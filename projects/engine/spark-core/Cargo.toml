@@ -1,0 +1,14 @@
+[package]
+name = "spark-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 元引擎基础类型与工具"
+keywords = ["spark", "game-engine"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }

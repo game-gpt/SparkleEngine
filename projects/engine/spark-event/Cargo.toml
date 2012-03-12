@@ -1,0 +1,14 @@
+[package]
+name = "spark-event"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 事件总线框架"
+keywords = ["spark", "events"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }

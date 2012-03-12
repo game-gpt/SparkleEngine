@@ -1,0 +1,14 @@
+[package]
+name = "spark-time"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 时间步与缩放"
+keywords = ["spark", "time"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }

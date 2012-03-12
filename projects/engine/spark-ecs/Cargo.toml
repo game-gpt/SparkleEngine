@@ -1,0 +1,14 @@
+[package]
+name = "spark-ecs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark ECS：实体、组件存储与系统调度框架"
+keywords = ["spark", "ecs"]
+categories = ["game-development", "data-structures"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
