@@ -1,7 +1,5 @@
 //! 类型擦除事件队列占位。
 
-#![forbid(unsafe_code)]
-
 use std::any::Any;
 
 #[derive(Default)]

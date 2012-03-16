@@ -1,7 +1,5 @@
 //! 固定时间步占位。
 
-#![forbid(unsafe_code)]
-
 #[derive(Debug, Clone, Copy)]
 pub struct Time {
     pub delta_seconds: f32,

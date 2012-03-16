@@ -1,7 +1,5 @@
 //! ECS 框架占位。后续承接 Archetype 存储与系统调度。
 
-#![forbid(unsafe_code)]
-
 use spark_core::SparkError;
 
 /// 稳定实体标识。
