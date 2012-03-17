@@ -21,10 +21,12 @@ spark-ecs = { path = "projects/engine/spark-ecs" }
 spark-time = { path = "projects/engine/spark-time" }
 spark-event = { path = "projects/engine/spark-event" }
 spark-input = { path = "projects/engine/spark-input" }
+spark-shader = { path = "projects/engine/spark-shader" }
 spark-app = { path = "projects/bindings/spark-app" }
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+wgpu = { version = "26", default-features = true }
 winit = "0.30"
 
 [profile.release]
