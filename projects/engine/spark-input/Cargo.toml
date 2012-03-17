@@ -1,0 +1,15 @@
+[package]
+name = "spark-input"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 输入状态（键鼠）"
+keywords = ["spark", "input"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+winit = { workspace = true }

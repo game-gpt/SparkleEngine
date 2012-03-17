@@ -20,10 +20,12 @@ spark-core = { path = "projects/engine/spark-core" }
 spark-ecs = { path = "projects/engine/spark-ecs" }
 spark-time = { path = "projects/engine/spark-time" }
 spark-event = { path = "projects/engine/spark-event" }
+spark-input = { path = "projects/engine/spark-input" }
 spark-app = { path = "projects/bindings/spark-app" }
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+winit = "0.30"
 
 [profile.release]
 opt-level = 3
