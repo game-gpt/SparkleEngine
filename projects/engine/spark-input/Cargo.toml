@@ -5,11 +5,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 输入状态（键鼠）"
-keywords = ["spark", "input"]
+description = "Spark 输入：自有键鼠类型与帧状态（不暴露窗口后端）"
+keywords = ["input", "game-engine"]
 categories = ["game-development"]
 publish = false
 
 [dependencies]
-spark-core = { workspace = true }
-winit = { workspace = true }
