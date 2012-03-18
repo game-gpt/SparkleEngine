@@ -20,4 +20,8 @@ cargo run -p spark-app
 | `spark-ecs` | ECS 世界占位 |
 | `spark-time` | 时间步占位 |
 | `spark-event` | 事件总线占位 |
+| `spark-input` | 键鼠输入状态 |
+| `spark-shader` | WGSL 内建着色器与模块装载 |
+| `spark-render` | 窗口与 wgpu 清屏循环 |
 | `spark-app` | 应用壳演示入口 |
+
