@@ -1,0 +1,16 @@
+[package]
+name = "spark-widget"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 立即模式 Widget 系统（重点是系统，不是控件库集合）"
+keywords = ["spark", "widget"]
+categories = ["game-development", "gui"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-input = { workspace = true }
+spark-render = { workspace = true }
