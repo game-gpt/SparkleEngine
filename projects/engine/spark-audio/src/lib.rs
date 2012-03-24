@@ -1,0 +1,145 @@
+//! 音频框架：输出设备 + 程序化短音。
+//!
+//! **不**包含曲库或玩法语义；游戏自行映射事件到 `Tone`。
+
+use std::f32::consts::PI;
+use std::time::Duration;
+
+use rodio::source::Source;
+use rodio::{OutputStream, OutputStreamHandle, Sink};
+
+/// 一段短音描述（Hz / 毫秒 / 音量 0..=1）。
+#[derive(Debug, Clone, Copy)]
+pub struct Tone {
+    pub freq_hz: f32,
+    pub duration_ms: u32,
+    pub volume: f32,
+}
+
+impl Tone {
+    pub const fn new(freq_hz: f32, duration_ms: u32, volume: f32) -> Self {
+        Self {
+            freq_hz,
+            duration_ms,
+            volume,
+        }
+    }
+}
+
+/// 音频总线。创建设备失败时降级为静默（不崩游戏）。
+pub struct AudioBus {
+    _stream: Option<OutputStream>,
+    handle: Option<OutputStreamHandle>,
+    muted: bool,
+}
+
+impl AudioBus {
+    pub fn try_open() -> Self {
+        match OutputStream::try_default() {
+            Ok((stream, handle)) => {
+                tracing::info!("音频输出已就绪");
+                Self {
+                    _stream: Some(stream),
+                    handle: Some(handle),
+                    muted: false,
+                }
+            }
+            Err(err) => {
+                tracing::warn!(?err, "音频输出不可用，静默运行");
+                Self {
+                    _stream: None,
+                    handle: None,
+                    muted: true,
+                }
+            }
+        }
+    }
+
+    pub fn set_muted(&mut self, muted: bool) {
+        self.muted = muted;
+    }
+
+    pub fn is_muted(&self) -> bool {
+        self.muted || self.handle.is_none()
+    }
+
+    /// 播放程序化正弦短音（非阻塞）。
+    pub fn play_tone(&self, tone: Tone) {
+        if self.is_muted() {
+            return;
+        }
+        let Some(handle) = self.handle.as_ref() else {
+            return;
+        };
+        let Ok(sink) = Sink::try_new(handle) else {
+            return;
+        };
+        let vol = tone.volume.clamp(0.0, 1.0);
+        sink.set_volume(vol);
+        let src = SineWave::new(tone.freq_hz, tone.duration_ms);
+        sink.append(src);
+        // 脱离本帧生命周期；播完后 Sink drop 停声
+        // 不变式：detach 后 rodio 在后台线程持有样本直到结束
+        sink.detach();
+    }
+}
+
+/// 有限长正弦源。
+struct SineWave {
+    freq: f32,
+    sample_rate: u32,
+    samples_left: usize,
+    t: f32,
+}
+
+impl SineWave {
+    fn new(freq: f32, duration_ms: u32) -> Self {
+        let sample_rate = 44_100;
+        let samples = (sample_rate as u64 * duration_ms as u64 / 1000) as usize;
+        Self {
+            freq: freq.max(20.0),
+            sample_rate,
+            samples_left: samples.max(1),
+            t: 0.0,
+        }
+    }
+}
+
+impl Iterator for SineWave {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        if self.samples_left == 0 {
+            return None;
+        }
+        self.samples_left -= 1;
+        let sample = (self.t * self.freq * 2.0 * PI).sin() * 0.25;
+        self.t += 1.0 / self.sample_rate as f32;
+        // 末端淡出，避免咔哒
+        let fade = if self.samples_left < 256 {
+            self.samples_left as f32 / 256.0
+        } else {
+            1.0
+        };
+        Some(sample * fade)
+    }
+}
+
+impl Source for SineWave {
+    fn current_frame_len(&self) -> Option<usize> {
+        Some(self.samples_left)
+    }
+
+    fn channels(&self) -> u16 {
+        1
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        let ms = self.samples_left as u64 * 1000 / self.sample_rate as u64;
+        Some(Duration::from_millis(ms))
+    }
+}
