@@ -1,0 +1,15 @@
+[package]
+name = "spark-gc"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 脚本堆与垃圾回收"
+keywords = ["spark", "gc"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+thiserror = { workspace = true }
