@@ -1,0 +1,16 @@
+[package]
+name = "spark-jit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 字节码 JIT / 热路径特化"
+keywords = ["spark", "jit"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-vm = { workspace = true }
+thiserror = { workspace = true }
