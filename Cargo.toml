@@ -22,12 +22,21 @@ spark-time = { path = "projects/engine/spark-time" }
 spark-event = { path = "projects/engine/spark-event" }
 spark-input = { path = "projects/engine/spark-input" }
 spark-shader = { path = "projects/engine/spark-shader" }
+spark-font = { path = "projects/engine/spark-font" }
 spark-render = { path = "projects/engine/spark-render" }
+spark-widget = { path = "projects/engine/spark-widget" }
+spark-audio = { path = "projects/engine/spark-audio" }
+spark-gc = { path = "projects/engine/spark-gc" }
+spark-vm = { path = "projects/engine/spark-vm" }
+spark-jit = { path = "projects/engine/spark-jit" }
+spark-script = { path = "projects/engine/spark-script" }
 spark-app = { path = "projects/bindings/spark-app" }
+oak-core = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
+oak-valkyrie = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-wgpu = { version = "26", default-features = true }
+wgpu = { version = "30.0.1", default-features = true }
 winit = "0.30"
 pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
