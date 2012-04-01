@@ -1,0 +1,14 @@
+[package]
+name = "spark-geometry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 2D 几何：向量运算、圆/线段/射线、变换与相交检测"
+keywords = ["spark", "geometry", "math"]
+categories = ["game-development", "mathematics"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
