@@ -1,6 +1,6 @@
 //! 着色器源码与 `ShaderModule` 装载。
 //!
-//! WGSL 正文归本 crate；`spark-render` 只消费编译结果与入口名，不内嵌着色器字符串。
+//! WGSL 正文归本 crate；`spark-renderer-wgpu` 只消费编译结果与入口名，不内嵌着色器字符串。
 
 use spark_core::SparkError;
 use wgpu::Device;

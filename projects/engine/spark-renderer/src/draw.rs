@@ -15,6 +15,8 @@ pub struct TextCmd {
 }
 
 /// 一帧绘制命令列表（屏幕像素坐标，原点左上）。
+///
+/// 与具体 GPU 后端无关；由 `spark-renderer-wgpu` 等实现提交。
 #[derive(Debug)]
 pub struct DrawList {
     pub clear: Color,

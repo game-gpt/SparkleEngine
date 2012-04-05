@@ -1,62 +1,26 @@
-//! 窗口壳、绘制列表与游戏帧循环。
+//! Spark 渲染 **wgpu** 后端：窗口壳与批绘制提交。
 //!
-//! **winit 止于此 crate**：游戏只看见 `FrameCtx` / `Input`（`spark-input` 自有键鼠）。
+//! 抽象类型（`DrawList` / `GameHost` / `FrameCtx` / `WindowConfig`）在 `spark-renderer`。
+//! **winit 止于此 crate**：游戏只看见 `spark-renderer` / `spark-input` 类型。
 
-mod draw;
 mod winit_map;
 
-pub use draw::{DrawList, QuadCmd, TextCmd};
 pub use spark_font::{GlyphCache, GlyphInfo};
-pub use spark_input::{ButtonState, Input, Key, MouseBtn};
+pub use spark_renderer::{
+    ButtonState, DrawList, FrameCtx, GameHost, Input, Key, MouseBtn, QuadCmd, TextCmd, WindowConfig,
+};
 
 use std::sync::Arc;
 use std::time::Instant;
 
 use bytemuck::{Pod, Zeroable};
 use spark_core::{Color, SparkError};
-use spark_shader::{create_builtin, BuiltinShader};
+use spark_shader::{BuiltinShader, create_builtin};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
-
-/// 启动窗口配置。
-#[derive(Debug, Clone)]
-pub struct WindowConfig {
-    pub title: String,
-    pub width: u32,
-    pub height: u32,
-    pub clear_color: [f64; 4],
-}
-
-impl Default for WindowConfig {
-    fn default() -> Self {
-        Self {
-            title: "Spark".into(),
-            width: 1280,
-            height: 720,
-            clear_color: [0.05, 0.06, 0.10, 1.0],
-        }
-    }
-}
-
-/// 每帧输入与时间。
-pub struct FrameCtx<'a> {
-    pub input: &'a Input,
-    pub dt: f32,
-    pub screen_w: f32,
-    pub screen_h: f32,
-}
-
-/// 游戏宿主：更新逻辑并填充绘制列表。
-pub trait GameHost {
-    fn update(&mut self, frame: &FrameCtx<'_>);
-    fn draw(&mut self, draw: &mut DrawList);
-    fn should_exit(&self) -> bool {
-        false
-    }
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -106,10 +70,9 @@ impl GpuState {
         let width = size.width.max(1);
         let height = size.height.max(1);
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            ..Default::default()
-        });
+        let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
+        instance_desc.backends = wgpu::Backends::PRIMARY;
+        let instance = wgpu::Instance::new(instance_desc);
         let surface = instance
             .create_surface(window.clone())
             .map_err(|e| SparkError::Message(format!("create surface: {e}")))?;
@@ -118,14 +81,16 @@ impl GpuState {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await
             .map_err(|e| SparkError::Message(format!("adapter: {e}")))?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                label: Some("spark-render"),
+                label: Some("spark-renderer-wgpu"),
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::default(),
+                experimental_features: wgpu::ExperimentalFeatures::default(),
                 memory_hints: Default::default(),
                 trace: Default::default(),
             })
@@ -142,6 +107,7 @@ impl GpuState {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
             width,
             height,
             present_mode: wgpu::PresentMode::AutoVsync,
@@ -279,13 +245,13 @@ impl GpuState {
 
         let solid_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("solid-pl"),
-            bind_group_layouts: &[&solid_bgl],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&solid_bgl)],
+            immediate_size: 0,
         });
         let glyph_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("glyph-pl"),
-            bind_group_layouts: &[&glyph_bgl],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&glyph_bgl)],
+            immediate_size: 0,
         });
 
         let solid_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -294,11 +260,11 @@ impl GpuState {
             vertex: wgpu::VertexState {
                 module: &solid_shader,
                 entry_point: Some(BuiltinShader::SolidQuad.vertex_entry()),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<SolidVertex>() as u64,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4],
-                }],
+                })],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -314,7 +280,7 @@ impl GpuState {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -324,11 +290,11 @@ impl GpuState {
             vertex: wgpu::VertexState {
                 module: &glyph_shader,
                 entry_point: Some(BuiltinShader::TexturedGlyph.vertex_entry()),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<GlyphVertex>() as u64,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4],
-                }],
+                })],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -344,7 +310,7 @@ impl GpuState {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -582,13 +548,18 @@ impl GpuState {
                 .write_buffer(&self.glyph_vbo, 0, bytemuck::cast_slice(&glyphs));
         }
 
-        let frame = match self.surface.get_current_texture() {
-            Ok(f) => f,
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+        let (frame, suboptimal) = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(tex) => (tex, false),
+            wgpu::CurrentSurfaceTexture::Suboptimal(tex) => (tex, true),
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface.configure(&self.device, &self.config);
                 return Ok(());
             }
-            Err(e) => return Err(SparkError::Message(format!("surface: {e}"))),
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
+                return Ok(());
+            }
         };
         let view = frame.texture.create_view(&Default::default());
         let mut encoder = self
@@ -616,6 +587,7 @@ impl GpuState {
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
                 timestamp_writes: None,
+                multiview_mask: None,
             });
             if !solids.is_empty() {
                 pass.set_pipeline(&self.solid_pipeline);
@@ -632,7 +604,10 @@ impl GpuState {
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         self.window.pre_present_notify();
-        frame.present();
+        self.queue.present(frame);
+        if suboptimal {
+            self.surface.configure(&self.device, &self.config);
+        }
         Ok(())
     }
 }
