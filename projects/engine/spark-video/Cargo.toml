@@ -1,17 +1,16 @@
 [package]
-name = "spark-audio"
+name = "spark-video"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 音频：混音、程序化短音与 Symphonia 解码播放"
-keywords = ["spark", "audio", "symphonia"]
+description = "Spark 视频：解复用与包泵（Symphonia via spark-media）"
+keywords = ["spark", "video", "symphonia"]
 categories = ["game-development", "multimedia"]
 publish = false
 
 [dependencies]
 spark-core = { workspace = true }
 spark-media = { workspace = true }
-rodio = { version = "0.20", default-features = true }
 tracing = { workspace = true }
