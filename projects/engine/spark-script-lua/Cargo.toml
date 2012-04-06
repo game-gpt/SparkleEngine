@@ -1,0 +1,17 @@
+[package]
+name = "spark-script-lua"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 脚本前端：Oaks Lua → spark-vm 字节码"
+keywords = ["spark", "script", "lua"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-vm = { workspace = true }
+oak-core = { workspace = true }
+oak-lua = { workspace = true }
+thiserror = { workspace = true }

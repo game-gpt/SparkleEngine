@@ -1,11 +1,19 @@
 //! Spark VM：栈式字节码解释器（无游戏语义）。
+//!
+//! # 与 ECS / JIT 的边界
+//!
+//! - **ECS**：世界与 Component 在 `spark-ecs`；脚本经 [`Value::Entity`] 与 [`CallNative`]
+//!   交换不透明 ID。调度侧用 [`Vm::call_function`] 调脚本 `micro`，勿把 World 塞进 VM。
+//! - **JIT**：每帧解释累加 [`Vm::hotness`]；`spark-jit` 对热点 [`FuncProto`] 做字节码特化，
+//!   [`Op::JitEnter`] 预留原生 stub 槽（解释路径跳过）。
+//! - **栈式**：操作数在值栈，调用帧只记 `func` / `ip` / `stack_base`，利于特化与调试。
 
 use std::collections::HashMap;
 
 use spark_gc::{GcObject, Heap, Value};
 use thiserror::Error;
 
-/// 字节码操作。
+/// 字节码操作（操作数小端紧随操作码）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Op {
@@ -33,18 +41,18 @@ pub enum Op {
     Le,
     Gt,
     Ge,
-    /// 相对跳转 i16。
+    /// 相对跳转 i16（相对操作数之后）。
     Jump,
     JumpIfFalse,
     JumpIfTrue,
-    /// 参数个数 u8。
+    /// 参数个数 u8；栈顶为 argN-1…arg0，其下为 callee（[`Value::Func`]）。
     Call,
     Return,
     /// 弹出 N 个（u8）。
     Pop,
-    /// 打印栈顶（调试宿主钩子前的默认实现）。
+    /// 打印栈顶（不弹出）。
     Print,
-    /// JIT 入口占位：后跟 u32 stub id（由 spark-jit 填充）。
+    /// JIT 入口占位：后跟 u32 stub id。
     JitEnter,
     /// 后跟 u16 字符串池下标；运行时分配到堆。
     LoadString,
@@ -52,7 +60,7 @@ pub enum Op {
     CallNative,
 }
 
-/// 编译期函数。
+/// 编译期函数原型（解释与 JIT 共用）。
 #[derive(Debug, Clone)]
 pub struct FuncProto {
     pub name: String,
@@ -60,9 +68,8 @@ pub struct FuncProto {
     pub locals: u16,
     pub code: Vec<u8>,
     pub consts: Vec<Value>,
-    /// 常量池中的字符串名（与 consts 并行，便于全局查找）。
+    /// 与 `consts` 并行的名字槽（全局符号用）。
     pub const_names: Vec<String>,
-    /// 字符串字面量池。
     pub strings: Vec<String>,
 }
 
@@ -102,6 +109,13 @@ impl FuncProto {
         i
     }
 
+    pub fn add_const_func(&mut self, func: u32) -> u16 {
+        let i = self.consts.len() as u16;
+        self.consts.push(Value::Func(func));
+        self.const_names.push(String::new());
+        i
+    }
+
     pub fn add_const_name(&mut self, name: impl Into<String>) -> u16 {
         let name = name.into();
         let i = self.consts.len() as u16;
@@ -130,9 +144,8 @@ impl FuncProto {
 #[derive(Debug, Clone)]
 pub struct Module {
     pub functions: Vec<FuncProto>,
-    /// 入口函数下标。
+    /// 入口函数下标（通常为隐式 `__main`）。
     pub entry: usize,
-    /// 原生函数名表（`CallNative` 索引）。
     pub native_names: Vec<String>,
 }
 
@@ -143,6 +156,10 @@ impl Module {
             entry,
             native_names: Vec::new(),
         }
+    }
+
+    pub fn find_function(&self, name: &str) -> Option<usize> {
+        self.functions.iter().position(|f| f.name == name)
     }
 
     pub fn intern_native(&mut self, name: impl Into<String>) -> u16 {
@@ -166,6 +183,8 @@ pub enum VmError {
     TypeError { expected: &'static str, got: String },
     #[error("未知全局 `{0}`")]
     UnknownGlobal(String),
+    #[error("未知函数 `{0}`")]
+    UnknownFunction(String),
     #[error("调用栈溢出")]
     CallOverflow,
     #[error("返回栈异常")]
@@ -178,7 +197,7 @@ pub enum VmError {
     Message(String),
 }
 
-/// 原生函数上下文。
+/// 原生函数上下文（宿主可经此访问堆与全局；ECS World 由闭包捕获）。
 pub struct NativeCtx<'a> {
     pub heap: &'a mut Heap,
     pub globals: &'a mut HashMap<String, Value>,
@@ -194,7 +213,7 @@ struct Frame {
     stack_base: usize,
 }
 
-/// 宿主钩子（打印等）。
+/// 宿主钩子（打印等；ECS 侧可换实现）。
 pub trait HostHooks {
     fn print(&mut self, text: &str);
 }
@@ -213,7 +232,7 @@ pub struct Vm {
     pub globals: HashMap<String, Value>,
     stack: Vec<Value>,
     frames: Vec<Frame>,
-    /// 每条函数热度（供 JIT）。
+    /// 每条函数解释步热度（供 JIT）。
     pub hotness: Vec<u32>,
     pub natives: HashMap<String, NativeFn>,
 }
@@ -239,20 +258,51 @@ impl Vm {
         self.natives.insert(name.into(), Box::new(f));
     }
 
+    /// 从模块入口运行（脚本顶层 / `__main`）。
     pub fn run(&mut self, host: &mut dyn HostHooks) -> Result<Value, VmError> {
         let entry = self.module.entry;
+        self.call_index(entry, &[], host)
+    }
+
+    /// 按名调用脚本函数（ECS System / 事件回调入口）。
+    pub fn call_function(
+        &mut self,
+        name: &str,
+        args: &[Value],
+        host: &mut dyn HostHooks,
+    ) -> Result<Value, VmError> {
+        let idx = self
+            .module
+            .find_function(name)
+            .ok_or_else(|| VmError::UnknownFunction(name.into()))?;
+        self.call_index(idx, args, host)
+    }
+
+    fn call_index(
+        &mut self,
+        func: usize,
+        args: &[Value],
+        host: &mut dyn HostHooks,
+    ) -> Result<Value, VmError> {
+        let arity = self.module.functions[func].arity as usize;
+        if args.len() != arity {
+            return Err(VmError::Message(format!(
+                "参数个数不符：期望 {arity}，得到 {}",
+                args.len()
+            )));
+        }
         self.frames.clear();
         self.stack.clear();
+        self.stack.extend_from_slice(args);
+        let need = self.module.functions[func].locals as usize;
+        while self.stack.len() < need {
+            self.stack.push(Value::Null);
+        }
         self.frames.push(Frame {
-            func: entry,
+            func,
             ip: 0,
             stack_base: 0,
         });
-        // 为入口预留局部
-        let locals = self.module.functions[entry].locals as usize;
-        while self.stack.len() < locals {
-            self.stack.push(Value::Null);
-        }
         self.interpret(host)
     }
 
@@ -286,18 +336,14 @@ impl Vm {
     ) -> Result<(), VmError> {
         let b = self.pop()?;
         let a = self.pop()?;
-        let an = a
-            .as_number()
-            .ok_or_else(|| VmError::TypeError {
-                expected: "number",
-                got: a.type_name().into(),
-            })?;
-        let bn = b
-            .as_number()
-            .ok_or_else(|| VmError::TypeError {
-                expected: "number",
-                got: b.type_name().into(),
-            })?;
+        let an = a.as_number().ok_or_else(|| VmError::TypeError {
+            expected: "number",
+            got: a.type_name().into(),
+        })?;
+        let bn = b.as_number().ok_or_else(|| VmError::TypeError {
+            expected: "number",
+            got: b.type_name().into(),
+        })?;
         self.stack.push(Value::Number(op(an, bn)?));
         Ok(())
     }
@@ -313,51 +359,17 @@ impl Vm {
             let ip = self.frames[fi].ip;
             let code = &self.module.functions[func_idx].code;
             if ip >= code.len() {
-                // 隐式 return null
                 let base = self.frames[fi].stack_base;
                 self.frames.pop();
                 self.stack.truncate(base);
                 self.stack.push(Value::Null);
                 continue;
             }
-            let op = code[ip];
+            let op_byte = code[ip];
             self.frames[fi].ip = ip + 1;
-            let op = match op {
-                x if x == Op::Nop as u8 => Op::Nop,
-                x if x == Op::LoadNull as u8 => Op::LoadNull,
-                x if x == Op::LoadTrue as u8 => Op::LoadTrue,
-                x if x == Op::LoadFalse as u8 => Op::LoadFalse,
-                x if x == Op::LoadConst as u8 => Op::LoadConst,
-                x if x == Op::LoadLocal as u8 => Op::LoadLocal,
-                x if x == Op::StoreLocal as u8 => Op::StoreLocal,
-                x if x == Op::LoadGlobal as u8 => Op::LoadGlobal,
-                x if x == Op::StoreGlobal as u8 => Op::StoreGlobal,
-                x if x == Op::Add as u8 => Op::Add,
-                x if x == Op::Sub as u8 => Op::Sub,
-                x if x == Op::Mul as u8 => Op::Mul,
-                x if x == Op::Div as u8 => Op::Div,
-                x if x == Op::Neg as u8 => Op::Neg,
-                x if x == Op::Not as u8 => Op::Not,
-                x if x == Op::Eq as u8 => Op::Eq,
-                x if x == Op::Ne as u8 => Op::Ne,
-                x if x == Op::Lt as u8 => Op::Lt,
-                x if x == Op::Le as u8 => Op::Le,
-                x if x == Op::Gt as u8 => Op::Gt,
-                x if x == Op::Ge as u8 => Op::Ge,
-                x if x == Op::Jump as u8 => Op::Jump,
-                x if x == Op::JumpIfFalse as u8 => Op::JumpIfFalse,
-                x if x == Op::JumpIfTrue as u8 => Op::JumpIfTrue,
-                x if x == Op::Call as u8 => Op::Call,
-                x if x == Op::Return as u8 => Op::Return,
-                x if x == Op::Pop as u8 => Op::Pop,
-                x if x == Op::Print as u8 => Op::Print,
-                x if x == Op::JitEnter as u8 => Op::JitEnter,
-                x if x == Op::LoadString as u8 => Op::LoadString,
-                x if x == Op::CallNative as u8 => Op::CallNative,
-                _ => {
-                    return Err(VmError::Message(format!("未知操作码 {op}")));
-                }
-            };
+            let op = decode_op(op_byte).ok_or_else(|| {
+                VmError::Message(format!("未知操作码 {op_byte}"))
+            })?;
 
             match op {
                 Op::Nop => {}
@@ -428,7 +440,6 @@ impl Vm {
                     self.globals.insert(name, v);
                 }
                 Op::Add => {
-                    // 数字或字符串拼接
                     let b = self.pop()?;
                     let a = self.pop()?;
                     match (&a, &b) {
@@ -519,19 +530,15 @@ impl Vm {
                     let mut ip = self.frames[fi].ip;
                     let argc = Self::read_u8(&self.module.functions[func_idx].code, &mut ip)?;
                     self.frames[fi].ip = ip;
-                    // 栈：... callee, arg0..argN-1
                     if self.stack.len() < argc as usize + 1 {
                         return Err(VmError::StackUnderflow);
                     }
                     let callee_idx = self.stack.len() - argc as usize - 1;
                     let callee = self.stack[callee_idx].clone();
-                    let Value::Number(fidx) = callee else {
-                        return Err(VmError::TypeError {
-                            expected: "function-index",
-                            got: callee.type_name().into(),
-                        });
-                    };
-                    let fidx = fidx as usize;
+                    let fidx = callee.as_func().ok_or_else(|| VmError::TypeError {
+                        expected: "function",
+                        got: callee.type_name().into(),
+                    })? as usize;
                     if fidx >= self.module.functions.len() {
                         return Err(VmError::CodeOob);
                     }
@@ -544,7 +551,6 @@ impl Vm {
                     if self.frames.len() > 256 {
                         return Err(VmError::CallOverflow);
                     }
-                    // 去掉 callee，参数留在栈上作为局部 0..arity
                     self.stack.remove(callee_idx);
                     let base = self.stack.len() - arity as usize;
                     let need = self.module.functions[fidx].locals as usize;
@@ -580,7 +586,6 @@ impl Vm {
                     host.print(&s);
                 }
                 Op::JitEnter => {
-                    // 跳过 stub id，解释器忽略（JIT 接管前为 no-op）
                     let mut ip = self.frames[fi].ip;
                     let _ = Self::read_u16(&self.module.functions[func_idx].code, &mut ip)?;
                     let _ = Self::read_u16(&self.module.functions[func_idx].code, &mut ip)?;
@@ -632,7 +637,6 @@ impl Vm {
                 }
             }
 
-            // 周期性 GC：栈 + 全局作根
             if self.heap.allocs_since_gc >= self.heap.gc_threshold {
                 let mut roots = self.stack.clone();
                 roots.extend(self.globals.values().cloned());
@@ -652,6 +656,8 @@ impl Vm {
                     n.to_string()
                 }
             }
+            Value::Entity(id) => format!("entity:{id}"),
+            Value::Func(i) => format!("<fn {}>", i),
             Value::Handle(h) => match self.heap.get(*h) {
                 Ok(GcObject::String(s)) => s.clone(),
                 Ok(_) => format!("<object {}>", h.0),
@@ -661,11 +667,50 @@ impl Vm {
     }
 }
 
+fn decode_op(op: u8) -> Option<Op> {
+    Some(match op {
+        x if x == Op::Nop as u8 => Op::Nop,
+        x if x == Op::LoadNull as u8 => Op::LoadNull,
+        x if x == Op::LoadTrue as u8 => Op::LoadTrue,
+        x if x == Op::LoadFalse as u8 => Op::LoadFalse,
+        x if x == Op::LoadConst as u8 => Op::LoadConst,
+        x if x == Op::LoadLocal as u8 => Op::LoadLocal,
+        x if x == Op::StoreLocal as u8 => Op::StoreLocal,
+        x if x == Op::LoadGlobal as u8 => Op::LoadGlobal,
+        x if x == Op::StoreGlobal as u8 => Op::StoreGlobal,
+        x if x == Op::Add as u8 => Op::Add,
+        x if x == Op::Sub as u8 => Op::Sub,
+        x if x == Op::Mul as u8 => Op::Mul,
+        x if x == Op::Div as u8 => Op::Div,
+        x if x == Op::Neg as u8 => Op::Neg,
+        x if x == Op::Not as u8 => Op::Not,
+        x if x == Op::Eq as u8 => Op::Eq,
+        x if x == Op::Ne as u8 => Op::Ne,
+        x if x == Op::Lt as u8 => Op::Lt,
+        x if x == Op::Le as u8 => Op::Le,
+        x if x == Op::Gt as u8 => Op::Gt,
+        x if x == Op::Ge as u8 => Op::Ge,
+        x if x == Op::Jump as u8 => Op::Jump,
+        x if x == Op::JumpIfFalse as u8 => Op::JumpIfFalse,
+        x if x == Op::JumpIfTrue as u8 => Op::JumpIfTrue,
+        x if x == Op::Call as u8 => Op::Call,
+        x if x == Op::Return as u8 => Op::Return,
+        x if x == Op::Pop as u8 => Op::Pop,
+        x if x == Op::Print as u8 => Op::Print,
+        x if x == Op::JitEnter as u8 => Op::JitEnter,
+        x if x == Op::LoadString as u8 => Op::LoadString,
+        x if x == Op::CallNative as u8 => Op::CallNative,
+        _ => return None,
+    })
+}
+
 fn values_eq(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Null, Value::Null) => true,
         (Value::Bool(x), Value::Bool(y)) => x == y,
         (Value::Number(x), Value::Number(y)) => x == y,
+        (Value::Entity(x), Value::Entity(y)) => x == y,
+        (Value::Func(x), Value::Func(y)) => x == y,
         (Value::Handle(x), Value::Handle(y)) => x == y,
         _ => false,
     }
@@ -701,6 +746,29 @@ mod tests {
         });
         let mut host = BufHost(String::new());
         let v = vm.run(&mut host).unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn call_function_by_name() {
+        let mut add = FuncProto::new("add", 2);
+        add.locals = 2;
+        add.emit(Op::LoadLocal);
+        add.emit_u16(0);
+        add.emit(Op::LoadLocal);
+        add.emit_u16(1);
+        add.emit(Op::Add);
+        add.emit(Op::Return);
+        let main = FuncProto::new("__main", 0);
+        let mut vm = Vm::new(Module {
+            functions: vec![add, main],
+            entry: 1,
+            native_names: Vec::new(),
+        });
+        let mut host = BufHost(String::new());
+        let v = vm
+            .call_function("add", &[Value::Number(40.0), Value::Number(2.0)], &mut host)
+            .unwrap();
         assert_eq!(v.as_number(), Some(42.0));
     }
 }

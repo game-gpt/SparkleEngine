@@ -5,8 +5,8 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 脚本引擎（Oaks Valkyrie → spark-vm）"
-keywords = ["spark", "script", "valkyrie"]
+description = "Spark 脚本引擎门面（多前端 → spark-vm）"
+keywords = ["spark", "script", "vm"]
 categories = ["game-development"]
 publish = false
 
@@ -15,6 +15,7 @@ spark-core = { workspace = true }
 spark-gc = { workspace = true }
 spark-vm = { workspace = true }
 spark-jit = { workspace = true }
-oak-core = { workspace = true }
-oak-valkyrie = { workspace = true }
+spark-script-valkyrie = { workspace = true }
+spark-script-lua = { workspace = true }
+spark-script-ruby = { workspace = true }
 thiserror = { workspace = true }
