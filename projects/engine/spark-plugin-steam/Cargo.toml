@@ -1,0 +1,18 @@
+[package]
+name = "spark-plugin-steam"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark Steam 脚本插件：成就、统计、云文件与用户信息（可换 Steamworks 后端）"
+keywords = ["spark", "plugin", "steam"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-gc = { workspace = true }
+spark-vm = { workspace = true }
+spark-plugin = { workspace = true }
+tracing = { workspace = true }

@@ -1,0 +1,18 @@
+[package]
+name = "spark-plugin-live2d"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark Live2D 脚本插件：模型句柄、参数与更新钩子（可接 Cubism 后端）"
+keywords = ["spark", "plugin", "live2d"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-gc = { workspace = true }
+spark-vm = { workspace = true }
+spark-plugin = { workspace = true }
+tracing = { workspace = true }
