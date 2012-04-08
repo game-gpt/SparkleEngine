@@ -1,0 +1,17 @@
+[package]
+name = "spark-engine-rts"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark RTS 特异化引擎：选取、指令队列、简易视野与编制（无阵营/科技树）"
+keywords = ["spark", "engine", "rts"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-engine = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
