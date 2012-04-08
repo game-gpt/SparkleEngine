@@ -17,22 +17,41 @@ readme = "readme.md"
 
 [workspace.dependencies]
 spark-core = { path = "projects/engine/spark-core" }
+spark-geometry = { path = "projects/engine/spark-geometry" }
 spark-ecs = { path = "projects/engine/spark-ecs" }
 spark-time = { path = "projects/engine/spark-time" }
 spark-event = { path = "projects/engine/spark-event" }
 spark-input = { path = "projects/engine/spark-input" }
 spark-shader = { path = "projects/engine/spark-shader" }
 spark-font = { path = "projects/engine/spark-font" }
-spark-render = { path = "projects/engine/spark-render" }
+spark-image = { path = "projects/engine/spark-image" }
+spark-renderer = { path = "projects/engine/spark-renderer" }
+spark-renderer-wgpu = { path = "projects/engine/spark-renderer-wgpu" }
 spark-widget = { path = "projects/engine/spark-widget" }
+spark-media = { path = "projects/engine/spark-media" }
 spark-audio = { path = "projects/engine/spark-audio" }
+spark-video = { path = "projects/engine/spark-video" }
 spark-gc = { path = "projects/engine/spark-gc" }
 spark-vm = { path = "projects/engine/spark-vm" }
 spark-jit = { path = "projects/engine/spark-jit" }
 spark-script = { path = "projects/engine/spark-script" }
+spark-script-valkyrie = { path = "projects/engine/spark-script-valkyrie" }
+spark-script-lua = { path = "projects/engine/spark-script-lua" }
+spark-script-ruby = { path = "projects/engine/spark-script-ruby" }
+spark-plugin = { path = "projects/engine/spark-plugin" }
+spark-plugin-live2d = { path = "projects/engine/spark-plugin-live2d" }
+spark-plugin-steam = { path = "projects/engine/spark-plugin-steam" }
+spark-engine = { path = "projects/engine/spark-engine" }
+spark-engine-rts = { path = "projects/engine/spark-engine-rts" }
+spark-engine-stg = { path = "projects/engine/spark-engine-stg" }
+spark-engine-rpg = { path = "projects/engine/spark-engine-rpg" }
+spark-engine-platformer = { path = "projects/engine/spark-engine-platformer" }
+spark-engine-galgame = { path = "projects/engine/spark-engine-galgame" }
 spark-app = { path = "projects/bindings/spark-app" }
 oak-core = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
 oak-valkyrie = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
+oak-lua = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
+oak-ruby = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -41,6 +60,20 @@ winit = "0.30"
 pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
 fontdue = "0.9"
+image = { version = "0.25", default-features = true }
+symphonia = { version = "0.5.5", features = [
+    "aac",
+    "adpcm",
+    "alac",
+    "flac",
+    "isomp4",
+    "mkv",
+    "mp3",
+    "ogg",
+    "pcm",
+    "vorbis",
+    "wav",
+] }
 
 [profile.release]
 opt-level = 3
