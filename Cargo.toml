@@ -1,7 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "projects/engine/*",
+    "projects/foundation/*",
+    "projects/graphics/*",
+    "projects/scripting/*",
+    "projects/gameplay/*",
     "projects/bindings/*",
 ]
 default-members = [
@@ -16,37 +19,37 @@ license = "Apache-2.0"
 readme = "readme.md"
 
 [workspace.dependencies]
-spark-core = { path = "projects/engine/spark-core" }
-spark-geometry = { path = "projects/engine/spark-geometry" }
-spark-ecs = { path = "projects/engine/spark-ecs" }
-spark-time = { path = "projects/engine/spark-time" }
-spark-event = { path = "projects/engine/spark-event" }
-spark-input = { path = "projects/engine/spark-input" }
-spark-shader = { path = "projects/engine/spark-shader" }
-spark-font = { path = "projects/engine/spark-font" }
-spark-image = { path = "projects/engine/spark-image" }
-spark-renderer = { path = "projects/engine/spark-renderer" }
-spark-renderer-wgpu = { path = "projects/engine/spark-renderer-wgpu" }
-spark-widget = { path = "projects/engine/spark-widget" }
-spark-media = { path = "projects/engine/spark-media" }
-spark-audio = { path = "projects/engine/spark-audio" }
-spark-video = { path = "projects/engine/spark-video" }
-spark-gc = { path = "projects/engine/spark-gc" }
-spark-vm = { path = "projects/engine/spark-vm" }
-spark-jit = { path = "projects/engine/spark-jit" }
-spark-script = { path = "projects/engine/spark-script" }
-spark-script-valkyrie = { path = "projects/engine/spark-script-valkyrie" }
-spark-script-lua = { path = "projects/engine/spark-script-lua" }
-spark-script-ruby = { path = "projects/engine/spark-script-ruby" }
-spark-plugin = { path = "projects/engine/spark-plugin" }
-spark-plugin-live2d = { path = "projects/engine/spark-plugin-live2d" }
-spark-plugin-steam = { path = "projects/engine/spark-plugin-steam" }
-spark-engine = { path = "projects/engine/spark-engine" }
-spark-engine-rts = { path = "projects/engine/spark-engine-rts" }
-spark-engine-stg = { path = "projects/engine/spark-engine-stg" }
-spark-engine-rpg = { path = "projects/engine/spark-engine-rpg" }
-spark-engine-platformer = { path = "projects/engine/spark-engine-platformer" }
-spark-engine-galgame = { path = "projects/engine/spark-engine-galgame" }
+spark-core = { path = "projects/foundation/spark-core" }
+spark-geometry = { path = "projects/foundation/spark-geometry" }
+spark-ecs = { path = "projects/foundation/spark-ecs" }
+spark-time = { path = "projects/foundation/spark-time" }
+spark-event = { path = "projects/foundation/spark-event" }
+spark-input = { path = "projects/foundation/spark-input" }
+spark-shader = { path = "projects/graphics/spark-shader" }
+spark-font = { path = "projects/graphics/spark-font" }
+spark-image = { path = "projects/graphics/spark-image" }
+spark-renderer = { path = "projects/graphics/spark-renderer" }
+spark-renderer-wgpu = { path = "projects/graphics/spark-renderer-wgpu" }
+spark-widget = { path = "projects/graphics/spark-widget" }
+spark-media = { path = "projects/graphics/spark-media" }
+spark-audio = { path = "projects/graphics/spark-audio" }
+spark-video = { path = "projects/graphics/spark-video" }
+spark-gc = { path = "projects/scripting/spark-gc" }
+spark-vm = { path = "projects/scripting/spark-vm" }
+spark-jit = { path = "projects/scripting/spark-jit" }
+spark-script = { path = "projects/scripting/spark-script" }
+spark-script-valkyrie = { path = "projects/scripting/spark-script-valkyrie" }
+spark-script-lua = { path = "projects/scripting/spark-script-lua" }
+spark-script-ruby = { path = "projects/scripting/spark-script-ruby" }
+spark-plugin = { path = "projects/gameplay/spark-plugin" }
+spark-plugin-live2d = { path = "projects/gameplay/spark-plugin-live2d" }
+spark-plugin-steam = { path = "projects/gameplay/spark-plugin-steam" }
+spark-engine = { path = "projects/gameplay/spark-engine" }
+spark-engine-rts = { path = "projects/gameplay/spark-engine-rts" }
+spark-engine-stg = { path = "projects/gameplay/spark-engine-stg" }
+spark-engine-rpg = { path = "projects/gameplay/spark-engine-rpg" }
+spark-engine-platformer = { path = "projects/gameplay/spark-engine-platformer" }
+spark-engine-galgame = { path = "projects/gameplay/spark-engine-galgame" }
 spark-app = { path = "projects/bindings/spark-app" }
 oak-core = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
 oak-valkyrie = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
