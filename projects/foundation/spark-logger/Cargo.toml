@@ -1,0 +1,13 @@
+[package]
+name = "spark-logger"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 分级日志与可插拔 sink"
+keywords = ["spark", "logging"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
