@@ -1,0 +1,17 @@
+[package]
+name = "spark-physics"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 2D 物理框架：刚体、宽窄相与步进（无游戏碰撞表）"
+keywords = ["spark", "physics", "collision"]
+categories = ["game-development", "science"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-geometry = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
