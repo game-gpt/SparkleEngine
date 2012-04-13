@@ -16,6 +16,7 @@ spark-input = { workspace = true }
 spark-shader = { workspace = true }
 spark-font = { workspace = true }
 spark-renderer = { workspace = true }
+spark-geometry = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 pollster = { workspace = true }

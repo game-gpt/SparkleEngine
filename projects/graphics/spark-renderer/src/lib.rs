@@ -3,9 +3,14 @@
 //! **不含** GPU / 窗口后端。桌面 wgpu 实现见 `spark-renderer-wgpu`。
 //! 游戏与 `spark-widget` 只依赖本 crate 的 `DrawList` / `GameHost` 等类型。
 
+mod camera3d;
 mod draw;
+mod draw3d;
 
+pub use camera3d::Camera3d;
 pub use draw::{DrawList, QuadCmd, TextCmd};
+pub use draw3d::{DrawList3d, MeshCmd, MeshVertex};
+pub use spark_geometry::{Mat4, Vec3};
 pub use spark_input::{ButtonState, Input, Key, MouseBtn};
 
 /// 启动窗口配置（后端无关字段）。
@@ -36,11 +41,24 @@ pub struct FrameCtx<'a> {
     pub screen_h: f32,
 }
 
-/// 游戏宿主：更新逻辑并填充绘制列表。
+/// 2D 游戏宿主：更新逻辑并填充绘制列表。
 pub trait GameHost {
     fn update(&mut self, frame: &FrameCtx<'_>);
     fn draw(&mut self, draw: &mut DrawList);
     fn should_exit(&self) -> bool {
         false
+    }
+}
+
+/// 3D 游戏宿主：透视网格 + 可选 2D HUD。
+pub trait GameHost3d {
+    fn update(&mut self, frame: &FrameCtx<'_>);
+    fn draw(&mut self, draw: &mut DrawList3d);
+    fn should_exit(&self) -> bool {
+        false
+    }
+    /// 是否请求指针锁定（第一人称）。
+    fn cursor_grab(&self) -> bool {
+        true
     }
 }

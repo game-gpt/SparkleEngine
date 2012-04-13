@@ -1,6 +1,6 @@
 //! 键鼠输入状态：引擎自有键码，**不**把窗口后端（如 winit）漏给游戏。
 //!
-//! 后端适配放在 `spark-renderer-wgpu` / 将来的 `spark-app`；本 crate 只认 `Key` / `MouseBtn`。
+//! 后端适配放在 `spark-renderer-wgpu` / `spark-napi`；本 crate 只认 `Key` / `MouseBtn`。
 
 use std::collections::HashSet;
 
@@ -65,6 +65,8 @@ pub enum Key {
     F10,
     F11,
     F12,
+    LShift,
+    RShift,
 }
 
 /// 鼠标按键。
@@ -92,6 +94,8 @@ pub struct Input {
     mouse_down: HashSet<MouseBtn>,
     mouse_pressed: HashSet<MouseBtn>,
     mouse_released: HashSet<MouseBtn>,
+    /// 本帧鼠标增量（设备像素，后端在 `begin_frame` 前写入，帧末清零）。
+    mouse_delta: (f32, f32),
 }
 
 impl Input {
@@ -100,6 +104,12 @@ impl Input {
         self.released.clear();
         self.mouse_pressed.clear();
         self.mouse_released.clear();
+        self.mouse_delta = (0.0, 0.0);
+    }
+
+    pub fn on_mouse_delta(&mut self, dx: f32, dy: f32) {
+        self.mouse_delta.0 += dx;
+        self.mouse_delta.1 += dy;
     }
 
     pub fn on_key(&mut self, key: Key, state: ButtonState) {
@@ -154,5 +164,9 @@ impl Input {
 
     pub fn mouse_pressed(&self, button: MouseBtn) -> bool {
         self.mouse_pressed.contains(&button)
+    }
+
+    pub fn mouse_delta(&self) -> (f32, f32) {
+        self.mouse_delta
     }
 }
