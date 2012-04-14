@@ -1,23 +1,30 @@
-//! Spark 引擎壳：在 `spark-vm` / `spark-script` 之上提供基础 **modder** 能力。
+//! Spark 引擎壳：帧主循环编排 + 在 `spark-vm` / `spark-script` 之上的 **modder** 能力。
 //!
-//! 提供：模组清单与发现、依赖排序加载、脚本入口、命名钩子、通用数据表、模组资源路径、
-//! 脚本插件挂载（[`PluginRegistry`]）。模组逻辑一律跑在 [`spark_vm`]（经 [`spark_script`]
-//! 多前端编译），与宿主目标平台无关。
+//! 提供：固定步 / update·draw 相位编排、模组清单与发现、依赖排序加载、脚本入口、命名钩子、
+//! 通用数据表、模组资源路径、脚本插件挂载（[`PluginRegistry`]）。模组逻辑一律跑在
+//! [`spark_vm`]（经 [`spark_script`] 多前端编译），与宿主目标平台无关。
+//! **不**拥有窗口后端（winit 等止于 `spark-renderer-wgpu` / 绑定宿主）。
 //! **不**提供游戏内容权威（方块 / 配方等由游戏仓解释 [`DataRegistry`]）。
 //! Rust 宿主若直接需要能力，请 path 依赖对应 crate，勿把 Rust API 伪装成插件。
 
 mod api;
+mod frame;
 mod hooks;
 mod loader;
 mod manifest;
 mod registry;
+mod run;
 mod vfs;
 
 pub use api::{BuiltinApi, ENGINE_NATIVES};
+pub use frame::{
+    FrameLoop, FrameLoopConfig, LoopedHost2d, LoopedHost3d, StepMode,
+};
 pub use hooks::{HookBus, HookRef};
 pub use loader::{LoadedMod, ModLoader};
 pub use manifest::ModManifest;
 pub use registry::{DataRegistry, RegValue};
+pub use run::{run_game, run_game_3d, run_game_3d_with, run_game_with};
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
 pub use vfs::ModVfs;
 
