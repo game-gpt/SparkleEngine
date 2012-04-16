@@ -1,0 +1,31 @@
+[package]
+name = "spark-napi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark Node-API 绑定：经 npm 派发引擎宿主能力"
+keywords = ["spark", "napi", "nodejs", "npm"]
+categories = ["game-development", "api-bindings"]
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# 启用后生成 Node-API 导出（需本机 Node / napi 构建链）。
+node = ["dep:napi", "dep:napi-derive"]
+
+[dependencies]
+spark-core = { workspace = true }
+spark-asset = { workspace = true }
+spark-geometry = { workspace = true }
+thiserror = { workspace = true }
+napi = { version = "2", default-features = false, features = ["napi4"], optional = true }
+napi-derive = { version = "2", optional = true }
+
+[package.metadata.napi]
+# npm 包名（发布时由 CI / 文档使用）
+name = "spark-engine"
