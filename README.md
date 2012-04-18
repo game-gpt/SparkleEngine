@@ -1,6 +1,6 @@
 # Spark Engine
 
-通用 **2D 游戏元引擎**（Rust）。提供 ECS、时间、事件与应用壳等基础设施，**不包含**任何具体游戏玩法。
+通用 **2D 游戏元引擎**（Rust）。提供 ECS、时间、事件与 Wasm / Node 派发等基础设施，**不包含**任何具体游戏玩法。
 
 呈现目标为现代 GPU API（wgpu：DX12 / Vulkan / Metal / WebGL2 方向）。**不是**第三方引擎的 fork。
 
@@ -9,18 +9,35 @@
 工具链见 `rust-toolchain.toml`。
 
 ```bash
-cargo run -p spark-app
+# 原生 N-API → packages/spark-<short>/spark.<triple>.node
+node scripts/build/napi.mjs
+
+# Wasm（spark-wasm）→ 拷入 npm Wasm 包
+rustup target add wasm32-unknown-unknown
+cargo build -p spark-wasm --target wasm32-unknown-unknown --release
+npm run copy:wasm --prefix packages/spark-unknown-wasm32
 ```
 
 ## 目录布局
 
 ```text
 projects/
-  foundation/   # 基础运行时（core / ecs / time / event / input / geometry）
+  foundation/   # 基础运行时（core / logger / ecs / time / event / input / geometry / physics / net / asset / debugger）
   graphics/     # 渲染与媒体（renderer / widget / audio / video …）
   scripting/    # GC / VM / 脚本前端
   gameplay/     # 模组壳、体裁引擎、脚本插件
-  bindings/     # 应用壳（spark-app）
+  bindings/     # 派发绑定（spark-wasm / spark-napi）
+```
+
+npm 包在仓库 `packages/`（不进 Cargo members）：
+
+```text
+packages/
+  spark-engine/           # TS 元包：resolveNativePath → require(.node)
+  spark-win32-x64/        # 二进制袋（main = spark.win32-x64-msvc.node）
+  spark-darwin-arm64/     # …
+  spark-linux-x64/        # …
+  spark-unknown-wasm32/   # Wasm（承接 spark-wasm 产物；可有 TS 胶水）
 ```
 
 ## Crate 一览（当前脚手架）
@@ -30,11 +47,17 @@ projects/
 | Crate | 职责 |
 |-------|------|
 | `spark-core` | 基础类型与错误 |
+| `spark-logger` | 分级日志、目标过滤与可插拔 sink |
 | `spark-geometry` | 2D 几何：向量运算、圆/线段/射线、变换与相交 |
-| `spark-ecs` | ECS 世界占位 |
-| `spark-time` | 时间步占位 |
+| `spark-ecs` | Archetype ECS：Entity / Component / Query / Resource / Schedule |
+| `spark-time` | 固定/可变时间步、缩放与暂停 |
 | `spark-event` | 事件总线占位 |
 | `spark-input` | 键鼠输入状态 |
+| `spark-physics` | 2D 刚体、宽窄相与步进框架 |
+| `spark-circuit` | 导体图、通道与可达查询框架 |
+| `spark-net` | 传输抽象、包序号与客户端预测框架 |
+| `spark-asset` | 资源句柄、缓存、加载器与热重载钩子 |
+| `spark-debugger` | 调试绘制、帧统计与检查器钩子 |
 
 ### graphics
 
@@ -44,7 +67,7 @@ projects/
 | `spark-font` | 字体装载、字形栅格化与 CPU 图集 |
 | `spark-image` | 像素图装载、精灵裁切与九宫格拉伸 |
 | `spark-renderer` | 2D 绘制列表 / 帧上下文 / 宿主契约（后端无关） |
-| `spark-renderer-wgpu` | wgpu 窗口壳与批绘制（消费 shader / font） |
+| `spark-renderer-wgpu` | wgpu 窗口事件泵与批绘制（帧编排在 `spark-engine`） |
 | `spark-widget` | 立即模式 Widget 系统 |
 | `spark-media` | Symphonia 容器探测 / 解复用 / 音频 PCM 解码（audio·video 共用） |
 | `spark-audio` | 混音、程序化短音与文件播放（消费 `spark-media`） |
@@ -66,7 +89,7 @@ projects/
 
 | Crate | 职责 |
 |-------|------|
-| `spark-engine` | VM 之上的模组加载、钩子、数据表与资源挂载（模组跑 `spark-vm`） |
+| `spark-engine` | 帧主循环编排 + VM 之上的模组加载、钩子、数据表与资源挂载（模组跑 `spark-vm`） |
 | `spark-engine-rts` | RTS 特异化：选取、指令队列、迷雾骨架 |
 | `spark-engine-stg` | STG 特异化：弹幕池、发射器、判定与关卡时钟 |
 | `spark-engine-rpg` | RPG 特异化：队伍、背包、属性、任务、回合序 |
@@ -80,4 +103,13 @@ projects/
 
 | Crate | 职责 |
 |-------|------|
-| `spark-app` | 应用壳演示入口 |
+| `spark-wasm` | Wasm cdylib（C ABI）；产物拷至 `packages/spark-unknown-wasm32` |
+| `spark-napi` | Node-API 原生绑定（feature `node`）；产物发布到 `packages/spark-<platform>` |
+
+### npm 包（`packages/`）
+
+| 包名 | 职责 |
+|------|------|
+| `spark-engine` | TS 入口：`resolveNativePath` / `loadSpark` |
+| `spark-win32-x64` 等 | 原生二进制袋（`os`/`cpu` + `main` = `.node`） |
+| `spark-unknown-wasm32` | Wasm 包（承接 `spark-wasm`） |

@@ -8,7 +8,7 @@ members = [
     "projects/bindings/*",
 ]
 default-members = [
-    "projects/bindings/spark-app",
+    "projects/bindings/spark-wasm",
 ]
 
 [workspace.package]
@@ -20,11 +20,17 @@ readme = "readme.md"
 
 [workspace.dependencies]
 spark-core = { path = "projects/foundation/spark-core" }
+spark-logger = { path = "projects/foundation/spark-logger" }
 spark-geometry = { path = "projects/foundation/spark-geometry" }
 spark-ecs = { path = "projects/foundation/spark-ecs" }
 spark-time = { path = "projects/foundation/spark-time" }
 spark-event = { path = "projects/foundation/spark-event" }
 spark-input = { path = "projects/foundation/spark-input" }
+spark-physics = { path = "projects/foundation/spark-physics" }
+spark-circuit = { path = "projects/foundation/spark-circuit" }
+spark-net = { path = "projects/foundation/spark-net" }
+spark-asset = { path = "projects/foundation/spark-asset" }
+spark-debugger = { path = "projects/foundation/spark-debugger" }
 spark-shader = { path = "projects/graphics/spark-shader" }
 spark-font = { path = "projects/graphics/spark-font" }
 spark-image = { path = "projects/graphics/spark-image" }
@@ -50,7 +56,8 @@ spark-engine-stg = { path = "projects/gameplay/spark-engine-stg" }
 spark-engine-rpg = { path = "projects/gameplay/spark-engine-rpg" }
 spark-engine-platformer = { path = "projects/gameplay/spark-engine-platformer" }
 spark-engine-galgame = { path = "projects/gameplay/spark-engine-galgame" }
-spark-app = { path = "projects/bindings/spark-app" }
+spark-napi = { path = "projects/bindings/spark-napi" }
+spark-wasm = { path = "projects/bindings/spark-wasm" }
 oak-core = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
 oak-valkyrie = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
 oak-lua = { git = "https://github.com/ygg-lang/oaks.git", branch = "dev" }
