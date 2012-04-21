@@ -72,4 +72,9 @@ impl Camera3d {
     pub fn view_proj(&self, aspect: f32) -> Mat4 {
         self.proj_matrix(aspect).mul(self.view_matrix())
     }
+
+    /// 当前相机的视锥（给定宽高比）。
+    pub fn frustum(&self, aspect: f32) -> crate::frustum::Frustum {
+        crate::frustum::Frustum::from_view_proj(&self.view_proj(aspect))
+    }
 }
