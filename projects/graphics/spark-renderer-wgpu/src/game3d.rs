@@ -1,5 +1,6 @@
 //! 3D 游戏宿主：透视网格 + 深度 + 可选 HUD + 指针锁定。
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -7,7 +8,7 @@ use bytemuck::{Pod, Zeroable};
 use spark_core::{Color, SparkError};
 use spark_font::GlyphCache;
 use spark_renderer::{
-    DrawList, DrawList3d, FrameCtx, GameHost3d, Input, MeshVertex, WindowConfig,
+    DrawList, DrawList3d, FrameCtx, GameHost3d, Input, MeshResidentKey, MeshVertex, WindowConfig,
 };
 use spark_shader::{BuiltinShader, create_builtin};
 use winit::application::ApplicationHandler;
@@ -65,6 +66,12 @@ fn mat4_to_cols(m: &spark_geometry::Mat4) -> [[f32; 4]; 4] {
     ]
 }
 
+struct ResidentMesh {
+    buffer: wgpu::Buffer,
+    vertex_count: u32,
+    revision: u32,
+}
+
 struct GpuState3d {
     window: Arc<Window>,
     surface: wgpu::Surface<'static>,
@@ -84,12 +91,15 @@ struct GpuState3d {
     glyph_tex: wgpu::Texture,
     glyph_view: wgpu::TextureView,
     glyph_cache: GlyphCache,
+    /// 瞬时网格上传缓冲。
     mesh_vbo: wgpu::Buffer,
     solid_vbo: wgpu::Buffer,
     glyph_vbo: wgpu::Buffer,
     mesh_cap: u64,
     solid_cap: u64,
     glyph_cap: u64,
+    /// 按 `MeshId` 驻留的 GPU 网格。
+    mesh_cache: HashMap<u64, ResidentMesh>,
 }
 
 impl GpuState3d {
@@ -461,6 +471,7 @@ impl GpuState3d {
             mesh_cap,
             solid_cap,
             glyph_cap,
+            mesh_cache: HashMap::new(),
         })
     }
 
@@ -474,6 +485,45 @@ impl GpuState3d {
         let (tex, view) = make_depth(&self.device, width, height);
         self.depth_tex = tex;
         self.depth_view = view;
+    }
+
+    fn upload_mesh_verts(&self, vertices: &[MeshVertex]) -> Vec<MeshVertGpu> {
+        vertices
+            .iter()
+            .map(|v| MeshVertGpu {
+                pos: v.pos,
+                color: v.color,
+            })
+            .collect()
+    }
+
+    /// 确保驻留网格与 `revision` 一致，过期则重建 VBO。
+    fn ensure_resident(&mut self, key: MeshResidentKey, vertices: &[MeshVertex]) {
+        if let Some(entry) = self.mesh_cache.get(&key.id.0) {
+            if entry.revision == key.revision && entry.vertex_count as usize == vertices.len() {
+                return;
+            }
+        }
+        let gpu_verts = self.upload_mesh_verts(vertices);
+        let bytes = (gpu_verts.len() * std::mem::size_of::<MeshVertGpu>()) as u64;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("resident-mesh-vbo"),
+            size: bytes.max(4),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        if !gpu_verts.is_empty() {
+            self.queue
+                .write_buffer(&buffer, 0, bytemuck::cast_slice(&gpu_verts));
+        }
+        self.mesh_cache.insert(
+            key.id.0,
+            ResidentMesh {
+                buffer,
+                vertex_count: gpu_verts.len() as u32,
+                revision: key.revision,
+            },
+        );
     }
 
     fn render(&mut self, list: &DrawList3d) -> Result<(), SparkError> {
@@ -623,6 +673,14 @@ impl GpuState3d {
             _ => return Ok(()),
         };
         let view = frame.texture.create_view(&Default::default());
+
+        // 渲染通道开始前完成驻留上传，避免与 pass 借用冲突。
+        for mesh in &list.meshes {
+            if let Some(key) = mesh.resident {
+                self.ensure_resident(key, &mesh.vertices);
+            }
+        }
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -661,18 +719,7 @@ impl GpuState3d {
 
             let vp = mat4_to_cols(&list.view_proj);
             for mesh in &list.meshes {
-                let gpu_verts: Vec<MeshVertGpu> = mesh
-                    .vertices
-                    .iter()
-                    .map(|v: &MeshVertex| MeshVertGpu {
-                        pos: v.pos,
-                        color: v.color,
-                    })
-                    .collect();
-                if gpu_verts.is_empty() {
-                    continue;
-                }
-                if gpu_verts.len() as u64 > self.mesh_cap {
+                if mesh.vertices.is_empty() {
                     continue;
                 }
                 let uniforms = Uniforms3d {
@@ -681,10 +728,27 @@ impl GpuState3d {
                 };
                 self.queue
                     .write_buffer(&self.mesh_uniform, 0, bytemuck::bytes_of(&uniforms));
-                self.queue
-                    .write_buffer(&self.mesh_vbo, 0, bytemuck::cast_slice(&gpu_verts));
-                pass.set_vertex_buffer(0, self.mesh_vbo.slice(..));
-                pass.draw(0..gpu_verts.len() as u32, 0..1);
+
+                if let Some(key) = mesh.resident {
+                    let Some(entry) = self.mesh_cache.get(&key.id.0) else {
+                        continue;
+                    };
+                    if entry.vertex_count == 0 {
+                        continue;
+                    }
+                    let vcount = entry.vertex_count;
+                    pass.set_vertex_buffer(0, entry.buffer.slice(..));
+                    pass.draw(0..vcount, 0..1);
+                } else {
+                    let gpu_verts = self.upload_mesh_verts(&mesh.vertices);
+                    if gpu_verts.len() as u64 > self.mesh_cap {
+                        continue;
+                    }
+                    self.queue
+                        .write_buffer(&self.mesh_vbo, 0, bytemuck::cast_slice(&gpu_verts));
+                    pass.set_vertex_buffer(0, self.mesh_vbo.slice(..));
+                    pass.draw(0..gpu_verts.len() as u32, 0..1);
+                }
             }
         }
 
