@@ -16,6 +16,27 @@ impl Channel {
     pub const POWER: Self = Self(1);
 }
 
+/// `POWER` 通道上的额定聚合（无潮流求解）。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PowerBudget {
+    pub supply: f32,
+    pub demand: f32,
+}
+
+impl PowerBudget {
+    pub fn satisfied(self) -> bool {
+        self.supply + 1e-5 >= self.demand
+    }
+
+    pub fn surplus(self) -> f32 {
+        (self.supply - self.demand).max(0.0)
+    }
+
+    pub fn deficit(self) -> f32 {
+        (self.demand - self.supply).max(0.0)
+    }
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CircuitError {
     #[error("未知节点：{0}")]
@@ -29,6 +50,10 @@ pub struct CircuitGraph {
     /// `adj[channel][node] = 邻居列表`
     adj: Vec<Vec<Vec<NodeId>>>,
     dirty: bool,
+    /// 节点供电额定（>0 视为源）。长度随节点增长。
+    power_supply: Vec<f32>,
+    /// 节点用电需求（>0 视为汇）。
+    power_demand: Vec<f32>,
 }
 
 impl CircuitGraph {
@@ -59,6 +84,8 @@ impl CircuitGraph {
         for ch in &mut self.adj {
             ch.push(Vec::new());
         }
+        self.power_supply.push(0.0);
+        self.power_demand.push(0.0);
         self.dirty = true;
         id
     }
@@ -113,6 +140,8 @@ impl CircuitGraph {
     pub fn clear(&mut self) {
         self.node_count = 0;
         self.adj.clear();
+        self.power_supply.clear();
+        self.power_demand.clear();
         self.dirty = true;
     }
 
@@ -216,6 +245,73 @@ impl CircuitGraph {
         Ok(labels[a as usize] == labels[b as usize])
     }
 
+    /// 将节点标为电源（额定 `supply`，≤0 清除源角色）。不改需求。
+    pub fn set_power_source(&mut self, node: NodeId, supply: f32) -> Result<(), CircuitError> {
+        if node >= self.node_count {
+            return Err(CircuitError::UnknownNode(node));
+        }
+        self.power_supply[node as usize] = supply.max(0.0);
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// 将节点标为负载（需求 `demand`，≤0 清除汇角色）。不改供电。
+    pub fn set_power_sink(&mut self, node: NodeId, demand: f32) -> Result<(), CircuitError> {
+        if node >= self.node_count {
+            return Err(CircuitError::UnknownNode(node));
+        }
+        self.power_demand[node as usize] = demand.max(0.0);
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// 清除节点的供电与需求角色。
+    pub fn clear_power_role(&mut self, node: NodeId) -> Result<(), CircuitError> {
+        if node >= self.node_count {
+            return Err(CircuitError::UnknownNode(node));
+        }
+        self.power_supply[node as usize] = 0.0;
+        self.power_demand[node as usize] = 0.0;
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn power_supply_of(&self, node: NodeId) -> Result<f32, CircuitError> {
+        if node >= self.node_count {
+            return Err(CircuitError::UnknownNode(node));
+        }
+        Ok(self.power_supply[node as usize])
+    }
+
+    pub fn power_demand_of(&self, node: NodeId) -> Result<f32, CircuitError> {
+        if node >= self.node_count {
+            return Err(CircuitError::UnknownNode(node));
+        }
+        Ok(self.power_demand[node as usize])
+    }
+
+    /// 从若干电源出发，在 `POWER` 通道上汇总可达供电与负载。
+    ///
+    /// 空源：supply/demand 均为 0。不做潮流分配，只做额定聚合。
+    pub fn power_budget(&self, sources: &[NodeId]) -> Result<PowerBudget, CircuitError> {
+        for &s in sources {
+            if s >= self.node_count {
+                return Err(CircuitError::UnknownNode(s));
+            }
+        }
+        let mask = self.bfs(sources, Channel::POWER);
+        let mut supply = 0.0f32;
+        let mut demand = 0.0f32;
+        for (i, &reach) in mask.iter().enumerate() {
+            if !reach {
+                continue;
+            }
+            supply += self.power_supply[i];
+            demand += self.power_demand[i];
+        }
+        Ok(PowerBudget { supply, demand })
+    }
+
     fn bfs(&self, sources: &[NodeId], channel: Channel) -> Vec<bool> {
         let n = self.node_count as usize;
         let mut seen = vec![false; n];
@@ -302,5 +398,26 @@ mod tests {
         let lists = g.component_lists(Channel::CONTROL);
         assert_eq!(lists.len(), 2);
         assert!(!g.same_component(a, c, Channel::CONTROL).unwrap());
+    }
+
+    #[test]
+    fn power_budget_cut_isolates_load() {
+        let mut g = CircuitGraph::new();
+        let gen = g.add_node();
+        let cable = g.add_node();
+        let load = g.add_node();
+        g.set_power_source(gen, 10.0).unwrap();
+        g.set_power_sink(load, 4.0).unwrap();
+        g.link(gen, cable, Channel::POWER).unwrap();
+        g.link(cable, load, Channel::POWER).unwrap();
+        let ok = g.power_budget(&[gen]).unwrap();
+        assert!(ok.satisfied());
+        assert!((ok.supply - 10.0).abs() < 1e-5);
+        assert!((ok.demand - 4.0).abs() < 1e-5);
+
+        g.unlink(cable, load, Channel::POWER).unwrap();
+        let cut = g.power_budget(&[gen]).unwrap();
+        assert!((cut.demand - 0.0).abs() < 1e-5);
+        assert!(cut.satisfied());
     }
 }
