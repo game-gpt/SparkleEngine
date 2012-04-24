@@ -403,20 +403,20 @@ mod tests {
     #[test]
     fn power_budget_cut_isolates_load() {
         let mut g = CircuitGraph::new();
-        let gen = g.add_node();
+        let source = g.add_node();
         let cable = g.add_node();
         let load = g.add_node();
-        g.set_power_source(gen, 10.0).unwrap();
+        g.set_power_source(source, 10.0).unwrap();
         g.set_power_sink(load, 4.0).unwrap();
-        g.link(gen, cable, Channel::POWER).unwrap();
+        g.link(source, cable, Channel::POWER).unwrap();
         g.link(cable, load, Channel::POWER).unwrap();
-        let ok = g.power_budget(&[gen]).unwrap();
+        let ok = g.power_budget(&[source]).unwrap();
         assert!(ok.satisfied());
         assert!((ok.supply - 10.0).abs() < 1e-5);
         assert!((ok.demand - 4.0).abs() < 1e-5);
 
         g.unlink(cable, load, Channel::POWER).unwrap();
-        let cut = g.power_budget(&[gen]).unwrap();
+        let cut = g.power_budget(&[source]).unwrap();
         assert!((cut.demand - 0.0).abs() < 1e-5);
         assert!(cut.satisfied());
     }
