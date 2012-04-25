@@ -1,6 +1,15 @@
 //! Spark 分级日志。可插拔 sink，不含游戏遥测 schema。
+//!
+//! 宏用法与常见日志库一致：
+//! ```ignore
+//! info!("ready");
+//! info!(target: "ac3", "chunks={}", n);
+//! ```
 
 use std::fmt::Write as _;
+use std::fs::{File, OpenOptions};
+use std::io::Write as IoWrite;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// 日志级别（数值越大越严重）。
@@ -39,18 +48,65 @@ pub trait LogSink: Send + Sync {
     fn log(&self, record: &Record);
 }
 
+fn format_line(record: &Record) -> String {
+    format!(
+        "[{}] [{}] {}",
+        record.level.as_str(),
+        record.target,
+        record.message
+    )
+}
+
 /// 默认 stderr sink。
 #[derive(Debug, Default)]
 pub struct StderrSink;
 
 impl LogSink for StderrSink {
     fn log(&self, record: &Record) {
-        eprintln!(
-            "[{}] [{}] {}",
-            record.level.as_str(),
-            record.target,
-            record.message
-        );
+        eprintln!("{}", format_line(record));
+    }
+}
+
+/// 追加写入文件（每条立即 flush，便于闪退排查）。
+#[derive(Debug)]
+pub struct FileSink {
+    file: Mutex<File>,
+    path: PathBuf,
+}
+
+impl FileSink {
+    /// 打开或创建日志文件；父目录不存在则创建。
+    pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)?;
+        Ok(Self {
+            file: Mutex::new(file),
+            path,
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl LogSink for FileSink {
+    fn log(&self, record: &Record) {
+        let line = format_line(record);
+        let mut guard = match self.file.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        let _ = writeln!(guard, "{line}");
+        let _ = guard.flush();
     }
 }
 
@@ -155,6 +211,14 @@ impl LoggerBuilder {
         self.sink(Arc::new(StderrSink))
     }
 
+    /// 追加文件 sink；打开失败则跳过（仍可用其它 sink）。
+    pub fn file(self, path: impl AsRef<Path>) -> Self {
+        match FileSink::open(path) {
+            Ok(sink) => self.sink(Arc::new(sink)),
+            Err(_) => self,
+        }
+    }
+
     pub fn build(self) -> Logger {
         let sinks = if self.sinks.is_empty() {
             vec![Arc::new(StderrSink) as Arc<dyn LogSink>]
@@ -187,31 +251,91 @@ pub fn format_msg(args: std::fmt::Arguments<'_>) -> String {
     buf
 }
 
+/// 安装 stderr + 可选文件，并挂 panic 钩子把 panic 写入同一通道。
+pub fn install_std(file: Option<&Path>, min_level: Level) -> bool {
+    let mut b = Logger::builder().min_level(min_level).stderr();
+    if let Some(path) = file {
+        b = b.file(path);
+    }
+    let ok = install_global(b.build());
+    if ok {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
+                (*s).to_string()
+            } else if let Some(s) = info.payload().downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Box<Any>".into()
+            };
+            let loc = info
+                .location()
+                .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+                .unwrap_or_else(|| "?".into());
+            global().error("panic", format!("{msg} @ {loc}"));
+            default_hook(info);
+        }));
+    }
+    ok
+}
+
 #[macro_export]
-macro_rules! spark_log {
-    ($level:expr, $target:expr, $($arg:tt)*) => {{
+macro_rules! log {
+    ($level:expr, target: $target:expr, $($arg:tt)*) => {{
         $crate::global().log($level, $target, $crate::format_msg(format_args!($($arg)*)));
+    }};
+    ($level:expr, $($arg:tt)*) => {{
+        $crate::global().log($level, module_path!(), $crate::format_msg(format_args!($($arg)*)));
     }};
 }
 
 #[macro_export]
-macro_rules! spark_info {
-    ($target:expr, $($arg:tt)*) => {
-        $crate::spark_log!($crate::Level::Info, $target, $($arg)*)
+macro_rules! trace {
+    (target: $target:expr, $($arg:tt)*) => {
+        $crate::log!($crate::Level::Trace, target: $target, $($arg)*)
+    };
+    ($($arg:tt)*) => {
+        $crate::log!($crate::Level::Trace, $($arg)*)
     };
 }
 
 #[macro_export]
-macro_rules! spark_warn {
-    ($target:expr, $($arg:tt)*) => {
-        $crate::spark_log!($crate::Level::Warn, $target, $($arg)*)
+macro_rules! debug {
+    (target: $target:expr, $($arg:tt)*) => {
+        $crate::log!($crate::Level::Debug, target: $target, $($arg)*)
+    };
+    ($($arg:tt)*) => {
+        $crate::log!($crate::Level::Debug, $($arg)*)
     };
 }
 
 #[macro_export]
-macro_rules! spark_error {
-    ($target:expr, $($arg:tt)*) => {
-        $crate::spark_log!($crate::Level::Error, $target, $($arg)*)
+macro_rules! info {
+    (target: $target:expr, $($arg:tt)*) => {
+        $crate::log!($crate::Level::Info, target: $target, $($arg)*)
+    };
+    ($($arg:tt)*) => {
+        $crate::log!($crate::Level::Info, $($arg)*)
+    };
+}
+
+#[macro_export]
+macro_rules! warn {
+    (target: $target:expr, $($arg:tt)*) => {
+        $crate::log!($crate::Level::Warn, target: $target, $($arg)*)
+    };
+    ($($arg:tt)*) => {
+        $crate::log!($crate::Level::Warn, $($arg)*)
+    };
+}
+
+#[macro_export]
+macro_rules! error {
+    (target: $target:expr, $($arg:tt)*) => {
+        $crate::log!($crate::Level::Error, target: $target, $($arg)*)
+    };
+    ($($arg:tt)*) => {
+        $crate::log!($crate::Level::Error, $($arg)*)
     };
 }
 
@@ -232,5 +356,21 @@ mod tests {
         assert_eq!(snap.len(), 1);
         assert_eq!(snap[0].level, Level::Warn);
         assert_eq!(snap[0].message, "keep");
+    }
+
+    #[test]
+    fn file_sink_appends() {
+        let dir = std::env::temp_dir().join("spark_logger_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("t.log");
+        let _ = std::fs::remove_file(&path);
+        let sink = FileSink::open(&path).expect("open");
+        sink.log(&Record {
+            level: Level::Info,
+            target: "test",
+            message: "hello".into(),
+        });
+        let text = std::fs::read_to_string(&path).expect("read");
+        assert!(text.contains("hello"));
     }
 }
