@@ -26,7 +26,7 @@ pub use mat4::Mat4;
 pub use polygon::Polygon;
 pub use ray3::{ray_aabb, ray_voxel, ray_voxel_dda, Ray3, VoxelHit};
 pub use spark_core::{Rect, Vec2};
-pub use sweep3::{aabb_sweep, aabb_sweep_allowed, SweepHit};
+pub use sweep3::{aabb_sweep, aabb_sweep_resolve, SweepHit};
 pub use transform::Transform2;
 pub use vec3::Vec3;
 pub use vec_ext::Vec2Ext;
