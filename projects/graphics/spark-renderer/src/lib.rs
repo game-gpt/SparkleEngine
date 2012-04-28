@@ -7,47 +7,17 @@ mod camera3d;
 mod draw;
 mod draw3d;
 mod frustum;
+mod texture;
 
 pub use camera3d::Camera3d;
 pub use draw::{DrawList, QuadCmd, TextCmd};
-pub use draw3d::{DrawList3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex};
+pub use draw3d::{
+    DrawList3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex, TexMeshCmd, TexMeshVertex,
+};
 pub use frustum::{CullParams, Frustum};
 pub use spark_geometry::{Aabb3, Mat4, Vec3};
 pub use spark_input::{ButtonState, Input, Key, MouseBtn};
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use spark_core::Color;
-    use std::sync::Arc;
-
-    #[test]
-    fn retain_visible_drops_far_mesh() {
-        let cam = Camera3d {
-            eye: Vec3::new(0.0, 0.0, 5.0),
-            yaw: 0.0,
-            pitch: 0.0,
-            fov_y_rad: 70f32.to_radians(),
-            near: 0.1,
-            far: 100.0,
-        };
-        let mut list = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), cam.view_proj(16.0 / 9.0));
-        let verts: Arc<[MeshVertex]> = Arc::from(vec![MeshVertex::new(0.0, 0.0, 0.0, Color::rgb(1.0, 1.0, 1.0))]);
-        list.mesh_culled(
-            Mat4::translation(Vec3::new(0.0, 0.0, 0.0)),
-            Arc::clone(&verts),
-            Aabb3::from_min_max(Vec3::new(-0.5, -0.5, -0.5), Vec3::new(0.5, 0.5, 0.5)),
-        );
-        list.mesh_culled(
-            Mat4::translation(Vec3::new(0.0, 0.0, -500.0)),
-            verts,
-            Aabb3::from_min_max(Vec3::new(-0.5, -0.5, -0.5), Vec3::new(0.5, 0.5, 0.5)),
-        );
-        assert_eq!(list.meshes.len(), 2);
-        list.retain_visible(CullParams::new(cam.eye).with_max_distance(50.0));
-        assert_eq!(list.meshes.len(), 1);
-    }
-}
+pub use texture::{alloc_texture_id, RgbaImage, TextureId};
 
 /// 启动窗口配置（后端无关字段）。
 #[derive(Debug, Clone)]
@@ -96,5 +66,48 @@ pub trait GameHost3d {
     /// 是否请求指针锁定（第一人称）。
     fn cursor_grab(&self) -> bool {
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spark_core::Color;
+    use std::sync::Arc;
+
+    #[test]
+    fn retain_visible_drops_far_mesh() {
+        let cam = Camera3d {
+            eye: Vec3::new(0.0, 0.0, 5.0),
+            yaw: 0.0,
+            pitch: 0.0,
+            fov_y_rad: 70f32.to_radians(),
+            near: 0.1,
+            far: 100.0,
+        };
+        let mut list = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), cam.view_proj(16.0 / 9.0));
+        let verts: Arc<[MeshVertex]> =
+            Arc::from(vec![MeshVertex::new(0.0, 0.0, 0.0, Color::rgb(1.0, 1.0, 1.0))]);
+        list.mesh_culled(
+            Mat4::translation(Vec3::new(0.0, 0.0, 0.0)),
+            Arc::clone(&verts),
+            Aabb3::from_min_max(Vec3::new(-0.5, -0.5, -0.5), Vec3::new(0.5, 0.5, 0.5)),
+        );
+        list.mesh_culled(
+            Mat4::translation(Vec3::new(0.0, 0.0, -500.0)),
+            verts,
+            Aabb3::from_min_max(Vec3::new(-0.5, -0.5, -0.5), Vec3::new(0.5, 0.5, 0.5)),
+        );
+        assert_eq!(list.meshes.len(), 2);
+        list.retain_visible(CullParams::new(cam.eye).with_max_distance(50.0));
+        assert_eq!(list.meshes.len(), 1);
+    }
+
+    #[test]
+    fn create_texture_queues_upload() {
+        let mut list = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), Mat4::IDENTITY);
+        let id = list.create_texture(1, 1, vec![255, 0, 0, 255]).unwrap();
+        assert!(id.0 >= 1);
+        assert_eq!(list.texture_uploads.len(), 1);
     }
 }
