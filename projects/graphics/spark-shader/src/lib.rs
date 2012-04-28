@@ -14,6 +14,8 @@ pub enum BuiltinShader {
     TexturedGlyph,
     /// 透视空间顶点色三角网格。
     SolidMesh3d,
+    /// 透视空间 RGBA 纹理三角网格。
+    TexturedMesh3d,
 }
 
 impl BuiltinShader {
@@ -22,6 +24,7 @@ impl BuiltinShader {
             Self::SolidQuad => "spark-shader/solid-quad",
             Self::TexturedGlyph => "spark-shader/textured-glyph",
             Self::SolidMesh3d => "spark-shader/solid-mesh3d",
+            Self::TexturedMesh3d => "spark-shader/textured-mesh3d",
         }
     }
 
@@ -30,6 +33,7 @@ impl BuiltinShader {
             Self::SolidQuad => include_str!("shaders/quad.wgsl"),
             Self::TexturedGlyph => include_str!("shaders/text.wgsl"),
             Self::SolidMesh3d => include_str!("shaders/mesh3d.wgsl"),
+            Self::TexturedMesh3d => include_str!("shaders/mesh3d_tex.wgsl"),
         }
     }
 
@@ -88,7 +92,12 @@ mod tests {
 
     #[test]
     fn builtin_sources_are_nonempty() {
-        for s in [BuiltinShader::SolidQuad, BuiltinShader::TexturedGlyph] {
+        for s in [
+            BuiltinShader::SolidQuad,
+            BuiltinShader::TexturedGlyph,
+            BuiltinShader::SolidMesh3d,
+            BuiltinShader::TexturedMesh3d,
+        ] {
             validate_source(&s.into()).unwrap();
             assert!(s.wgsl().contains("vs_main"));
             assert!(s.wgsl().contains("fs_main"));
