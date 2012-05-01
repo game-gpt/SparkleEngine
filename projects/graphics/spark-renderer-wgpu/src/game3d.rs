@@ -66,6 +66,11 @@ fn mat4_to_cols(m: &spark_geometry::Mat4) -> [[f32; 4]; 4] {
     ]
 }
 
+/// 供 `tex_mesh` 模块复用。
+pub(crate) fn mat4_to_cols_pub(m: &spark_geometry::Mat4) -> [[f32; 4]; 4] {
+    mat4_to_cols(m)
+}
+
 struct ResidentMesh {
     buffer: wgpu::Buffer,
     vertex_count: u32,
@@ -100,6 +105,7 @@ struct GpuState3d {
     glyph_cap: u64,
     /// 按 `MeshId` 驻留的 GPU 网格。
     mesh_cache: HashMap<u64, ResidentMesh>,
+    tex_mesh: crate::tex_mesh::TexMeshGpu,
 }
 
 impl GpuState3d {
@@ -446,6 +452,7 @@ impl GpuState3d {
         });
 
         tracing::info!("GPU 3D ready");
+        let tex_mesh = crate::tex_mesh::TexMeshGpu::new(&device, format);
         Ok(Self {
             window,
             surface,
@@ -472,6 +479,7 @@ impl GpuState3d {
             solid_cap,
             glyph_cap,
             mesh_cache: HashMap::new(),
+            tex_mesh,
         })
     }
 
@@ -680,6 +688,9 @@ impl GpuState3d {
                 self.ensure_resident(key, &mesh.vertices);
             }
         }
+        self.tex_mesh
+            .ingest_uploads(&self.device, &self.queue, &list.texture_uploads)?;
+        self.tex_mesh.prepare_residents(&self.device, list);
 
         let mut encoder = self
             .device
@@ -750,6 +761,7 @@ impl GpuState3d {
                     pass.draw(0..gpu_verts.len() as u32, 0..1);
                 }
             }
+            self.tex_mesh.draw(&mut pass, &self.queue, list)?;
         }
 
         {
