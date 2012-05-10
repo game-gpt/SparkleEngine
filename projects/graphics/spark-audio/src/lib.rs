@@ -1,9 +1,9 @@
 //! 音频框架：输出设备 + 程序化短音 + Symphonia 文件解码（经 `spark-media`）。
 //!
-//! **不**包含曲库或玩法语义；游戏自行映射事件到 `Tone` / 资源路径。
+//! **不**包含曲库或玩法语义；游戏自行映射事件到 [`PlayRequest`] / `Tone` / 资源路径。
 
 use std::f32::consts::PI;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use rodio::buffer::SamplesBuffer;
@@ -28,6 +28,67 @@ impl Tone {
             freq_hz,
             duration_ms,
             volume,
+        }
+    }
+}
+
+/// 播放请求（事件式，由宿主在帧末 `flush`）。
+#[derive(Debug, Clone)]
+pub enum PlayRequest {
+    Tone(Tone),
+    File(PathBuf),
+}
+
+/// 待播放队列。系统只 `push`，音频宿主 `flush` 到 [`AudioBus`]。
+#[derive(Debug, Default)]
+pub struct AudioQueue {
+    pending: Vec<PlayRequest>,
+}
+
+impl AudioQueue {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push(&mut self, req: PlayRequest) {
+        self.pending.push(req);
+    }
+
+    pub fn play_tone(&mut self, tone: Tone) {
+        self.push(PlayRequest::Tone(tone));
+    }
+
+    pub fn play_file(&mut self, path: impl Into<PathBuf>) {
+        self.push(PlayRequest::File(path.into()));
+    }
+
+    pub fn len(&self) -> usize {
+        self.pending.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.pending.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.pending.clear();
+    }
+
+    /// 排空队列并交给总线播放。文件失败写入 `errors`（若提供）。
+    pub fn flush(&mut self, bus: &AudioBus, mut errors: Option<&mut Vec<SparkError>>) {
+        for req in self.pending.drain(..) {
+            match req {
+                PlayRequest::Tone(t) => bus.play_tone(t),
+                PlayRequest::File(path) => {
+                    if let Err(e) = bus.play_file(&path) {
+                        if let Some(out) = errors.as_deref_mut() {
+                            out.push(e);
+                        } else {
+                            tracing::warn!(error = %e, path = %path.display(), "音频文件播放失败");
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -90,6 +151,9 @@ impl AudioBus {
 
     /// 用 Symphonia（`spark-media`）解码文件并播放。
     pub fn play_file(&self, path: impl AsRef<Path>) -> Result<(), SparkError> {
+        if self.is_muted() {
+            return Ok(());
+        }
         let pcm = AudioDecoder::decode_path(path, None)?;
         self.play_pcm(&pcm)
     }
@@ -170,5 +234,27 @@ impl Source for SineWave {
     fn total_duration(&self) -> Option<Duration> {
         let ms = self.samples_left as u64 * 1000 / self.sample_rate as u64;
         Some(Duration::from_millis(ms))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn queue_drains_into_silent_bus() {
+        let bus = AudioBus {
+            _stream: None,
+            handle: None,
+            muted: true,
+        };
+        let mut q = AudioQueue::new();
+        q.play_tone(Tone::new(440.0, 10, 0.5));
+        q.play_file("nope.wav");
+        assert_eq!(q.len(), 2);
+        let mut errs = Vec::new();
+        q.flush(&bus, Some(&mut errs));
+        assert!(q.is_empty());
+        assert!(errs.is_empty());
     }
 }
