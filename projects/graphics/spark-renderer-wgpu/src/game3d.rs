@@ -8,8 +8,8 @@ use bytemuck::{Pod, Zeroable};
 use spark_core::{Color, SparkError};
 use spark_font::GlyphCache;
 use spark_renderer::{
-    DrawList, DrawList3d, FrameCtx, GameHost3d, Input, MeshCmd, MeshResidentKey, MeshVertex,
-    WindowConfig,
+    DrawList, DrawList3d, FrameCtx, FrameLights3d, GameHost3d, Input, MeshCmd, MeshResidentKey,
+    MeshVertex, WindowConfig,
 };
 use spark_shader::{BuiltinShader, create_builtin};
 use winit::application::ApplicationHandler;
@@ -30,9 +30,33 @@ struct Uniforms3d {
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
+struct FrameLightsGpu {
+    sun_dir: [f32; 4],
+    sun_color: [f32; 4],
+    ambient: [f32; 4],
+    fog_color_density: [f32; 4],
+    eye: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct MeshVertGpu {
     pos: [f32; 3],
+    normal: [f32; 3],
     color: [f32; 4],
+}
+
+impl FrameLightsGpu {
+    fn from_lights(l: &FrameLights3d) -> Self {
+        let d = l.sun_dir.normalized();
+        Self {
+            sun_dir: [d.x, d.y, d.z, 0.0],
+            sun_color: l.sun_color.to_array(),
+            ambient: l.ambient.to_array(),
+            fog_color_density: [l.fog_color.r, l.fog_color.g, l.fog_color.b, l.fog_density],
+            eye: [l.eye.x, l.eye.y, l.eye.z, 0.0],
+        }
+    }
 }
 
 #[repr(C)]
@@ -86,14 +110,16 @@ struct GpuState3d {
     config: wgpu::SurfaceConfiguration,
     depth_view: wgpu::TextureView,
     depth_tex: wgpu::Texture,
-    /// 不透明网格：写深度，Less。
+    /// 不透明网格：写深度，Less，前向光照。
     mesh_pipeline: wgpu::RenderPipeline,
-    /// 天空 / 天体：不写深度，Always（绘制顺序即前后）。
+    /// 天空 / 天体：不写深度，Always，无光照。
     sky_pipeline: wgpu::RenderPipeline,
     solid_pipeline: wgpu::RenderPipeline,
     glyph_pipeline: wgpu::RenderPipeline,
     mesh_bind: wgpu::BindGroup,
     mesh_uniform: wgpu::Buffer,
+    lights_bind: wgpu::BindGroup,
+    lights_uniform: wgpu::Buffer,
     solid_bind: wgpu::BindGroup,
     glyph_bind: wgpu::BindGroup,
     hud_uniform: wgpu::Buffer,
@@ -168,6 +194,7 @@ impl GpuState3d {
         let (depth_tex, depth_view) = make_depth(&device, width, height);
 
         let mesh_shader = create_builtin(&device, BuiltinShader::SolidMesh3d);
+        let lit_mesh_shader = create_builtin(&device, BuiltinShader::LitSolidMesh3d);
         let solid_shader = create_builtin(&device, BuiltinShader::SolidQuad);
         let glyph_shader = create_builtin(&device, BuiltinShader::TexturedGlyph);
 
@@ -184,9 +211,28 @@ impl GpuState3d {
                 count: None,
             }],
         });
+        let lights_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("frame-lights-bgl"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
         let mesh_uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("mesh3d-uniform"),
             size: std::mem::size_of::<Uniforms3d>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let lights_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("frame-lights-uniform"),
+            size: std::mem::size_of::<FrameLightsGpu>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -198,26 +244,46 @@ impl GpuState3d {
                 resource: mesh_uniform.as_entire_binding(),
             }],
         });
-        let mesh_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("mesh3d-pl"),
+        let lights_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("frame-lights-bg"),
+            layout: &lights_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: lights_uniform.as_entire_binding(),
+            }],
+        });
+        let mesh_vert_layout = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<MeshVertGpu>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &wgpu::vertex_attr_array![
+                0 => Float32x3,
+                1 => Float32x3,
+                2 => Float32x4
+            ],
+        };
+        // SkyPass：无光照，仅 object uniform。
+        let sky_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("mesh3d-sky-pl"),
             bind_group_layouts: &[Some(&mesh_bgl)],
             immediate_size: 0,
         });
+        // 不透明：object + frame lights。
+        let mesh_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("mesh3d-lit-pl"),
+            bind_group_layouts: &[Some(&mesh_bgl), Some(&lights_bgl)],
+            immediate_size: 0,
+        });
         let mesh_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("mesh3d"),
+            label: Some("mesh3d-lit"),
             layout: Some(&mesh_pl),
             vertex: wgpu::VertexState {
-                module: &mesh_shader,
+                module: &lit_mesh_shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<MeshVertGpu>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4],
-                })],
+                buffers: &[Some(mesh_vert_layout.clone())],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &mesh_shader,
+                module: &lit_mesh_shader,
                 entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
@@ -242,19 +308,15 @@ impl GpuState3d {
             multiview_mask: None,
             cache: None,
         });
-        // SkyPass：同顶点色 shader，关闭深度写入，Always 比较，避免与天体共面竞争。
+        // SkyPass：同顶点布局，关闭深度写入，Always 比较。
         let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("mesh3d-sky"),
-            layout: Some(&mesh_pl),
+            layout: Some(&sky_pl),
             vertex: wgpu::VertexState {
                 module: &mesh_shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<MeshVertGpu>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4],
-                })],
+                buffers: &[Some(mesh_vert_layout)],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &mesh_shader,
@@ -268,7 +330,6 @@ impl GpuState3d {
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
-                // 内向穹顶：顶点按内表面绕序，背面剔除仍适用。
                 cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
@@ -497,7 +558,7 @@ impl GpuState3d {
         });
 
         tracing::info!("GPU 3D ready");
-        let tex_mesh = crate::tex_mesh::TexMeshGpu::new(&device, format);
+        let tex_mesh = crate::tex_mesh::TexMeshGpu::new(&device, format, &lights_bgl);
         Ok(Self {
             window,
             surface,
@@ -512,6 +573,8 @@ impl GpuState3d {
             glyph_pipeline,
             mesh_bind,
             mesh_uniform,
+            lights_bind,
+            lights_uniform,
             solid_bind,
             glyph_bind,
             hud_uniform,
@@ -546,6 +609,7 @@ impl GpuState3d {
             .iter()
             .map(|v| MeshVertGpu {
                 pos: v.pos,
+                normal: v.normal,
                 color: v.color,
             })
             .collect()
@@ -780,6 +844,10 @@ impl GpuState3d {
             .ingest_uploads(&self.device, &self.queue, &list.texture_uploads)?;
         self.tex_mesh.prepare_residents(&self.device, list);
 
+        let lights_gpu = FrameLightsGpu::from_lights(&list.lights);
+        self.queue
+            .write_buffer(&self.lights_uniform, 0, bytemuck::bytes_of(&lights_gpu));
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -854,8 +922,10 @@ impl GpuState3d {
             });
             pass.set_pipeline(&self.mesh_pipeline);
             pass.set_bind_group(0, &self.mesh_bind, &[]);
+            pass.set_bind_group(1, &self.lights_bind, &[]);
             self.draw_mesh_cmds(&mut pass, &list.meshes, &list.view_proj);
-            self.tex_mesh.draw(&mut pass, &self.queue, list)?;
+            self.tex_mesh
+                .draw(&mut pass, &self.queue, list, &self.lights_bind)?;
         }
 
         {

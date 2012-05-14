@@ -24,33 +24,82 @@ pub struct MeshResidentKey {
 #[derive(Debug, Clone, Copy)]
 pub struct MeshVertex {
     pub pos: [f32; 3],
+    pub normal: [f32; 3],
     pub color: [f32; 4],
 }
 
 impl MeshVertex {
+    /// 无显式法线时默认朝上（天空等不参与光照的网格可忽略）。
     pub fn new(x: f32, y: f32, z: f32, color: Color) -> Self {
+        Self::with_normal(x, y, z, 0.0, 1.0, 0.0, color)
+    }
+
+    pub fn with_normal(x: f32, y: f32, z: f32, nx: f32, ny: f32, nz: f32, color: Color) -> Self {
         Self {
             pos: [x, y, z],
+            normal: [nx, ny, nz],
             color: color.to_array(),
         }
     }
 }
 
-/// 带 UV 的纹理网格顶点。
+/// 带 UV / 法线的纹理网格顶点。
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct TexMeshVertex {
     pub pos: [f32; 3],
+    pub normal: [f32; 3],
     pub uv: [f32; 2],
     pub color: [f32; 4],
 }
 
 impl TexMeshVertex {
+    /// 无显式法线时默认朝上。
     pub fn new(x: f32, y: f32, z: f32, u: f32, v: f32, color: Color) -> Self {
+        Self::with_normal(x, y, z, 0.0, 1.0, 0.0, u, v, color)
+    }
+
+    pub fn with_normal(
+        x: f32,
+        y: f32,
+        z: f32,
+        nx: f32,
+        ny: f32,
+        nz: f32,
+        u: f32,
+        v: f32,
+        color: Color,
+    ) -> Self {
         Self {
             pos: [x, y, z],
+            normal: [nx, ny, nz],
             uv: [u, v],
             color: color.to_array(),
+        }
+    }
+}
+
+/// 每帧不透明前向光照参数（游戏填权威太阳方向与雾色）。
+#[derive(Debug, Clone, Copy)]
+pub struct FrameLights3d {
+    /// 从表面指向太阳的单位方向。
+    pub sun_dir: Vec3,
+    pub sun_color: Color,
+    pub ambient: Color,
+    pub fog_color: Color,
+    pub fog_density: f32,
+    pub eye: Vec3,
+}
+
+impl Default for FrameLights3d {
+    fn default() -> Self {
+        Self {
+            sun_dir: Vec3::new(0.35, 0.85, 0.25).normalized(),
+            sun_color: Color::rgb(1.0, 0.92, 0.78),
+            ambient: Color::rgb(0.22, 0.26, 0.34),
+            fog_color: Color::rgb(0.62, 0.70, 0.82),
+            fog_density: 0.0012,
+            eye: Vec3::ZERO,
         }
     }
 }
@@ -94,6 +143,8 @@ pub struct DrawList3d {
     pub view_proj: Mat4,
     /// 天空 / 天体专用 VP（通常为去平移的 `Camera3d::sky_view_proj`）。
     pub sky_view_proj: Mat4,
+    /// 不透明前向光照（天空 pass 不消费）。
+    pub lights: FrameLights3d,
     /// SkyPass：无深度写入；在清深度前绘制。
     pub sky_meshes: Vec<MeshCmd>,
     pub meshes: Vec<MeshCmd>,
@@ -109,6 +160,7 @@ impl DrawList3d {
             clear,
             view_proj,
             sky_view_proj: view_proj,
+            lights: FrameLights3d::default(),
             sky_meshes: Vec::new(),
             meshes: Vec::new(),
             tex_meshes: Vec::new(),

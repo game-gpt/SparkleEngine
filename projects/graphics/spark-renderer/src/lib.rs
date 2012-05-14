@@ -12,7 +12,8 @@ mod texture;
 pub use camera3d::Camera3d;
 pub use draw::{DrawList, QuadCmd, TextCmd};
 pub use draw3d::{
-    DrawList3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex, TexMeshCmd, TexMeshVertex,
+    DrawList3d, FrameLights3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex, TexMeshCmd,
+    TexMeshVertex,
 };
 pub use frustum::{CullParams, Frustum};
 pub use spark_geometry::{Aabb3, Mat4, Vec3};
