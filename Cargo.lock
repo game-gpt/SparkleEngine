@@ -2803,6 +2803,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "spark-anim"
+version = "0.1.0"
+dependencies = [
+ "spark-geometry",
+]
+
+[[package]]
 name = "spark-asset"
 version = "0.1.0"
 dependencies = [
