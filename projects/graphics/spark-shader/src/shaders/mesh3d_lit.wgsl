@@ -56,5 +56,16 @@ fn fs_main(v: VsOut) -> @location(0) vec4<f32> {
     let dist = length(v.world_pos - lights.eye.xyz);
     let fog_t = 1.0 - exp(-lights.fog_color_density.w * dist);
     rgb = mix(rgb, lights.fog_color_density.xyz, clamp(fog_t, 0.0, 1.0));
+    // 简易曝光 + ACES：不透明 pass 先有稳定色调，完整 HDR 后处理后置。
+    rgb = aces_tonemap(rgb * 1.15);
     return vec4<f32>(rgb, v.color.w);
+}
+
+fn aces_tonemap(x: vec3<f32>) -> vec3<f32> {
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }
