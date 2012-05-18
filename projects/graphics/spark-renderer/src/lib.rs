@@ -12,8 +12,8 @@ mod texture;
 pub use camera3d::Camera3d;
 pub use draw::{DrawList, QuadCmd, TextCmd};
 pub use draw3d::{
-    DrawList3d, FrameLights3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex, TexMeshCmd,
-    TexMeshVertex,
+    DrawList3d, FrameLights3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex, SkinnedMeshCmd,
+    SkinnedVertex, TexMeshCmd, TexMeshVertex, MAX_SKIN_JOINTS,
 };
 pub use frustum::{CullParams, Frustum};
 pub use spark_geometry::{Aabb3, Mat4, Vec3};
@@ -110,5 +110,27 @@ mod tests {
         let id = list.create_texture(1, 1, vec![255, 0, 0, 255]).unwrap();
         assert!(id.0 >= 1);
         assert_eq!(list.texture_uploads.len(), 1);
+    }
+
+    #[test]
+    fn skinned_mesh_truncates_palette() {
+        let mut list = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), Mat4::IDENTITY);
+        let vert = SkinnedVertex::new(
+            [0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0],
+            Color::rgb(1.0, 1.0, 1.0),
+            [0, 0, 0, 0],
+            [1.0, 0.0, 0.0, 0.0],
+        );
+        let palette: Vec<Mat4> = (0..MAX_SKIN_JOINTS + 8).map(|_| Mat4::IDENTITY).collect();
+        list.skinned_mesh(
+            Mat4::IDENTITY,
+            Arc::from(vec![vert]),
+            Arc::from(palette),
+            None,
+        );
+        assert_eq!(list.skinned_meshes.len(), 1);
+        assert_eq!(list.skinned_meshes[0].joint_palette.len(), MAX_SKIN_JOINTS);
     }
 }

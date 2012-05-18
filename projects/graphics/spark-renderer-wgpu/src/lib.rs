@@ -2,10 +2,11 @@
 //!
 //! 抽象类型（`DrawList` / `GameHost` / `FrameCtx` / `WindowConfig`）在 `spark-renderer`。
 //! **帧主循环编排在 `spark-engine`**；本 crate 只泵 winit 事件并提交 GPU。
-//! 3D 路径支持 `MeshResidentKey` 网格驻留与 `TexMeshCmd` 纹理网格。
+//! 3D 路径支持 `MeshResidentKey` 网格驻留、`TexMeshCmd` 纹理网格与 `SkinnedMeshCmd` 蒙皮网格。
 //! **winit 止于此 crate**：游戏只看见 `spark-renderer` / `spark-input` 类型。
 
 mod game3d;
+mod skinned_mesh;
 mod tex_mesh;
 mod winit_map;
 
@@ -14,7 +15,8 @@ pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
     alloc_texture_id, Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx,
     Frustum, GameHost, GameHost3d, Input, Key, Mat4, MeshCmd, MeshId, MeshResidentKey, MeshVertex,
-    MouseBtn, QuadCmd, RgbaImage, TexMeshCmd, TexMeshVertex, TextCmd, TextureId, Vec3, WindowConfig,
+    MouseBtn, QuadCmd, RgbaImage, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, TextCmd,
+    TextureId, Vec3, WindowConfig, MAX_SKIN_JOINTS,
 };
 
 use std::sync::Arc;

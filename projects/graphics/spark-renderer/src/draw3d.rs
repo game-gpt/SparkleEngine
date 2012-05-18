@@ -1,4 +1,4 @@
-//! 3D 绘制列表（顶点色 / 纹理三角网格 + HUD + 驻留键 / 裁剪）。
+//! 3D 绘制列表（顶点色 / 纹理 / 蒙皮三角网格 + HUD + 驻留键 / 裁剪）。
 
 use std::sync::Arc;
 
@@ -133,9 +133,62 @@ impl TexMeshCmd {
     }
 }
 
+/// 蒙皮关节 palette 首切上限（与 `spark-anim::MAX_JOINTS` / WGSL uniform 一致）。
+pub const MAX_SKIN_JOINTS: usize = 64;
+
+/// 蒙皮顶点：最多 4 影响；权重应归一化到 1。
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SkinnedVertex {
+    pub pos: [f32; 3],
+    pub normal: [f32; 3],
+    pub uv: [f32; 2],
+    pub color: [f32; 4],
+    pub joints: [u32; 4],
+    pub weights: [f32; 4],
+}
+
+impl SkinnedVertex {
+    pub fn new(
+        pos: [f32; 3],
+        normal: [f32; 3],
+        uv: [f32; 2],
+        color: Color,
+        joints: [u32; 4],
+        weights: [f32; 4],
+    ) -> Self {
+        Self {
+            pos,
+            normal,
+            uv,
+            color: color.to_array(),
+            joints,
+            weights,
+        }
+    }
+}
+
+/// 不透明蒙皮网格绘制命令（Opaque；透明/自发光后置）。
+#[derive(Debug, Clone)]
+pub struct SkinnedMeshCmd {
+    pub model: Mat4,
+    pub vertices: Arc<[SkinnedVertex]>,
+    /// `global * inverse_bind`；长度 ≤ [`MAX_SKIN_JOINTS`]。
+    pub joint_palette: Arc<[Mat4]>,
+    pub texture: Option<TextureId>,
+    pub resident: Option<MeshResidentKey>,
+    pub local_aabb: Option<Aabb3>,
+}
+
+impl SkinnedMeshCmd {
+    pub fn world_aabb(&self) -> Option<Aabb3> {
+        self.local_aabb.map(|a| a.transformed(self.model))
+    }
+}
+
 /// 一帧 3D 绘制 + HUD。
 ///
-/// 提交顺序由后端保证：`sky_meshes`（SkyPass）→ 清深度 → `meshes`/`tex_meshes`（Opaque）→ HUD。
+/// 提交顺序由后端保证：`sky_meshes`（SkyPass）→ 清深度 → `meshes`/`tex_meshes`/`skinned_meshes`（Opaque）→ HUD。
 /// 透明 / 自发光 / 后处理列表尚未立契约，禁止把半透明语义塞进不透明网格。
 #[derive(Debug)]
 pub struct DrawList3d {
@@ -149,6 +202,8 @@ pub struct DrawList3d {
     pub sky_meshes: Vec<MeshCmd>,
     pub meshes: Vec<MeshCmd>,
     pub tex_meshes: Vec<TexMeshCmd>,
+    /// 不透明蒙皮网格（在静态 meshes / tex_meshes 之后绘制）。
+    pub skinned_meshes: Vec<SkinnedMeshCmd>,
     /// 本帧新建 / 更新纹理，由 wgpu 后端上传。
     pub texture_uploads: Vec<(TextureId, RgbaImage)>,
     pub hud: DrawList,
@@ -164,6 +219,7 @@ impl DrawList3d {
             sky_meshes: Vec::new(),
             meshes: Vec::new(),
             tex_meshes: Vec::new(),
+            skinned_meshes: Vec::new(),
             texture_uploads: Vec::new(),
             hud: DrawList::new(Color::rgba(0.0, 0.0, 0.0, 0.0)),
         }
@@ -254,6 +310,36 @@ impl DrawList3d {
         self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb);
     }
 
+    /// 不透明蒙皮网格（可选纹理；首切 palette ≤ [`MAX_SKIN_JOINTS`]）。
+    pub fn skinned_mesh(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[SkinnedVertex]>,
+        joint_palette: Arc<[Mat4]>,
+        texture: Option<TextureId>,
+    ) {
+        self.push_skinned_mesh(model, vertices, joint_palette, texture, None, None);
+    }
+
+    pub fn skinned_mesh_resident(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[SkinnedVertex]>,
+        joint_palette: Arc<[Mat4]>,
+        texture: Option<TextureId>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_skinned_mesh(
+            model,
+            vertices,
+            joint_palette,
+            texture,
+            Some(key),
+            local_aabb,
+        );
+    }
+
     fn push_mesh(
         &mut self,
         model: Mat4,
@@ -310,6 +396,33 @@ impl DrawList3d {
         });
     }
 
+    fn push_skinned_mesh(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[SkinnedVertex]>,
+        joint_palette: Arc<[Mat4]>,
+        texture: Option<TextureId>,
+        resident: Option<MeshResidentKey>,
+        local_aabb: Option<Aabb3>,
+    ) {
+        if vertices.is_empty() || joint_palette.is_empty() {
+            return;
+        }
+        let palette = if joint_palette.len() > MAX_SKIN_JOINTS {
+            Arc::from(&joint_palette[..MAX_SKIN_JOINTS])
+        } else {
+            joint_palette
+        };
+        self.skinned_meshes.push(SkinnedMeshCmd {
+            model,
+            vertices,
+            joint_palette: palette,
+            texture,
+            resident,
+            local_aabb,
+        });
+    }
+
     pub fn retain_visible(&mut self, cull: CullParams) {
         let frustum = Frustum::from_view_proj(&self.view_proj);
         let keep = |world: Aabb3| -> bool {
@@ -325,6 +438,8 @@ impl DrawList3d {
         self.meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.skinned_meshes
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
     }
 
     pub fn retain_within_distance(&mut self, eye: Vec3, max_distance: f32) {
@@ -336,6 +451,8 @@ impl DrawList3d {
         };
         self.meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.skinned_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
     }
 }
