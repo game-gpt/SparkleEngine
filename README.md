@@ -65,10 +65,11 @@ packages/
 |-------|------|
 | `spark-shader` | WGSL 内建着色器与模块装载 |
 | `spark-anim` | 骨架、命名挂点、剪辑采样、混合与皮肤矩阵（CPU） |
+| `spark-gltf` | glTF 2.0 导入：骨架、剪辑与蒙皮网格（无 GPU） |
 | `spark-font` | 字体装载、字形栅格化与 CPU 图集 |
 | `spark-image` | 像素图装载、精灵裁切与九宫格拉伸 |
-| `spark-renderer` | 2D 绘制列表 / 帧上下文 / 宿主契约（后端无关） |
-| `spark-renderer-wgpu` | wgpu 窗口事件泵与批绘制（帧编排在 `spark-engine`） |
+| `spark-renderer` | 2D/3D 绘制列表、帧上下文、蒙皮网格契约（后端无关） |
+| `spark-renderer-wgpu` | wgpu 窗口事件泵与批绘制（含蒙皮 palette；帧编排在 `spark-engine`） |
 | `spark-widget` | 立即模式 Widget 系统 |
 | `spark-media` | Symphonia 容器探测 / 解复用 / 音频 PCM 解码（audio·video 共用） |
 | `spark-audio` | 混音、程序化短音与文件播放（消费 `spark-media`） |
