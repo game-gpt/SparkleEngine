@@ -75,4 +75,23 @@ mod tests_3d {
         let hit = aabb_sweep(moving, Vec3::new(5.0, 0.0, 0.0), wall).unwrap();
         assert!(hit.toi > 0.0 && hit.toi < 1.0);
     }
+
+    #[test]
+    fn mat4_inverse_roundtrip_trs() {
+        let m = Mat4::from_trs(
+            Vec3::new(1.0, 2.0, 3.0),
+            Quat::from_axis_angle(Vec3::Y, 0.7),
+            Vec3::new(2.0, 0.5, 1.5),
+        );
+        let inv = m.try_inverse().expect("invertible");
+        let i = m.mul(inv);
+        for idx in 0..16 {
+            let expected = if idx % 5 == 0 { 1.0 } else { 0.0 };
+            assert!(
+                (i.cols[idx] - expected).abs() < 1e-4,
+                "idx {idx}: {}",
+                i.cols[idx]
+            );
+        }
+    }
 }
