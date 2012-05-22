@@ -188,9 +188,9 @@ impl SkinnedMeshCmd {
 
 /// 一帧 3D 绘制 + HUD。
 ///
-/// 提交顺序由后端保证：`sky_meshes`（SkyPass）→ 清深度 → Opaque（`meshes` /
-/// `tex_meshes` / `skinned_meshes`）→ Transparent（`tex_meshes_xlu`）→ HUD。
-/// 自发光 / 后处理列表尚未立契约。
+/// 提交顺序由后端保证：`sky_meshes` → `sky_emissive_meshes`（additive）→ 清深度 →
+/// Opaque → Transparent → HUD。
+/// 世界自发光 / 全屏后处理尚未立契约。
 #[derive(Debug)]
 pub struct DrawList3d {
     pub clear: Color,
@@ -201,6 +201,8 @@ pub struct DrawList3d {
     pub lights: FrameLights3d,
     /// SkyPass：无深度写入；在清深度前绘制。
     pub sky_meshes: Vec<MeshCmd>,
+    /// Sky 加性发光（方日光晕等）；测深 Always、不写深、additive。
+    pub sky_emissive_meshes: Vec<MeshCmd>,
     pub meshes: Vec<MeshCmd>,
     pub tex_meshes: Vec<TexMeshCmd>,
     /// Transparent：树叶 / 玻璃等；深度测试开启、不写深度。
@@ -220,6 +222,7 @@ impl DrawList3d {
             sky_view_proj: view_proj,
             lights: FrameLights3d::default(),
             sky_meshes: Vec::new(),
+            sky_emissive_meshes: Vec::new(),
             meshes: Vec::new(),
             tex_meshes: Vec::new(),
             tex_meshes_xlu: Vec::new(),
@@ -292,6 +295,21 @@ impl DrawList3d {
         local_aabb: Option<Aabb3>,
     ) {
         self.push_sky_mesh(model, vertices, Some(key), local_aabb);
+    }
+
+    /// 天空加性发光（方日光晕等）。
+    pub fn sky_emissive_mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {
+        self.push_sky_emissive(model, vertices, None, None);
+    }
+
+    pub fn sky_emissive_mesh_resident(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_sky_emissive(model, vertices, Some(key), local_aabb);
     }
 
     pub fn tex_mesh(
@@ -394,6 +412,24 @@ impl DrawList3d {
             return;
         }
         self.sky_meshes.push(MeshCmd {
+            model,
+            vertices,
+            resident,
+            local_aabb,
+        });
+    }
+
+    fn push_sky_emissive(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        resident: Option<MeshResidentKey>,
+        local_aabb: Option<Aabb3>,
+    ) {
+        if vertices.is_empty() {
+            return;
+        }
+        self.sky_emissive_meshes.push(MeshCmd {
             model,
             vertices,
             resident,
