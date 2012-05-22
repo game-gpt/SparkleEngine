@@ -18,6 +18,8 @@ pub enum BuiltinShader {
     LitSolidMesh3d,
     /// 透视空间 RGBA 纹理三角网格（方向光 + 雾 + ACES）。
     TexturedMesh3d,
+    /// 透视空间自发光纹理网格（无方向光；additive Emissive pass）。
+    EmissiveMesh3d,
     /// 透视空间蒙皮三角网格（关节 palette + 方向光 + 雾）。
     SkinnedMesh3d,
 }
@@ -30,6 +32,7 @@ impl BuiltinShader {
             Self::SolidMesh3d => "spark-shader/solid-mesh3d",
             Self::LitSolidMesh3d => "spark-shader/lit-solid-mesh3d",
             Self::TexturedMesh3d => "spark-shader/textured-mesh3d",
+            Self::EmissiveMesh3d => "spark-shader/emissive-mesh3d",
             Self::SkinnedMesh3d => "spark-shader/skinned-mesh3d",
         }
     }
@@ -41,6 +44,7 @@ impl BuiltinShader {
             Self::SolidMesh3d => include_str!("shaders/mesh3d.wgsl"),
             Self::LitSolidMesh3d => include_str!("shaders/mesh3d_lit.wgsl"),
             Self::TexturedMesh3d => include_str!("shaders/mesh3d_tex.wgsl"),
+            Self::EmissiveMesh3d => include_str!("shaders/mesh3d_tex_emissive.wgsl"),
             Self::SkinnedMesh3d => include_str!("shaders/mesh3d_skinned.wgsl"),
         }
     }

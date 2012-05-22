@@ -44,6 +44,8 @@ pub struct TexMeshGpu {
     pipeline: wgpu::RenderPipeline,
     /// Transparent：测深、不写深、双面（树叶/玻璃）。
     pipeline_xlu: wgpu::RenderPipeline,
+    /// Emissive：测深、不写深、additive（岩浆/引擎）。
+    pipeline_emissive: wgpu::RenderPipeline,
     bgl: wgpu::BindGroupLayout,
     uniform: wgpu::Buffer,
     sampler: wgpu::Sampler,
@@ -196,6 +198,62 @@ impl TexMeshGpu {
             multiview_mask: None,
             cache: None,
         });
+        let emissive_shader = create_builtin(device, BuiltinShader::EmissiveMesh3d);
+        let pipeline_emissive = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("tex-mesh3d-emissive"),
+            layout: Some(&pl),
+            vertex: wgpu::VertexState {
+                module: &emissive_shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<TexVertGpu>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![
+                        0 => Float32x3,
+                        1 => Float32x3,
+                        2 => Float32x2,
+                        3 => Float32x4
+                    ],
+                })],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &emissive_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
         let transient_cap = 256_000u64;
         let transient_vbo = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("tex-mesh-transient-vbo"),
@@ -206,6 +264,7 @@ impl TexMeshGpu {
         Self {
             pipeline,
             pipeline_xlu,
+            pipeline_emissive,
             bgl,
             uniform,
             sampler,
@@ -299,7 +358,12 @@ impl TexMeshGpu {
     }
 
     pub fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
-        for mesh in list.tex_meshes.iter().chain(list.tex_meshes_xlu.iter()) {
+        for mesh in list
+            .tex_meshes
+            .iter()
+            .chain(list.tex_meshes_xlu.iter())
+            .chain(list.tex_meshes_emissive.iter())
+        {
             if let Some(key) = mesh.resident {
                 self.ensure_resident(device, key, &mesh.vertices);
             }
@@ -344,7 +408,14 @@ impl TexMeshGpu {
         list: &DrawList3d,
         lights_bind: &'a wgpu::BindGroup,
     ) -> Result<(), SparkError> {
-        self.draw_cmds(pass, queue, &list.tex_meshes, &list.view_proj, lights_bind, false)
+        self.draw_cmds(
+            pass,
+            queue,
+            &list.tex_meshes,
+            &list.view_proj,
+            lights_bind,
+            TexDrawKind::Opaque,
+        )
     }
 
     /// Transparent pass：在不透明与 HUD 之间调用。
@@ -361,7 +432,25 @@ impl TexMeshGpu {
             &list.tex_meshes_xlu,
             &list.view_proj,
             lights_bind,
-            true,
+            TexDrawKind::Xlu,
+        )
+    }
+
+    /// Emissive pass：透明之后、HUD 之前。
+    pub fn draw_emissive<'a>(
+        &'a self,
+        pass: &mut wgpu::RenderPass<'a>,
+        queue: &wgpu::Queue,
+        list: &DrawList3d,
+        lights_bind: &'a wgpu::BindGroup,
+    ) -> Result<(), SparkError> {
+        self.draw_cmds(
+            pass,
+            queue,
+            &list.tex_meshes_emissive,
+            &list.view_proj,
+            lights_bind,
+            TexDrawKind::Emissive,
         )
     }
 
@@ -372,15 +461,15 @@ impl TexMeshGpu {
         meshes: &[spark_renderer::TexMeshCmd],
         view_proj: &spark_geometry::Mat4,
         lights_bind: &'a wgpu::BindGroup,
-        transparent: bool,
+        kind: TexDrawKind,
     ) -> Result<(), SparkError> {
         if meshes.is_empty() {
             return Ok(());
         }
-        pass.set_pipeline(if transparent {
-            &self.pipeline_xlu
-        } else {
-            &self.pipeline
+        pass.set_pipeline(match kind {
+            TexDrawKind::Opaque => &self.pipeline,
+            TexDrawKind::Xlu => &self.pipeline_xlu,
+            TexDrawKind::Emissive => &self.pipeline_emissive,
         });
         pass.set_bind_group(1, lights_bind, &[]);
         let vp = mat4_to_cols_pub(view_proj);
@@ -417,4 +506,11 @@ impl TexMeshGpu {
         }
         Ok(())
     }
+}
+
+#[derive(Clone, Copy)]
+enum TexDrawKind {
+    Opaque,
+    Xlu,
+    Emissive,
 }
