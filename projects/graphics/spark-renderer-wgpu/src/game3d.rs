@@ -139,6 +139,7 @@ struct GpuState3d {
     mesh_cache: HashMap<u64, ResidentMesh>,
     tex_mesh: crate::tex_mesh::TexMeshGpu,
     skinned_mesh: crate::skinned_mesh::SkinnedMeshGpu,
+    bloom: crate::bloom::BloomGpu,
 }
 
 impl GpuState3d {
@@ -617,6 +618,7 @@ impl GpuState3d {
         tracing::info!("GPU 3D ready");
         let tex_mesh = crate::tex_mesh::TexMeshGpu::new(&device, format, &lights_bgl);
         let skinned_mesh = crate::skinned_mesh::SkinnedMeshGpu::new(&device, format, &lights_bgl);
+        let bloom = crate::bloom::BloomGpu::new(&device, format);
         Ok(Self {
             window,
             surface,
@@ -649,6 +651,7 @@ impl GpuState3d {
             mesh_cache: HashMap::new(),
             tex_mesh,
             skinned_mesh,
+            bloom,
         })
     }
 
@@ -662,6 +665,7 @@ impl GpuState3d {
         let (tex, view) = make_depth(&self.device, width, height);
         self.depth_tex = tex;
         self.depth_view = view;
+        self.bloom.resize(&self.device, width, height);
     }
 
     fn upload_mesh_verts(&self, vertices: &[MeshVertex]) -> Vec<MeshVertGpu> {
@@ -914,6 +918,19 @@ impl GpuState3d {
         self.queue
             .write_buffer(&self.lights_uniform, 0, bytemuck::bytes_of(&lights_gpu));
 
+        let use_bloom = list.bloom_strength > 0.001;
+        if use_bloom {
+            self.bloom
+                .resize(&self.device, self.config.width, self.config.height);
+        }
+        // 克隆场景 RT 视图，避免与后续 `bloom.apply` 借用冲突。
+        let scene_color = if use_bloom {
+            self.bloom.scene_view().map(|v| v.clone())
+        } else {
+            None
+        };
+        let color_view = scene_color.as_ref().unwrap_or(&view);
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -925,7 +942,7 @@ impl GpuState3d {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -974,7 +991,7 @@ impl GpuState3d {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("3d-opaque"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: color_load,
@@ -1013,7 +1030,7 @@ impl GpuState3d {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("3d-transparent"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -1039,7 +1056,7 @@ impl GpuState3d {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("3d-emissive"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -1059,6 +1076,17 @@ impl GpuState3d {
             });
             self.tex_mesh
                 .draw_emissive(&mut pass, &self.queue, list, &self.lights_bind)?;
+        }
+
+        // 场景色 → bloom → 交换链；HUD 叠在交换链上保持清晰。
+        if use_bloom {
+            self.bloom.apply(
+                &mut encoder,
+                &self.queue,
+                &self.device,
+                &view,
+                list.bloom_strength,
+            );
         }
 
         {

@@ -189,7 +189,7 @@ impl SkinnedMeshCmd {
 /// 一帧 3D 绘制 + HUD。
 ///
 /// 提交顺序由后端保证：`sky_meshes` → `sky_emissive_meshes`（additive）→ 清深度 →
-/// Opaque → Transparent → Emissive（世界加性）→ HUD。
+/// Opaque → Transparent → Emissive（世界加性）→ bloom → HUD。
 #[derive(Debug)]
 pub struct DrawList3d {
     pub clear: Color,
@@ -212,6 +212,8 @@ pub struct DrawList3d {
     pub skinned_meshes: Vec<SkinnedMeshCmd>,
     /// 本帧新建 / 更新纹理，由 wgpu 后端上传。
     pub texture_uploads: Vec<(TextureId, RgbaImage)>,
+    /// 全屏 bloom 强度；`0` 关闭后处理。
+    pub bloom_strength: f32,
     pub hud: DrawList,
 }
 
@@ -230,6 +232,7 @@ impl DrawList3d {
             tex_meshes_emissive: Vec::new(),
             skinned_meshes: Vec::new(),
             texture_uploads: Vec::new(),
+            bloom_strength: 0.55,
             hud: DrawList::new(Color::rgba(0.0, 0.0, 0.0, 0.0)),
         }
     }
