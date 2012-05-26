@@ -112,6 +112,10 @@ struct GpuState3d {
     depth_tex: wgpu::Texture,
     /// 不透明网格：写深度，Less，前向光照。
     mesh_pipeline: wgpu::RenderPipeline,
+    /// 顶点色半透明：测深不写深。
+    mesh_xlu_pipeline: wgpu::RenderPipeline,
+    /// 顶点色自发光：测深不写深、additive。
+    mesh_emissive_pipeline: wgpu::RenderPipeline,
     /// 天空 / 天体：不写深度，Always，无光照。
     sky_pipeline: wgpu::RenderPipeline,
     /// 大气穹顶：不写深度，Always，消费 FrameLights。
@@ -308,6 +312,87 @@ impl GpuState3d {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let mesh_xlu_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("mesh3d-lit-xlu"),
+            layout: Some(&mesh_pl),
+            vertex: wgpu::VertexState {
+                module: &lit_mesh_shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[Some(mesh_vert_layout.clone())],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &lit_mesh_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let mesh_emissive_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("mesh3d-emissive"),
+            layout: Some(&sky_pl),
+            vertex: wgpu::VertexState {
+                module: &mesh_shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[Some(mesh_vert_layout.clone())],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &mesh_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
                 stencil: Default::default(),
                 bias: Default::default(),
             }),
@@ -674,6 +759,8 @@ impl GpuState3d {
             depth_view,
             depth_tex,
             mesh_pipeline,
+            mesh_xlu_pipeline,
+            mesh_emissive_pipeline,
             sky_pipeline,
             sky_atmosphere_pipeline,
             sky_emissive_pipeline,
@@ -952,6 +1039,8 @@ impl GpuState3d {
             .chain(list.sky_meshes.iter())
             .chain(list.sky_emissive_meshes.iter())
             .chain(list.meshes.iter())
+            .chain(list.meshes_xlu.iter())
+            .chain(list.meshes_emissive.iter())
         {
             if let Some(key) = mesh.resident {
                 self.ensure_resident(key, &mesh.vertices);
@@ -1083,7 +1172,7 @@ impl GpuState3d {
             )?;
         }
 
-        if !list.tex_meshes_xlu.is_empty() {
+        if !list.tex_meshes_xlu.is_empty() || !list.meshes_xlu.is_empty() {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("3d-transparent"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1105,11 +1194,19 @@ impl GpuState3d {
                 }),
                 ..Default::default()
             });
-            self.tex_mesh
-                .draw_xlu(&mut pass, &self.queue, list, &self.lights_bind)?;
+            if !list.meshes_xlu.is_empty() {
+                pass.set_pipeline(&self.mesh_xlu_pipeline);
+                pass.set_bind_group(0, &self.mesh_bind, &[]);
+                pass.set_bind_group(1, &self.lights_bind, &[]);
+                self.draw_mesh_cmds(&mut pass, &list.meshes_xlu, &list.view_proj);
+            }
+            if !list.tex_meshes_xlu.is_empty() {
+                self.tex_mesh
+                    .draw_xlu(&mut pass, &self.queue, list, &self.lights_bind)?;
+            }
         }
 
-        if !list.tex_meshes_emissive.is_empty() {
+        if !list.tex_meshes_emissive.is_empty() || !list.meshes_emissive.is_empty() {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("3d-emissive"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1131,8 +1228,15 @@ impl GpuState3d {
                 }),
                 ..Default::default()
             });
-            self.tex_mesh
-                .draw_emissive(&mut pass, &self.queue, list, &self.lights_bind)?;
+            if !list.meshes_emissive.is_empty() {
+                pass.set_pipeline(&self.mesh_emissive_pipeline);
+                pass.set_bind_group(0, &self.mesh_bind, &[]);
+                self.draw_mesh_cmds(&mut pass, &list.meshes_emissive, &list.view_proj);
+            }
+            if !list.tex_meshes_emissive.is_empty() {
+                self.tex_mesh
+                    .draw_emissive(&mut pass, &self.queue, list, &self.lights_bind)?;
+            }
         }
 
         // 场景色 → bloom → 交换链；HUD 叠在交换链上保持清晰。
