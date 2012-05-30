@@ -79,7 +79,7 @@ fn fs_main(v: VsOut) -> @location(0) vec4<f32> {
     base = mix(base, horizon * 1.05, haze * 0.45);
 
     var rgb = base * v.tint.xyz;
-    rgb = aces_tonemap(rgb * 1.05);
+    rgb = aces_tonemap(rgb * select(1.05, lights.eye.w, lights.eye.w > 0.01));
     return vec4<f32>(rgb, v.tint.w);
 }
 
