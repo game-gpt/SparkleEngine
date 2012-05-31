@@ -192,7 +192,8 @@ impl SkinnedMeshCmd {
 /// 一帧 3D 绘制 + HUD。
 ///
 /// 提交顺序由后端保证：`sky_atmosphere_meshes` → `sky_meshes` → `sky_emissive_meshes`
-/// （additive）→ 清深度 → Opaque → Transparent → Emissive（世界加性）→ bloom → HUD。
+/// （additive）→ 清深度 → Opaque → Transparent → Emissive（世界加性）→
+/// 清深度 → `view_model_meshes`（第一人称手臂/武器）→ bloom → HUD。
 #[derive(Debug)]
 pub struct DrawList3d {
     pub clear: Color,
@@ -219,6 +220,8 @@ pub struct DrawList3d {
     pub tex_meshes_emissive: Vec<TexMeshCmd>,
     /// 不透明蒙皮网格（在静态 meshes / tex_meshes 之后绘制）。
     pub skinned_meshes: Vec<SkinnedMeshCmd>,
+    /// 第一人称 view-model：世界 pass 之后清深度再画，避免被近景墙体裁切。
+    pub view_model_meshes: Vec<MeshCmd>,
     /// 本帧新建 / 更新纹理，由 wgpu 后端上传。
     pub texture_uploads: Vec<(TextureId, RgbaImage)>,
     /// 全屏 bloom 强度；`0` 关闭后处理。
@@ -243,6 +246,7 @@ impl DrawList3d {
             tex_meshes_xlu: Vec::new(),
             tex_meshes_emissive: Vec::new(),
             skinned_meshes: Vec::new(),
+            view_model_meshes: Vec::new(),
             texture_uploads: Vec::new(),
             bloom_strength: 0.55,
             hud: DrawList::new(Color::rgba(0.0, 0.0, 0.0, 0.0)),
@@ -327,6 +331,21 @@ impl DrawList3d {
         local_aabb: Option<Aabb3>,
     ) {
         self.push_mesh_emissive(model, vertices, Some(key), local_aabb);
+    }
+
+    /// 第一人称 view-model（独立深度 pass）。
+    pub fn view_model_mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {
+        self.push_view_model_mesh(model, vertices, None, None);
+    }
+
+    pub fn view_model_mesh_resident(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_view_model_mesh(model, vertices, Some(key), local_aabb);
     }
 
     /// 天空 / 天体网格（走 SkyPass，不参与不透明深度竞争）。
@@ -513,6 +532,24 @@ impl DrawList3d {
             return;
         }
         self.meshes_emissive.push(MeshCmd {
+            model,
+            vertices,
+            resident,
+            local_aabb,
+        });
+    }
+
+    fn push_view_model_mesh(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        resident: Option<MeshResidentKey>,
+        local_aabb: Option<Aabb3>,
+    ) {
+        if vertices.is_empty() {
+            return;
+        }
+        self.view_model_meshes.push(MeshCmd {
             model,
             vertices,
             resident,
