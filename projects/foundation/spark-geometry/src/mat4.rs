@@ -92,6 +92,22 @@ impl Mat4 {
         Self { cols }
     }
 
+    /// 正交投影（WebGPU Z ∈ [0, 1]，Y 向上）。用于阴影图 / 2.5D。
+    pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+        let mut cols = [0.0; 16];
+        let rl = (right - left).max(1e-6);
+        let tb = (top - bottom).max(1e-6);
+        let fn_ = (far - near).max(1e-6);
+        cols[0] = 2.0 / rl;
+        cols[5] = 2.0 / tb;
+        cols[10] = 1.0 / fn_;
+        cols[12] = -(right + left) / rl;
+        cols[13] = -(top + bottom) / tb;
+        cols[14] = -near / fn_;
+        cols[15] = 1.0;
+        Self { cols }
+    }
+
     pub fn look_to(eye: Vec3, forward: Vec3, up: Vec3) -> Self {
         let f = forward.normalized();
         let mut s = f.cross(up);

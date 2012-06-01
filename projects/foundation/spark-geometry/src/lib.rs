@@ -77,6 +77,16 @@ mod tests_3d {
     }
 
     #[test]
+    fn mat4_orthographic_maps_center_to_origin() {
+        let m = Mat4::orthographic(-10.0, 10.0, -5.0, 5.0, 0.0, 100.0);
+        let p = m.transform_point(Vec3::new(0.0, 0.0, 50.0));
+        assert!(p.x.abs() < 1e-4);
+        assert!(p.y.abs() < 1e-4);
+        // Z ∈ [0,1]：near→0，far→1，中点约 0.5
+        assert!((p.z - 0.5).abs() < 1e-3);
+    }
+
+    #[test]
     fn mat4_inverse_roundtrip_trs() {
         let m = Mat4::from_trs(
             Vec3::new(1.0, 2.0, 3.0),
