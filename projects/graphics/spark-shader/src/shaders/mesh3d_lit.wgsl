@@ -1,4 +1,4 @@
-// 不透明顶点色网格：方向光 + 环境光 + 指数距离雾。
+// 不透明顶点色网格：方向光 + 环境光 + 指数距离雾 + 单级太阳阴影。
 // SkyPass 继续使用 mesh3d.wgsl（无光照）。
 
 struct ObjectUniforms {
@@ -14,10 +14,22 @@ struct FrameLights {
     eye: vec4<f32>,
 }
 
+struct ShadowUniforms {
+    light_view_proj: mat4x4<f32>,
+    // x=enabled y=bias z=strength
+    params: vec4<f32>,
+}
+
 @group(0) @binding(0)
 var<uniform> object: ObjectUniforms;
 @group(1) @binding(0)
 var<uniform> lights: FrameLights;
+@group(2) @binding(0)
+var shadow_map: texture_depth_2d;
+@group(2) @binding(1)
+var shadow_samp: sampler_comparison;
+@group(2) @binding(2)
+var<uniform> shadow: ShadowUniforms;
 
 struct VsIn {
     @location(0) pos: vec3<f32>,
@@ -46,12 +58,29 @@ fn vs_main(v: VsIn) -> VsOut {
     return out;
 }
 
+fn sun_shadow(world_pos: vec3<f32>) -> f32 {
+    if shadow.params.x < 0.5 {
+        return 1.0;
+    }
+    let lp = shadow.light_view_proj * vec4<f32>(world_pos, 1.0);
+    let ndc = lp.xyz / max(lp.w, 1e-6);
+    // wgpu：裁剪 Y 向上，深度纹理 (0,0) 在左上 → 采样时翻转 Y。
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, -ndc.y * 0.5 + 0.5);
+    let depth = ndc.z;
+    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || depth < 0.0 || depth > 1.0 {
+        return 1.0;
+    }
+    let lit = textureSampleCompare(shadow_map, shadow_samp, uv, depth - shadow.params.y);
+    return mix(1.0 - shadow.params.z, 1.0, lit);
+}
+
 @fragment
 fn fs_main(v: VsOut) -> @location(0) vec4<f32> {
     let n = normalize(v.world_n);
     let sun = normalize(lights.sun_dir.xyz);
     let ndotl = max(dot(n, sun), 0.0);
-    let lit = lights.ambient.xyz + lights.sun_color.xyz * ndotl;
+    let sh = sun_shadow(v.world_pos);
+    let lit = lights.ambient.xyz + lights.sun_color.xyz * ndotl * sh;
     var rgb = v.color.xyz * lit;
     let dist = length(v.world_pos - lights.eye.xyz);
     let fog_t = 1.0 - exp(-lights.fog_color_density.w * dist);

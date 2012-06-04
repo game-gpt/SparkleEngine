@@ -7,6 +7,7 @@
 
 mod bloom;
 mod game3d;
+mod shadow;
 mod skinned_mesh;
 mod tex_mesh;
 mod winit_map;
