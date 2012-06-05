@@ -1,7 +1,7 @@
-//! 单级方向光阴影图（太阳正交投影）。
+//! 太阳正交阴影图（支持 1..3 级联深度数组）。
 
 use bytemuck::{Pod, Zeroable};
-use spark_renderer::{DrawList3d, MeshCmd, TexMeshCmd, TexMeshVertex, MeshVertex};
+use spark_renderer::{DrawList3d, MeshCmd, MeshVertex, ShadowParams3d, TexMeshCmd, TexMeshVertex, MAX_SHADOW_CASCADES};
 use spark_shader::{create_builtin, BuiltinShader};
 use wgpu::util::DeviceExt;
 
@@ -19,9 +19,11 @@ struct ObjectUniforms {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct ShadowUniformsGpu {
-    pub light_view_proj: [[f32; 4]; 4],
-    /// x=enabled y=bias z=strength
+    pub light_view_proj: [[[f32; 4]; 4]; MAX_SHADOW_CASCADES],
+    /// x=enabled y=bias z=strength w=cascade_count
     pub params: [f32; 4],
+    /// xyz = split_end[0..3]；w = 1/MAP_SIZE（PCF 纹素）
+    pub splits: [f32; 4],
 }
 
 struct DepthResident {
@@ -32,9 +34,10 @@ struct DepthResident {
 
 /// 阴影图 + 深度管线 + 比较采样绑定。
 pub struct ShadowMapGpu {
-    /// 保持纹理存活；采样通过 `view`。
+    /// 保持纹理存活；采样通过 `sample_view`。
     _map: wgpu::Texture,
-    view: wgpu::TextureView,
+    _sample_view: wgpu::TextureView,
+    layer_views: [wgpu::TextureView; MAX_SHADOW_CASCADES],
     depth_pipeline_mesh: wgpu::RenderPipeline,
     depth_pipeline_tex: wgpu::RenderPipeline,
     object_uniform: wgpu::Buffer,
@@ -58,7 +61,7 @@ impl ShadowMapGpu {
             size: wgpu::Extent3d {
                 width: MAP_SIZE,
                 height: MAP_SIZE,
-                depth_or_array_layers: 1,
+                depth_or_array_layers: MAX_SHADOW_CASCADES as u32,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -67,7 +70,24 @@ impl ShadowMapGpu {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        let view = map.create_view(&Default::default());
+        let sample_view = map.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("sun-shadow-sample"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        let layer_views = std::array::from_fn(|i| {
+            map.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("sun-shadow-layer"),
+                format: None,
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                aspect: wgpu::TextureAspect::All,
+                base_mip_level: 0,
+                mip_level_count: Some(1),
+                base_array_layer: i as u32,
+                array_layer_count: Some(1),
+                usage: None,
+            })
+        });
 
         let depth_shader = create_builtin(device, BuiltinShader::DepthOnlyMesh3d);
         let object_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -183,7 +203,7 @@ impl ShadowMapGpu {
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::D2,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
                         multisampled: false,
                     },
                     count: None,
@@ -225,7 +245,7 @@ impl ShadowMapGpu {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
+                    resource: wgpu::BindingResource::TextureView(&sample_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -254,7 +274,8 @@ impl ShadowMapGpu {
 
         Self {
             _map: map,
-            view,
+            _sample_view: sample_view,
+            layer_views,
             depth_pipeline_mesh,
             depth_pipeline_tex,
             object_uniform,
@@ -281,19 +302,11 @@ impl ShadowMapGpu {
 
     pub fn write_params(&self, queue: &wgpu::Queue, list: &DrawList3d) {
         let s = &list.shadow;
-        let gpu = ShadowUniformsGpu {
-            light_view_proj: mat4_to_cols_pub(&s.light_view_proj),
-            params: [
-                if s.enabled { 1.0 } else { 0.0 },
-                s.bias,
-                s.strength,
-                0.0,
-            ],
-        };
+        let gpu = pack_shadow_uniforms(s);
         queue.write_buffer(&self.shadow_uniform, 0, bytemuck::bytes_of(&gpu));
     }
 
-    /// 将不透明投射体写入阴影图。
+    /// 将不透明投射体写入各级联阴影层。
     pub fn render_casters(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -306,28 +319,31 @@ impl ShadowMapGpu {
         }
         self.prepare_residents(device, list);
 
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("sun-shadow"),
-            color_attachments: &[],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Store,
+        let count = list.shadow.cascade_count.clamp(1, MAX_SHADOW_CASCADES as u32) as usize;
+        for layer in 0..count {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("sun-shadow-cascade"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.layer_views[layer],
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
                 }),
-                stencil_ops: None,
-            }),
-            ..Default::default()
-        });
+                ..Default::default()
+            });
 
-        let light_vp = list.shadow.light_view_proj;
-        pass.set_pipeline(&self.depth_pipeline_mesh);
-        pass.set_bind_group(0, &self.object_bind, &[]);
-        self.draw_mesh_depth(&mut pass, queue, &list.meshes, &light_vp);
+            let light_vp = list.shadow.light_view_proj[layer];
+            pass.set_pipeline(&self.depth_pipeline_mesh);
+            pass.set_bind_group(0, &self.object_bind, &[]);
+            self.draw_mesh_depth(&mut pass, queue, &list.meshes, &light_vp);
 
-        pass.set_pipeline(&self.depth_pipeline_tex);
-        pass.set_bind_group(0, &self.object_bind, &[]);
-        self.draw_tex_depth(&mut pass, queue, &list.tex_meshes, &light_vp);
+            pass.set_pipeline(&self.depth_pipeline_tex);
+            pass.set_bind_group(0, &self.object_bind, &[]);
+            self.draw_tex_depth(&mut pass, queue, &list.tex_meshes, &light_vp);
+        }
     }
 
     fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
@@ -492,5 +508,28 @@ impl ShadowMapGpu {
                 pass.draw(0..mesh.vertices.len() as u32, 0..1);
             }
         }
+    }
+}
+
+fn pack_shadow_uniforms(s: &ShadowParams3d) -> ShadowUniformsGpu {
+    let mut light_view_proj = [[[0.0f32; 4]; 4]; MAX_SHADOW_CASCADES];
+    for i in 0..MAX_SHADOW_CASCADES {
+        light_view_proj[i] = mat4_to_cols_pub(&s.light_view_proj[i]);
+    }
+    let count = s.cascade_count.clamp(1, MAX_SHADOW_CASCADES as u32) as f32;
+    ShadowUniformsGpu {
+        light_view_proj,
+        params: [
+            if s.enabled { 1.0 } else { 0.0 },
+            s.bias,
+            s.strength,
+            count,
+        ],
+        splits: [
+            s.split_end[0],
+            s.split_end[1],
+            s.split_end[2],
+            1.0 / MAP_SIZE as f32,
+        ],
     }
 }
