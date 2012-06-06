@@ -6,6 +6,7 @@
 //! **winit 止于此 crate**：游戏只看见 `spark-renderer` / `spark-input` 类型。
 
 mod bloom;
+mod dyn_ubo;
 mod game3d;
 mod shadow;
 mod skinned_mesh;

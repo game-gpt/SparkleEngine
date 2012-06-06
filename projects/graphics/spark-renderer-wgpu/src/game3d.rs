@@ -126,6 +126,8 @@ struct GpuState3d {
     glyph_pipeline: wgpu::RenderPipeline,
     mesh_bind: wgpu::BindGroup,
     mesh_uniform: wgpu::Buffer,
+    mesh_uniform_stride: u64,
+    mesh_uniform_slots: usize,
     lights_bind: wgpu::BindGroup,
     lights_uniform: wgpu::Buffer,
     solid_bind: wgpu::BindGroup,
@@ -217,8 +219,10 @@ impl GpuState3d {
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+                    has_dynamic_offset: true,
+                    min_binding_size: crate::dyn_ubo::binding_size(
+                        std::mem::size_of::<Uniforms3d>() as u64,
+                    ),
                 },
                 count: None,
             }],
@@ -236,9 +240,12 @@ impl GpuState3d {
                 count: None,
             }],
         });
+        let mesh_uniform_stride =
+            crate::dyn_ubo::uniform_stride(&device, std::mem::size_of::<Uniforms3d>() as u64);
+        let mesh_uniform_slots = 512usize;
         let mesh_uniform = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("mesh3d-uniform"),
-            size: std::mem::size_of::<Uniforms3d>() as u64,
+            label: Some("mesh3d-uniform-ring"),
+            size: mesh_uniform_stride * mesh_uniform_slots as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -253,7 +260,11 @@ impl GpuState3d {
             layout: &mesh_bgl,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: mesh_uniform.as_entire_binding(),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &mesh_uniform,
+                    offset: 0,
+                    size: crate::dyn_ubo::binding_size(std::mem::size_of::<Uniforms3d>() as u64),
+                }),
             }],
         });
         let lights_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -777,6 +788,8 @@ impl GpuState3d {
             glyph_pipeline,
             mesh_bind,
             mesh_uniform,
+            mesh_uniform_stride,
+            mesh_uniform_slots,
             lights_bind,
             lights_uniform,
             solid_bind,
@@ -831,17 +844,40 @@ impl GpuState3d {
         view_proj: &spark_geometry::Mat4,
     ) {
         let vp = mat4_to_cols(view_proj);
-        for mesh in meshes {
-            if mesh.vertices.is_empty() {
+        // 每条 draw 独立 uniform 槽：`write_buffer` 在 submit 前合并，同偏移会互相覆盖。
+        let mut slot = 0usize;
+        let mut planned: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
+        for (mi, mesh) in meshes.iter().enumerate() {
+            if mesh.vertices.is_empty() && mesh.resident.is_none() {
                 continue;
+            }
+            let drawable = if let Some(key) = mesh.resident {
+                self.mesh_cache
+                    .get(&key.id.0)
+                    .map(|e| e.vertex_count > 0)
+                    .unwrap_or(false)
+            } else {
+                !mesh.vertices.is_empty() && (mesh.vertices.len() as u64) <= self.mesh_cap
+            };
+            if !drawable {
+                continue;
+            }
+            if slot >= self.mesh_uniform_slots {
+                break;
             }
             let uniforms = Uniforms3d {
                 view_proj: vp,
                 model: mat4_to_cols(&mesh.model),
             };
+            let off = slot as u64 * self.mesh_uniform_stride;
             self.queue
-                .write_buffer(&self.mesh_uniform, 0, bytemuck::bytes_of(&uniforms));
-
+                .write_buffer(&self.mesh_uniform, off, bytemuck::bytes_of(&uniforms));
+            planned.push((off as u32, mi));
+            slot += 1;
+        }
+        for (dyn_off, mi) in planned {
+            let mesh = &meshes[mi];
+            pass.set_bind_group(0, &self.mesh_bind, &[dyn_off]);
             if let Some(key) = mesh.resident {
                 let Some(entry) = self.mesh_cache.get(&key.id.0) else {
                     continue;

@@ -29,7 +29,7 @@ struct Uniforms3d {
 }
 
 struct GpuTexture {
-    _texture: wgpu::Texture,
+    texture: wgpu::Texture,
     bind: wgpu::BindGroup,
 }
 
@@ -47,7 +47,10 @@ pub struct TexMeshGpu {
     /// Emissive：测深、不写深、additive（岩浆/引擎）。
     pipeline_emissive: wgpu::RenderPipeline,
     bgl: wgpu::BindGroupLayout,
+    /// 动态 object uniform 环（每 draw 一槽，submit 前一次性写入）。
     uniform: wgpu::Buffer,
+    uniform_stride: u64,
+    uniform_slots: usize,
     sampler: wgpu::Sampler,
     transient_vbo: wgpu::Buffer,
     transient_cap: u64,
@@ -71,8 +74,10 @@ impl TexMeshGpu {
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                        has_dynamic_offset: true,
+                        min_binding_size: crate::dyn_ubo::binding_size(
+                            std::mem::size_of::<Uniforms3d>() as u64,
+                        ),
                     },
                     count: None,
                 },
@@ -94,9 +99,12 @@ impl TexMeshGpu {
                 },
             ],
         });
+        let uniform_stride =
+            crate::dyn_ubo::uniform_stride(device, std::mem::size_of::<Uniforms3d>() as u64);
+        let uniform_slots = 512usize;
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("tex-mesh3d-uniform"),
-            size: std::mem::size_of::<Uniforms3d>() as u64,
+            label: Some("tex-mesh3d-uniform-ring"),
+            size: uniform_stride * uniform_slots as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -273,11 +281,76 @@ impl TexMeshGpu {
             pipeline_emissive,
             bgl,
             uniform,
+            uniform_stride,
+            uniform_slots,
             sampler,
             transient_vbo,
             transient_cap,
             textures: HashMap::new(),
             mesh_cache: HashMap::new(),
+        }
+    }
+
+    fn object_binding(&self) -> wgpu::BindingResource<'_> {
+        wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+            buffer: &self.uniform,
+            offset: 0,
+            size: crate::dyn_ubo::binding_size(std::mem::size_of::<Uniforms3d>() as u64),
+        })
+    }
+
+    fn make_tex_bind(
+        &self,
+        device: &wgpu::Device,
+        view: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("tex-mesh3d-bg"),
+            layout: &self.bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.object_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        })
+    }
+
+    fn ensure_uniform_slots(&mut self, device: &wgpu::Device, need: usize) {
+        if need <= self.uniform_slots {
+            return;
+        }
+        let slots = need.next_power_of_two().max(self.uniform_slots * 2);
+        self.uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("tex-mesh3d-uniform-ring"),
+            size: self.uniform_stride * slots as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.uniform_slots = slots;
+        // 环缓冲换新后重建所有纹理 bind（引用旧 buffer 无效）。
+        let keys: Vec<u32> = self.textures.keys().copied().collect();
+        for id in keys {
+            let Some(tex) = self.textures.remove(&id) else {
+                continue;
+            };
+            let view = tex.texture.create_view(&Default::default());
+            let bind = self.make_tex_bind(device, &view);
+            self.textures.insert(
+                id,
+                GpuTexture {
+                    texture: tex.texture,
+                    bind,
+                },
+            );
         }
     }
 
@@ -322,28 +395,11 @@ impl TexMeshGpu {
                 },
             );
             let view = texture.create_view(&Default::default());
-            let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("tex-mesh3d-bg"),
-                layout: &self.bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: self.uniform.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
-                    },
-                ],
-            });
+            let bind = self.make_tex_bind(device, &view);
             self.textures.insert(
                 id.0,
                 GpuTexture {
-                    _texture: texture,
+                    texture,
                     bind,
                 },
             );
@@ -364,6 +420,10 @@ impl TexMeshGpu {
     }
 
     pub fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
+        let draw_n = list.tex_meshes.len()
+            + list.tex_meshes_xlu.len()
+            + list.tex_meshes_emissive.len();
+        self.ensure_uniform_slots(device, draw_n);
         let mut uploads = 0usize;
         for mesh in list
             .tex_meshes
@@ -507,16 +567,46 @@ impl TexMeshGpu {
             pass.set_bind_group(2, shadow, &[]);
         }
         let vp = mat4_to_cols_pub(view_proj);
-        for mesh in meshes {
-            let Some(tex) = self.textures.get(&mesh.texture.0) else {
+        // 先为每条 draw 写入独立槽，再开画：`queue.write_buffer` 在 submit 前合并，同偏移会互相覆盖。
+        let mut slot = 0usize;
+        let mut draw_slots: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
+        for (mi, mesh) in meshes.iter().enumerate() {
+            if !self.textures.contains_key(&mesh.texture.0) {
                 continue;
+            }
+            let drawable = if let Some(key) = mesh.resident {
+                self.mesh_cache
+                    .get(&key.id.0)
+                    .map(|e| e.vertex_count > 0)
+                    .unwrap_or(false)
+            } else {
+                !mesh.vertices.is_empty() && (mesh.vertices.len() as u64) <= self.transient_cap
             };
+            if !drawable {
+                continue;
+            }
+            if slot >= self.uniform_slots {
+                break;
+            }
             let uniforms = Uniforms3d {
                 view_proj: vp,
                 model: mat4_to_cols_pub(&mesh.model),
             };
-            queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniforms));
-            pass.set_bind_group(0, &tex.bind, &[]);
+            queue.write_buffer(
+                &self.uniform,
+                slot as u64 * self.uniform_stride,
+                bytemuck::bytes_of(&uniforms),
+            );
+            draw_slots.push(((slot as u64 * self.uniform_stride) as u32, mi));
+            slot += 1;
+        }
+
+        for (dyn_off, mi) in draw_slots {
+            let mesh = &meshes[mi];
+            let Some(tex) = self.textures.get(&mesh.texture.0) else {
+                continue;
+            };
+            pass.set_bind_group(0, &tex.bind, &[dyn_off]);
 
             if let Some(key) = mesh.resident {
                 let Some(entry) = self.mesh_cache.get(&key.id.0) else {
