@@ -1,7 +1,10 @@
 //! 太阳正交阴影图（支持 1..3 级联深度数组）。
 
 use bytemuck::{Pod, Zeroable};
-use spark_renderer::{DrawList3d, MeshCmd, MeshVertex, ShadowParams3d, TexMeshCmd, TexMeshVertex, MAX_SHADOW_CASCADES};
+use spark_renderer::{
+    DrawList3d, MeshCmd, MeshResidentKey, MeshVertex, ShadowParams3d, TexMeshCmd, TexMeshVertex,
+    MAX_SHADOW_CASCADES,
+};
 use spark_shader::{create_builtin, BuiltinShader};
 use wgpu::util::DeviceExt;
 
@@ -347,15 +350,44 @@ impl ShadowMapGpu {
     }
 
     fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
+        let mut uploads = 0usize;
         for m in &list.meshes {
             if let Some(key) = m.resident {
+                if Self::mesh_fresh(self.mesh_cache.get(&key.id.0), key, m.vertices.len()) {
+                    continue;
+                }
+                if uploads >= crate::RESIDENT_UPLOADS_PER_FRAME {
+                    continue;
+                }
                 self.ensure_mesh(device, key.id.0, key.revision, &m.vertices);
+                uploads += 1;
             }
         }
         for m in &list.tex_meshes {
             if let Some(key) = m.resident {
+                if Self::tex_fresh(self.tex_cache.get(&key.id.0), key, m.vertices.len()) {
+                    continue;
+                }
+                if uploads >= crate::RESIDENT_UPLOADS_PER_FRAME {
+                    continue;
+                }
                 self.ensure_tex(device, key.id.0, key.revision, &m.vertices);
+                uploads += 1;
             }
+        }
+    }
+
+    fn mesh_fresh(entry: Option<&DepthResident>, key: MeshResidentKey, n: usize) -> bool {
+        match entry {
+            Some(e) => e.revision == key.revision && e.vertex_count as usize == n,
+            None => n == 0,
+        }
+    }
+
+    fn tex_fresh(entry: Option<&DepthResident>, key: MeshResidentKey, n: usize) -> bool {
+        match entry {
+            Some(e) => e.revision == key.revision && e.vertex_count as usize == n,
+            None => n == 0,
         }
     }
 

@@ -12,6 +12,9 @@ mod skinned_mesh;
 mod tex_mesh;
 mod winit_map;
 
+/// 每帧最多新建/更新的驻留网格 VBO 数（分摊开局 remesh 洪峰，未上传的本帧跳过绘制）。
+pub(crate) const RESIDENT_UPLOADS_PER_FRAME: usize = 8;
+
 pub use game3d::run_window_3d;
 pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{

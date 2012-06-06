@@ -866,6 +866,17 @@ impl GpuState3d {
     }
 
     /// 确保驻留网格与 `revision` 一致，过期则重建 VBO。
+    fn resident_stale(
+        entry: Option<&ResidentMesh>,
+        key: MeshResidentKey,
+        vertex_count: usize,
+    ) -> bool {
+        match entry {
+            Some(e) => e.revision != key.revision || e.vertex_count as usize != vertex_count,
+            None => vertex_count > 0,
+        }
+    }
+
     fn ensure_resident(&mut self, key: MeshResidentKey, vertices: &[MeshVertex]) {
         if let Some(entry) = self.mesh_cache.get(&key.id.0) {
             if entry.revision == key.revision && entry.vertex_count as usize == vertices.len() {
@@ -1043,6 +1054,8 @@ impl GpuState3d {
         let view = frame.texture.create_view(&Default::default());
 
         // 渲染通道开始前完成驻留上传，避免与 pass 借用冲突。
+        // 每帧限量，避免 remesh 洪峰一次 create_buffer 过多。
+        let mut uploads = 0usize;
         for mesh in list
             .sky_atmosphere_meshes
             .iter()
@@ -1054,7 +1067,14 @@ impl GpuState3d {
             .chain(list.view_model_meshes.iter())
         {
             if let Some(key) = mesh.resident {
+                if !Self::resident_stale(self.mesh_cache.get(&key.id.0), key, mesh.vertices.len()) {
+                    continue;
+                }
+                if uploads >= crate::RESIDENT_UPLOADS_PER_FRAME {
+                    continue;
+                }
                 self.ensure_resident(key, &mesh.vertices);
+                uploads += 1;
             }
         }
         self.tex_mesh

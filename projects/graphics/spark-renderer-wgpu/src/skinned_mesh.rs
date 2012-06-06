@@ -189,9 +189,23 @@ impl SkinnedMeshGpu {
     }
 
     pub fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
+        let mut uploads = 0usize;
         for cmd in &list.skinned_meshes {
             if let Some(key) = cmd.resident {
+                if let Some(entry) = self.mesh_cache.get(&key.id.0) {
+                    if entry.revision == key.revision
+                        && entry.vertex_count as usize == cmd.vertices.len()
+                    {
+                        continue;
+                    }
+                } else if cmd.vertices.is_empty() {
+                    continue;
+                }
+                if uploads >= crate::RESIDENT_UPLOADS_PER_FRAME {
+                    continue;
+                }
                 self.ensure_resident(device, key, &cmd.vertices);
+                uploads += 1;
             }
         }
     }
