@@ -2,6 +2,7 @@
 //!
 //! 从 `game3d` 抽出，避免主文件继续膨胀。
 
+use std::cell::Cell;
 use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
@@ -51,6 +52,8 @@ pub struct TexMeshGpu {
     uniform: wgpu::Buffer,
     uniform_stride: u64,
     uniform_slots: usize,
+    /// 本帧环游标（opaque / xlu / emissive 累加）。
+    uniform_next: Cell<usize>,
     sampler: wgpu::Sampler,
     transient_vbo: wgpu::Buffer,
     transient_cap: u64,
@@ -283,12 +286,18 @@ impl TexMeshGpu {
             uniform,
             uniform_stride,
             uniform_slots,
+            uniform_next: Cell::new(0),
             sampler,
             transient_vbo,
             transient_cap,
             textures: HashMap::new(),
             mesh_cache: HashMap::new(),
         }
+    }
+
+    /// 每帧渲染开始时重置 object uniform 环游标。
+    pub fn begin_frame(&self) {
+        self.uniform_next.set(0);
     }
 
     fn object_binding(&self) -> wgpu::BindingResource<'_> {
@@ -567,8 +576,8 @@ impl TexMeshGpu {
             pass.set_bind_group(2, shadow, &[]);
         }
         let vp = mat4_to_cols_pub(view_proj);
-        // 先为每条 draw 写入独立槽，再开画：`queue.write_buffer` 在 submit 前合并，同偏移会互相覆盖。
-        let mut slot = 0usize;
+        // 先为每条 draw 写入独立槽，再开画；游标跨 opaque/xlu/emissive 累加。
+        let mut slot = self.uniform_next.get();
         let mut draw_slots: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
         for (mi, mesh) in meshes.iter().enumerate() {
             if !self.textures.contains_key(&mesh.texture.0) {
@@ -600,6 +609,7 @@ impl TexMeshGpu {
             draw_slots.push(((slot as u64 * self.uniform_stride) as u32, mi));
             slot += 1;
         }
+        self.uniform_next.set(slot);
 
         for (dyn_off, mi) in draw_slots {
             let mesh = &meshes[mi];

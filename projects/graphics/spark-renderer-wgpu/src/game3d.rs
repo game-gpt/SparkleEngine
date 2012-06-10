@@ -1,5 +1,6 @@
 //! 3D 游戏宿主：透视网格 + 深度 + 可选 HUD + 指针锁定。
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -128,6 +129,8 @@ struct GpuState3d {
     mesh_uniform: wgpu::Buffer,
     mesh_uniform_stride: u64,
     mesh_uniform_slots: usize,
+    /// 本帧 object uniform 环游标（跨天空/不透明/透明/VM 累加，避免同偏移覆盖）。
+    mesh_uniform_next: Cell<usize>,
     lights_bind: wgpu::BindGroup,
     lights_uniform: wgpu::Buffer,
     solid_bind: wgpu::BindGroup,
@@ -790,6 +793,7 @@ impl GpuState3d {
             mesh_uniform,
             mesh_uniform_stride,
             mesh_uniform_slots,
+            mesh_uniform_next: Cell::new(0),
             lights_bind,
             lights_uniform,
             solid_bind,
@@ -844,8 +848,8 @@ impl GpuState3d {
         view_proj: &spark_geometry::Mat4,
     ) {
         let vp = mat4_to_cols(view_proj);
-        // 每条 draw 独立 uniform 槽：`write_buffer` 在 submit 前合并，同偏移会互相覆盖。
-        let mut slot = 0usize;
+        // 每条 draw 独立槽；游标跨 pass 累加，因 `write_buffer` 在 submit 前合并。
+        let mut slot = self.mesh_uniform_next.get();
         let mut planned: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
         for (mi, mesh) in meshes.iter().enumerate() {
             if mesh.vertices.is_empty() && mesh.resident.is_none() {
@@ -875,6 +879,7 @@ impl GpuState3d {
             planned.push((off as u32, mi));
             slot += 1;
         }
+        self.mesh_uniform_next.set(slot);
         for (dyn_off, mi) in planned {
             let mesh = &meshes[mi];
             pass.set_bind_group(0, &self.mesh_bind, &[dyn_off]);
@@ -1089,6 +1094,10 @@ impl GpuState3d {
         };
         let view = frame.texture.create_view(&Default::default());
 
+        // 每帧重置 object uniform 环游标（mesh / tex-mesh 各自独立）。
+        self.mesh_uniform_next.set(0);
+        self.tex_mesh.begin_frame();
+
         // 渲染通道开始前完成驻留上传，避免与 pass 借用冲突。
         // 每帧限量，避免 remesh 洪峰一次 create_buffer 过多。
         let mut uploads = 0usize;
@@ -1178,18 +1187,15 @@ impl GpuState3d {
             });
             if !list.sky_atmosphere_meshes.is_empty() {
                 pass.set_pipeline(&self.sky_atmosphere_pipeline);
-                pass.set_bind_group(0, &self.mesh_bind, &[]);
                 pass.set_bind_group(1, &self.lights_bind, &[]);
                 self.draw_mesh_cmds(&mut pass, &list.sky_atmosphere_meshes, &list.sky_view_proj);
             }
             if !list.sky_meshes.is_empty() {
                 pass.set_pipeline(&self.sky_pipeline);
-                pass.set_bind_group(0, &self.mesh_bind, &[]);
                 self.draw_mesh_cmds(&mut pass, &list.sky_meshes, &list.sky_view_proj);
             }
             if !list.sky_emissive_meshes.is_empty() {
                 pass.set_pipeline(&self.sky_emissive_pipeline);
-                pass.set_bind_group(0, &self.mesh_bind, &[]);
                 self.draw_mesh_cmds(&mut pass, &list.sky_emissive_meshes, &list.sky_view_proj);
             }
         }
@@ -1228,7 +1234,6 @@ impl GpuState3d {
                 ..Default::default()
             });
             pass.set_pipeline(&self.mesh_pipeline);
-            pass.set_bind_group(0, &self.mesh_bind, &[]);
             pass.set_bind_group(1, &self.lights_bind, &[]);
             pass.set_bind_group(2, self.shadow.sample_bind(), &[]);
             self.draw_mesh_cmds(&mut pass, &list.meshes, &list.view_proj);
@@ -1273,7 +1278,6 @@ impl GpuState3d {
             });
             if !list.meshes_xlu.is_empty() {
                 pass.set_pipeline(&self.mesh_xlu_pipeline);
-                pass.set_bind_group(0, &self.mesh_bind, &[]);
                 pass.set_bind_group(1, &self.lights_bind, &[]);
                 pass.set_bind_group(2, self.shadow.sample_bind(), &[]);
                 self.draw_mesh_cmds(&mut pass, &list.meshes_xlu, &list.view_proj);
@@ -1313,7 +1317,6 @@ impl GpuState3d {
             });
             if !list.meshes_emissive.is_empty() {
                 pass.set_pipeline(&self.mesh_emissive_pipeline);
-                pass.set_bind_group(0, &self.mesh_bind, &[]);
                 self.draw_mesh_cmds(&mut pass, &list.meshes_emissive, &list.view_proj);
             }
             if !list.tex_meshes_emissive.is_empty() {
@@ -1346,7 +1349,6 @@ impl GpuState3d {
                 ..Default::default()
             });
             pass.set_pipeline(&self.mesh_pipeline);
-            pass.set_bind_group(0, &self.mesh_bind, &[]);
             pass.set_bind_group(1, &self.lights_bind, &[]);
             pass.set_bind_group(2, self.shadow.sample_bind(), &[]);
             self.draw_mesh_cmds(&mut pass, &list.view_model_meshes, &list.view_proj);
