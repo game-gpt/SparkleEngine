@@ -508,6 +508,9 @@ impl ShadowMapGpu {
         let vp = mat4_to_cols_pub(light_vp);
         let mut planned: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
         for (mi, mesh) in meshes.iter().enumerate() {
+            if !mesh.casts_shadow {
+                continue;
+            }
             if mesh
                 .world_aabb()
                 .is_some_and(|aabb| !light_frustum.intersects_aabb(&aabb))
@@ -569,6 +572,9 @@ impl ShadowMapGpu {
         let vp = mat4_to_cols_pub(light_vp);
         let mut planned: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
         for (mi, mesh) in meshes.iter().enumerate() {
+            if !mesh.casts_shadow {
+                continue;
+            }
             if mesh
                 .world_aabb()
                 .is_some_and(|aabb| !light_frustum.intersects_aabb(&aabb))
