@@ -116,6 +116,7 @@ mod tests {
             dt: 1.0 / 60.0,
             screen_w: 1280.0,
             screen_h: 720.0,
+            timing: Default::default(),
         };
         host.update(&frame);
         let mut draw = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), Mat4::IDENTITY);

@@ -1359,7 +1359,6 @@ impl GpuState3d {
             self.bloom.apply(
                 &mut encoder,
                 &self.queue,
-                &self.device,
                 &view,
                 list.bloom_strength,
             );
@@ -1427,6 +1426,9 @@ struct HostApp3d<H: GameHost3d> {
     input: Input,
     state: Option<GpuState3d>,
     last: Instant,
+    /// 上一帧实测（供下一帧 `FrameCtx` 与慢帧日志）。
+    timing: spark_renderer::FrameTiming,
+    frame_index: u64,
     scale: f32,
     grab_applied: bool,
     modifiers: ModifiersState,
@@ -1539,20 +1541,26 @@ impl<H: GameHost3d> HostApp3d<H> {
         }
 
         let now = Instant::now();
-        let dt = (now - self.last).as_secs_f32().clamp(1.0 / 240.0, 0.05);
+        let raw_sec = (now - self.last).as_secs_f32();
         self.last = now;
+        // 模拟步长仍钳制，避免螺旋死亡；遥测用 raw_sec。
+        let dt = raw_sec.clamp(1.0 / 240.0, 0.05);
         let sw = gpu.config.width as f32;
         let sh = gpu.config.height as f32;
+        let prev_timing = self.timing;
 
+        let t_update = Instant::now();
         {
             let frame = FrameCtx {
                 input: &self.input,
                 dt,
                 screen_w: sw,
                 screen_h: sh,
+                timing: prev_timing,
             };
             self.host.update(&frame);
         }
+        let update_ms = t_update.elapsed().as_secs_f32() * 1000.0;
         self.input.begin_frame();
 
         if self.host.should_exit() {
@@ -1566,13 +1574,39 @@ impl<H: GameHost3d> HostApp3d<H> {
             self.config.clear_color[2] as f32,
             self.config.clear_color[3] as f32,
         );
+        let t_draw = Instant::now();
         let mut draw = DrawList3d::new(clear, spark_geometry::Mat4::IDENTITY);
         self.host.draw(&mut draw);
+        let draw_ms = t_draw.elapsed().as_secs_f32() * 1000.0;
+
+        let t_render = Instant::now();
         if let Err(e) = gpu.render(&draw) {
             tracing::error!(?e, "render3d failed");
             event_loop.exit();
             return;
         }
+        let render_ms = t_render.elapsed().as_secs_f32() * 1000.0;
+
+        self.timing = spark_renderer::FrameTiming {
+            frame_sec: raw_sec,
+            update_ms,
+            draw_ms,
+            render_ms,
+        };
+        self.frame_index = self.frame_index.wrapping_add(1);
+        let frame_ms = raw_sec * 1000.0;
+        if frame_ms > 33.0 || self.frame_index % 120 == 0 {
+            tracing::info!(
+                target: "spark.frame",
+                frame = self.frame_index,
+                frame_ms = format!("{frame_ms:.1}"),
+                update_ms = format!("{update_ms:.1}"),
+                draw_ms = format!("{draw_ms:.1}"),
+                render_ms = format!("{render_ms:.1}"),
+                "frame timing"
+            );
+        }
+
         gpu.window.request_redraw();
         let _ = DrawList::new(clear);
         let _ = self.modifiers;
@@ -1592,6 +1626,8 @@ pub fn run_window_3d<H: GameHost3d + 'static>(
         input: Input::default(),
         state: None,
         last: Instant::now(),
+        timing: spark_renderer::FrameTiming::default(),
+        frame_index: 0,
         scale: 1.0,
         grab_applied: false,
         modifiers: ModifiersState::default(),

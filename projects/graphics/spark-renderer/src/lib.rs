@@ -41,12 +41,25 @@ impl Default for WindowConfig {
     }
 }
 
+/// 上一帧宿主侧耗时（秒 / 毫秒）。`dt` 仍为模拟用钳制步长。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FrameTiming {
+    /// 墙钟帧间隔（秒，**未**钳制）。
+    pub frame_sec: f32,
+    pub update_ms: f32,
+    pub draw_ms: f32,
+    /// GPU 提交路径（含编码 + submit/present 等待）。
+    pub render_ms: f32,
+}
+
 /// 每帧输入与时间。
 pub struct FrameCtx<'a> {
     pub input: &'a Input,
     pub dt: f32,
     pub screen_w: f32,
     pub screen_h: f32,
+    /// 上一帧实测耗时；首帧或未测量后端为零。
+    pub timing: FrameTiming,
 }
 
 /// 2D 游戏宿主：更新逻辑并填充绘制列表。
