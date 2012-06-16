@@ -747,7 +747,8 @@ impl GpuState3d {
         });
 
         let mesh_cap = 256_000u64;
-        let solid_cap = 16_384u64;
+        // 全屏地图等 HUD 色块可达数万顶点；不足时由 `ensure_solid_cap` 扩容。
+        let solid_cap = 65_536u64;
         let glyph_cap = 32_768u64;
         let mesh_vbo = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("mesh-vbo"),
@@ -946,6 +947,42 @@ impl GpuState3d {
         );
     }
 
+    fn ensure_solid_cap(&mut self, need: u64) -> Result<(), SparkError> {
+        if need <= self.solid_cap {
+            return Ok(());
+        }
+        let mut cap = self.solid_cap.max(4096);
+        while cap < need {
+            cap = cap.saturating_mul(2);
+        }
+        self.solid_vbo = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("solid-hud-vbo"),
+            size: cap * std::mem::size_of::<SolidVertex>() as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.solid_cap = cap;
+        Ok(())
+    }
+
+    fn ensure_glyph_cap(&mut self, need: u64) -> Result<(), SparkError> {
+        if need <= self.glyph_cap {
+            return Ok(());
+        }
+        let mut cap = self.glyph_cap.max(4096);
+        while cap < need {
+            cap = cap.saturating_mul(2);
+        }
+        self.glyph_vbo = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("glyph-hud-vbo"),
+            size: cap * std::mem::size_of::<GlyphVertex>() as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.glyph_cap = cap;
+        Ok(())
+    }
+
     fn render(&mut self, list: &DrawList3d) -> Result<(), SparkError> {
         let sw = self.config.width as f32;
         let sh = self.config.height as f32;
@@ -1069,10 +1106,10 @@ impl GpuState3d {
             }),
         );
         if solids.len() as u64 > self.solid_cap {
-            return Err(SparkError::Message("HUD solid overflow".into()));
+            self.ensure_solid_cap(solids.len() as u64)?;
         }
         if glyphs.len() as u64 > self.glyph_cap {
-            return Err(SparkError::Message("HUD glyph overflow".into()));
+            self.ensure_glyph_cap(glyphs.len() as u64)?;
         }
         if !solids.is_empty() {
             self.queue
