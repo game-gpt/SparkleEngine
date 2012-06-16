@@ -40,6 +40,8 @@ pub struct BloomGpu {
     scene: Option<Rt>,
     bloom_a: Option<Rt>,
     bloom_b: Option<Rt>,
+    /// 合成 bind group：随 RT 重建，普通帧复用。
+    composite_bind: Option<wgpu::BindGroup>,
     width: u32,
     height: u32,
 }
@@ -242,6 +244,7 @@ impl BloomGpu {
             scene: None,
             bloom_a: None,
             bloom_b: None,
+            composite_bind: None,
             width: 0,
             height: 0,
         }
@@ -261,6 +264,40 @@ impl BloomGpu {
         self.scene = Some(self.make_rt(device, width, height, "bloom-scene"));
         self.bloom_a = Some(self.make_rt(device, hw, hh, "bloom-a"));
         self.bloom_b = Some(self.make_rt(device, hw, hh, "bloom-b"));
+        self.rebuild_composite_bind(device);
+    }
+
+    fn rebuild_composite_bind(&mut self, device: &wgpu::Device) {
+        let Some(scene) = self.scene.as_ref() else {
+            self.composite_bind = None;
+            return;
+        };
+        let Some(a) = self.bloom_a.as_ref() else {
+            self.composite_bind = None;
+            return;
+        };
+        self.composite_bind = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bloom-comp-bg"),
+            layout: &self.composite_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scene.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&a.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: self.comp_uniform.as_entire_binding(),
+                },
+            ],
+        }));
     }
 
     fn make_rt(&self, device: &wgpu::Device, w: u32, h: u32, label: &str) -> Rt {
@@ -313,7 +350,6 @@ impl BloomGpu {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         queue: &wgpu::Queue,
-        device: &wgpu::Device,
         dst: &wgpu::TextureView,
         strength: f32,
     ) {
@@ -324,6 +360,9 @@ impl BloomGpu {
             return;
         };
         let Some(b) = self.bloom_b.as_ref() else {
+            return;
+        };
+        let Some(comp_bind) = self.composite_bind.as_ref() else {
             return;
         };
 
@@ -416,28 +455,6 @@ impl BloomGpu {
                 _pad: [0.0; 3],
             }),
         );
-        let comp_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bloom-comp-bg"),
-            layout: &self.composite_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&scene.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&a.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: self.comp_uniform.as_entire_binding(),
-                },
-            ],
-        });
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("bloom-composite"),
@@ -454,7 +471,7 @@ impl BloomGpu {
                 ..Default::default()
             });
             pass.set_pipeline(&self.composite_pl);
-            pass.set_bind_group(0, &comp_bind, &[]);
+            pass.set_bind_group(0, comp_bind, &[]);
             pass.draw(0..3, 0..1);
         }
     }
