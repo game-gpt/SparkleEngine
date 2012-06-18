@@ -485,7 +485,7 @@ impl DrawList3d {
         texture: TextureId,
         vertices: Arc<[TexMeshVertex]>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Opaque);
+        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Opaque, true);
     }
 
     pub fn tex_mesh_resident(
@@ -496,7 +496,36 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Opaque);
+        self.push_tex_mesh(
+            model,
+            texture,
+            vertices,
+            Some(key),
+            local_aabb,
+            TexPass::Opaque,
+            true,
+        );
+    }
+
+    /// 不透明纹理网格，可显式关闭阴影投射（远距体素块）。
+    pub fn tex_mesh_resident_cast_shadow(
+        &mut self,
+        model: Mat4,
+        texture: TextureId,
+        vertices: Arc<[TexMeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+        casts_shadow: bool,
+    ) {
+        self.push_tex_mesh(
+            model,
+            texture,
+            vertices,
+            Some(key),
+            local_aabb,
+            TexPass::Opaque,
+            casts_shadow,
+        );
     }
 
     /// 半透明纹理网格（Transparent pass：测深不写深）。
@@ -506,7 +535,7 @@ impl DrawList3d {
         texture: TextureId,
         vertices: Arc<[TexMeshVertex]>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Xlu);
+        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Xlu, false);
     }
 
     pub fn tex_mesh_xlu_resident(
@@ -517,7 +546,15 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Xlu);
+        self.push_tex_mesh(
+            model,
+            texture,
+            vertices,
+            Some(key),
+            local_aabb,
+            TexPass::Xlu,
+            false,
+        );
     }
 
     /// 世界自发光纹理网格（Emissive pass：测深不写深、additive）。
@@ -527,7 +564,15 @@ impl DrawList3d {
         texture: TextureId,
         vertices: Arc<[TexMeshVertex]>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Emissive);
+        self.push_tex_mesh(
+            model,
+            texture,
+            vertices,
+            None,
+            None,
+            TexPass::Emissive,
+            false,
+        );
     }
 
     pub fn tex_mesh_emissive_resident(
@@ -538,7 +583,15 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Emissive);
+        self.push_tex_mesh(
+            model,
+            texture,
+            vertices,
+            Some(key),
+            local_aabb,
+            TexPass::Emissive,
+            false,
+        );
     }
 
     /// 不透明蒙皮网格（可选纹理；首切 palette ≤ [`MAX_SKIN_JOINTS`]）。
@@ -713,6 +766,7 @@ impl DrawList3d {
         resident: Option<MeshResidentKey>,
         local_aabb: Option<Aabb3>,
         pass: TexPass,
+        casts_shadow: bool,
     ) {
         if vertices.is_empty() {
             return;
@@ -723,8 +777,8 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
-            // 不透明可投射；透明/自发光不进阴影深度。
-            casts_shadow: matches!(pass, TexPass::Opaque),
+            // 透明/自发光永不投射；不透明由调用方决定。
+            casts_shadow: casts_shadow && matches!(pass, TexPass::Opaque),
         };
         match pass {
             TexPass::Opaque => self.tex_meshes.push(cmd),
