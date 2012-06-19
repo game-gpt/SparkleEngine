@@ -87,6 +87,16 @@ fn sun_shadow(world_pos: vec3<f32>) -> f32 {
         return 1.0;
     }
     let dist = length(world_pos - lights.eye.xyz);
+    let count = i32(shadow.params.w);
+    // 超出最远级联覆盖半径：远景 LOD 像素跳过矩阵与深度采样。
+    let cover = select(
+        shadow.splits.x,
+        select(shadow.splits.y, shadow.splits.z, count >= 3),
+        count >= 2,
+    );
+    if dist > cover {
+        return 1.0;
+    }
     let layer = pick_cascade(dist);
     let lp = shadow.light_view_proj[layer] * vec4<f32>(world_pos, 1.0);
     let ndc = lp.xyz / max(lp.w, 1e-6);
@@ -95,17 +105,9 @@ fn sun_shadow(world_pos: vec3<f32>) -> f32 {
     if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || depth < 0.0 || depth > 1.0 {
         return 1.0;
     }
-    // 3×3 PCF：软化体素台阶上的硬影锯齿。
-    let texel = shadow.splits.w;
+    // 单点比较：体素远景满屏时 3×3 PCF 成本过高。
     let bias = shadow.params.y;
-    var acc = 0.0;
-    for (var oy = -1; oy <= 1; oy++) {
-        for (var ox = -1; ox <= 1; ox++) {
-            let o = vec2<f32>(f32(ox), f32(oy)) * texel;
-            acc += textureSampleCompare(shadow_map, shadow_samp, uv + o, layer, depth - bias);
-        }
-    }
-    let lit = acc / 9.0;
+    let lit = textureSampleCompare(shadow_map, shadow_samp, uv, layer, depth - bias);
     return mix(1.0 - shadow.params.z, 1.0, lit);
 }
 
