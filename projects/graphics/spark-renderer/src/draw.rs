@@ -1,4 +1,6 @@
-use spark_core::{Color, Rect, Vec2};
+use spark_core::{Color, Rect, SparkError, Vec2};
+
+use crate::texture::{alloc_texture_id, RgbaImage, TextureId};
 
 #[derive(Debug, Clone)]
 pub struct QuadCmd {
@@ -14,6 +16,15 @@ pub struct TextCmd {
     pub text: String,
 }
 
+/// 屏幕空间纹理四边形（归一化 UV，颜色相乘）。
+#[derive(Debug, Clone)]
+pub struct TexQuadCmd {
+    pub texture: TextureId,
+    pub dest: Rect,
+    pub uv: Rect,
+    pub color: Color,
+}
+
 /// 一帧绘制命令列表（屏幕像素坐标，原点左上）。
 ///
 /// 与具体 GPU 后端无关；由 `spark-renderer-wgpu` 等实现提交。
@@ -22,6 +33,8 @@ pub struct DrawList {
     pub clear: Color,
     pub quads: Vec<QuadCmd>,
     pub texts: Vec<TextCmd>,
+    pub tex_quads: Vec<TexQuadCmd>,
+    pub texture_uploads: Vec<(TextureId, RgbaImage)>,
 }
 
 impl DrawList {
@@ -30,6 +43,8 @@ impl DrawList {
             clear,
             quads: Vec::new(),
             texts: Vec::new(),
+            tex_quads: Vec::new(),
+            texture_uploads: Vec::new(),
         }
     }
 
@@ -43,6 +58,42 @@ impl DrawList {
             size,
             color,
             text: text.into(),
+        });
+    }
+
+    /// 分配稳定纹理 ID 并排队上传。请缓存返回的 ID。
+    pub fn create_texture(
+        &mut self,
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
+    ) -> Result<TextureId, SparkError> {
+        let img = RgbaImage::from_rgba8(width, height, rgba)?;
+        let id = alloc_texture_id();
+        self.texture_uploads.push((id, img));
+        Ok(id)
+    }
+
+    /// 用已有 ID 重新上传像素。
+    pub fn update_texture(
+        &mut self,
+        id: TextureId,
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
+    ) -> Result<(), SparkError> {
+        let img = RgbaImage::from_rgba8(width, height, rgba)?;
+        self.texture_uploads.push((id, img));
+        Ok(())
+    }
+
+    /// 绘制纹理四边形。`uv` 为归一化 [0,1] 源矩形。
+    pub fn tex_rect(&mut self, texture: TextureId, dest: Rect, uv: Rect, color: Color) {
+        self.tex_quads.push(TexQuadCmd {
+            texture,
+            dest,
+            uv,
+            color,
         });
     }
 }

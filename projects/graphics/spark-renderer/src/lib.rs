@@ -10,7 +10,7 @@ mod frustum;
 mod texture;
 
 pub use camera3d::Camera3d;
-pub use draw::{DrawList, QuadCmd, TextCmd};
+pub use draw::{DrawList, QuadCmd, TexQuadCmd, TextCmd};
 pub use draw3d::{
     DrawList3d, FrameLights3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex, ShadowParams3d,
     MAX_SHADOW_CASCADES,

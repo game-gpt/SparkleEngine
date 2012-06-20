@@ -12,6 +12,8 @@ pub enum BuiltinShader {
     SolidQuad,
     /// 图集采样文字 / 精灵（R 通道作 alpha）。
     TexturedGlyph,
+    /// 屏幕空间 RGBA 纹理四边形（像素图集 / 图标）。
+    TexturedQuad,
     /// 透视空间顶点色三角网格（无光照；天空用）。
     SolidMesh3d,
     /// 透视空间顶点色三角网格（方向光 + 雾 + ACES；不透明世界）。
@@ -37,6 +39,7 @@ impl BuiltinShader {
         match self {
             Self::SolidQuad => "spark-shader/solid-quad",
             Self::TexturedGlyph => "spark-shader/textured-glyph",
+            Self::TexturedQuad => "spark-shader/textured-quad",
             Self::SolidMesh3d => "spark-shader/solid-mesh3d",
             Self::LitSolidMesh3d => "spark-shader/lit-solid-mesh3d",
             Self::TexturedMesh3d => "spark-shader/textured-mesh3d",
@@ -53,6 +56,7 @@ impl BuiltinShader {
         match self {
             Self::SolidQuad => include_str!("shaders/quad.wgsl"),
             Self::TexturedGlyph => include_str!("shaders/text.wgsl"),
+            Self::TexturedQuad => include_str!("shaders/tex_quad.wgsl"),
             Self::SolidMesh3d => include_str!("shaders/mesh3d.wgsl"),
             Self::LitSolidMesh3d => include_str!("shaders/mesh3d_lit.wgsl"),
             Self::TexturedMesh3d => include_str!("shaders/mesh3d_tex.wgsl"),
@@ -123,6 +127,7 @@ mod tests {
         for s in [
             BuiltinShader::SolidQuad,
             BuiltinShader::TexturedGlyph,
+            BuiltinShader::TexturedQuad,
             BuiltinShader::SolidMesh3d,
             BuiltinShader::LitSolidMesh3d,
             BuiltinShader::TexturedMesh3d,
