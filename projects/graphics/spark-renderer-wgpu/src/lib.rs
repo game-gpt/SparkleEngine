@@ -455,114 +455,23 @@ impl GpuState {
             }),
         );
 
-        let mut solids = Vec::with_capacity(list.quads.len() * 6);
+        let mut solids = Vec::with_capacity((list.quads.len() + list.hud_quads.len()) * 6);
         for q in &list.quads {
-            let x0 = q.rect.x;
-            let y0 = q.rect.y;
-            let x1 = q.rect.x + q.rect.w;
-            let y1 = q.rect.y + q.rect.h;
-            let c = q.color.to_array();
-            let verts = [
-                SolidVertex {
-                    pos: [x0, y0],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x1, y0],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x1, y1],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x0, y0],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x1, y1],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x0, y1],
-                    color: c,
-                },
-            ];
-            solids.extend_from_slice(&verts);
+            push_solid_quad(&mut solids, q);
+        }
+        let world_solid_end = solids.len() as u32;
+        for q in &list.hud_quads {
+            push_solid_quad(&mut solids, q);
         }
 
         let mut glyphs = Vec::new();
         for t in &list.texts {
-            let mut pen_x = t.pos.x;
-            let baseline = t.pos.y + t.size;
-            for ch in t.text.chars() {
-                if ch == '\n' {
-                    continue;
-                }
-                let Some((advance, width, height, bearing_y, u0, v0, u1, v1)) =
-                    self.glyph_cache.glyph(ch, t.size).map(|g| {
-                        (
-                            g.advance,
-                            g.width,
-                            g.height,
-                            g.bearing_y,
-                            g.uv_min[0],
-                            g.uv_min[1],
-                            g.uv_max[0],
-                            g.uv_max[1],
-                        )
-                    })
-                else {
-                    continue;
-                };
-                let x0 = pen_x;
-                let y0 = baseline - bearing_y - height;
-                let x1 = x0 + width;
-                let y1 = y0 + height;
-                let c = t.color.to_array();
-                glyphs.extend_from_slice(&[
-                    GlyphVertex {
-                        pos: [x0, y0],
-                        uv: [u0, v0],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x1, y0],
-                        uv: [u1, v0],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x1, y1],
-                        uv: [u1, v1],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x0, y0],
-                        uv: [u0, v0],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x1, y1],
-                        uv: [u1, v1],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x0, y1],
-                        uv: [u0, v1],
-                        color: c,
-                    },
-                ]);
-                pen_x += advance;
-            }
+            push_text_glyphs(&mut glyphs, &mut self.glyph_cache, t);
         }
         self.upload_atlas_if_needed();
 
-        self.tex_quads.prepare_frame(
-            &self.device,
-            &self.queue,
-            &self.uniform_buf,
-            list,
-        )?;
+        self.tex_quads
+            .prepare_frame(&self.device, &self.queue, &self.uniform_buf, list)?;
 
         self.ensure_solid_cap(solids.len() as u64)?;
         self.ensure_glyph_cap(glyphs.len() as u64)?;
@@ -616,13 +525,23 @@ impl GpuState {
                 timestamp_writes: None,
                 multiview_mask: None,
             });
-            if !solids.is_empty() {
+            if world_solid_end > 0 {
                 pass.set_pipeline(&self.solid_pipeline);
                 pass.set_bind_group(0, &self.solid_bind, &[]);
                 pass.set_vertex_buffer(0, self.solid_vbo.slice(..));
-                pass.draw(0..solids.len() as u32, 0..1);
+                pass.draw(0..world_solid_end, 0..1);
             }
-            self.tex_quads.encode_pass(&mut pass);
+            let split = self.tex_quads.world_vert_end();
+            self.tex_quads.encode_pass_range(&mut pass, 0, split);
+            let hud_solid_end = solids.len() as u32;
+            if hud_solid_end > world_solid_end {
+                pass.set_pipeline(&self.solid_pipeline);
+                pass.set_bind_group(0, &self.solid_bind, &[]);
+                pass.set_vertex_buffer(0, self.solid_vbo.slice(..));
+                pass.draw(world_solid_end..hud_solid_end, 0..1);
+            }
+            self.tex_quads
+                .encode_pass_range(&mut pass, split, u32::MAX);
             if !glyphs.is_empty() {
                 pass.set_pipeline(&self.glyph_pipeline);
                 pass.set_bind_group(0, &self.glyph_bind, &[]);
@@ -637,6 +556,96 @@ impl GpuState {
             self.surface.configure(&self.device, &self.config);
         }
         Ok(())
+    }
+}
+
+fn push_solid_quad(solids: &mut Vec<SolidVertex>, q: &spark_renderer::QuadCmd) {
+    let x0 = q.rect.x;
+    let y0 = q.rect.y;
+    let x1 = q.rect.x + q.rect.w;
+    let y1 = q.rect.y + q.rect.h;
+    let c = q.color.to_array();
+    solids.extend_from_slice(&[
+        SolidVertex {
+            pos: [x0, y0],
+            color: c,
+        },
+        SolidVertex {
+            pos: [x1, y0],
+            color: c,
+        },
+        SolidVertex {
+            pos: [x1, y1],
+            color: c,
+        },
+        SolidVertex {
+            pos: [x0, y0],
+            color: c,
+        },
+        SolidVertex {
+            pos: [x1, y1],
+            color: c,
+        },
+        SolidVertex {
+            pos: [x0, y1],
+            color: c,
+        },
+    ]);
+}
+
+fn push_text_glyphs(
+    glyphs: &mut Vec<GlyphVertex>,
+    cache: &mut GlyphCache,
+    t: &spark_renderer::TextCmd,
+) {
+    let mut pen_x = t.pos.x;
+    let baseline = t.pos.y + t.size;
+    for ch in t.text.chars() {
+        if ch == '\n' {
+            continue;
+        }
+        let Some(g) = cache.glyph(ch, t.size) else {
+            continue;
+        };
+        let x0 = pen_x;
+        let y0 = baseline - g.bearing_y - g.height;
+        let x1 = x0 + g.width;
+        let y1 = y0 + g.height;
+        let c = t.color.to_array();
+        let (u0, v0, u1, v1) = (g.uv_min[0], g.uv_min[1], g.uv_max[0], g.uv_max[1]);
+        glyphs.extend_from_slice(&[
+            GlyphVertex {
+                pos: [x0, y0],
+                uv: [u0, v0],
+                color: c,
+            },
+            GlyphVertex {
+                pos: [x1, y0],
+                uv: [u1, v0],
+                color: c,
+            },
+            GlyphVertex {
+                pos: [x1, y1],
+                uv: [u1, v1],
+                color: c,
+            },
+            GlyphVertex {
+                pos: [x0, y0],
+                uv: [u0, v0],
+                color: c,
+            },
+            GlyphVertex {
+                pos: [x1, y1],
+                uv: [u1, v1],
+                color: c,
+            },
+            GlyphVertex {
+                pos: [x0, y1],
+                uv: [u0, v1],
+                color: c,
+            },
+        ]);
+        pen_x += g.advance;
     }
 }
 

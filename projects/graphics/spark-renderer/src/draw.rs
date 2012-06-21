@@ -25,16 +25,28 @@ pub struct TexQuadCmd {
     pub color: Color,
 }
 
+/// 2D 绘制层：世界在下，HUD 在上（同层内纹理压在纯色之上）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DrawLayer2d {
+    #[default]
+    World,
+    Hud,
+}
+
 /// 一帧绘制命令列表（屏幕像素坐标，原点左上）。
 ///
 /// 与具体 GPU 后端无关；由 `spark-renderer-wgpu` 等实现提交。
+/// 提交顺序：`world` 纯色 → `world` 纹理 → `hud` 纯色 → `hud` 纹理 → 文字。
 #[derive(Debug)]
 pub struct DrawList {
     pub clear: Color,
     pub quads: Vec<QuadCmd>,
-    pub texts: Vec<TextCmd>,
     pub tex_quads: Vec<TexQuadCmd>,
+    pub hud_quads: Vec<QuadCmd>,
+    pub hud_tex_quads: Vec<TexQuadCmd>,
+    pub texts: Vec<TextCmd>,
     pub texture_uploads: Vec<(TextureId, RgbaImage)>,
+    layer: DrawLayer2d,
 }
 
 impl DrawList {
@@ -42,14 +54,29 @@ impl DrawList {
         Self {
             clear,
             quads: Vec::new(),
-            texts: Vec::new(),
             tex_quads: Vec::new(),
+            hud_quads: Vec::new(),
+            hud_tex_quads: Vec::new(),
+            texts: Vec::new(),
             texture_uploads: Vec::new(),
+            layer: DrawLayer2d::World,
         }
     }
 
+    pub fn begin_world(&mut self) {
+        self.layer = DrawLayer2d::World;
+    }
+
+    pub fn begin_hud(&mut self) {
+        self.layer = DrawLayer2d::Hud;
+    }
+
     pub fn fill_rect(&mut self, rect: Rect, color: Color) {
-        self.quads.push(QuadCmd { rect, color });
+        let q = QuadCmd { rect, color };
+        match self.layer {
+            DrawLayer2d::World => self.quads.push(q),
+            DrawLayer2d::Hud => self.hud_quads.push(q),
+        }
     }
 
     pub fn text(&mut self, x: f32, y: f32, size: f32, color: Color, text: impl Into<String>) {
@@ -89,11 +116,15 @@ impl DrawList {
 
     /// 绘制纹理四边形。`uv` 为归一化 [0,1] 源矩形。
     pub fn tex_rect(&mut self, texture: TextureId, dest: Rect, uv: Rect, color: Color) {
-        self.tex_quads.push(TexQuadCmd {
+        let q = TexQuadCmd {
             texture,
             dest,
             uv,
             color,
-        });
+        };
+        match self.layer {
+            DrawLayer2d::World => self.tex_quads.push(q),
+            DrawLayer2d::Hud => self.hud_tex_quads.push(q),
+        }
     }
 }
