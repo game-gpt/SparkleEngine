@@ -1,0 +1,17 @@
+[package]
+name = "spark-localization"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 国际化与本地化：Locale 协商、消息模型、快照与诊断"
+keywords = ["spark", "i18n", "l10n", "locale"]
+categories = ["game-development", "internationalization"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
