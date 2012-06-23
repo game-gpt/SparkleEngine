@@ -8,6 +8,7 @@
 //! - **负责**：BCP 47、消息求值契约、回退链、切换事务数据、伪本地化钩子位。
 //! - **不负责**：机器翻译、玩法权威状态、已格式化文本的网络/存档权威。
 
+mod asset;
 mod bundle;
 mod check;
 mod compile;
@@ -15,6 +16,7 @@ mod coverage;
 mod diagnostic;
 mod document;
 mod eval;
+mod json;
 mod locale;
 mod manifest;
 mod message;
@@ -22,6 +24,10 @@ mod pseudo;
 mod snapshot;
 mod text;
 
+pub use asset::{
+    LocaleLoadError, MemoryLocaleLoader, load_bundle_from_manifest, load_document_json,
+    prepare_snapshot,
+};
 pub use bundle::{CompiledMessage, LocalizationBundle};
 pub use check::{CheckIssue, CheckIssueKind, CheckReport, check_document, check_locale_set};
 pub use compile::{CompileError, CompileOptions, CompileOutput, compile_document, compile_documents};
@@ -32,6 +38,7 @@ pub use diagnostic::{DiagnosticFlags, DiagnosticRecord, MessageDiagnostic};
 pub use document::{
     ArgumentFormat, LocalizationDocument, MessageDefinition, MessageName, MessageNode, SelectKind,
 };
+pub use json::{JsonError, document_from_json_slice, document_from_json_str};
 pub use locale::{
     LocaleId, LocaleParseError, LocaleRequest, TextDirection, build_fallback_chain, negotiate,
 };
