@@ -2,9 +2,12 @@
 
 use std::sync::Arc;
 
-use crate::diagnostic::{DiagnosticFlags, MessageDiagnostic};
+use crate::bundle::LocalizationBundle;
+use crate::diagnostic::DiagnosticFlags;
+use crate::document::{MessageDefinition, MessageName};
+use crate::eval::evaluate_compiled;
 use crate::locale::{LocaleId, TextDirection, build_fallback_chain};
-use crate::message::{MessageArgs, MessageRef};
+use crate::message::{MessageArgs, MessageId, MessageRef, NamespaceId};
 use crate::text::LocalizedText;
 
 /// Locale 切换后由 `spark-event` 传播的事件载荷。
@@ -24,21 +27,34 @@ pub struct LocaleSnapshot {
     pub fallback_chain: Arc<[LocaleId]>,
     pub direction: TextDirection,
     pub generation: u64,
-    /// 已装载命名空间 → 消息名 → 原文 pattern 文本（首版占位字典）。
-    ///
-    /// 后续替换为编译后的消息字节码；公共 API 不暴露实现细节。
-    bundles: Arc<BundleIndex>,
-}
-
-#[derive(Debug, Default, Clone)]
-struct BundleIndex {
-    /// namespace → message name → locale → pattern
-    by_ns: std::collections::BTreeMap<Arc<str>, std::collections::BTreeMap<Arc<str>, std::collections::BTreeMap<Arc<str>, Arc<str>>>>,
+    bundle: Arc<LocalizationBundle>,
 }
 
 impl LocaleSnapshot {
     /// 构造空快照（仅协商结果，无消息）。
-    pub fn empty(locale: LocaleId, product_default: &LocaleId, available: &[LocaleId], generation: u64) -> Self {
+    pub fn empty(
+        locale: LocaleId,
+        product_default: &LocaleId,
+        available: &[LocaleId],
+        generation: u64,
+    ) -> Self {
+        Self::from_bundle(
+            locale,
+            product_default,
+            available,
+            generation,
+            LocalizationBundle::new(),
+        )
+    }
+
+    /// 从已编译语言包构造快照。
+    pub fn from_bundle(
+        locale: LocaleId,
+        product_default: &LocaleId,
+        available: &[LocaleId],
+        generation: u64,
+        bundle: LocalizationBundle,
+    ) -> Self {
         let direction = locale.direction();
         let fallback_chain = build_fallback_chain(&locale, product_default, available);
         Self {
@@ -46,11 +62,11 @@ impl LocaleSnapshot {
             fallback_chain,
             direction,
             generation,
-            bundles: Arc::new(BundleIndex::default()),
+            bundle: Arc::new(bundle),
         }
     }
 
-    /// 从已校验的字符串表构造快照。
+    /// 测试 / 过渡：从扁平字符串表构造（内部编译为 bundle）。
     ///
     /// `entries`：`(namespace, message, locale_tag, pattern)`。
     pub fn from_entries(
@@ -60,28 +76,26 @@ impl LocaleSnapshot {
         generation: u64,
         entries: impl IntoIterator<Item = (Arc<str>, Arc<str>, Arc<str>, Arc<str>)>,
     ) -> Self {
-        let mut bundles = BundleIndex::default();
+        let mut bundle = LocalizationBundle::new();
         for (namespace, message, locale_tag, pattern) in entries {
-            bundles
-                .by_ns
-                .entry(namespace)
-                .or_default()
-                .entry(message)
-                .or_default()
-                .insert(locale_tag, pattern);
+            let Ok(entry_locale) = LocaleId::parse(&locale_tag) else {
+                continue;
+            };
+            bundle.insert(
+                NamespaceId::new(namespace),
+                MessageName::new(message),
+                entry_locale,
+                crate::bundle::CompiledMessage::from_definition(&MessageDefinition::Text(pattern)),
+            );
         }
-        let direction = locale.direction();
-        let fallback_chain = build_fallback_chain(&locale, product_default, available);
-        Self {
-            locale,
-            fallback_chain,
-            direction,
-            generation,
-            bundles: Arc::new(bundles),
-        }
+        Self::from_bundle(locale, product_default, available, generation, bundle)
     }
 
-    /// 查询并做最小占位格式化（仅替换 `{name}` 字符串/整数；完整规则后续接入）。
+    pub fn bundle(&self) -> &LocalizationBundle {
+        &self.bundle
+    }
+
+    /// 查询并格式化消息。
     pub fn format(&self, message: &MessageRef, args: &MessageArgs) -> LocalizedText {
         let Some(name) = message_name(message) else {
             return LocalizedText::missing_placeholder(
@@ -91,14 +105,15 @@ impl LocaleSnapshot {
             );
         };
 
-        let ns = message.namespace.as_str();
+        let ns = NamespaceId::new(message.namespace.as_str());
+        let msg_name = MessageName::new(name);
         let mut diagnostics = DiagnosticFlags::empty();
         let mut resolved_locale = self.locale.clone();
-        let mut pattern: Option<Arc<str>> = None;
+        let mut compiled = None;
 
         for candidate in self.fallback_chain.iter() {
-            if let Some(found) = self.lookup(ns, name, candidate.as_str()) {
-                pattern = Some(found);
+            if let Some(found) = self.bundle.get(&ns, &msg_name, candidate) {
+                compiled = Some(found);
                 resolved_locale = candidate.clone();
                 if candidate != &self.locale {
                     diagnostics.insert(DiagnosticFlags::FALLBACK_USED);
@@ -107,71 +122,29 @@ impl LocaleSnapshot {
             }
         }
 
-        let Some(pattern) = pattern else {
-            let mut text = LocalizedText::missing_placeholder(name, self.locale.clone(), self.generation);
+        let Some(compiled) = compiled else {
+            let mut text =
+                LocalizedText::missing_placeholder(name, self.locale.clone(), self.generation);
             text.diagnostics = DiagnosticFlags::MISSING;
             return text;
         };
 
-        let rendered = render_simple_pattern(&pattern, args, &mut diagnostics);
+        let rendered = evaluate_compiled(compiled, args, &mut diagnostics);
         LocalizedText {
-            text: Arc::from(rendered),
+            text: rendered,
             resolved_locale,
             direction: self.direction,
             generation: self.generation,
             diagnostics,
         }
     }
-
-    fn lookup(&self, namespace: &str, message: &str, locale_tag: &str) -> Option<Arc<str>> {
-        self.bundles
-            .by_ns
-            .get(namespace)?
-            .get(message)?
-            .get(locale_tag)
-            .cloned()
-    }
 }
 
 fn message_name(message: &MessageRef) -> Option<&str> {
     match &message.message {
-        crate::message::MessageId::Name(name) => Some(name.as_ref()),
-        crate::message::MessageId::Compact(_) => None,
+        MessageId::Name(name) => Some(name.as_ref()),
+        MessageId::Compact(_) => None,
     }
-}
-
-fn render_simple_pattern(pattern: &str, args: &MessageArgs, diagnostics: &mut DiagnosticFlags) -> String {
-    let mut out = String::with_capacity(pattern.len());
-    let mut rest = pattern;
-    while let Some(start) = rest.find('{') {
-        let (head, after) = rest.split_at(start);
-        out.push_str(head);
-        let Some(end) = after.find('}') else {
-            out.push_str(after);
-            diagnostics.insert(DiagnosticFlags::from_diagnostic(MessageDiagnostic::InvalidMarkup));
-            return out;
-        };
-        let key = after[1..end].trim();
-        match args.get(key) {
-            Some(crate::message::MessageValue::String(s)) => out.push_str(s),
-            Some(crate::message::MessageValue::Integer(v)) => {
-                use std::fmt::Write;
-                let _ = write!(&mut out, "{v}");
-            }
-            Some(crate::message::MessageValue::Select(s)) => out.push_str(s),
-            Some(_) => {
-                diagnostics.insert(DiagnosticFlags::from_diagnostic(MessageDiagnostic::BadArgument));
-                out.push('?');
-            }
-            None => {
-                diagnostics.insert(DiagnosticFlags::from_diagnostic(MessageDiagnostic::MissingArgument));
-                out.push('?');
-            }
-        }
-        rest = &after[end + 1..];
-    }
-    out.push_str(rest);
-    out
 }
 
 /// 持有当前快照；切换时整体替换 `Arc`。
@@ -222,8 +195,12 @@ impl Localizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::document::{MessageDefinition, MessageNode, SelectKind};
     use crate::locale::{LocaleId, LocaleRequest, negotiate};
     use crate::message::{MessageArgs, MessageRef, MessageValue};
+    use crate::compile::compile_documents;
+    use crate::compile::CompileOptions;
+    use std::collections::BTreeMap;
     use std::sync::Arc;
 
     fn loc(tag: &str) -> LocaleId {
@@ -251,7 +228,10 @@ mod tests {
         assert_eq!(changed.previous.as_str(), "en");
         assert_eq!(changed.current.as_str(), "zh-Hans-CN");
         assert_eq!(changed.generation, 2);
-        let text = localizer.format(&MessageRef::named("astracraft", "menu.continue"), &MessageArgs::new());
+        let text = localizer.format(
+            &MessageRef::named("astracraft", "menu.continue"),
+            &MessageArgs::new(),
+        );
         assert_eq!(text.text.as_ref(), "继续游戏");
         assert_eq!(text.generation, 2);
     }
@@ -301,5 +281,47 @@ mod tests {
         args.insert("player_name", MessageValue::String(Arc::from("Ada")));
         let text = snap.format(&MessageRef::named("game", "welcome"), &args);
         assert_eq!(text.text.as_ref(), "Hello, Ada");
+    }
+
+    #[test]
+    fn format_cardinal_select_from_bundle() {
+        let mut cases = BTreeMap::new();
+        cases.insert(
+            Arc::from("one"),
+            vec![
+                MessageNode::Argument {
+                    name: Arc::from("count"),
+                    format: crate::document::ArgumentFormat::None,
+                },
+                MessageNode::Text(Arc::from(" item")),
+            ],
+        );
+        cases.insert(
+            Arc::from("other"),
+            vec![
+                MessageNode::Argument {
+                    name: Arc::from("count"),
+                    format: crate::document::ArgumentFormat::None,
+                },
+                MessageNode::Text(Arc::from(" items")),
+            ],
+        );
+        let mut doc = crate::document::LocalizationDocument::new(loc("en"), "game");
+        doc.insert(
+            "item_count",
+            MessageDefinition::Select {
+                argument: Arc::from("count"),
+                kind: SelectKind::Cardinal,
+                cases,
+            },
+        );
+        let bundle = compile_documents(&[doc], CompileOptions::default())
+            .unwrap()
+            .bundle;
+        let snap = LocaleSnapshot::from_bundle(loc("en"), &loc("en"), &[loc("en")], 1, bundle);
+        let mut args = MessageArgs::new();
+        args.insert("count", MessageValue::Integer(2));
+        let text = snap.format(&MessageRef::named("game", "item_count"), &args);
+        assert_eq!(text.text.as_ref(), "2 items");
     }
 }
