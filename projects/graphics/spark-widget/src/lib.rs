@@ -3,8 +3,13 @@
 //! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
 //! **不**提供游戏 HUD 产品或完整控件库。
 
+mod text_source;
+
+pub use text_source::{ResolvedText, TextBinding, TextSource};
+
 use spark_core::{Color, Rect, Vec2};
 use spark_input::{Input, Key, MouseBtn};
+use spark_localization::LocaleSnapshot;
 use spark_renderer::DrawList;
 
 /// 纵向流式布局光标。
@@ -140,8 +145,23 @@ pub fn titled_panel(
 }
 
 /// 标签文字。
+/// 静态标签（字面文本，不走本地化）。
 pub fn label(draw: &mut DrawList, x: f32, y: f32, size: f32, color: Color, text: &str) {
     draw.text(x, y, size, color, text);
+}
+
+/// 按 [`TextSource`] 解析后绘制；`Message` 绑定依赖调用方提供的快照。
+pub fn label_source(
+    draw: &mut DrawList,
+    snapshot: &LocaleSnapshot,
+    x: f32,
+    y: f32,
+    size: f32,
+    color: Color,
+    source: &TextSource,
+) {
+    let resolved = source.resolve(snapshot);
+    draw.text(x, y, size, color, resolved.text.as_ref());
 }
 
 /// 按钮。返回本帧是否点击。
