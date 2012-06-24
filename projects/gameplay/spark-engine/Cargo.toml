@@ -19,6 +19,8 @@ spark-script = { workspace = true }
 spark-plugin = { workspace = true }
 spark-time = { workspace = true }
 spark-ecs = { workspace = true }
+spark-event = { workspace = true }
+spark-localization = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 spark-renderer-wgpu = { workspace = true }
