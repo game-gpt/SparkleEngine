@@ -161,7 +161,7 @@ impl SparkEngine {
         Ok(loaded)
     }
 
-    /// 加载单个模组目录（内含 `mod.toml`）。
+    /// 加载单个模组目录（内含 `mod.von`）。
     pub fn load_mod_dir(&mut self, dir: impl AsRef<Path>) -> Result<String, EngineError> {
         let dir = dir.as_ref();
         let manifest = ModManifest::from_dir(dir)?;
@@ -312,7 +312,7 @@ impl SparkEngine {
 
 fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
     let candidate = root.join(id);
-    if candidate.join("mod.toml").is_file() {
+    if candidate.join("mod.von").is_file() {
         return Ok(candidate);
     }
     let rd = std::fs::read_dir(root).map_err(|e| {
@@ -323,11 +323,11 @@ fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
         if !p.is_dir() {
             continue;
         }
-        let toml = p.join("mod.toml");
-        if !toml.is_file() {
+        let von = p.join("mod.von");
+        if !von.is_file() {
             continue;
         }
-        if let Ok(m) = ModManifest::from_path(&toml) {
+        if let Ok(m) = ModManifest::from_path(&von) {
             if m.id == id {
                 return Ok(p);
             }
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn manifest_roundtrip_toml() {
+    fn manifest_roundtrip_von() {
         let raw = r#"
 id = "demo"
 name = "Demo"
@@ -394,7 +394,7 @@ version = "0.1.0"
 entry = "main.vk"
 dependencies = ["core"]
 "#;
-        let m: ModManifest = toml::from_str(raw).unwrap();
+        let m = crate::manifest::parse_mod_von(raw).unwrap();
         assert_eq!(m.id, "demo");
         assert_eq!(m.dependencies, vec!["core"]);
     }
@@ -451,14 +451,14 @@ dependencies = ["core"]
         std::fs::create_dir_all(root.join("base")).unwrap();
         std::fs::create_dir_all(root.join("child")).unwrap();
         std::fs::write(
-            root.join("base/mod.toml"),
+            root.join("base/mod.von"),
             r#"id = "base"
 version = "1.0.0"
 "#,
         )
         .unwrap();
         std::fs::write(
-            root.join("child/mod.toml"),
+            root.join("child/mod.von"),
             r#"id = "child"
 version = "1.0.0"
 dependencies = ["base"]

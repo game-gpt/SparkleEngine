@@ -33,11 +33,11 @@ pub fn discover_and_order(mods_root: &Path) -> Result<Vec<ModManifest>, EngineEr
         if !p.is_dir() {
             continue;
         }
-        let toml = p.join("mod.toml");
-        if !toml.is_file() {
+        let von = p.join("mod.von");
+        if !von.is_file() {
             continue;
         }
-        let m = ModManifest::from_path(&toml)?;
+        let m = ModManifest::from_path(&von)?;
         if by_id.contains_key(&m.id) {
             return Err(EngineError::Message(format!("重复模组 id `{}`", m.id)));
         }
