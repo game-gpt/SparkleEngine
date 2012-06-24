@@ -6,6 +6,7 @@
 
 mod ast;
 mod compile;
+mod native_sig;
 mod parse;
 
 use spark_vm::Module;
@@ -13,6 +14,7 @@ use thiserror::Error;
 
 pub use ast::ValkyrieRoot;
 pub use compile::compile_root;
+pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 pub use parse::parse as parse_source;
 
 #[derive(Debug, Error)]
@@ -24,9 +26,23 @@ pub enum ValkyrieScriptError {
 }
 
 /// 源码 → [`Module`]。
+///
+/// `natives` 仅提供函数名，**不足以**支撑补全与类型检查。
+/// 新代码请优先使用 [`compile_with_registry`]。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, ValkyrieScriptError> {
     let root = parse(source)?;
     compile_root(&root, natives).map_err(ValkyrieScriptError::Compile)
+}
+
+/// 带完整宿主签名的编译入口。
+///
+/// 当前字节码生成仍只消费函数名；签名供后续名称解析 / 类型检查 / 编辑器复用。
+pub fn compile_with_registry(
+    source: &str,
+    natives: &NativeRegistry,
+) -> Result<Module, ValkyrieScriptError> {
+    let names = natives.name_list();
+    compile(source, &names)
 }
 
 /// 解析为 AST 根。
