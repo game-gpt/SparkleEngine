@@ -1,6 +1,7 @@
-//! 产品本地化清单（对应 `localization.toml` 的逻辑模型）。
+//! 产品本地化清单（对应 `localization.von` 的逻辑模型）。
 //!
-//! 清单不得写死本机路径；资产一律经 `spark-asset` 逻辑路径解析。
+//! 作者清单使用 Oak VON；JSON 仅作交换格式。清单不得写死本机路径；
+//! 资产一律经 `spark-asset` 逻辑路径解析。
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
