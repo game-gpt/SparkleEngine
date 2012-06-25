@@ -6,22 +6,63 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde::Deserialize;
-use thiserror::Error;
 
 use crate::document::{
     ArgumentFormat, LocalizationDocument, MessageDefinition, MessageName, MessageNode, SelectKind,
 };
 use crate::locale::{LocaleId, LocaleParseError};
 
-/// JSON 解析错误。
-#[derive(Debug, Error)]
+/// JSON 解析错误（稳定码；无用户句子）。
+#[derive(Debug)]
 pub enum JsonError {
-    #[error(transparent)]
-    Locale(#[from] LocaleParseError),
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-    #[error("{0}")]
-    Message(String),
+    Locale(LocaleParseError),
+    Serde { detail: String },
+    RichMessageIncomplete,
+    NodeObjectIncomplete,
+    UnknownSelectKind { kind: String },
+    UnknownArgumentFormat { format: String },
+}
+
+impl JsonError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Locale(e) => e.code(),
+            Self::Serde { .. } => "spark.localization.json_parse",
+            Self::RichMessageIncomplete => "spark.localization.json_rich_incomplete",
+            Self::NodeObjectIncomplete => "spark.localization.json_node_incomplete",
+            Self::UnknownSelectKind { .. } => "spark.localization.json_unknown_select_kind",
+            Self::UnknownArgumentFormat { .. } => "spark.localization.json_unknown_arg_format",
+        }
+    }
+}
+
+impl std::fmt::Display for JsonError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for JsonError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Locale(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<LocaleParseError> for JsonError {
+    fn from(value: LocaleParseError) -> Self {
+        Self::Locale(value)
+    }
+}
+
+impl From<serde_json::Error> for JsonError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Serde {
+            detail: value.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -114,9 +155,7 @@ fn convert_message(message: JsonMessage) -> Result<MessageDefinition, JsonError>
                 Some(JsonPattern::Nodes(nodes)) => {
                     Ok(MessageDefinition::Pattern(convert_nodes(&nodes)?))
                 }
-                None => Err(JsonError::Message(
-                    "rich message needs `value` or `select`".into(),
-                )),
+                None => Err(JsonError::RichMessageIncomplete),
             }
         }
     }
@@ -189,9 +228,7 @@ fn convert_node(node: &JsonNode) -> Result<MessageNode, JsonError> {
                     attribute: obj.attribute.as_ref().map(|s| Arc::from(s.as_str())),
                 });
             }
-            Err(JsonError::Message(
-                "node object needs argument, message, or select".into(),
-            ))
+            Err(JsonError::NodeObjectIncomplete)
         }
     }
 }
@@ -201,7 +238,9 @@ fn parse_select_kind(raw: Option<&str>) -> Result<SelectKind, JsonError> {
         "select" => Ok(SelectKind::Select),
         "cardinal" => Ok(SelectKind::Cardinal),
         "ordinal" => Ok(SelectKind::Ordinal),
-        other => Err(JsonError::Message(format!("unknown select kind: {other}"))),
+        other => Err(JsonError::UnknownSelectKind {
+            kind: other.to_string(),
+        }),
     }
 }
 
@@ -218,7 +257,9 @@ fn parse_format(raw: Option<&str>) -> Result<ArgumentFormat, JsonError> {
         other if other.starts_with("currency:") => Ok(ArgumentFormat::Currency {
             currency_code: Arc::from(other.trim_start_matches("currency:")),
         }),
-        other => Err(JsonError::Message(format!("unknown argument format: {other}"))),
+        other => Err(JsonError::UnknownArgumentFormat {
+            format: other.to_string(),
+        }),
     }
 }
 

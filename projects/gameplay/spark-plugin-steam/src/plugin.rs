@@ -87,7 +87,7 @@ impl Plugin for SteamPlugin {
             rt.borrow_mut()
                 .backend
                 .unlock_achievement(&id)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
 
@@ -98,7 +98,7 @@ impl Plugin for SteamPlugin {
                 .borrow()
                 .backend
                 .is_achievement_unlocked(&id)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Bool(ok))
         });
 
@@ -108,7 +108,7 @@ impl Plugin for SteamPlugin {
             rt.borrow_mut()
                 .backend
                 .clear_achievement(&id)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
 
@@ -119,7 +119,7 @@ impl Plugin for SteamPlugin {
                 .borrow()
                 .backend
                 .get_stat(&name)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Number(v as f64))
         });
 
@@ -130,7 +130,7 @@ impl Plugin for SteamPlugin {
             rt.borrow_mut()
                 .backend
                 .set_stat(&name, value)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
 
@@ -139,7 +139,7 @@ impl Plugin for SteamPlugin {
             rt.borrow_mut()
                 .backend
                 .store_stats()
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
 
@@ -150,7 +150,7 @@ impl Plugin for SteamPlugin {
                 .borrow()
                 .backend
                 .cloud_read(&path)
-                .map_err(|e| VmError::Message(e.to_string()))?
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?
             {
                 Some(s) => Ok(ctx.heap.alloc_string(s)),
                 None => Ok(Value::Null),
@@ -164,7 +164,7 @@ impl Plugin for SteamPlugin {
             rt.borrow_mut()
                 .backend
                 .cloud_write(&path, &data)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
 
@@ -175,7 +175,7 @@ impl Plugin for SteamPlugin {
                 .borrow_mut()
                 .backend
                 .cloud_delete(&path)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Bool(ok))
         });
 
@@ -185,7 +185,7 @@ impl Plugin for SteamPlugin {
             rt.borrow_mut()
                 .backend
                 .overlay_open_url(&url)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
     }
@@ -195,22 +195,22 @@ fn arg_f32(args: &[Value], i: usize) -> Result<f32, VmError> {
     args.get(i)
         .and_then(|v| v.as_number())
         .map(|n| n as f32)
-        .ok_or_else(|| VmError::Message("需要 number 参数".into()))
+        .ok_or_else(|| VmError::BadNativeArg { name: "number" })
 }
 
 fn arg_string(ctx: &NativeCtx<'_>, args: &[Value], i: usize) -> Result<String, VmError> {
     let v = args
         .get(i)
-        .ok_or_else(|| VmError::Message("缺少字符串参数".into()))?;
+        .ok_or_else(|| VmError::BadNativeArg { name: "string" })?;
     match v {
         Value::Handle(h) => match ctx.heap.get(*h) {
             Ok(GcObject::String(s)) => Ok(s.clone()),
-            _ => Err(VmError::Message("期望字符串".into())),
+            _ => Err(VmError::BadNativeArg { name: "string" }),
         },
         Value::Number(n) => Ok(n.to_string()),
         Value::Bool(b) => Ok(b.to_string()),
         Value::Null => Ok(String::new()),
-        _ => Err(VmError::Message("期望字符串".into())),
+        _ => Err(VmError::BadNativeArg { name: "string" }),
     }
 }
 

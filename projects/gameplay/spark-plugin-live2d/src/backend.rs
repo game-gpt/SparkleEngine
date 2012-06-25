@@ -49,7 +49,7 @@ impl Live2dBackend for NullLive2dBackend {
 
     fn unload(&mut self, id: Live2dModelId) -> Result<(), SparkError> {
         if self.models.remove(&id.0).is_none() {
-            return Err(SparkError::Message(format!("无效 Live2D 模型 {id:?}")));
+            return Err(SparkError::internal(format!("无效 Live2D 模型 {id:?}")));
         }
         Ok(())
     }
@@ -58,7 +58,7 @@ impl Live2dBackend for NullLive2dBackend {
         let m = self
             .models
             .get_mut(&id.0)
-            .ok_or_else(|| SparkError::Message(format!("无效 Live2D 模型 {id:?}")))?;
+            .ok_or_else(|| SparkError::internal(format!("无效 Live2D 模型 {id:?}")))?;
         m.params.insert(name.into(), value);
         Ok(())
     }
@@ -67,14 +67,14 @@ impl Live2dBackend for NullLive2dBackend {
         let m = self
             .models
             .get(&id.0)
-            .ok_or_else(|| SparkError::Message(format!("无效 Live2D 模型 {id:?}")))?;
+            .ok_or_else(|| SparkError::internal(format!("无效 Live2D 模型 {id:?}")))?;
         Ok(m.params.get(name).copied().unwrap_or(0.0))
     }
 
     fn update(&mut self, id: Live2dModelId, dt: f32) -> Result<(), SparkError> {
         let _ = dt;
         if !self.models.contains_key(&id.0) {
-            return Err(SparkError::Message(format!("无效 Live2D 模型 {id:?}")));
+            return Err(SparkError::internal(format!("无效 Live2D 模型 {id:?}")));
         }
         Ok(())
     }
@@ -86,7 +86,7 @@ impl Live2dBackend for NullLive2dBackend {
         index: i32,
     ) -> Result<(), SparkError> {
         if !self.models.contains_key(&id.0) {
-            return Err(SparkError::Message(format!("无效 Live2D 模型 {id:?}")));
+            return Err(SparkError::internal(format!("无效 Live2D 模型 {id:?}")));
         }
         tracing::debug!(?id, group, index, "Live2D 占位 start_motion");
         Ok(())

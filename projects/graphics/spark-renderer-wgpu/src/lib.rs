@@ -92,7 +92,7 @@ impl GpuState {
         let instance = wgpu::Instance::new(instance_desc);
         let surface = instance
             .create_surface(window.clone())
-            .map_err(|e| SparkError::Message(format!("create surface: {e}")))?;
+            .map_err(|e| SparkError::internal(format!("create surface: {e}")))?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -101,7 +101,7 @@ impl GpuState {
                 apply_limit_buckets: false,
             })
             .await
-            .map_err(|e| SparkError::Message(format!("adapter: {e}")))?;
+            .map_err(|e| SparkError::internal(format!("adapter: {e}")))?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("spark-renderer-wgpu"),
@@ -112,7 +112,7 @@ impl GpuState {
                 trace: Default::default(),
             })
             .await
-            .map_err(|e| SparkError::Message(format!("device: {e}")))?;
+            .map_err(|e| SparkError::internal(format!("device: {e}")))?;
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps
@@ -797,7 +797,7 @@ pub fn run_window_2d<H: GameHost + 'static>(
     config: WindowConfig,
     host: H,
 ) -> Result<(), SparkError> {
-    let event_loop = EventLoop::new().map_err(|e| SparkError::Message(e.to_string()))?;
+    let event_loop = EventLoop::new().map_err(|e| SparkError::internal(e.to_string()))?;
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = HostApp {
         config,
@@ -809,7 +809,7 @@ pub fn run_window_2d<H: GameHost + 'static>(
     };
     event_loop
         .run_app(&mut app)
-        .map_err(|e| SparkError::Message(e.to_string()))
+        .map_err(|e| SparkError::internal(e.to_string()))
 }
 
 /// 仅清屏窗口（无宿主逻辑）。

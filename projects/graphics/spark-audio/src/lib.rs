@@ -167,7 +167,7 @@ impl AudioBus {
             return Ok(());
         };
         let sink = Sink::try_new(handle)
-            .map_err(|e| SparkError::Message(format!("创建音频 Sink 失败：{e}")))?;
+            .map_err(|e| SparkError::internal(format!("创建音频 Sink 失败：{e}")))?;
         if pcm.samples.is_empty() {
             return Ok(());
         }

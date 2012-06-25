@@ -43,15 +43,15 @@ impl GlyphCache {
                 }
             }
         }
-        Err(SparkError::Message(
-            "未找到可用系统字体（尝试过微软雅黑 / 黑体 / Arial）".into(),
+        Err(SparkError::internal(
+            "未找到可用系统字体（尝试过微软雅黑 / 黑体 / Arial）",
         ))
     }
 
     /// 从字节流装载（测试 / 打包字体）。
     pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, SparkError> {
         let font = Font::from_bytes(bytes.as_ref(), FontSettings::default())
-            .map_err(|e| SparkError::Message(format!("字体解析失败：{e}")))?;
+            .map_err(|e| SparkError::internal(format!("字体解析失败：{e}")))?;
         Ok(Self::new(font))
     }
 
@@ -59,7 +59,7 @@ impl GlyphCache {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, SparkError> {
         let path = path.as_ref();
         let bytes = std::fs::read(path)
-            .map_err(|e| SparkError::Message(format!("读取字体失败 {}: {e}", path.display())))?;
+            .map_err(|e| SparkError::internal(format!("读取字体失败 {}: {e}", path.display())))?;
         Self::from_bytes(bytes)
     }
 

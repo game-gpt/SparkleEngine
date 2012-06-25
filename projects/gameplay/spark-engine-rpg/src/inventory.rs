@@ -52,13 +52,13 @@ impl Inventory {
                 return Ok(());
             }
         }
-        Err(SparkError::Message("背包已满".into()))
+        Err(SparkError::internal("背包已满"))
     }
 
     pub fn remove(&mut self, id: &str, count: u32) -> Result<(), SparkError> {
         let have = self.count(id);
         if have < count {
-            return Err(SparkError::Message(format!(
+            return Err(SparkError::internal(format!(
                 "物品不足：需要 {count}，仅有 {have}"
             )));
         }

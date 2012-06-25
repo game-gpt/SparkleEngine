@@ -2881,7 +2881,6 @@ name = "spark-asset"
 version = "0.1.0"
 dependencies = [
  "spark-core",
- "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -2906,7 +2905,7 @@ dependencies = [
 name = "spark-core"
 version = "0.1.0"
 dependencies = [
- "thiserror 2.0.20",
+ "spark-diagnostics",
 ]
 
 [[package]]
@@ -2916,6 +2915,10 @@ dependencies = [
  "spark-core",
  "spark-renderer",
 ]
+
+[[package]]
+name = "spark-diagnostics"
+version = "0.1.0"
 
 [[package]]
 name = "spark-ecs"
@@ -2941,7 +2944,6 @@ dependencies = [
  "spark-script",
  "spark-time",
  "spark-vm",
- "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -3016,7 +3018,6 @@ name = "spark-gc"
 version = "0.1.0"
 dependencies = [
  "spark-core",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3059,7 +3060,6 @@ version = "0.1.0"
 dependencies = [
  "spark-core",
  "spark-vm",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3070,7 +3070,6 @@ dependencies = [
  "serde_json",
  "spark-asset",
  "spark-core",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3083,7 +3082,6 @@ version = "0.1.0"
 dependencies = [
  "spark-core",
  "symphonia",
- "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -3124,7 +3122,6 @@ version = "0.1.0"
 dependencies = [
  "spark-gc",
  "spark-vm",
- "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -3187,7 +3184,6 @@ dependencies = [
  "spark-script-ruby",
  "spark-script-valkyrie",
  "spark-vm",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3197,7 +3193,6 @@ dependencies = [
  "oak-core",
  "oak-lua",
  "spark-vm",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3205,7 +3200,6 @@ name = "spark-script-ruby"
 version = "0.1.0"
 dependencies = [
  "spark-vm",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3214,7 +3208,6 @@ version = "0.1.0"
 dependencies = [
  "spark-gc",
  "spark-vm",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3247,7 +3240,6 @@ version = "0.1.0"
 dependencies = [
  "spark-core",
  "spark-gc",
- "thiserror 2.0.20",
 ]
 
 [[package]]

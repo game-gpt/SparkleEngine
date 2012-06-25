@@ -47,9 +47,7 @@ pub fn install_builtins(
     let mid = mod_id.to_string();
     eng.vm.register_native("register_hook", move |ctx, args| {
         if args.len() < 2 {
-            return Err(VmError::Message(
-                "register_hook(hook, function_name)".into(),
-            ));
+            return Err(VmError::ArityMismatch { expected: 2, got: args.len() as u16 });
         }
         let hook = value_to_string(ctx, &args[0])?;
         let func = value_to_string(ctx, &args[1])?;
@@ -63,9 +61,7 @@ pub fn install_builtins(
     let shared_set = Rc::clone(shared);
     eng.vm.register_native("registry_set", move |ctx, args| {
         if args.len() < 3 {
-            return Err(VmError::Message(
-                "registry_set(namespace, key, value)".into(),
-            ));
+            return Err(VmError::ArityMismatch { expected: 3, got: args.len() as u16 });
         }
         let ns = value_to_string(ctx, &args[0])?;
         let key = value_to_string(ctx, &args[1])?;
@@ -77,7 +73,7 @@ pub fn install_builtins(
     let shared_get = Rc::clone(shared);
     eng.vm.register_native("registry_get", move |ctx, args| {
         if args.len() < 2 {
-            return Err(VmError::Message("registry_get(namespace, key)".into()));
+            return Err(VmError::ArityMismatch { expected: 2, got: args.len() as u16 });
         }
         let ns = value_to_string(ctx, &args[0])?;
         let key = value_to_string(ctx, &args[1])?;
@@ -103,7 +99,7 @@ pub fn install_builtins(
         };
         let path = vfs
             .resolve(&rel)
-            .map_err(|e| VmError::Message(e.to_string()))?;
+            .map_err(|_| VmError::BadNativeArg { name: "asset_path" })?;
         Ok(ctx.heap.alloc_string(path.to_string_lossy().into_owned()))
     });
 }
@@ -124,7 +120,7 @@ fn value_to_string(ctx: &NativeCtx<'_>, v: &Value) -> Result<String, VmError> {
         Value::Handle(h) => match ctx.heap.get(*h) {
             Ok(GcObject::String(s)) => Ok(s.clone()),
             Ok(_) => Ok(format!("<object {}>", h.0)),
-            Err(_) => Err(VmError::Message("悬空字符串句柄".into())),
+            Err(_) => Err(VmError::BadNativeArg { name: "handle" }),
         },
     }
 }
@@ -136,14 +132,14 @@ fn value_to_reg(ctx: &NativeCtx<'_>, v: &Value) -> Result<RegValue, VmError> {
         Value::Number(n) => RegValue::Number(*n),
         Value::Entity(e) => RegValue::Entity(*e),
         Value::Func(_) => {
-            return Err(VmError::Message("registry 不能存函数".into()));
+            return Err(VmError::BadNativeArg { name: "function" });
         }
         Value::Handle(h) => match ctx.heap.get(*h) {
             Ok(GcObject::String(s)) => RegValue::String(s.clone()),
             Ok(_) => {
-                return Err(VmError::Message("registry 仅支持字符串对象句柄".into()));
+                return Err(VmError::BadNativeArg { name: "string_handle" });
             }
-            Err(_) => return Err(VmError::Message("悬空句柄".into())),
+            Err(_) => return Err(VmError::BadNativeArg { name: "handle" }),
         },
     })
 }

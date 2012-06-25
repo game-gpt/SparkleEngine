@@ -1,19 +1,56 @@
 //! 加载器。
 
+use std::fmt;
 use std::path::{Path, PathBuf};
-
-use thiserror::Error;
+use std::sync::Arc;
 
 use crate::handle::AssetKey;
 
-#[derive(Debug, Error)]
+/// 资源加载失败（稳定码 + 路径事实；`Display` 不输出自然语言）。
+#[derive(Debug)]
 pub enum LoadError {
-    #[error("资源未找到：{0}")]
-    NotFound(String),
-    #[error("IO：{0}")]
-    Io(#[from] std::io::Error),
-    #[error("{0}")]
-    Message(String),
+    NotFound { key: Arc<str> },
+    Io {
+        key: Arc<str>,
+        cause: std::io::Error,
+    },
+}
+
+impl LoadError {
+    pub fn not_found(key: impl AsRef<str>) -> Self {
+        Self::NotFound {
+            key: Arc::from(key.as_ref()),
+        }
+    }
+
+    pub fn io(key: impl AsRef<str>, cause: std::io::Error) -> Self {
+        Self::Io {
+            key: Arc::from(key.as_ref()),
+            cause,
+        }
+    }
+
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::NotFound { .. } => "spark.asset.not_found",
+            Self::Io { .. } => "spark.asset.io",
+        }
+    }
+}
+
+impl fmt::Display for LoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for LoadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io { cause, .. } => Some(cause),
+            Self::NotFound { .. } => None,
+        }
+    }
 }
 
 pub trait AssetLoader: Send + Sync {
@@ -40,9 +77,9 @@ impl AssetLoader for BytesLoader {
     fn load(&self, key: &AssetKey) -> Result<Vec<u8>, LoadError> {
         let path = self.resolve(key);
         if !path.is_file() {
-            return Err(LoadError::NotFound(path.display().to_string()));
+            return Err(LoadError::not_found(key.as_str()));
         }
-        Ok(std::fs::read(&path)?)
+        std::fs::read(&path).map_err(|e| LoadError::io(key.as_str(), e))
     }
 }
 

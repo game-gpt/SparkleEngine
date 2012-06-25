@@ -83,7 +83,7 @@ impl SpriteSheet {
     /// 按行列取精灵（列先行后，原点左上）。
     pub fn sprite_at(&self, col: u32, row: u32) -> Result<Sprite, SparkError> {
         if col >= self.columns || row >= self.rows {
-            return Err(SparkError::Message(format!(
+            return Err(SparkError::internal(format!(
                 "精灵格越界 ({col},{row}) 于 {}x{}",
                 self.columns, self.rows
             )));
@@ -101,7 +101,7 @@ impl SpriteSheet {
     /// 按线性下标取精灵（行主序）。
     pub fn sprite_index(&self, index: u32) -> Result<Sprite, SparkError> {
         if self.columns == 0 {
-            return Err(SparkError::Message("精灵表列数为 0".into()));
+            return Err(SparkError::internal("精灵表列数为 0"));
         }
         let col = index % self.columns;
         let row = index / self.columns;
@@ -111,10 +111,10 @@ impl SpriteSheet {
     /// 从图像尺寸推断格大小（无边距无间距时）。
     pub fn from_image(image: &PixelImage, columns: u32, rows: u32) -> Result<Self, SparkError> {
         if columns == 0 || rows == 0 {
-            return Err(SparkError::Message("精灵表行列须为正".into()));
+            return Err(SparkError::internal("精灵表行列须为正"));
         }
         if image.width() % columns != 0 || image.height() % rows != 0 {
-            return Err(SparkError::Message(format!(
+            return Err(SparkError::internal(format!(
                 "图像 {}x{} 无法整除为 {}x{} 格",
                 image.width(),
                 image.height(),

@@ -78,10 +78,10 @@ impl ScriptPlayer {
 
     pub fn choose(&mut self, index: usize, flags: &mut FlagStore) -> Result<(), SparkError> {
         let Some(choices) = self.waiting_choice.take() else {
-            return Err(SparkError::Message("当前没有选项".into()));
+            return Err(SparkError::internal("当前没有选项"));
         };
         let Some(c) = choices.get(index) else {
-            return Err(SparkError::Message("选项下标越界".into()));
+            return Err(SparkError::internal("选项下标越界"));
         };
         if let Some((k, v)) = &c.set_flag {
             flags.set(k, *v);

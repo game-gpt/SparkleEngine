@@ -1,6 +1,14 @@
 //! Spark 基础类型。不含游戏玩法概念。
+//!
+//! 错误使用 [`SparkError`]（即 `spark-diagnostics::Error`）：只保存稳定码与类型化参数，
+//! **不**把自然语言句子作为错误权威内容。
 
-use thiserror::Error;
+pub use spark_diagnostics::{
+    Diagnostic, ErrorArg, ErrorArgs, ErrorCode, ErrorContext, MessageKey, Severity, codes,
+};
+
+/// 引擎级结构化错误（稳定码 + 参数；`Display` 仅输出错误码）。
+pub type SparkError = spark_diagnostics::Error;
 
 /// 二维向量（逻辑 / 呈现共用基础表示）。
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -61,13 +69,4 @@ impl Color {
     pub fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
-}
-
-/// 引擎级错误根类型。
-#[derive(Debug, Error)]
-pub enum SparkError {
-    #[error("尚未实现：{0}")]
-    NotImplemented(&'static str),
-    #[error("{0}")]
-    Message(String),
 }
