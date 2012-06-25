@@ -9,24 +9,32 @@ mod compile;
 mod parse;
 
 use spark_vm::Module;
-use thiserror::Error;
 
 pub use ast::RubyRoot;
 pub use compile::compile_root;
 pub use parse::parse as parse_source;
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum RubyScriptError {
-    #[error("解析错误：{0}")]
-    Parse(String),
-    #[error("编译错误：{0}")]
-    Compile(String),
+    Parse { detail: String },
+    Compile { detail: String },
 }
+
+impl std::fmt::Display for RubyScriptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Parse { .. } => f.write_str("spark.script.ruby.parse"),
+            Self::Compile { .. } => f.write_str("spark.script.ruby.compile"),
+        }
+    }
+}
+
+impl std::error::Error for RubyScriptError {}
 
 /// 源码 → [`Module`]。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, RubyScriptError> {
-    let root = parse_source(source).map_err(RubyScriptError::Parse)?;
-    compile_root(&root, natives).map_err(RubyScriptError::Compile)
+    let root = parse_source(source).map_err(|detail| RubyScriptError::Parse { detail })?;
+    compile_root(&root, natives).map_err(|detail| RubyScriptError::Compile { detail })
 }
 
 #[cfg(test)]

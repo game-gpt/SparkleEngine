@@ -13,4 +13,3 @@ publish = false
 [dependencies]
 spark-core = { workspace = true }
 spark-gc = { workspace = true }
-thiserror = { workspace = true }

@@ -14,4 +14,3 @@ publish = false
 spark-vm = { workspace = true }
 oak-core = { workspace = true }
 oak-lua = { workspace = true }
-thiserror = { workspace = true }

@@ -4,8 +4,7 @@
 //! 栈值 [`Value`] 含非堆变体（数字、实体 ID、函数下标），GC 只追踪 [`Value::Handle`]。
 
 use std::collections::HashMap;
-
-use thiserror::Error;
+use std::fmt;
 
 /// 堆对象句柄（分代可后续扩展；当前为槽位索引）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -83,11 +82,27 @@ impl Value {
     }
 }
 
-#[derive(Debug, Error)]
+/// GC 结构化错误。`Display` 只输出稳定码。
+#[derive(Debug)]
 pub enum GcError {
-    #[error("无效句柄 {0:?}")]
     BadHandle(GcHandle),
 }
+
+impl GcError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::BadHandle(_) => "spark.gc.bad_handle",
+        }
+    }
+}
+
+impl fmt::Display for GcError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for GcError {}
 
 #[derive(Debug)]
 struct Slot {

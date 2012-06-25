@@ -11,7 +11,54 @@
 use std::collections::HashMap;
 
 use spark_gc::{GcObject, Heap, Value};
-use thiserror::Error;
+use std::fmt;
+
+/// VM 结构化错误。`Display` 只输出稳定码。
+#[derive(Debug)]
+pub enum VmError {
+    StackUnderflow,
+    CodeOob,
+    TypeError {
+        expected: &'static str,
+        got: String,
+    },
+    UnknownGlobal(String),
+    UnknownFunction(String),
+    CallOverflow,
+    BadReturn,
+    DivByZero,
+    UnknownNative(String),
+    UnknownOpcode(u8),
+    ArityMismatch { expected: u16, got: u16 },
+    BadNativeArg { name: &'static str },
+}
+
+impl VmError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::StackUnderflow => "spark.vm.stack_underflow",
+            Self::CodeOob => "spark.vm.code_oob",
+            Self::TypeError { .. } => "spark.vm.type_mismatch",
+            Self::UnknownGlobal(_) => "spark.vm.unknown_global",
+            Self::UnknownFunction(_) => "spark.vm.unknown_function",
+            Self::CallOverflow => "spark.vm.call_overflow",
+            Self::BadReturn => "spark.vm.bad_return",
+            Self::DivByZero => "spark.vm.div_by_zero",
+            Self::UnknownNative(_) => "spark.vm.unknown_native",
+            Self::UnknownOpcode(_) => "spark.vm.unknown_opcode",
+            Self::ArityMismatch { .. } => "spark.vm.arity_mismatch",
+            Self::BadNativeArg { .. } => "spark.vm.bad_native_arg",
+        }
+    }
+}
+
+impl fmt::Display for VmError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for VmError {}
 
 /// 字节码操作（操作数小端紧随操作码）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,30 +220,6 @@ impl Module {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum VmError {
-    #[error("栈下溢")]
-    StackUnderflow,
-    #[error("字节码越界")]
-    CodeOob,
-    #[error("类型错误：期望 {expected}，得到 {got}")]
-    TypeError { expected: &'static str, got: String },
-    #[error("未知全局 `{0}`")]
-    UnknownGlobal(String),
-    #[error("未知函数 `{0}`")]
-    UnknownFunction(String),
-    #[error("调用栈溢出")]
-    CallOverflow,
-    #[error("返回栈异常")]
-    BadReturn,
-    #[error("除零")]
-    DivByZero,
-    #[error("未知原生函数 `{0}`")]
-    UnknownNative(String),
-    #[error("{0}")]
-    Message(String),
-}
-
 /// 原生函数上下文（宿主可经此访问堆与全局；ECS World 由闭包捕获）。
 pub struct NativeCtx<'a> {
     pub heap: &'a mut Heap,
@@ -286,10 +309,10 @@ impl Vm {
     ) -> Result<Value, VmError> {
         let arity = self.module.functions[func].arity as usize;
         if args.len() != arity {
-            return Err(VmError::Message(format!(
-                "参数个数不符：期望 {arity}，得到 {}",
-                args.len()
-            )));
+            return Err(VmError::ArityMismatch {
+                expected: arity as u16,
+                got: args.len() as u16,
+            });
         }
         self.frames.clear();
         self.stack.clear();
@@ -368,7 +391,7 @@ impl Vm {
             let op_byte = code[ip];
             self.frames[fi].ip = ip + 1;
             let op = decode_op(op_byte).ok_or_else(|| {
-                VmError::Message(format!("未知操作码 {op_byte}"))
+                VmError::UnknownOpcode(op_byte)
             })?;
 
             match op {
@@ -544,9 +567,10 @@ impl Vm {
                     }
                     let arity = self.module.functions[fidx].arity;
                     if argc != arity {
-                        return Err(VmError::Message(format!(
-                            "参数个数不符：期望 {arity}，得到 {argc}"
-                        )));
+                        return Err(VmError::ArityMismatch {
+                            expected: u16::from(arity),
+                            got: u16::from(argc),
+                        });
                     }
                     if self.frames.len() > 256 {
                         return Err(VmError::CallOverflow);

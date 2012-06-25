@@ -10,20 +10,30 @@ mod native_sig;
 mod parse;
 
 use spark_vm::Module;
-use thiserror::Error;
 
 pub use ast::ValkyrieRoot;
 pub use compile::compile_root;
 pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 pub use parse::parse as parse_source;
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum ValkyrieScriptError {
-    #[error("解析错误：{0}")]
-    Parse(String),
-    #[error("编译错误：{0}")]
-    Compile(String),
+    /// 解析失败。`detail` 为前端原始说明。
+    Parse { detail: String },
+    /// 编译失败。
+    Compile { detail: String },
 }
+
+impl std::fmt::Display for ValkyrieScriptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Parse { .. } => f.write_str("spark.script.valkyrie.parse"),
+            Self::Compile { .. } => f.write_str("spark.script.valkyrie.compile"),
+        }
+    }
+}
+
+impl std::error::Error for ValkyrieScriptError {}
 
 /// 源码 → [`Module`]。
 ///
@@ -31,7 +41,7 @@ pub enum ValkyrieScriptError {
 /// 新代码请优先使用 [`compile_with_registry`]。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, ValkyrieScriptError> {
     let root = parse(source)?;
-    compile_root(&root, natives).map_err(ValkyrieScriptError::Compile)
+    compile_root(&root, natives).map_err(|detail| ValkyrieScriptError::Compile { detail })
 }
 
 /// 带完整宿主签名的编译入口。
@@ -47,7 +57,7 @@ pub fn compile_with_registry(
 
 /// 解析为 AST 根。
 pub fn parse(source: &str) -> Result<ValkyrieRoot, ValkyrieScriptError> {
-    parse_source(source).map_err(ValkyrieScriptError::Parse)
+    parse_source(source).map_err(|detail| ValkyrieScriptError::Parse { detail })
 }
 
 /// 调试：列出根上 `micro` 名。

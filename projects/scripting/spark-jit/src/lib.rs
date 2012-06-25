@@ -5,16 +5,33 @@
 
 use std::collections::HashMap;
 
-use spark_vm::{FuncProto, Module, Op, Vm};
-use thiserror::Error;
+use std::fmt;
 
-#[derive(Debug, Error)]
+use spark_vm::{FuncProto, Module, Op, Vm};
+
+/// JIT 结构化错误。`Display` 只输出稳定码。
+#[derive(Debug)]
 pub enum JitError {
-    #[error("函数下标越界")]
     BadFunc,
-    #[error("{0}")]
-    Message(String),
+    TruncatedOperands,
 }
+
+impl JitError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::BadFunc => "spark.jit.bad_func",
+            Self::TruncatedOperands => "spark.jit.truncated_operands",
+        }
+    }
+}
+
+impl fmt::Display for JitError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for JitError {}
 
 /// 已特化的函数记录。
 #[derive(Debug, Clone)]
@@ -86,7 +103,7 @@ pub fn specialize_func(f: &mut FuncProto) -> Result<(), JitError> {
         let extra = operand_bytes(op);
         for _ in 0..extra {
             if i >= code.len() {
-                return Err(JitError::Message("特化时操作数截断".into()));
+                return Err(JitError::TruncatedOperands);
             }
             out.push(code[i]);
             i += 1;
