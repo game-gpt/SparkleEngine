@@ -7,8 +7,9 @@
 //!
 //! 插件只负责声明元信息，并把原生函数注册到 [`Vm`]。
 
+use std::fmt;
+
 use spark_vm::Vm;
-use thiserror::Error;
 
 /// 插件元信息（稳定 id，供注册表去重）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,13 +33,29 @@ pub trait Plugin {
     fn install(&mut self, vm: &mut Vm);
 }
 
-#[derive(Debug, Error)]
+/// 插件注册表错误。`Display` 只输出稳定码。
+#[derive(Debug)]
 pub enum PluginError {
-    #[error("插件 id 已注册：`{0}`")]
-    DuplicateId(String),
-    #[error("未注册插件：`{0}`")]
-    NotFound(String),
+    DuplicateId { id: String },
+    NotFound { id: String },
 }
+
+impl PluginError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::DuplicateId { .. } => "spark.plugin.duplicate_id",
+            Self::NotFound { .. } => "spark.plugin.not_found",
+        }
+    }
+}
+
+impl fmt::Display for PluginError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for PluginError {}
 
 /// 汇总若干插件的原生名（去重保序）。
 pub fn collect_native_names(plugins: &[&dyn Plugin]) -> Vec<&'static str> {
@@ -67,7 +84,7 @@ impl PluginRegistry {
     pub fn register(&mut self, plugin: Box<dyn Plugin>) -> Result<(), PluginError> {
         let id = plugin.info().id;
         if self.plugins.iter().any(|p| p.info().id == id) {
-            return Err(PluginError::DuplicateId(id.into()));
+            return Err(PluginError::DuplicateId { id: id.into() });
         }
         tracing::info!(
             plugin = id,
@@ -117,7 +134,7 @@ impl PluginRegistry {
     /// 只安装指定 id。
     pub fn install_one(&mut self, id: &str, vm: &mut Vm) -> Result<(), PluginError> {
         let Some(p) = self.plugins.iter_mut().find(|p| p.info().id == id) else {
-            return Err(PluginError::NotFound(id.into()));
+            return Err(PluginError::NotFound { id: id.into() });
         };
         p.install(vm);
         Ok(())

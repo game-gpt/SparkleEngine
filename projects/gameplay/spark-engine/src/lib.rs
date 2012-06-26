@@ -42,32 +42,107 @@ use spark_core::SparkError;
 use spark_gc::Value;
 use spark_script::{ScriptEngine, ScriptError, ScriptLanguage};
 use spark_vm::{HostHooks, StdHost};
-use thiserror::Error;
 
 use crate::api::install_builtins;
 use crate::loader::discover_and_order;
 
-#[derive(Debug, Error)]
+/// 引擎壳结构化错误。`Display` 只输出稳定码。
+#[derive(Debug)]
 pub enum EngineError {
-    #[error(transparent)]
-    Spark(#[from] SparkError),
-    #[error(transparent)]
-    Script(#[from] ScriptError),
-    #[error(transparent)]
-    Plugin(#[from] PluginError),
-    #[error("模组 `{0}` 未加载")]
-    ModNotFound(String),
-    #[error("模组依赖缺失：{0} 需要 {1}")]
-    MissingDep(String, String),
-    #[error("循环依赖：{0}")]
-    CyclicDeps(String),
-    #[error("{0}")]
-    Message(String),
+    Spark(SparkError),
+    Script(ScriptError),
+    Plugin(PluginError),
+    ModNotFound { id: String },
+    MissingDep { mod_id: String, dep: String },
+    CyclicDeps { mods: String },
+    DuplicateMod { id: String },
+    ManifestParse { path: String, detail: String },
+    ManifestMissingId { path: String },
+    Io { path: String, detail: String },
+    HookFailed {
+        hook: String,
+        mod_id: String,
+        function: String,
+        source: ScriptError,
+    },
+}
+
+impl EngineError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Spark(e) => {
+                // 透传 SparkError 的码字符串不便为 &'static；统一用包装码。
+                let _ = e;
+                "spark.engine.spark"
+            }
+            Self::Script(_) => "spark.engine.script",
+            Self::Plugin(_) => "spark.engine.plugin",
+            Self::ModNotFound { .. } => "spark.engine.mod_not_found",
+            Self::MissingDep { .. } => "spark.engine.missing_dep",
+            Self::CyclicDeps { .. } => "spark.engine.cyclic_deps",
+            Self::DuplicateMod { .. } => "spark.engine.duplicate_mod",
+            Self::ManifestParse { .. } => "spark.engine.manifest_parse",
+            Self::ManifestMissingId { .. } => "spark.engine.manifest_missing_id",
+            Self::Io { .. } => "spark.engine.io",
+            Self::HookFailed { .. } => "spark.engine.hook_failed",
+        }
+    }
+
+    pub fn io(path: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self::Io {
+            path: path.into(),
+            detail: detail.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for EngineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Spark(e) => e.fmt(f),
+            Self::Script(e) => e.fmt(f),
+            Self::Plugin(e) => e.fmt(f),
+            other => f.write_str(other.code()),
+        }
+    }
+}
+
+impl std::error::Error for EngineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Spark(e) => Some(e),
+            Self::Script(e) => Some(e),
+            Self::Plugin(e) => Some(e),
+            Self::HookFailed { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+impl From<SparkError> for EngineError {
+    fn from(value: SparkError) -> Self {
+        Self::Spark(value)
+    }
+}
+
+impl From<ScriptError> for EngineError {
+    fn from(value: ScriptError) -> Self {
+        Self::Script(value)
+    }
+}
+
+impl From<PluginError> for EngineError {
+    fn from(value: PluginError) -> Self {
+        Self::Plugin(value)
+    }
 }
 
 impl From<EngineError> for SparkError {
     fn from(e: EngineError) -> Self {
-        SparkError::Message(e.to_string())
+        match e {
+            EngineError::Spark(s) => s,
+            other => SparkError::new(spark_core::ErrorCode::parse(other.code())),
+        }
     }
 }
 
@@ -182,7 +257,10 @@ impl SparkEngine {
     ) -> Result<(), EngineError> {
         for dep in &manifest.dependencies {
             if !self.mods.contains_key(dep) {
-                return Err(EngineError::MissingDep(manifest.id.clone(), dep.clone()));
+                return Err(EngineError::MissingDep {
+                    mod_id: manifest.id.clone(),
+                    dep: dep.clone(),
+                });
             }
         }
 
@@ -192,22 +270,15 @@ impl SparkEngine {
         if let Some(entry) = &manifest.entry {
             let entry_path = root.join(entry);
             let source = std::fs::read_to_string(&entry_path).map_err(|e| {
-                EngineError::Message(format!(
-                    "读取入口脚本失败 {}: {e}",
-                    entry_path.display()
-                ))
+                EngineError::io(entry_path.display().to_string(), e.to_string())
             })?;
             let lang = resolve_language(manifest.language.as_deref(), entry);
             let natives = self.compile_native_names();
-            let mut eng = ScriptEngine::compile_with(lang, &source, &natives).map_err(|e| {
-                EngineError::Message(format!("编译模组 `{}` 失败：{e}", manifest.id))
-            })?;
+            let mut eng = ScriptEngine::compile_with(lang, &source, &natives)?;
             install_builtins(&mut eng, &self.shared, &manifest.id, &vfs);
             self.plugins.install_all(&mut eng.vm);
             let mut host = StdHost;
-            eng.eval_with(&mut host).map_err(|e| {
-                EngineError::Message(format!("执行模组 `{}` 入口失败：{e}", manifest.id))
-            })?;
+            eng.eval_with(&mut host)?;
             script = Some(eng);
         }
 
@@ -249,11 +320,13 @@ impl SparkEngine {
             let Some(script) = m.script.as_mut() else {
                 continue;
             };
-            script.call(&href.function, args, host).map_err(|e| {
-                EngineError::Message(format!(
-                    "钩子 `{hook}` → {}:{} 失败：{e}",
-                    href.mod_id, href.function
-                ))
+            script.call(&href.function, args, host).map_err(|source| {
+                EngineError::HookFailed {
+                    hook: hook.to_string(),
+                    mod_id: href.mod_id.clone(),
+                    function: href.function.clone(),
+                    source,
+                }
             })?;
         }
         Ok(())
@@ -270,7 +343,7 @@ impl SparkEngine {
             let m = self
                 .mods
                 .get(id)
-                .ok_or_else(|| EngineError::ModNotFound(id.into()))?;
+                .ok_or_else(|| EngineError::ModNotFound { id: id.into() })?;
             (m.manifest.clone(), m.root.clone(), m.enabled)
         };
         self.shared.borrow_mut().hooks.remove_mod(id);
@@ -286,7 +359,7 @@ impl SparkEngine {
         let m = self
             .mods
             .get_mut(id)
-            .ok_or_else(|| EngineError::ModNotFound(id.into()))?;
+            .ok_or_else(|| EngineError::ModNotFound { id: id.into() })?;
         m.enabled = enabled;
         Ok(())
     }
@@ -295,7 +368,9 @@ impl SparkEngine {
         let m = self
             .mods
             .get(mod_id)
-            .ok_or_else(|| EngineError::ModNotFound(mod_id.into()))?;
+            .ok_or_else(|| EngineError::ModNotFound {
+                id: mod_id.into(),
+            })?;
         m.vfs.resolve(rel).map_err(EngineError::from)
     }
 
@@ -316,7 +391,7 @@ fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
         return Ok(candidate);
     }
     let rd = std::fs::read_dir(root).map_err(|e| {
-        EngineError::Message(format!("读取模组根目录失败 {}: {e}", root.display()))
+        EngineError::io(root.display().to_string(), e.to_string())
     })?;
     for ent in rd.flatten() {
         let p = ent.path();
@@ -333,10 +408,7 @@ fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
             }
         }
     }
-    Err(EngineError::Message(format!(
-        "找不到模组 `{id}` 的目录（在 {}）",
-        root.display()
-    )))
+    Err(EngineError::ModNotFound { id: id.into() })
 }
 
 fn resolve_language(explicit: Option<&str>, entry: &str) -> ScriptLanguage {
