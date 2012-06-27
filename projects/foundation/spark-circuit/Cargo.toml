@@ -11,4 +11,4 @@ categories = ["game-development", "data-structures"]
 publish = false
 
 [dependencies]
-thiserror = { workspace = true }
+spark-core = { workspace = true }

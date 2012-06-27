@@ -16,7 +16,6 @@ spark-geometry = { workspace = true }
 spark-anim = { workspace = true }
 spark-renderer = { workspace = true }
 gltf = { version = "1.4", default-features = true }
-thiserror = { workspace = true }
 
 [dev-dependencies]
 base64 = "0.22"

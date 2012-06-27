@@ -1,24 +1,66 @@
 //! 导入入口与错误类型。
 
+use std::fmt;
 use std::path::Path;
 
 use spark_anim::{AnimationClip, Skeleton};
 use spark_core::Color;
 use spark_geometry::{Aabb3, Vec3};
 use spark_renderer::SkinnedVertex;
-use thiserror::Error;
 
 use crate::mesh::import_meshes;
 use crate::skin::{import_animations, import_skeleton, remap_mesh_joints};
 
-#[derive(Debug, Error)]
+/// glTF 导入错误。`Display` 只输出稳定码。
+#[derive(Debug)]
 pub enum GltfError {
-    #[error(transparent)]
-    Gltf(#[from] gltf::Error),
-    #[error("IO：{0}")]
-    Io(#[from] std::io::Error),
-    #[error("{0}")]
-    Message(String),
+    Gltf(gltf::Error),
+    Io(std::io::Error),
+    Invalid { detail: String },
+}
+
+impl GltfError {
+    pub fn invalid(detail: impl Into<String>) -> Self {
+        Self::Invalid {
+            detail: detail.into(),
+        }
+    }
+
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Gltf(_) => "spark.gltf.parse",
+            Self::Io(_) => "spark.gltf.io",
+            Self::Invalid { .. } => "spark.gltf.invalid",
+        }
+    }
+}
+
+impl fmt::Display for GltfError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for GltfError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Gltf(e) => Some(e),
+            Self::Io(e) => Some(e),
+            Self::Invalid { .. } => None,
+        }
+    }
+}
+
+impl From<gltf::Error> for GltfError {
+    fn from(value: gltf::Error) -> Self {
+        Self::Gltf(value)
+    }
+}
+
+impl From<std::io::Error> for GltfError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
 }
 
 /// 导入后的 CPU 网格（三角列表，已展开索引）。
@@ -89,7 +131,7 @@ fn load_buffers(
     for buffer in gltf.buffers() {
         match buffer.source() {
             gltf::buffer::Source::Bin => {
-                let data = blob.ok_or_else(|| GltfError::Message("GLB 缺少 BIN 块".into()))?;
+                let data = blob.ok_or_else(|| GltfError::invalid("GLB 缺少 BIN 块"))?;
                 out.push(data.to_vec());
             }
             gltf::buffer::Source::Uri(uri) => {
@@ -97,11 +139,11 @@ fn load_buffers(
                     let b64 = data
                         .split(',')
                         .nth(1)
-                        .ok_or_else(|| GltfError::Message("非法 data URI".into()))?;
+                        .ok_or_else(|| GltfError::invalid("非法 data URI"))?;
                     out.push(decode_base64(b64)?);
                 } else {
                     let base = base.ok_or_else(|| {
-                        GltfError::Message("外置 buffer 需要文件路径导入".into())
+                        GltfError::invalid("外置 buffer 需要文件路径导入")
                     })?;
                     let path = base.join(uri);
                     out.push(std::fs::read(path)?);
@@ -133,7 +175,7 @@ fn decode_base64(s: &str) -> Result<Vec<u8>, GltfError> {
             continue;
         }
         let Some(v) = val(c) else {
-            return Err(GltfError::Message("base64 非法字符".into()));
+            return Err(GltfError::invalid("base64 非法字符"));
         };
         buf[n] = v;
         n += 1;
@@ -150,7 +192,7 @@ fn decode_base64(s: &str) -> Result<Vec<u8>, GltfError> {
         out.push((buf[0] << 2) | (buf[1] >> 4));
         out.push((buf[1] << 4) | (buf[2] >> 2));
     } else if n == 1 {
-        return Err(GltfError::Message("base64 长度非法".into()));
+        return Err(GltfError::invalid("base64 长度非法"));
     }
     Ok(out)
 }

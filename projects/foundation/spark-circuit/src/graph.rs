@@ -1,6 +1,6 @@
 //! 无向导体图与按通道的可达查询。
 
-use thiserror::Error;
+use std::fmt;
 
 /// 图内节点句柄（稠密从 0 递增）。
 pub type NodeId = u32;
@@ -37,11 +37,27 @@ impl PowerBudget {
     }
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+/// 电路图错误。`Display` 只输出稳定码。
+#[derive(Debug, PartialEq, Eq)]
 pub enum CircuitError {
-    #[error("未知节点：{0}")]
     UnknownNode(NodeId),
 }
+
+impl CircuitError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::UnknownNode(_) => "spark.circuit.unknown_node",
+        }
+    }
+}
+
+impl fmt::Display for CircuitError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for CircuitError {}
 
 /// 多通道无向图。边变更后可惰性或立即重算可达。
 #[derive(Debug, Clone, Default)]

@@ -12,5 +12,4 @@ publish = false
 
 [dependencies]
 spark-core = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
