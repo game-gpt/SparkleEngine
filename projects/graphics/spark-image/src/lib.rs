@@ -11,9 +11,10 @@ pub use nine::{Margin, NineQuad, NineSlice, NineSliceMode};
 pub use sprite::{Sprite, SpriteSheet};
 
 use std::path::Path;
+use std::sync::Arc;
 
 use image::ImageReader;
-use spark_core::{Color, Rect, SparkError};
+use spark_core::{Color, ErrorArg, Rect, SparkError, codes};
 
 /// CPU 侧 RGBA8 像素图（行主序，每像素 4 字节）。
 #[derive(Debug, Clone)]
@@ -29,12 +30,15 @@ impl PixelImage {
         let need = (width as usize)
             .checked_mul(height as usize)
             .and_then(|n| n.checked_mul(4))
-            .ok_or_else(|| SparkError::internal("图像尺寸溢出"))?;
+            .ok_or_else(|| {
+                SparkError::new(codes::image_dimension_overflow())
+                    .arg("width", ErrorArg::Unsigned(width as u64))
+                    .arg("height", ErrorArg::Unsigned(height as u64))
+            })?;
         if rgba.len() != need {
-            return Err(SparkError::internal(format!(
-                "RGBA 长度不符：期望 {need}，得到 {}",
-                rgba.len()
-            )));
+            return Err(SparkError::new(codes::image_rgba_length_mismatch())
+                .arg("expected", ErrorArg::Unsigned(need as u64))
+                .arg("got", ErrorArg::Unsigned(rgba.len() as u64)));
         }
         Ok(Self {
             width,
@@ -47,7 +51,11 @@ impl PixelImage {
     pub fn solid(width: u32, height: u32, color: Color) -> Result<Self, SparkError> {
         let n = (width as usize)
             .checked_mul(height as usize)
-            .ok_or_else(|| SparkError::internal("图像尺寸溢出"))?;
+            .ok_or_else(|| {
+                SparkError::new(codes::image_dimension_overflow())
+                    .arg("width", ErrorArg::Unsigned(width as u64))
+                    .arg("height", ErrorArg::Unsigned(height as u64))
+            })?;
         let r = (color.r.clamp(0.0, 1.0) * 255.0) as u8;
         let g = (color.g.clamp(0.0, 1.0) * 255.0) as u8;
         let b = (color.b.clamp(0.0, 1.0) * 255.0) as u8;
@@ -62,13 +70,27 @@ impl PixelImage {
     /// 从文件解码（PNG / JPEG / WebP 等，由 `image` 决定）。
     pub fn load(path: impl AsRef<Path>) -> Result<Self, SparkError> {
         let path = path.as_ref();
+        let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
         let reader = ImageReader::open(path)
-            .map_err(|e| SparkError::internal(format!("打开图像失败 {}: {e}", path.display())))?
+            .map_err(|e| {
+                SparkError::new(codes::io())
+                    .arg("path", path_arg.clone())
+                    .arg("op", ErrorArg::String(Arc::from("open")))
+                    .caused_by(e)
+            })?
             .with_guessed_format()
-            .map_err(|e| SparkError::internal(format!("探测图像格式失败 {}: {e}", path.display())))?;
-        let dyn_img = reader
-            .decode()
-            .map_err(|e| SparkError::internal(format!("解码图像失败 {}: {e}", path.display())))?;
+            .map_err(|e| {
+                SparkError::new(codes::image_decode())
+                    .arg("path", path_arg.clone())
+                    .arg("op", ErrorArg::String(Arc::from("guess_format")))
+                    .caused_by(e)
+            })?;
+        let dyn_img = reader.decode().map_err(|e| {
+            SparkError::new(codes::image_decode())
+                .arg("path", path_arg)
+                .arg("op", ErrorArg::String(Arc::from("decode")))
+                .caused_by(e)
+        })?;
         let rgba = dyn_img.to_rgba8();
         let (w, h) = rgba.dimensions();
         Self::from_rgba8(w, h, rgba.into_raw())
@@ -76,8 +98,12 @@ impl PixelImage {
 
     /// 从内存字节解码。
     pub fn load_from_memory(bytes: &[u8]) -> Result<Self, SparkError> {
-        let dyn_img = image::load_from_memory(bytes)
-            .map_err(|e| SparkError::internal(format!("解码图像失败：{e}")))?;
+        let dyn_img = image::load_from_memory(bytes).map_err(|e| {
+            SparkError::new(codes::image_decode())
+                .arg("op", ErrorArg::String(Arc::from("decode_memory")))
+                .arg("bytes", ErrorArg::Unsigned(bytes.len() as u64))
+                .caused_by(e)
+        })?;
         let rgba = dyn_img.to_rgba8();
         let (w, h) = rgba.dimensions();
         Self::from_rgba8(w, h, rgba.into_raw())
@@ -115,10 +141,11 @@ impl PixelImage {
     /// 采样单像素（越界报错）。
     pub fn pixel(&self, x: u32, y: u32) -> Result<[u8; 4], SparkError> {
         if x >= self.width || y >= self.height {
-            return Err(SparkError::internal(format!(
-                "像素越界 ({x},{y}) 于 {}x{}",
-                self.width, self.height
-            )));
+            return Err(SparkError::new(codes::image_pixel_out_of_bounds())
+                .arg("x", ErrorArg::Unsigned(x as u64))
+                .arg("y", ErrorArg::Unsigned(y as u64))
+                .arg("width", ErrorArg::Unsigned(self.width as u64))
+                .arg("height", ErrorArg::Unsigned(self.height as u64)));
         }
         let i = ((y * self.width + x) * 4) as usize;
         Ok([
@@ -132,17 +159,22 @@ impl PixelImage {
 
 pub(crate) fn validate_region(img_w: u32, img_h: u32, region: Rect) -> Result<(), SparkError> {
     if region.w <= 0.0 || region.h <= 0.0 {
-        return Err(SparkError::internal("源矩形宽高须为正"));
+        return Err(SparkError::new(codes::image_region_invalid())
+            .arg("w", ErrorArg::Float(region.w as f64))
+            .arg("h", ErrorArg::Float(region.h as f64)));
     }
     if region.x < 0.0
         || region.y < 0.0
         || region.x + region.w > img_w as f32 + 1e-3
         || region.y + region.h > img_h as f32 + 1e-3
     {
-        return Err(SparkError::internal(format!(
-            "源矩形 {:?} 超出图像 {}x{}",
-            region, img_w, img_h
-        )));
+        return Err(SparkError::new(codes::image_region_out_of_bounds())
+            .arg("x", ErrorArg::Float(region.x as f64))
+            .arg("y", ErrorArg::Float(region.y as f64))
+            .arg("w", ErrorArg::Float(region.w as f64))
+            .arg("h", ErrorArg::Float(region.h as f64))
+            .arg("img_w", ErrorArg::Unsigned(img_w as u64))
+            .arg("img_h", ErrorArg::Unsigned(img_h as u64)));
     }
     Ok(())
 }
@@ -159,8 +191,12 @@ mod tests {
         assert_eq!(img.pixel(0, 0).unwrap(), [255, 0, 0, 255]);
         let uv = img.uv_rect(Rect::new(16.0, 8.0, 16.0, 8.0)).unwrap();
         assert!((uv.x - 0.25).abs() < 1e-5);
-        assert!((uv.y - 0.25).abs() < 1e-5);
         assert!((uv.w - 0.25).abs() < 1e-5);
-        assert!((uv.h - 0.25).abs() < 1e-5);
+    }
+
+    #[test]
+    fn errors_are_stable_codes() {
+        let err = PixelImage::from_rgba8(1, 1, vec![0, 0, 0]).unwrap_err();
+        assert_eq!(err.to_string(), "spark.image.rgba_length_mismatch");
     }
 }

@@ -1,6 +1,6 @@
 //! 九宫格（九切片）布局：四角固定，边与中心按模式拉伸或平铺。
 
-use spark_core::{Rect, SparkError};
+use spark_core::{ErrorArg, Rect, SparkError, codes};
 
 use crate::{validate_region, PixelImage};
 
@@ -80,10 +80,14 @@ impl NineSlice {
     fn validate_margin(&self) -> Result<(), SparkError> {
         let m = self.margin;
         if m.left < 0.0 || m.right < 0.0 || m.top < 0.0 || m.bottom < 0.0 {
-            return Err(SparkError::internal("九宫格边距不能为负"));
+            return Err(SparkError::new(codes::image_nine_margin_invalid())
+                .arg("reason", ErrorArg::String("negative".into())));
         }
         if m.left + m.right > self.source.w + 1e-3 || m.top + m.bottom > self.source.h + 1e-3 {
-            return Err(SparkError::internal("九宫格边距超过源矩形"));
+            return Err(SparkError::new(codes::image_nine_margin_invalid())
+                .arg("reason", ErrorArg::String("exceeds_source".into()))
+                .arg("source_w", ErrorArg::Float(self.source.w as f64))
+                .arg("source_h", ErrorArg::Float(self.source.h as f64)));
         }
         Ok(())
     }
@@ -94,7 +98,9 @@ impl NineSlice {
     pub fn layout(&self, dest: Rect) -> Result<Vec<NineQuad>, SparkError> {
         self.validate_margin()?;
         if dest.w <= 0.0 || dest.h <= 0.0 {
-            return Err(SparkError::internal("目标矩形宽高须为正"));
+            return Err(SparkError::new(codes::image_dest_invalid())
+                .arg("w", ErrorArg::Float(dest.w as f64))
+                .arg("h", ErrorArg::Float(dest.h as f64)));
         }
 
         let sx = self.source.x;
