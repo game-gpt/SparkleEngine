@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use spark_core::SparkError;
+use spark_core::{SparkError, codes};
 use spark_media::{
     MediaPacket, MediaReader, PacketKind, VideoTrackInfo,
 };
@@ -24,7 +24,7 @@ impl VideoClip {
         let video = reader
             .default_video()
             .cloned()
-            .ok_or_else(|| SparkError::internal("媒体中无视频轨"))?;
+            .ok_or_else(|| SparkError::new(codes::video_no_track()))?;
         let audio_track_id = reader.default_audio().map(|a| a.track_id);
         Ok(Self {
             reader,
@@ -38,7 +38,7 @@ impl VideoClip {
         let video = reader
             .default_video()
             .cloned()
-            .ok_or_else(|| SparkError::internal("媒体中无视频轨"))?;
+            .ok_or_else(|| SparkError::new(codes::video_no_track()))?;
         let audio_track_id = reader.default_audio().map(|a| a.track_id);
         Ok(Self {
             reader,

@@ -4,9 +4,10 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use fontdue::{Font, FontSettings};
-use spark_core::SparkError;
+use spark_core::{ErrorArg, SparkError, codes};
 
 /// 单个已栅格字形在图集中的布局信息。
 #[derive(Debug, Clone, Copy)]
@@ -43,23 +44,31 @@ impl GlyphCache {
                 }
             }
         }
-        Err(SparkError::internal(
-            "未找到可用系统字体（尝试过微软雅黑 / 黑体 / Arial）",
+        Err(SparkError::new(codes::font_not_found()).arg(
+            "tried",
+            ErrorArg::String(Arc::from("msyh,simhei,arial")),
         ))
     }
 
     /// 从字节流装载（测试 / 打包字体）。
     pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, SparkError> {
-        let font = Font::from_bytes(bytes.as_ref(), FontSettings::default())
-            .map_err(|e| SparkError::internal(format!("字体解析失败：{e}")))?;
+        let font = Font::from_bytes(bytes.as_ref(), FontSettings::default()).map_err(|e| {
+            SparkError::new(codes::font_parse())
+                .arg("bytes", ErrorArg::Unsigned(bytes.as_ref().len() as u64))
+                .caused_by(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        })?;
         Ok(Self::new(font))
     }
 
     /// 从文件路径装载。
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, SparkError> {
         let path = path.as_ref();
-        let bytes = std::fs::read(path)
-            .map_err(|e| SparkError::internal(format!("读取字体失败 {}: {e}", path.display())))?;
+        let bytes = std::fs::read(path).map_err(|e| {
+            SparkError::new(codes::io())
+                .arg("path", ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref())))
+                .arg("op", ErrorArg::String(Arc::from("read")))
+                .caused_by(e)
+        })?;
         Self::from_bytes(bytes)
     }
 

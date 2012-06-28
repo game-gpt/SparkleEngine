@@ -131,7 +131,7 @@ fn load_buffers(
     for buffer in gltf.buffers() {
         match buffer.source() {
             gltf::buffer::Source::Bin => {
-                let data = blob.ok_or_else(|| GltfError::invalid("GLB 缺少 BIN 块"))?;
+                let data = blob.ok_or_else(|| GltfError::invalid("missing_bin_chunk"))?;
                 out.push(data.to_vec());
             }
             gltf::buffer::Source::Uri(uri) => {
@@ -139,11 +139,11 @@ fn load_buffers(
                     let b64 = data
                         .split(',')
                         .nth(1)
-                        .ok_or_else(|| GltfError::invalid("非法 data URI"))?;
+                        .ok_or_else(|| GltfError::invalid("invalid_data_uri"))?;
                     out.push(decode_base64(b64)?);
                 } else {
                     let base = base.ok_or_else(|| {
-                        GltfError::invalid("外置 buffer 需要文件路径导入")
+                        GltfError::invalid("external_buffer_needs_path")
                     })?;
                     let path = base.join(uri);
                     out.push(std::fs::read(path)?);
@@ -175,7 +175,7 @@ fn decode_base64(s: &str) -> Result<Vec<u8>, GltfError> {
             continue;
         }
         let Some(v) = val(c) else {
-            return Err(GltfError::invalid("base64 非法字符"));
+            return Err(GltfError::invalid("invalid_base64_char"));
         };
         buf[n] = v;
         n += 1;
@@ -192,7 +192,7 @@ fn decode_base64(s: &str) -> Result<Vec<u8>, GltfError> {
         out.push((buf[0] << 2) | (buf[1] >> 4));
         out.push((buf[1] << 4) | (buf[2] >> 2));
     } else if n == 1 {
-        return Err(GltfError::invalid("base64 长度非法"));
+        return Err(GltfError::invalid("invalid_base64_length"));
     }
     Ok(out)
 }

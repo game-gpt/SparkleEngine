@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bytemuck::{Pod, Zeroable};
-use spark_core::{Color, SparkError};
+use spark_core::{Color, SparkError, codes};
 use spark_font::GlyphCache;
 use spark_renderer::{
     DrawList, DrawList3d, FrameCtx, FrameLights3d, GameHost3d, Input, MeshCmd, MeshResidentKey,
@@ -165,7 +165,7 @@ impl GpuState3d {
         let instance = wgpu::Instance::new(instance_desc);
         let surface = instance
             .create_surface(window.clone())
-            .map_err(|e| SparkError::internal(format!("create surface: {e}")))?;
+            .map_err(|e| SparkError::new(codes::gpu_surface()).caused_by(e))?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -174,7 +174,10 @@ impl GpuState3d {
                 apply_limit_buckets: false,
             })
             .await
-            .map_err(|e| SparkError::internal(format!("no adapter: {e}")))?;
+            .map_err(|e| {
+                SparkError::new(codes::gpu_adapter())
+                    .caused_by(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            })?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("spark-3d"),
@@ -185,7 +188,7 @@ impl GpuState3d {
                 trace: Default::default(),
             })
             .await
-            .map_err(|e| SparkError::internal(format!("request_device: {e}")))?;
+            .map_err(|e| SparkError::new(codes::gpu_device()).caused_by(e))?;
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps
@@ -1655,7 +1658,9 @@ pub fn run_window_3d<H: GameHost3d + 'static>(
     config: WindowConfig,
     host: H,
 ) -> Result<(), SparkError> {
-    let event_loop = EventLoop::new().map_err(|e| SparkError::internal(e.to_string()))?;
+    let event_loop = EventLoop::new().map_err(|e| {
+        SparkError::new(codes::gpu_event_loop()).caused_by(e)
+    })?;
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = HostApp3d {
         config,
@@ -1671,5 +1676,5 @@ pub fn run_window_3d<H: GameHost3d + 'static>(
     };
     event_loop
         .run_app(&mut app)
-        .map_err(|e| SparkError::internal(e.to_string()))
+        .map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
 }

@@ -17,7 +17,7 @@ pub(crate) fn import_meshes(
             let reader = primitive.reader(get);
             let positions: Vec<[f32; 3]> = reader
                 .read_positions()
-                .ok_or_else(|| GltfError::invalid(format!("{name}#{pi} 缺少 POSITION")))?
+                .ok_or_else(|| GltfError::invalid(format!("missing_position:{name}#{pi}")))?
                 .collect();
             if positions.is_empty() {
                 continue;
@@ -52,7 +52,7 @@ pub(crate) fn import_meshes(
             if normals.len() != n || uvs.len() != n || colors.len() != n || joints.len() != n || weights.len() != n
             {
                 return Err(GltfError::invalid(format!(
-                    "{name}#{pi} 顶点属性长度不一致"
+                    "attribute_len_mismatch:{name}#{pi}"
                 )));
             }
 
@@ -68,7 +68,7 @@ pub(crate) fn import_meshes(
                 for i in idx {
                     let i = i as usize;
                     if i >= verts.len() {
-                        return Err(GltfError::invalid(format!("{name}#{pi} 索引越界")));
+                        return Err(GltfError::invalid(format!("index_out_of_bounds:{name}#{pi}")));
                     }
                     expanded.push(verts[i]);
                 }
