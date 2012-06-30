@@ -3071,6 +3071,9 @@ dependencies = [
 [[package]]
 name = "spark-logger"
 version = "0.1.0"
+dependencies = [
+ "spark-diagnostics",
+]
 
 [[package]]
 name = "spark-media"
@@ -3171,6 +3174,7 @@ name = "spark-script"
 version = "0.1.0"
 dependencies = [
  "spark-core",
+ "spark-diagnostics",
  "spark-gc",
  "spark-jit",
  "spark-script-lua",
@@ -3185,6 +3189,7 @@ version = "0.1.0"
 dependencies = [
  "oak-core",
  "oak-lua",
+ "spark-diagnostics",
  "spark-vm",
 ]
 
@@ -3192,6 +3197,7 @@ dependencies = [
 name = "spark-script-ruby"
 version = "0.1.0"
 dependencies = [
+ "spark-diagnostics",
  "spark-vm",
 ]
 
@@ -3199,6 +3205,7 @@ dependencies = [
 name = "spark-script-valkyrie"
 version = "0.1.0"
 dependencies = [
+ "spark-diagnostics",
  "spark-gc",
  "spark-vm",
 ]

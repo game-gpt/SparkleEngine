@@ -9,6 +9,7 @@
 //! 游戏绑定经原生函数表注入。ECS 侧用 [`spark_vm::Vm::call_function`] 调脚本，
 //! 不把 World 塞进本 crate。
 
+use spark_diagnostics::{ErrorArg, ErrorArgs};
 use spark_jit::JitEngine;
 use spark_vm::{HostHooks, Module, StdHost, Vm, VmError};
 
@@ -25,23 +26,62 @@ pub enum ScriptLanguage {
     Ruby,
 }
 
+/// 脚本管线阶段。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ScriptStage {
+    Parse,
+    Compile,
+    Runtime,
+}
+
+/// 结构化脚本错误（码 + 参数；`Display` 只输出稳定码）。
 #[derive(Debug)]
 pub enum ScriptError {
-    /// 解析失败。`detail` 为前端原始说明。
-    Parse { detail: String },
-    /// 编译失败。
-    Compile { detail: String },
-    /// VM 执行失败。
+    Parse { args: ErrorArgs },
+    Compile { args: ErrorArgs },
     Vm(VmError),
+}
+
+impl ScriptError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Parse { .. } => "spark.script.parse",
+            Self::Compile { .. } => "spark.script.compile",
+            Self::Vm(e) => e.code(),
+        }
+    }
+
+    pub fn stage(&self) -> ScriptStage {
+        match self {
+            Self::Parse { .. } => ScriptStage::Parse,
+            Self::Compile { .. } => ScriptStage::Compile,
+            Self::Vm(_) => ScriptStage::Runtime,
+        }
+    }
+
+    pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::Parse {
+            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+        }
+    }
+
+    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::Compile {
+            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+        }
+    }
+
+    pub fn args(&self) -> Option<&ErrorArgs> {
+        match self {
+            Self::Parse { args } | Self::Compile { args } => Some(args),
+            Self::Vm(_) => None,
+        }
+    }
 }
 
 impl std::fmt::Display for ScriptError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Parse { .. } => f.write_str("spark.script.parse"),
-            Self::Compile { .. } => f.write_str("spark.script.compile"),
-            Self::Vm(e) => e.fmt(f),
-        }
+        f.write_str(self.code())
     }
 }
 
@@ -63,11 +103,11 @@ impl From<VmError> for ScriptError {
 impl From<spark_script_valkyrie::ValkyrieScriptError> for ScriptError {
     fn from(e: spark_script_valkyrie::ValkyrieScriptError) -> Self {
         match e {
-            spark_script_valkyrie::ValkyrieScriptError::Parse { detail } => {
-                ScriptError::Parse { detail }
+            spark_script_valkyrie::ValkyrieScriptError::Parse { args } => {
+                ScriptError::Parse { args }
             }
-            spark_script_valkyrie::ValkyrieScriptError::Compile { detail } => {
-                ScriptError::Compile { detail }
+            spark_script_valkyrie::ValkyrieScriptError::Compile { args } => {
+                ScriptError::Compile { args }
             }
         }
     }
@@ -76,8 +116,8 @@ impl From<spark_script_valkyrie::ValkyrieScriptError> for ScriptError {
 impl From<spark_script_lua::LuaScriptError> for ScriptError {
     fn from(e: spark_script_lua::LuaScriptError) -> Self {
         match e {
-            spark_script_lua::LuaScriptError::Parse { detail } => ScriptError::Parse { detail },
-            spark_script_lua::LuaScriptError::Compile { detail } => ScriptError::Compile { detail },
+            spark_script_lua::LuaScriptError::Parse { args } => ScriptError::Parse { args },
+            spark_script_lua::LuaScriptError::Compile { args } => ScriptError::Compile { args },
         }
     }
 }
@@ -85,10 +125,8 @@ impl From<spark_script_lua::LuaScriptError> for ScriptError {
 impl From<spark_script_ruby::RubyScriptError> for ScriptError {
     fn from(e: spark_script_ruby::RubyScriptError) -> Self {
         match e {
-            spark_script_ruby::RubyScriptError::Parse { detail } => ScriptError::Parse { detail },
-            spark_script_ruby::RubyScriptError::Compile { detail } => {
-                ScriptError::Compile { detail }
-            }
+            spark_script_ruby::RubyScriptError::Parse { args } => ScriptError::Parse { args },
+            spark_script_ruby::RubyScriptError::Compile { args } => ScriptError::Compile { args },
         }
     }
 }

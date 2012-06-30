@@ -7,14 +7,29 @@ mod compile;
 
 use oak_core::{Builder, SourceText};
 use oak_lua::{LuaBuilder, LuaLanguage, LuaRoot};
+use spark_diagnostics::{ErrorArg, ErrorArgs};
 use spark_vm::Module;
 
 pub use compile::compile_root;
 
 #[derive(Debug)]
 pub enum LuaScriptError {
-    Parse { detail: String },
-    Compile { detail: String },
+    Parse { args: ErrorArgs },
+    Compile { args: ErrorArgs },
+}
+
+impl LuaScriptError {
+    pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::Parse {
+            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+        }
+    }
+
+    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::Compile {
+            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+        }
+    }
 }
 
 impl std::fmt::Display for LuaScriptError {
@@ -31,7 +46,7 @@ impl std::error::Error for LuaScriptError {}
 /// 源码 → [`Module`]。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, LuaScriptError> {
     let root = parse(source)?;
-    compile_root(&root, natives).map_err(|detail| LuaScriptError::Compile { detail })
+    compile_root(&root, natives).map_err(LuaScriptError::compile_opaque)
 }
 
 /// 解析为 AST 根。
@@ -50,7 +65,7 @@ pub fn parse(source: &str) -> Result<LuaRoot, LuaScriptError> {
                 detail.push_str("; ");
                 detail.push_str(&soft.join("; "));
             }
-            Err(LuaScriptError::Parse { detail })
+            Err(LuaScriptError::parse_opaque(detail))
         }
     }
 }

@@ -8,6 +8,7 @@ mod ast;
 mod compile;
 mod parse;
 
+use spark_diagnostics::{ErrorArg, ErrorArgs};
 use spark_vm::Module;
 
 pub use ast::RubyRoot;
@@ -16,8 +17,22 @@ pub use parse::parse as parse_source;
 
 #[derive(Debug)]
 pub enum RubyScriptError {
-    Parse { detail: String },
-    Compile { detail: String },
+    Parse { args: ErrorArgs },
+    Compile { args: ErrorArgs },
+}
+
+impl RubyScriptError {
+    pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::Parse {
+            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+        }
+    }
+
+    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::Compile {
+            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+        }
+    }
 }
 
 impl std::fmt::Display for RubyScriptError {
@@ -33,8 +48,8 @@ impl std::error::Error for RubyScriptError {}
 
 /// 源码 → [`Module`]。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, RubyScriptError> {
-    let root = parse_source(source).map_err(|detail| RubyScriptError::Parse { detail })?;
-    compile_root(&root, natives).map_err(|detail| RubyScriptError::Compile { detail })
+    let root = parse_source(source).map_err(RubyScriptError::parse_opaque)?;
+    compile_root(&root, natives).map_err(RubyScriptError::compile_opaque)
 }
 
 #[cfg(test)]
