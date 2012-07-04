@@ -4,6 +4,9 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
+
+use spark_diagnostics::{ErrorArg, ErrorArgs};
 
 use crate::EngineError;
 
@@ -20,15 +23,57 @@ pub struct ModManifest {
     pub dependencies: Vec<String>,
 }
 
+/// `mod.von` 解析错误（稳定码 + 类型化参数，无预先拼好的 Locale 句子）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ManifestParseError {
+    MissingAssign { line: u32 },
+    UnknownField { field: Arc<str>, line: u32 },
+    ExpectedString { opaque: Arc<str> },
+    ExpectedStringArray { opaque: Arc<str> },
+}
+
+impl ManifestParseError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::MissingAssign { .. } => "spark.engine.manifest.missing_assign",
+            Self::UnknownField { .. } => "spark.engine.manifest.unknown_field",
+            Self::ExpectedString { .. } => "spark.engine.manifest.expected_string",
+            Self::ExpectedStringArray { .. } => "spark.engine.manifest.expected_string_array",
+        }
+    }
+
+    pub fn args(&self) -> ErrorArgs {
+        match self {
+            Self::MissingAssign { line } => {
+                ErrorArgs::new().with("line", ErrorArg::Unsigned(u64::from(*line)))
+            }
+            Self::UnknownField { field, line } => ErrorArgs::new()
+                .with("field", ErrorArg::String(Arc::clone(field)))
+                .with("line", ErrorArg::Unsigned(u64::from(*line))),
+            Self::ExpectedString { opaque } | Self::ExpectedStringArray { opaque } => {
+                ErrorArgs::new().with("opaque", ErrorArg::String(Arc::clone(opaque)))
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for ManifestParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for ManifestParseError {}
+
 impl ModManifest {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, EngineError> {
         let path = path.as_ref();
         let text = fs::read_to_string(path).map_err(|e| {
             EngineError::io(path.display().to_string(), e.to_string())
         })?;
-        let mut m = parse_mod_von(&text).map_err(|detail| EngineError::ManifestParse {
+        let mut m = parse_mod_von(&text).map_err(|source| EngineError::ManifestParse {
             path: path.display().to_string(),
-            detail,
+            source,
         })?;
         if m.name.is_empty() {
             m.name = m.id.clone();
@@ -47,7 +92,7 @@ impl ModManifest {
 }
 
 /// 解析扁平 `mod.von`（顶层 `key = value`）。
-pub fn parse_mod_von(text: &str) -> Result<ModManifest, String> {
+pub fn parse_mod_von(text: &str) -> Result<ModManifest, ManifestParseError> {
     let mut id = String::new();
     let mut name = String::new();
     let mut version = "0.0.0".to_string();
@@ -62,7 +107,9 @@ pub fn parse_mod_von(text: &str) -> Result<ModManifest, String> {
             continue;
         }
         let Some((key, value)) = split_assign(line) else {
-            return Err(format!("第 {} 行缺少 `=`：{raw_line}", line_no + 1));
+            return Err(ManifestParseError::MissingAssign {
+                line: (line_no + 1) as u32,
+            });
         };
         match key {
             "id" => id = parse_string(value)?,
@@ -72,7 +119,10 @@ pub fn parse_mod_von(text: &str) -> Result<ModManifest, String> {
             "language" => language = Some(parse_string(value)?),
             "dependencies" => dependencies = parse_string_array(value)?,
             other => {
-                return Err(format!("未知清单字段 `{other}`（第 {} 行）", line_no + 1));
+                return Err(ManifestParseError::UnknownField {
+                    field: Arc::from(other),
+                    line: (line_no + 1) as u32,
+                });
             }
         }
     }
@@ -130,7 +180,7 @@ fn split_assign(line: &str) -> Option<(&str, &str)> {
     Some((key, value))
 }
 
-fn parse_string(value: &str) -> Result<String, String> {
+fn parse_string(value: &str) -> Result<String, ManifestParseError> {
     let value = value.trim();
     if (value.starts_with('"') && value.ends_with('"'))
         || (value.starts_with('\'') && value.ends_with('\''))
@@ -144,13 +194,17 @@ fn parse_string(value: &str) -> Result<String, String> {
     {
         return Ok(value.to_string());
     }
-    Err(format!("期望字符串：{value}"))
+    Err(ManifestParseError::ExpectedString {
+        opaque: Arc::from(value),
+    })
 }
 
-fn parse_string_array(value: &str) -> Result<Vec<String>, String> {
+fn parse_string_array(value: &str) -> Result<Vec<String>, ManifestParseError> {
     let value = value.trim();
     if !value.starts_with('[') || !value.ends_with(']') {
-        return Err(format!("期望字符串数组：{value}"));
+        return Err(ManifestParseError::ExpectedStringArray {
+            opaque: Arc::from(value),
+        });
     }
     let inner = value[1..value.len() - 1].trim();
     if inner.is_empty() {
@@ -246,5 +300,13 @@ dependencies = ["core", "extra"]
         assert_eq!(m.name, "Demo");
         assert_eq!(m.entry.as_deref(), Some("main.vk"));
         assert_eq!(m.dependencies, vec!["core", "extra"]);
+    }
+
+    #[test]
+    fn unknown_field_is_structured() {
+        let err = parse_mod_von("id = \"x\"\nfoo = 1\n").unwrap_err();
+        assert_eq!(err.code(), "spark.engine.manifest.unknown_field");
+        assert!(err.args().get("field").is_some());
+        assert!(!err.to_string().contains("未知"));
     }
 }

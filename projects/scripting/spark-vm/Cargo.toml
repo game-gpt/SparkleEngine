@@ -12,4 +12,5 @@ publish = false
 
 [dependencies]
 spark-core = { workspace = true }
+spark-diagnostics = { workspace = true }
 spark-gc = { workspace = true }

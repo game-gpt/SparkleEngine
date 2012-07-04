@@ -9,9 +9,11 @@
 //! - **栈式**：操作数在值栈，调用帧只记 `func` / `ip` / `stack_base`，利于特化与调试。
 
 use std::collections::HashMap;
-
-use spark_gc::{GcObject, Heap, Value};
 use std::fmt;
+use std::sync::Arc;
+
+use spark_diagnostics::{Error, ErrorArg, ErrorArgs, ErrorCode};
+use spark_gc::{GcObject, Heap, Value};
 
 /// VM 结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]
@@ -49,6 +51,36 @@ impl VmError {
             Self::ArityMismatch { .. } => "spark.vm.arity_mismatch",
             Self::BadNativeArg { .. } => "spark.vm.bad_native_arg",
         }
+    }
+
+    /// 类型化参数（供 Diagnostic / LogEvent / localization 渲染）。
+    pub fn args(&self) -> ErrorArgs {
+        match self {
+            Self::TypeError { expected, got } => ErrorArgs::new()
+                .with("expected", ErrorArg::TypeName(Arc::from(*expected)))
+                .with("got", ErrorArg::TypeName(Arc::from(got.as_str()))),
+            Self::UnknownGlobal(name)
+            | Self::UnknownFunction(name)
+            | Self::UnknownNative(name) => {
+                ErrorArgs::new().with("name", ErrorArg::String(Arc::from(name.as_str())))
+            }
+            Self::UnknownOpcode(op) => ErrorArgs::new().with("opcode", ErrorArg::Opcode(*op)),
+            Self::ArityMismatch { expected, got } => ErrorArgs::new()
+                .with("expected", ErrorArg::Unsigned(u64::from(*expected)))
+                .with("got", ErrorArg::Unsigned(u64::from(*got))),
+            Self::BadNativeArg { name } => {
+                ErrorArgs::new().with("name", ErrorArg::String(Arc::from(*name)))
+            }
+            Self::StackUnderflow
+            | Self::CodeOob
+            | Self::CallOverflow
+            | Self::BadReturn
+            | Self::DivByZero => ErrorArgs::new(),
+        }
+    }
+
+    pub fn to_error(&self) -> Error {
+        Error::new(ErrorCode::parse(self.code())).with_args(self.args())
     }
 }
 
