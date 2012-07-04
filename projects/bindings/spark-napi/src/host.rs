@@ -46,12 +46,9 @@ impl SparkJsHost {
         &mut self,
         root: &str,
         key: &str,
-    ) -> Result<u32, String> {
+    ) -> Result<u32, spark_asset::AssetError> {
         let loader = BytesLoader::new(root);
-        let id = self
-            .assets
-            .load(AssetKey::new(key), &loader)
-            .map_err(|e| e.to_string())?;
+        let id = self.assets.load(AssetKey::new(key), &loader)?;
         Ok(id.0)
     }
 
