@@ -42,7 +42,7 @@ enum Tok {
     Eof,
 }
 
-pub fn parse(source: &str) -> Result<ValkyrieRoot, String> {
+pub(crate) fn parse(source: &str) -> Result<ValkyrieRoot, String> {
     let tokens = lex(source)?;
     let mut p = Parser { tokens, i: 0 };
     p.parse_root()

@@ -5,12 +5,12 @@
 
 mod compile;
 
+use compile::compile_root;
+
 use oak_core::{Builder, SourceText};
 use oak_lua::{LuaBuilder, LuaLanguage, LuaRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
 use spark_vm::Module;
-
-pub use compile::compile_root;
 
 #[derive(Debug)]
 pub enum LuaScriptError {

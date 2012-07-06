@@ -11,7 +11,7 @@ use oak_lua::ast::{
 };
 use spark_vm::{FuncProto, Module, Op};
 
-pub fn compile_root(root: &LuaRoot, native_names: &[&str]) -> Result<Module, String> {
+pub(crate) fn compile_root(root: &LuaRoot, native_names: &[&str]) -> Result<Module, String> {
     let native_set: HashSet<&str> = native_names.iter().copied().collect();
     let mut functions: Vec<FuncProto> = Vec::new();
     let mut fn_index: HashMap<String, usize> = HashMap::new();

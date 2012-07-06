@@ -9,13 +9,14 @@ mod compile;
 mod native_sig;
 mod parse;
 
+use compile::compile_root;
+use parse::parse as parse_source;
+
 use spark_diagnostics::{ErrorArg, ErrorArgs};
 use spark_vm::Module;
 
 pub use ast::ValkyrieRoot;
-pub use compile::compile_root;
 pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
-pub use parse::parse as parse_source;
 
 #[derive(Debug)]
 pub enum ValkyrieScriptError {

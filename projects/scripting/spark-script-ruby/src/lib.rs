@@ -8,12 +8,13 @@ mod ast;
 mod compile;
 mod parse;
 
+use compile::compile_root;
+use parse::parse as parse_source;
+
 use spark_diagnostics::{ErrorArg, ErrorArgs};
 use spark_vm::Module;
 
 pub use ast::RubyRoot;
-pub use compile::compile_root;
-pub use parse::parse as parse_source;
 
 #[derive(Debug)]
 pub enum RubyScriptError {

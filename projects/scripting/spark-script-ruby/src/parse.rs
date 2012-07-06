@@ -38,7 +38,7 @@ enum Tok {
     Eof,
 }
 
-pub fn parse(source: &str) -> Result<RubyRoot, String> {
+pub(crate) fn parse(source: &str) -> Result<RubyRoot, String> {
     let tokens = lex(source)?;
     let mut p = Parser {
         tokens,
