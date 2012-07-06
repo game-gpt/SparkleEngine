@@ -22,6 +22,7 @@ mod manifest;
 mod manifest_von;
 mod message;
 mod pseudo;
+mod render;
 mod snapshot;
 mod text;
 
@@ -50,5 +51,6 @@ pub use message::{
     MessageRef, MessageValue, NamespaceId,
 };
 pub use pseudo::{PseudoKind, generate_pseudo};
+pub use render::{message_args_from_error_args, render_diagnostic, render_error};
 pub use snapshot::{LocaleChanged, LocaleSnapshot, Localizer};
 pub use text::{LocalizedContent, LocalizedText, LocalizedToken};
