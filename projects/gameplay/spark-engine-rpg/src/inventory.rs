@@ -1,6 +1,14 @@
 //! 堆叠背包（物品 ID 为不透明字符串）。
 
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_core::{ErrorArg, ErrorCode, SparkError};
+
+fn inventory_full() -> ErrorCode {
+    ErrorCode::new("spark.rpg", "inventory.full")
+}
+
+fn inventory_invalid() -> ErrorCode {
+    ErrorCode::new("spark.rpg", "inventory.invalid")
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemStack {
@@ -52,13 +60,13 @@ impl Inventory {
                 return Ok(());
             }
         }
-        Err(SparkError::new(codes::inventory_full()))
+        Err(SparkError::new(inventory_full()))
     }
 
     pub fn remove(&mut self, id: &str, count: u32) -> Result<(), SparkError> {
         let have = self.count(id);
         if have < count {
-            return Err(SparkError::new(codes::inventory_invalid())
+            return Err(SparkError::new(inventory_invalid())
                 .arg("reason", ErrorArg::String("insufficient".into()))
                 .arg("need", ErrorArg::Unsigned(count as u64))
                 .arg("have", ErrorArg::Unsigned(have as u64))

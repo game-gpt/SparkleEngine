@@ -22,7 +22,7 @@ npm run copy:wasm --prefix packages/spark-unknown-wasm32
 
 ```text
 projects/
-  foundation/   # 基础运行时（core / logger / ecs / time / event / input / geometry / physics / net / asset / localization / debugger）
+  foundation/   # 基础运行时（core / diagnostics / logger / ecs / time / event / input / geometry / physics / net / asset / localization / debugger）
   graphics/     # 渲染与媒体（renderer / widget / audio / video …）
   scripting/    # GC / VM / 脚本前端
   gameplay/     # 模组壳、体裁引擎、脚本插件

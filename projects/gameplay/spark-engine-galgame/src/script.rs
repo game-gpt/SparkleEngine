@@ -1,6 +1,10 @@
 //! 对白与选项播放器。
 
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_core::{ErrorArg, ErrorCode, SparkError};
+
+fn choice_invalid() -> ErrorCode {
+    ErrorCode::new("spark.galgame", "script.choice_invalid")
+}
 
 use crate::flags::FlagStore;
 
@@ -78,11 +82,11 @@ impl ScriptPlayer {
 
     pub fn choose(&mut self, index: usize, flags: &mut FlagStore) -> Result<(), SparkError> {
         let Some(choices) = self.waiting_choice.take() else {
-            return Err(SparkError::new(codes::script_choice_invalid())
+            return Err(SparkError::new(choice_invalid())
                 .arg("reason", ErrorArg::String("no_choices".into())));
         };
         let Some(c) = choices.get(index) else {
-            return Err(SparkError::new(codes::script_choice_invalid())
+            return Err(SparkError::new(choice_invalid())
                 .arg("reason", ErrorArg::String("index_out_of_bounds".into()))
                 .arg("index", ErrorArg::Unsigned(index as u64))
                 .arg("len", ErrorArg::Unsigned(choices.len() as u64)));
