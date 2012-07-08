@@ -33,6 +33,33 @@ impl GltfError {
             Self::Invalid { .. } => "spark.gltf.invalid",
         }
     }
+
+    pub fn args(&self) -> spark_diagnostics::ErrorArgs {
+        use spark_diagnostics::{ErrorArg, ErrorArgs};
+        use std::sync::Arc;
+        match self {
+            Self::Invalid { detail } => {
+                // `detail` 必须是机器令牌（如 `missing_bin_chunk`），不是自然语言。
+                ErrorArgs::new().with("reason", ErrorArg::String(Arc::from(detail.as_str())))
+            }
+            Self::Io(e) => ErrorArgs::new().with(
+                "kind",
+                ErrorArg::String(Arc::from(io_kind_token(e.kind()))),
+            ),
+            Self::Gltf(_) => ErrorArgs::new(),
+        }
+    }
+}
+
+fn io_kind_token(kind: std::io::ErrorKind) -> &'static str {
+    use std::io::ErrorKind::*;
+    match kind {
+        NotFound => "not_found",
+        PermissionDenied => "permission_denied",
+        InvalidData => "invalid_data",
+        UnexpectedEof => "unexpected_eof",
+        _ => "other",
+    }
 }
 
 impl fmt::Display for GltfError {

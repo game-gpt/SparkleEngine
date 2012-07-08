@@ -47,6 +47,16 @@ impl PluginError {
             Self::NotFound { .. } => "spark.plugin.not_found",
         }
     }
+
+    pub fn args(&self) -> spark_diagnostics::ErrorArgs {
+        use spark_diagnostics::{ErrorArg, ErrorArgs};
+        use std::sync::Arc;
+        match self {
+            Self::DuplicateId { id } | Self::NotFound { id } => {
+                ErrorArgs::new().with("id", ErrorArg::String(Arc::from(id.as_str())))
+            }
+        }
+    }
 }
 
 impl fmt::Display for PluginError {
@@ -87,9 +97,9 @@ impl PluginRegistry {
             return Err(PluginError::DuplicateId { id: id.into() });
         }
         tracing::info!(
+            event = "spark.plugin.registered",
             plugin = id,
             version = plugin.info().version,
-            "已注册脚本插件"
         );
         self.plugins.push(plugin);
         Ok(())

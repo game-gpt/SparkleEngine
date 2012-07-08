@@ -69,7 +69,7 @@ impl ModManifest {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, EngineError> {
         let path = path.as_ref();
         let text = fs::read_to_string(path).map_err(|e| {
-            EngineError::io(path.display().to_string(), e.to_string())
+            EngineError::from_io(path.display().to_string(), e)
         })?;
         let mut m = parse_mod_von(&text).map_err(|source| EngineError::ManifestParse {
             path: path.display().to_string(),
