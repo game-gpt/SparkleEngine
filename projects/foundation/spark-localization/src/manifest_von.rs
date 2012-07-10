@@ -35,6 +35,24 @@ impl ManifestVonError {
             Self::ExpectedArray => "spark.localization.von_expected_array",
         }
     }
+
+    pub fn args(&self) -> spark_core::ErrorArgs {
+        use spark_core::{ErrorArg, ErrorArgs};
+        match self {
+            Self::Locale(e) => e.args(),
+            Self::MissingAssign { line } => {
+                ErrorArgs::new().with("line", ErrorArg::Unsigned(*line as u64))
+            }
+            Self::UnknownField { field, line } => ErrorArgs::new()
+                .with("field", ErrorArg::String(Arc::from(field.as_str())))
+                .with("line", ErrorArg::Unsigned(*line as u64)),
+            Self::NamespaceArity
+            | Self::MissingProductDefault
+            | Self::ExpectedString
+            | Self::ExpectedInteger
+            | Self::ExpectedArray => ErrorArgs::new(),
+        }
+    }
 }
 
 impl std::fmt::Display for ManifestVonError {

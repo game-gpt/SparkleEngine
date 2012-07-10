@@ -13,13 +13,29 @@ pub use handle::{AssetId, AssetKey};
 pub use hot_reload::HotReloadWatch;
 pub use loader::{AssetLoader, BytesLoader, LoadError, ReloadEvent};
 
-use spark_core::SparkError;
+use spark_core::{ErrorArgs, SparkError};
 
 /// 资源层错误。自然语言不在此生成。
 #[derive(Debug)]
 pub enum AssetError {
     Spark(SparkError),
     Load(LoadError),
+}
+
+impl AssetError {
+    pub fn code(&self) -> String {
+        match self {
+            Self::Spark(e) => e.code.to_string(),
+            Self::Load(e) => e.code().to_string(),
+        }
+    }
+
+    pub fn args(&self) -> ErrorArgs {
+        match self {
+            Self::Spark(e) => e.args.clone(),
+            Self::Load(e) => e.args(),
+        }
+    }
 }
 
 impl std::fmt::Display for AssetError {

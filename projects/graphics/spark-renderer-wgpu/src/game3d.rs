@@ -772,7 +772,7 @@ impl GpuState3d {
             mapped_at_creation: false,
         });
 
-        tracing::info!("GPU 3D ready");
+        tracing::info!(event = "spark.renderer.gpu3d_ready");
         let tex_mesh =
             crate::tex_mesh::TexMeshGpu::new(&device, format, &lights_bgl, shadow.sample_bgl());
         let skinned_mesh = crate::skinned_mesh::SkinnedMeshGpu::new(&device, format, &lights_bgl);
@@ -1485,7 +1485,7 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
         let window = match event_loop.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {
-                tracing::error!(?e, "create_window");
+                tracing::error!(event = "spark.renderer.window_create_failed", ?e);
                 event_loop.exit();
                 return;
             }
@@ -1494,7 +1494,7 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
         match pollster::block_on(GpuState3d::new(window)) {
             Ok(s) => self.state = Some(s),
             Err(e) => {
-                tracing::error!(?e, "gpu3d init");
+                tracing::error!(event = "spark.renderer.gpu3d_init_failed", ?e);
                 event_loop.exit();
             }
         }
@@ -1621,7 +1621,7 @@ impl<H: GameHost3d> HostApp3d<H> {
 
         let t_render = Instant::now();
         if let Err(e) = gpu.render(&draw) {
-            tracing::error!(?e, "render3d failed");
+            tracing::error!(event = "spark.renderer.render3d_failed", ?e);
             event_loop.exit();
             return;
         }

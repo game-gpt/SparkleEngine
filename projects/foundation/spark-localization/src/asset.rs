@@ -35,6 +35,15 @@ impl LocaleLoadError {
             Self::NoAvailableLocales => "spark.localization.no_available_locales",
         }
     }
+
+    pub fn args(&self) -> spark_core::ErrorArgs {
+        match self {
+            Self::Load(e) => e.args(),
+            Self::Json(e) => e.args(),
+            Self::Compile(e) => e.args(),
+            Self::EmptyShards | Self::NoAvailableLocales => spark_core::ErrorArgs::new(),
+        }
+    }
 }
 
 impl fmt::Display for LocaleLoadError {
