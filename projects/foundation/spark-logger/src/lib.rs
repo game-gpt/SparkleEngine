@@ -294,7 +294,11 @@ pub fn install_std(file: Option<&Path>, min_level: Level) -> bool {
                 .location()
                 .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
                 .unwrap_or_else(|| "?".into());
-            global().error("panic", format!("{msg} @ {loc}"));
+            global().emit(
+                LogEvent::new(Level::Error, "panic", "spark.runtime.panic")
+                    .field("payload", spark_diagnostics::ErrorArg::String(std::sync::Arc::from(msg)))
+                    .field("location", spark_diagnostics::ErrorArg::String(std::sync::Arc::from(loc))),
+            );
             default_hook(info);
         }));
     }
@@ -361,9 +365,69 @@ macro_rules! error {
     };
 }
 
+/// 结构化事件宏：写入稳定 event 码与字段，不拼用户句子。
+///
+/// ```ignore
+/// spark_logger::spark_event!(
+///     level: spark_logger::Level::Error,
+///     event: "spark.media.open_failed",
+///     "path" => ErrorArg::Path(...),
+/// );
+/// ```
+#[macro_export]
+macro_rules! spark_event {
+    (
+        level: $level:expr,
+        event: $event:expr
+        $(, $key:literal => $value:expr)* $(,)?
+    ) => {{
+        let mut __ev = $crate::LogEvent::new($level, module_path!(), $event);
+        $(
+            __ev = __ev.field($key, $value);
+        )*
+        $crate::global().emit(__ev);
+    }};
+    (
+        level: $level:expr,
+        target: $target:expr,
+        event: $event:expr
+        $(, $key:literal => $value:expr)* $(,)?
+    ) => {{
+        let mut __ev = $crate::LogEvent::new($level, $target, $event);
+        $(
+            __ev = __ev.field($key, $value);
+        )*
+        $crate::global().emit(__ev);
+    }};
+}
+
+/// 错误级结构化事件（同 [`spark_event!`]，级别固定为 Error）。
+#[macro_export]
+macro_rules! spark_error {
+    (
+        event: $event:expr
+        $(, $key:literal => $value:expr)* $(,)?
+    ) => {
+        $crate::spark_event!(level: $crate::Level::Error, event: $event $(, $key => $value)*)
+    };
+    (
+        target: $target:expr,
+        event: $event:expr
+        $(, $key:literal => $value:expr)* $(,)?
+    ) => {
+        $crate::spark_event!(
+            level: $crate::Level::Error,
+            target: $target,
+            event: $event
+            $(, $key => $value)*
+        )
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use spark_diagnostics::ErrorArg;
 
     #[test]
     fn memory_sink_filters_by_level() {
@@ -378,6 +442,15 @@ mod tests {
         assert_eq!(snap.len(), 1);
         assert_eq!(snap[0].level, Level::Warn);
         assert_eq!(snap[0].message, "keep");
+    }
+
+    #[test]
+    fn structured_event_code_line() {
+        let ev = LogEvent::new(Level::Error, "media", "spark.media.open_failed")
+            .field("io_kind", ErrorArg::String(Arc::from("not_found")));
+        let line = ev.code_line();
+        assert!(line.contains("event=spark.media.open_failed"));
+        assert!(line.contains("io_kind=not_found"));
     }
 
     #[test]
