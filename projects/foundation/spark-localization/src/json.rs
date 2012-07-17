@@ -16,7 +16,8 @@ use crate::locale::{LocaleId, LocaleParseError};
 #[derive(Debug)]
 pub enum JsonError {
     Locale(LocaleParseError),
-    Serde { detail: String },
+    /// serde_json 失败：只保留行列位置，不吞第三方 Display 句子。
+    Serde { line: u64, column: u64 },
     RichMessageIncomplete,
     NodeObjectIncomplete,
     UnknownSelectKind { kind: String },
@@ -39,9 +40,9 @@ impl JsonError {
         use spark_core::{ErrorArg, ErrorArgs};
         match self {
             Self::Locale(e) => e.args(),
-            Self::Serde { detail } => {
-                ErrorArgs::new().with("opaque", ErrorArg::String(Arc::from(detail.as_str())))
-            }
+            Self::Serde { line, column } => ErrorArgs::new()
+                .with("line", ErrorArg::Unsigned(*line))
+                .with("column", ErrorArg::Unsigned(*column)),
             Self::RichMessageIncomplete | Self::NodeObjectIncomplete => ErrorArgs::new(),
             Self::UnknownSelectKind { kind } => {
                 ErrorArgs::new().with("kind", ErrorArg::String(Arc::from(kind.as_str())))
@@ -77,7 +78,8 @@ impl From<LocaleParseError> for JsonError {
 impl From<serde_json::Error> for JsonError {
     fn from(value: serde_json::Error) -> Self {
         Self::Serde {
-            detail: value.to_string(),
+            line: value.line() as u64,
+            column: value.column() as u64,
         }
     }
 }

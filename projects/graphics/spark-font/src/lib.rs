@@ -52,10 +52,10 @@ impl GlyphCache {
 
     /// 从字节流装载（测试 / 打包字体）。
     pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, SparkError> {
-        let font = Font::from_bytes(bytes.as_ref(), FontSettings::default()).map_err(|e| {
+        let font = Font::from_bytes(bytes.as_ref(), FontSettings::default()).map_err(|_| {
             SparkError::new(codes::font_parse())
                 .arg("bytes", ErrorArg::Unsigned(bytes.as_ref().len() as u64))
-                .caused_by(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                .arg("reason", ErrorArg::String(Arc::from("invalid_font_bytes")))
         })?;
         Ok(Self::new(font))
     }
