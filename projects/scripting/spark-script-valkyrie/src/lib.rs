@@ -20,23 +20,31 @@ pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 
 #[derive(Debug)]
 pub enum ValkyrieScriptError {
-    /// 解析失败。`args.opaque` 可保留前端原始说明（非用户 Locale 句子权威）。
+    /// 解析失败。`args.reason` 为机器令牌（非用户 Locale 句子）。
     Parse { args: ErrorArgs },
     /// 编译失败。
     Compile { args: ErrorArgs },
 }
 
 impl ValkyrieScriptError {
-    pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+    pub fn parse_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Parse {
-            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
         }
     }
 
-    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+    pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile {
-            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
         }
+    }
+
+    pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::parse_reason(detail)
+    }
+
+    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::compile_reason(detail)
     }
 }
 
