@@ -50,6 +50,9 @@ fn error_arg_to_message_value(value: &ErrorArg) -> MessageValue {
             }
         }
         ErrorArg::Bool(b) => MessageValue::Select(Arc::from(if *b { "true" } else { "false" })),
+        ErrorArg::Span(span) => {
+            MessageValue::String(Arc::from(format!("{}..{}", span.start, span.end)))
+        }
     }
 }
 
