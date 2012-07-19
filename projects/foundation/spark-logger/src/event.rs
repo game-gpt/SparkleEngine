@@ -88,6 +88,9 @@ impl LogEvent {
                 ErrorArg::Opcode(op) => line.push_str(&format!("0x{op:02x}")),
                 ErrorArg::EntityBits(bits) => line.push_str(&bits.to_string()),
                 ErrorArg::Bool(b) => line.push_str(if *b { "true" } else { "false" }),
+                ErrorArg::Span(span) => {
+                    line.push_str(&format!("{}..{}", span.start, span.end));
+                }
             }
         }
         if let Some(err) = &self.error {

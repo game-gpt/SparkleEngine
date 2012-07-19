@@ -9,7 +9,7 @@
 //! 游戏绑定经原生函数表注入。ECS 侧用 [`spark_vm::Vm::call_function`] 调脚本，
 //! 不把 World 塞进本 crate。
 
-use spark_diagnostics::{ErrorArg, ErrorArgs};
+use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
 use spark_jit::JitEngine;
 use spark_vm::{HostHooks, Module, StdHost, Vm, VmError};
 
@@ -37,8 +37,14 @@ pub enum ScriptStage {
 /// 结构化脚本错误（码 + 参数；`Display` 只输出稳定码）。
 #[derive(Debug)]
 pub enum ScriptError {
-    Parse { args: ErrorArgs },
-    Compile { args: ErrorArgs },
+    Parse {
+        args: ErrorArgs,
+        span: Option<SourceSpan>,
+    },
+    Compile {
+        args: ErrorArgs,
+        span: Option<SourceSpan>,
+    },
     Vm(VmError),
 }
 
@@ -62,12 +68,23 @@ impl ScriptError {
     pub fn parse_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Parse {
             args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
+            span: None,
+        }
+    }
+
+    pub fn parse_at(reason: impl Into<std::sync::Arc<str>>, span: SourceSpan) -> Self {
+        Self::Parse {
+            args: ErrorArgs::new()
+                .with("reason", ErrorArg::String(reason.into()))
+                .with("span", ErrorArg::Span(span)),
+            span: Some(span),
         }
     }
 
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile {
             args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
+            span: None,
         }
     }
 
@@ -79,9 +96,24 @@ impl ScriptError {
         Self::compile_reason(detail)
     }
 
+    pub fn span(&self) -> Option<SourceSpan> {
+        match self {
+            Self::Parse { span, .. } | Self::Compile { span, .. } => *span,
+            Self::Vm(_) => None,
+        }
+    }
+
+    pub fn context(&self) -> ErrorContext {
+        let mut ctx = ErrorContext::new().target("spark-script");
+        if let Some(span) = self.span() {
+            ctx = ctx.with_span(span);
+        }
+        ctx
+    }
+
     pub fn args(&self) -> ErrorArgs {
         match self {
-            Self::Parse { args } | Self::Compile { args } => args.clone(),
+            Self::Parse { args, .. } | Self::Compile { args, .. } => args.clone(),
             Self::Vm(e) => e.args(),
         }
     }
@@ -111,11 +143,11 @@ impl From<VmError> for ScriptError {
 impl From<spark_script_valkyrie::ValkyrieScriptError> for ScriptError {
     fn from(e: spark_script_valkyrie::ValkyrieScriptError) -> Self {
         match e {
-            spark_script_valkyrie::ValkyrieScriptError::Parse { args } => {
-                ScriptError::Parse { args }
+            spark_script_valkyrie::ValkyrieScriptError::Parse { args, span } => {
+                ScriptError::Parse { args, span }
             }
-            spark_script_valkyrie::ValkyrieScriptError::Compile { args } => {
-                ScriptError::Compile { args }
+            spark_script_valkyrie::ValkyrieScriptError::Compile { args, span } => {
+                ScriptError::Compile { args, span }
             }
         }
     }
@@ -124,8 +156,12 @@ impl From<spark_script_valkyrie::ValkyrieScriptError> for ScriptError {
 impl From<spark_script_lua::LuaScriptError> for ScriptError {
     fn from(e: spark_script_lua::LuaScriptError) -> Self {
         match e {
-            spark_script_lua::LuaScriptError::Parse { args } => ScriptError::Parse { args },
-            spark_script_lua::LuaScriptError::Compile { args } => ScriptError::Compile { args },
+            spark_script_lua::LuaScriptError::Parse { args } => {
+                ScriptError::Parse { args, span: None }
+            }
+            spark_script_lua::LuaScriptError::Compile { args } => {
+                ScriptError::Compile { args, span: None }
+            }
         }
     }
 }
@@ -133,8 +169,12 @@ impl From<spark_script_lua::LuaScriptError> for ScriptError {
 impl From<spark_script_ruby::RubyScriptError> for ScriptError {
     fn from(e: spark_script_ruby::RubyScriptError) -> Self {
         match e {
-            spark_script_ruby::RubyScriptError::Parse { args } => ScriptError::Parse { args },
-            spark_script_ruby::RubyScriptError::Compile { args } => ScriptError::Compile { args },
+            spark_script_ruby::RubyScriptError::Parse { args } => {
+                ScriptError::Parse { args, span: None }
+            }
+            spark_script_ruby::RubyScriptError::Compile { args } => {
+                ScriptError::Compile { args, span: None }
+            }
         }
     }
 }
@@ -341,5 +381,16 @@ mod tests {
         )
         .unwrap();
         assert!(eng.vm.module.native_names.iter().any(|n| n == "ping"));
+    }
+
+    #[test]
+    fn valkyrie_parse_error_propagates_span() {
+        let err = compile_module(ScriptLanguage::Valkyrie, "return @", &[])
+            .expect_err("illegal char");
+        let span = err.span().expect("span");
+        assert_eq!(span.start, 7);
+        assert_eq!(span.end, 8);
+        assert_eq!(err.code(), "spark.script.parse");
+        assert_eq!(err.context().span, Some(span));
     }
 }

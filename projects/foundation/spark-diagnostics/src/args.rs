@@ -20,6 +20,8 @@ pub enum ErrorArg {
     EntityBits(u64),
     TypeName(Arc<str>),
     Bool(bool),
+    /// 源码字节范围。
+    Span(crate::SourceSpan),
 }
 
 /// 具名参数表（有序，便于测试与序列化）。
