@@ -1,4 +1,4 @@
-//! 探针：确认手写 Valkyrie 子集能解析常见语句形态。
+//! 探针：确认 Oaks `ValkyrieBuilder` 能解析常见语句形态。
 
 #[test]
 fn probe_valkyrie_sources() {

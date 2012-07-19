@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 脚本前端：Valkyrie 子集 → spark-vm 字节码"
+description = "Spark 脚本前端：Oaks Valkyrie → spark-vm 字节码"
 keywords = ["spark", "script", "valkyrie"]
 categories = ["game-development"]
 publish = false
@@ -14,3 +14,5 @@ publish = false
 spark-diagnostics = { workspace = true }
 spark-vm = { workspace = true }
 spark-gc = { workspace = true }
+oak-core = { workspace = true }
+oak-valkyrie = { workspace = true }

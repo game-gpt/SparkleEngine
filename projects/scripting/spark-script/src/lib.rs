@@ -2,7 +2,7 @@
 //!
 //! | 前端 | Crate | 解析 |
 //! |------|-------|------|
-//! | Valkyrie | `spark-script-valkyrie` | 手写子集（Oaks Builder 暂不稳） |
+//! | Valkyrie | `spark-script-valkyrie` | Oaks `oak-valkyrie` Builder |
 //! | Lua | `spark-script-lua` | Oaks `oak-lua` |
 //! | Ruby（RPG Maker / RGSS 子集） | `spark-script-ruby` | 自研子集（上游 Builder 未就绪） |
 //!
@@ -385,12 +385,12 @@ mod tests {
 
     #[test]
     fn valkyrie_parse_error_propagates_span() {
-        let err = compile_module(ScriptLanguage::Valkyrie, "return @", &[])
-            .expect_err("illegal char");
-        let span = err.span().expect("span");
-        assert_eq!(span.start, 7);
-        assert_eq!(span.end, 8);
+        let err = compile_module(ScriptLanguage::Valkyrie, "@@@", &[]).expect_err("bare attributes");
         assert_eq!(err.code(), "spark.script.parse");
-        assert_eq!(err.context().span, Some(span));
+        assert!(err.span().is_some());
+        assert!(matches!(
+            err.args().get("reason"),
+            Some(ErrorArg::String(s)) if s.as_ref() == "parse_failed"
+        ));
     }
 }
