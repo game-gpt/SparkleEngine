@@ -1,13 +1,21 @@
 //! winit → Spark 输入映射。仅本 crate 可见，游戏层零 winit。
 
 use spark_input::{ButtonState, Key, MouseBtn};
-use winit::event::{ElementState, MouseButton};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 pub fn button_state(state: ElementState) -> ButtonState {
     match state {
         ElementState::Pressed => ButtonState::Pressed,
         ElementState::Released => ButtonState::Released,
+    }
+}
+
+/// 将滚轮增量归一为「行」近似值（正＝向上），供快捷栏等离散切换。
+pub fn wheel_lines(delta: MouseScrollDelta) -> f32 {
+    match delta {
+        MouseScrollDelta::LineDelta(_, y) => y,
+        MouseScrollDelta::PixelDelta(p) => (p.y as f32) / 32.0,
     }
 }
 
