@@ -8,6 +8,7 @@
 mod bloom;
 mod dyn_ubo;
 mod game3d;
+mod mipmap;
 mod shadow;
 mod skinned_mesh;
 mod tex_mesh;
