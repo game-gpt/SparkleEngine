@@ -134,6 +134,10 @@ pub mod codes {
         ErrorCode::new("spark", "image.decode")
     }
 
+    pub fn image_encode() -> ErrorCode {
+        ErrorCode::new("spark", "image.encode")
+    }
+
     pub fn image_pixel_out_of_bounds() -> ErrorCode {
         ErrorCode::new("spark", "image.pixel_out_of_bounds")
     }

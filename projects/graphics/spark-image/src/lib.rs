@@ -125,6 +125,27 @@ impl PixelImage {
         self.rgba
     }
 
+    /// 写成 PNG。格式由 `image` 负责，不在调用方再实现编码器。
+    pub fn save_png(&self, path: impl AsRef<Path>) -> Result<(), SparkError> {
+        let path = path.as_ref();
+        let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
+        image::save_buffer_with_format(
+            path,
+            &self.rgba,
+            self.width,
+            self.height,
+            image::ExtendedColorType::Rgba8,
+            image::ImageFormat::Png,
+        )
+        .map_err(|e| {
+            SparkError::new(codes::image_encode())
+                .arg("path", path_arg)
+                .arg("width", ErrorArg::Unsigned(self.width as u64))
+                .arg("height", ErrorArg::Unsigned(self.height as u64))
+                .caused_by(e)
+        })
+    }
+
     /// 整图作为源矩形（像素坐标，原点左上）。
     pub fn bounds(&self) -> Rect {
         Rect::new(0.0, 0.0, self.width as f32, self.height as f32)
@@ -198,5 +219,17 @@ mod tests {
     fn errors_are_stable_codes() {
         let err = PixelImage::from_rgba8(1, 1, vec![0, 0, 0]).unwrap_err();
         assert_eq!(err.to_string(), "spark.image.rgba_length_mismatch");
+    }
+
+    #[test]
+    fn png_roundtrip() {
+        let src = PixelImage::solid(2, 1, Color::rgba(0.0, 1.0, 0.0, 0.5)).unwrap();
+        let path = std::env::temp_dir().join(format!("spark-image-{}.png", std::process::id()));
+        src.save_png(&path).unwrap();
+        let loaded = PixelImage::load(&path).unwrap();
+        assert_eq!(loaded.width(), 2);
+        assert_eq!(loaded.height(), 1);
+        assert_eq!(loaded.pixel(0, 0).unwrap(), src.pixel(0, 0).unwrap());
+        let _ = std::fs::remove_file(&path);
     }
 }
