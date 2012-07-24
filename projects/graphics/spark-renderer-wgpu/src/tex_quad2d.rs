@@ -72,12 +72,12 @@ impl TexQuad2dGpu {
                 },
             ],
         });
-        // mag 最近邻保留近距像素感。min + mip 线性：高清瓦片缩到小屏幕覆盖时选正确层级。
+        // 近距、缩小时都用最近点。像素图按整数倍放大时，线性过滤会把块面糊掉。
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("tex-quad2d-mip"),
             mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
