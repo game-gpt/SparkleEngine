@@ -91,6 +91,7 @@ pub fn manifest_from_von_str(text: &str) -> Result<LocalizationManifest, Manifes
     let mut locales: Vec<LocaleId> = Vec::new();
     let mut bundled: Option<Vec<LocaleId>> = None;
     let mut namespaces: Vec<(String, String, bool)> = Vec::new();
+    let mut shard_files: Vec<String> = Vec::new();
 
     for (line_no, raw_line) in text.lines().enumerate() {
         let owned = strip_line_comment(raw_line);
@@ -131,6 +132,9 @@ pub fn manifest_from_von_str(text: &str) -> Result<LocalizationManifest, Manifes
                 }
                 let allow = parts.get(2).map(|p| p == "true").unwrap_or(false);
                 namespaces.push((parts[0].clone(), parts[1].clone(), allow));
+            }
+            "shards" => {
+                shard_files = parse_string_array(value)?;
             }
             other => {
                 return Err(ManifestVonError::UnknownField {
@@ -179,10 +183,17 @@ pub fn manifest_from_von_str(text: &str) -> Result<LocalizationManifest, Manifes
         });
     }
 
+    if !shard_files.is_empty() {
+        manifest.shards.insert(
+            manifest.product_default.clone(),
+            shard_files.into_iter().map(Arc::from).collect(),
+        );
+    }
+
     Ok(manifest)
 }
 
-fn strip_line_comment(line: &str) -> String {
+pub(crate) fn strip_line_comment(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut chars = line.chars().peekable();
     let mut in_string = false;
@@ -215,7 +226,7 @@ fn strip_line_comment(line: &str) -> String {
     out
 }
 
-fn split_assign(line: &str) -> Option<(&str, &str)> {
+pub(crate) fn split_assign(line: &str) -> Option<(&str, &str)> {
     let idx = line.find('=')?;
     let key = line[..idx].trim();
     let value = line[idx + 1..].trim();
@@ -226,7 +237,7 @@ fn split_assign(line: &str) -> Option<(&str, &str)> {
     }
 }
 
-fn parse_string(value: &str) -> Result<String, ManifestVonError> {
+pub(crate) fn parse_string(value: &str) -> Result<String, ManifestVonError> {
     let value = value.trim();
     if (value.starts_with('"') && value.ends_with('"'))
         || (value.starts_with('\'') && value.ends_with('\''))
@@ -340,5 +351,18 @@ namespace = ["astracraft", "AstraCraft", false]
         assert!(m.locales.iter().any(|e| e.locale.as_str() == "ar" && !e.bundled));
         assert_eq!(m.namespaces[0].namespace.as_str(), "astracraft");
         assert!(!m.namespaces[0].allow_override);
+        assert!(m.shards.is_empty());
+    }
+
+    #[test]
+    fn parses_shard_paths() {
+        let text = r#"
+product_default = "en"
+shards = ["locales/en.von", "locales/zh-Hans.von"]
+"#;
+        let m = manifest_from_von_str(text).unwrap();
+        let paths = m.shards.get(&m.product_default).unwrap();
+        assert_eq!(paths.len(), 2);
+        assert_eq!(paths[0].as_ref(), "locales/en.von");
     }
 }

@@ -148,6 +148,23 @@ impl LocalizationBundle {
         set.into_keys().collect()
     }
 
+    pub fn contains(
+        &self,
+        namespace: &NamespaceId,
+        message: &MessageName,
+        locale: &LocaleId,
+    ) -> bool {
+        self.get(namespace, message, locale).is_some()
+    }
+
+    /// 后写入覆盖同键。用于按依赖序合并模组语言包。
+    pub fn merge_from(&mut self, other: &Self) {
+        for (key, message) in &other.messages {
+            self.messages.insert(key.clone(), message.clone());
+        }
+        self.rehash();
+    }
+
     fn rehash(&mut self) {
         // FNV-1a 64：确定性、无额外依赖。
         let mut hash: u64 = 0xcbf29ce484222325;
