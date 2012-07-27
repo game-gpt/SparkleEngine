@@ -5,5 +5,8 @@ Thumbs.db
 logs/
 tmp/
 
+# 本机 path 覆盖，不入库
+.cargo/
+
 # IDE
 .idea/
