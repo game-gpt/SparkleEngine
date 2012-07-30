@@ -2,23 +2,25 @@
 
 use std::sync::Arc;
 
-use crate::host_schema::HostEffect;
-use crate::ir::hir::Ty;
-use crate::request::PackageId;
+use crate::hir::{HirBinaryOp, HirUnaryOp, PackageId, Ty};
 
-/// MIR 值引用（SSA 风格占位；槽分配可后续再定）。
+/// MIR 层效果标记（与宿主 schema 效果对齐的子集）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IrEffect {
+    Pure,
+    HostCall,
+    Dynamic,
+}
+
+/// MIR 值引用。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MirValue(pub u32);
 
 /// 基本块终结。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MirTerminator {
-    Return {
-        value: Option<MirValue>,
-    },
-    Jump {
-        target: u32,
-    },
+    Return { value: Option<MirValue> },
+    Jump { target: u32 },
     Branch {
         cond: MirValue,
         then_target: u32,
@@ -31,34 +33,22 @@ pub enum MirTerminator {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MirInst {
     Nop,
-    ConstNull {
-        dst: MirValue,
-    },
-    ConstBool {
-        dst: MirValue,
-        value: bool,
-    },
-    ConstNumber {
-        dst: MirValue,
-        value: f64,
-    },
-    ConstString {
-        dst: MirValue,
-        value: Arc<str>,
-    },
-    Move {
-        dst: MirValue,
-        src: MirValue,
-    },
+    ConstNull { dst: MirValue },
+    ConstBool { dst: MirValue, value: bool },
+    ConstNumber { dst: MirValue, value: f64 },
+    ConstString { dst: MirValue, value: Arc<str> },
+    LoadLocal { dst: MirValue, index: u32 },
+    StoreLocal { index: u32, src: MirValue },
+    Move { dst: MirValue, src: MirValue },
     Binary {
         dst: MirValue,
-        op: crate::ir::hir::HirBinaryOp,
+        op: HirBinaryOp,
         lhs: MirValue,
         rhs: MirValue,
     },
     Unary {
         dst: MirValue,
-        op: crate::ir::hir::HirUnaryOp,
+        op: HirUnaryOp,
         src: MirValue,
     },
     Call {
@@ -68,7 +58,6 @@ pub enum MirInst {
     },
     HostCall {
         dst: Option<MirValue>,
-        /// 链接前为短名；链接后应改为槽位。
         host_slot_or_name: HostRef,
         args: Vec<MirValue>,
     },
@@ -102,7 +91,7 @@ pub struct MirFunction {
     pub arity: u8,
     pub local_tys: Vec<Ty>,
     pub blocks: Vec<BasicBlock>,
-    pub effects: Vec<HostEffect>,
+    pub effects: Vec<IrEffect>,
 }
 
 /// MIR 模块。
