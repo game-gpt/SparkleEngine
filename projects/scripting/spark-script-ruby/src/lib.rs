@@ -287,4 +287,32 @@ mod tests {
         let value = vm.run(&mut StdHost).unwrap();
         assert_eq!(value.as_number(), Some(6001.0));
     }
+
+    #[test]
+    fn default_param_stops_recursive_new() {
+        let module = compile(
+            r#"
+            class Game_Variables
+              def initialize(base=false)
+                @data = []
+                @plus = Game_Variables.new(true) unless base
+              end
+            end
+            $v = Game_Variables.new
+            return 1
+            "#,
+            &[],
+        )
+        .unwrap();
+        let init = module
+            .functions
+            .iter()
+            .find(|f| f.name == "Game_Variables_initialize")
+            .expect("initialize");
+        assert_eq!(init.arity, 2, "self + base");
+        let mut vm = Vm::new(module);
+        vm.step_limit = 100_000;
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(1.0));
+    }
 }
