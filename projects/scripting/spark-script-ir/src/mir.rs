@@ -37,6 +37,7 @@ pub enum MirInst {
     ConstBool { dst: MirValue, value: bool },
     ConstNumber { dst: MirValue, value: f64 },
     ConstString { dst: MirValue, value: Arc<str> },
+    ConstFunc { dst: MirValue, func_index: u32 },
     LoadLocal { dst: MirValue, index: u32 },
     StoreLocal { index: u32, src: MirValue },
     Move { dst: MirValue, src: MirValue },
@@ -56,6 +57,7 @@ pub enum MirInst {
         func: MirValue,
         args: Vec<MirValue>,
     },
+    Print { src: MirValue },
     HostCall {
         dst: Option<MirValue>,
         host_slot_or_name: HostRef,

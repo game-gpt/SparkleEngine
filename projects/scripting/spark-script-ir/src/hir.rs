@@ -77,9 +77,19 @@ pub enum HirExpr {
         index: u32,
         span: Option<SourceSpan>,
     },
+    /// 已解析的函数下标（模块内）。
+    FuncRef {
+        func_index: u32,
+        span: Option<SourceSpan>,
+    },
     Call {
         callee: Box<HirExpr>,
         args: Vec<HirExpr>,
+        span: Option<SourceSpan>,
+    },
+    /// 调试打印（非宿主槽位；对应 VM `Print`）。
+    Print {
+        value: Box<HirExpr>,
         span: Option<SourceSpan>,
     },
     DynamicSend {
