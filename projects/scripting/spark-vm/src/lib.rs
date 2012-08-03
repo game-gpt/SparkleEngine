@@ -2,8 +2,9 @@
 //!
 //! # 与 ECS / JIT 的边界
 //!
-//! - **ECS**：世界与 Component 在 `spark-ecs`；脚本经 [`Value::Entity`] 与 [`CallNative`]
-//!   交换不透明 ID。调度侧用 [`Vm::call_function`] 调脚本 `micro`，勿把 World 塞进 VM。
+//! - **ECS**：世界与 Component 在 `spark-ecs`；脚本经 [`Value::Entity`] 与
+//!   [`Op::CallHost`] / [`Op::CallNative`] 交换不透明 ID。调度侧用 [`Vm::call_function`]
+//!   调脚本导出，勿把 World 塞进 VM。
 //! - **JIT**：每帧解释累加 [`Vm::hotness`]；`spark-jit` 对热点 [`FuncProto`] 做字节码特化，
 //!   [`Op::JitEnter`] 预留原生 stub 槽（解释路径跳过）。
 //! - **栈式**：操作数在值栈，调用帧只记 `func` / `ip` / `stack_base`，利于特化与调试。
@@ -15,8 +16,10 @@ use std::sync::Arc;
 use spark_diagnostics::{Error, ErrorArg, ErrorArgs, ErrorCode};
 use spark_gc::{GcObject, Heap, Value};
 
+mod bind;
 mod verify;
 
+pub use bind::bind_host_slots;
 pub use verify::{verify_bytecode, BytecodeVerifyError};
 
 /// VM 结构化错误。`Display` 只输出稳定码。

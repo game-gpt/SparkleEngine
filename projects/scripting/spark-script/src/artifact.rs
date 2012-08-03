@@ -76,7 +76,7 @@ pub struct LinkedProgram {
 }
 
 impl LinkedProgram {
-    /// 过渡期单目标「链接」：校验宿主导入名均在 schema 中，并记录生命周期导出。
+    /// 过渡期单目标「链接」：校验宿主导入、把 `CallNative` 绑成 `CallHost`、记录生命周期导出。
     pub fn link_single(object: SparkObject, host: &HostSchema) -> Result<Self, LinkError> {
         if object.host_abi_version != host.abi_version {
             return Err(LinkError::AbiVersionMismatch {
@@ -100,13 +100,20 @@ impl LinkedProgram {
             .filter(|n| is_lifecycle_export(n))
             .cloned()
             .collect();
+        let mut module = object.legacy_module;
+        let slot_names = host.short_names();
+        spark_vm::bind_host_slots(&mut module, &slot_names).map_err(|detail| {
+            LinkError::HostBindFailed {
+                detail: Arc::from(detail),
+            }
+        })?;
         Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
             package: object.package,
             language: object.language,
             host_schema_hash: object.host_schema_hash,
             host_abi_version: object.host_abi_version,
-            legacy_module: object.legacy_module,
+            legacy_module: module,
             lifecycle_exports,
         })
     }
@@ -134,6 +141,7 @@ pub enum LinkError {
     AbiVersionMismatch { object: u32, host: u32 },
     HostSchemaMismatch,
     UnresolvedHost { name: Arc<str> },
+    HostBindFailed { detail: Arc<str> },
 }
 
 impl LinkError {
@@ -142,6 +150,7 @@ impl LinkError {
             Self::AbiVersionMismatch { .. } => "spark.script.link.abi_mismatch",
             Self::HostSchemaMismatch => "spark.script.link.host_schema_mismatch",
             Self::UnresolvedHost { .. } => "spark.script.link.unresolved_host",
+            Self::HostBindFailed { .. } => "spark.script.link.host_bind_failed",
         }
     }
 }
@@ -286,5 +295,40 @@ mod tests {
         );
         let err = LinkedProgram::link_single(obj, &host).unwrap_err();
         assert!(matches!(err, LinkError::UnresolvedHost { .. }));
+    }
+
+    #[test]
+    fn link_rewrites_call_native_to_call_host() {
+        let mut f = FuncProto::new("__main", 0);
+        let si = f.add_string("print");
+        f.emit(Op::LoadNull);
+        f.emit(Op::CallNative);
+        f.emit_u16(si);
+        f.emit_u8(1);
+        f.emit(Op::Return);
+        let host = schema_with_print();
+        let obj = SparkObject::from_legacy_module(
+            PackageId::anonymous(),
+            crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
+            &host,
+            Module {
+                functions: vec![f],
+                entry: 0,
+                native_names: vec!["print".into()],
+            },
+        );
+        let linked = LinkedProgram::link_single(obj, &host).unwrap();
+        assert!(linked
+            .legacy_module
+            .functions[0]
+            .code
+            .iter()
+            .any(|&b| b == Op::CallHost as u8));
+        assert!(!linked
+            .legacy_module
+            .functions[0]
+            .code
+            .iter()
+            .any(|&b| b == Op::CallNative as u8));
     }
 }
