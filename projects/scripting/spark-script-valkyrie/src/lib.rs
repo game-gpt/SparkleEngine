@@ -13,7 +13,7 @@ use oak_core::{Builder, SourceText};
 use oak_core::errors::OakErrorKind;
 use oak_valkyrie::{ValkyrieBuilder, ValkyrieLanguage, ValkyrieRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
-use spark_script_ir::{emit_module, lower_module};
+use spark_script_ir::{emit_module_with_host, lower_module, HostEmitMode};
 use spark_vm::Module;
 
 pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
@@ -90,7 +90,12 @@ pub fn compile(source: &str, natives: &[&str]) -> Result<Module, ValkyrieScriptE
     match lower_root_to_hir(&root, natives) {
         Ok(hir) => {
             let mir = lower_module(&hir).map_err(ValkyrieScriptError::compile_opaque)?;
-            emit_module(&mir).map_err(ValkyrieScriptError::compile_opaque)
+            let host = if natives.is_empty() {
+                HostEmitMode::CallNativeByName
+            } else {
+                HostEmitMode::CallHostSlots(natives)
+            };
+            emit_module_with_host(&mir, host).map_err(ValkyrieScriptError::compile_opaque)
         }
         Err(_) => compile_root(&root, natives).map_err(ValkyrieScriptError::compile_opaque),
     }
@@ -234,6 +239,7 @@ mod tests {
         )
         .unwrap();
         let mut vm = Vm::new(m);
+        vm.prepare_host_slots(["register_block"]);
         let called = std::rc::Rc::new(std::cell::Cell::new(0u32));
         let c2 = called.clone();
         vm.register_native("register_block", move |_ctx, args: Vec<Value>| {
@@ -243,6 +249,7 @@ mod tests {
         });
         let _ = vm.run(&mut StdHost).unwrap();
         assert_eq!(called.get(), 1);
+        assert_eq!(vm.call_hits.get("host:0:register_block"), Some(&1));
     }
 
     #[test]

@@ -144,21 +144,25 @@ fn verify_function(
             Op::Call | Op::Pop | Op::NewArray => {
                 let _ = read_u8(func, func_index, &mut ip, at)?;
             }
-            Op::CallNative | Op::Send => {
+            Op::CallNative | Op::Send | Op::CallHost => {
                 let idx = read_u16(func, func_index, &mut ip, at)?;
                 let _argc = read_u8(func, func_index, &mut ip, at)?;
-                let in_strings = (idx as usize) < func.strings.len();
-                let in_natives = (idx as usize) < native_len;
-                // 过渡期：字符串池（新约定）或模块 native_names（旧 Lua 等）均可。
-                if op == Op::CallNative && !in_strings && !in_natives {
-                    return Err(BytecodeVerifyError::StringOob {
-                        func: func_index,
-                        offset: at,
-                        index: idx,
-                        len: func.strings.len().max(native_len),
-                    });
-                }
-                if op == Op::Send && !in_strings {
+                if op == Op::CallHost {
+                    // 槽位合法性在装载 prepare_host_slots 后由运行时检查；
+                    // 此处只保证操作数完整。
+                    let _ = idx;
+                } else if op == Op::CallNative {
+                    let in_strings = (idx as usize) < func.strings.len();
+                    let in_natives = (idx as usize) < native_len;
+                    if !in_strings && !in_natives {
+                        return Err(BytecodeVerifyError::StringOob {
+                            func: func_index,
+                            offset: at,
+                            index: idx,
+                            len: func.strings.len().max(native_len),
+                        });
+                    }
+                } else if (idx as usize) >= func.strings.len() {
                     return Err(BytecodeVerifyError::StringOob {
                         func: func_index,
                         offset: at,

@@ -33,9 +33,9 @@ pub use request::{
 };
 pub use runtime::ScriptRuntime;
 pub use spark_script_ir::{
-    BasicBlock, HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostRef,
-    MirFunction, MirInst, MirModule, MirTerminator, MirValue, SymbolId, Ty, emit_module,
-    lower_module,
+    BasicBlock, HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostEmitMode,
+    HostRef, MirFunction, MirInst, MirModule, MirTerminator, MirValue, SymbolId, Ty, emit_module,
+    emit_module_with_host, lower_module,
 };
 pub use spark_script_ir::PackageId as IrPackageId;
 pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
@@ -424,6 +424,34 @@ mod tests {
         )
         .unwrap();
         assert!(eng.vm.module.native_names.iter().any(|n| n == "ping"));
+        assert_eq!(eng.vm.host_slot_names, vec!["ping".to_string()]);
+        assert!(eng.vm.module.functions.iter().any(|f| {
+            f.code.iter().any(|&b| b == spark_vm::Op::CallHost as u8)
+        }));
+    }
+
+    #[test]
+    fn runtime_host_slot_call_executes_registered_native() {
+        let mut host_schema = HostSchema::new(1);
+        host_schema.insert(HostFunction::new(HostFunctionId::new("host", "triple", 1)));
+        let mut compiler = ScriptCompiler::new();
+        let package = compiler
+            .compile_source(
+                ScriptLanguage::Valkyrie,
+                "return triple(14)",
+                &host_schema,
+            )
+            .unwrap();
+        let mut rt = ScriptRuntime::from_image(&package.image, &host_schema).unwrap();
+        rt.vm.register_native("triple", |_ctx, args| {
+            let n = args
+                .first()
+                .and_then(|v| v.as_number())
+                .unwrap_or(0.0);
+            Ok(spark_gc::Value::Number(n * 3.0))
+        });
+        let v = rt.eval().unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
     }
 
     #[test]

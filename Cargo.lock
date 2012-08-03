@@ -3334,6 +3334,7 @@ name = "spark-script-ir"
 version = "0.1.0"
 dependencies = [
  "spark-diagnostics",
+ "spark-gc",
  "spark-vm",
 ]
 
