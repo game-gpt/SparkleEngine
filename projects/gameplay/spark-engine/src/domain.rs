@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use spark_gc::Value;
-use spark_script::{ExecutableImage, HostSchema, ScriptRuntime};
-use spark_vm::HostHooks;
+use spark_script::{ExecutableImage, HostSchema, ScriptLanguage, ScriptRuntime};
+use spark_vm::{HostHooks, Module};
 
 use crate::EngineError;
 
@@ -107,6 +107,47 @@ impl ScriptDomain {
         }
         self.runtime.eval_with(host).map_err(EngineError::Script)
     }
+
+    /// 过渡期：从裸 [`Module`] 创建领域（跳过制品校验，供测试与旧路径）。
+    pub fn from_legacy_module(
+        mod_id: impl Into<Arc<str>>,
+        module: Module,
+        language: ScriptLanguage,
+        budget: ScriptBudget,
+    ) -> Self {
+        let lifecycle_exports = module
+            .functions
+            .iter()
+            .filter(|f| is_lifecycle_name(&f.name))
+            .map(|f| Arc::<str>::from(f.name.as_str()))
+            .collect();
+        let runtime = ScriptRuntime::from_legacy_module(module, language);
+        Self {
+            mod_id: mod_id.into(),
+            host_schema_hash: 0,
+            host_abi_version: 0,
+            lifecycle_exports,
+            runtime,
+            budget,
+            enabled: true,
+        }
+    }
+}
+
+fn is_lifecycle_name(name: &str) -> bool {
+    matches!(
+        name,
+        "on_load"
+            | "on_start"
+            | "fixed_update"
+            | "update"
+            | "late_update"
+            | "render_prepare"
+            | "on_event"
+            | "on_unload"
+            | "save_state"
+            | "load_state"
+    )
 }
 
 #[cfg(test)]

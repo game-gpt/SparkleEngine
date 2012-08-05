@@ -4,8 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use spark_gc::{GcObject, Value};
-use spark_script::ScriptEngine;
-use spark_vm::{NativeCtx, VmError};
+use spark_vm::{NativeCtx, Vm, VmError};
 
 use crate::registry::RegValue;
 use crate::vfs::ModVfs;
@@ -26,13 +25,13 @@ pub struct BuiltinApi;
 
 /// 向脚本 VM 安装引擎原生函数。
 pub fn install_builtins(
-    eng: &mut ScriptEngine,
+    vm: &mut Vm,
     shared: &Rc<RefCell<EngineShared>>,
     mod_id: &str,
     vfs: &ModVfs,
 ) {
     let shared_log = Rc::clone(shared);
-    eng.vm.register_native("log", move |ctx, args| {
+    vm.register_native("log", move |ctx, args| {
         let msg = args
             .first()
             .map(|v| value_to_string(ctx, v))
@@ -45,7 +44,7 @@ pub fn install_builtins(
 
     let shared_hook = Rc::clone(shared);
     let mid = mod_id.to_string();
-    eng.vm.register_native("register_hook", move |ctx, args| {
+    vm.register_native("register_hook", move |ctx, args| {
         if args.len() < 2 {
             return Err(VmError::ArityMismatch { expected: 2, got: args.len() as u16 });
         }
@@ -59,7 +58,7 @@ pub fn install_builtins(
     });
 
     let shared_set = Rc::clone(shared);
-    eng.vm.register_native("registry_set", move |ctx, args| {
+    vm.register_native("registry_set", move |ctx, args| {
         if args.len() < 3 {
             return Err(VmError::ArityMismatch { expected: 3, got: args.len() as u16 });
         }
@@ -71,7 +70,7 @@ pub fn install_builtins(
     });
 
     let shared_get = Rc::clone(shared);
-    eng.vm.register_native("registry_get", move |ctx, args| {
+    vm.register_native("registry_get", move |ctx, args| {
         if args.len() < 2 {
             return Err(VmError::ArityMismatch { expected: 2, got: args.len() as u16 });
         }
@@ -87,12 +86,12 @@ pub fn install_builtins(
     });
 
     let mid = mod_id.to_string();
-    eng.vm.register_native("mod_id", move |ctx, _args| {
+    vm.register_native("mod_id", move |ctx, _args| {
         Ok(ctx.heap.alloc_string(mid.clone()))
     });
 
     let vfs = vfs.clone();
-    eng.vm.register_native("asset_path", move |ctx, args| {
+    vm.register_native("asset_path", move |ctx, args| {
         let rel = match args.first() {
             Some(v) => value_to_string(ctx, v)?,
             None => String::new(),

@@ -3,17 +3,18 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 
+use crate::domain::ScriptDomain;
 use crate::manifest::ModManifest;
 use crate::vfs::ModVfs;
 use crate::EngineError;
-use spark_script::ScriptEngine;
 
 /// 已加载模组。
 pub struct LoadedMod {
     pub manifest: ModManifest,
     pub root: std::path::PathBuf,
     pub vfs: ModVfs,
-    pub script: Option<ScriptEngine>,
+    /// 脚本运行域（有入口脚本时存在）。
+    pub domain: Option<ScriptDomain>,
     pub enabled: bool,
 }
 
