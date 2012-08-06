@@ -9,6 +9,7 @@ use spark_gc::Value;
 use spark_script::{ExecutableImage, HostSchema, ScriptLanguage, ScriptRuntime};
 use spark_vm::{HostHooks, Module};
 
+use crate::command_buffer::ScriptCommandBuffer;
 use crate::EngineError;
 
 /// 每领域每帧（或每次回调）的资源预算（初版仅记录上限，耗尽策略后续补）。
@@ -39,6 +40,8 @@ pub struct ScriptDomain {
     pub host_abi_version: u32,
     pub lifecycle_exports: Vec<Arc<str>>,
     pub budget: ScriptBudget,
+    /// 结构变更意图，同步点由引擎 `drain` 后提交。
+    pub command_buffer: ScriptCommandBuffer,
     /// 领域是否仍可被调度（trap / 预算耗尽后可置 false）。
     pub enabled: bool,
 }
@@ -59,6 +62,7 @@ impl ScriptDomain {
             lifecycle_exports: image.lifecycle_exports.clone(),
             runtime,
             budget,
+            command_buffer: ScriptCommandBuffer::new(),
             enabled: true,
         })
     }
@@ -129,8 +133,14 @@ impl ScriptDomain {
             lifecycle_exports,
             runtime,
             budget,
+            command_buffer: ScriptCommandBuffer::new(),
             enabled: true,
         }
+    }
+
+    /// 取出并清空本领域命令缓冲（帧同步点调用）。
+    pub fn drain_commands(&mut self) -> Vec<crate::ScriptCommand> {
+        self.command_buffer.drain()
     }
 }
 
@@ -190,5 +200,21 @@ mod tests {
             .call_lifecycle("on_unload", &[], &mut hooks)
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn domain_command_buffer_drains() {
+        let host = HostSchema::new(1);
+        let mut compiler = ScriptCompiler::new();
+        let package = compiler
+            .compile_source(ScriptLanguage::Valkyrie, "return 1", &host)
+            .unwrap();
+        let mut domain =
+            ScriptDomain::from_image("buf.mod", &package.image, &host, ScriptBudget::default())
+                .unwrap();
+        domain.command_buffer.spawn("rock");
+        let cmds = domain.drain_commands();
+        assert_eq!(cmds.len(), 1);
+        assert!(domain.command_buffer.is_empty());
     }
 }
