@@ -12,6 +12,7 @@ mod api;
 mod command_buffer;
 mod domain;
 mod ecs_host;
+mod event_inbox;
 mod frame;
 mod hooks;
 mod loader;
@@ -25,6 +26,7 @@ pub use api::{BuiltinApi, ENGINE_NATIVES};
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
 pub use ecs_host::{DrawBuffer3d, EcsHost3d, FrameSnapshot};
+pub use event_inbox::{ScriptEvent, ScriptEventInbox};
 pub use frame::{
     FrameLoop, FrameLoopConfig, LoopedHost2d, LoopedHost3d, StepMode,
 };
@@ -488,6 +490,50 @@ impl SparkEngine {
             }
         }
         out
+    }
+
+    /// 向指定模组领域入队事件（不立即派发）。
+    pub fn enqueue_script_event(
+        &mut self,
+        mod_id: &str,
+        name: impl Into<std::sync::Arc<str>>,
+        args: Vec<Value>,
+    ) -> Result<(), EngineError> {
+        let m = self
+            .mods
+            .get_mut(mod_id)
+            .ok_or_else(|| EngineError::ModNotFound {
+                id: mod_id.into(),
+            })?;
+        let domain = m
+            .domain
+            .as_mut()
+            .ok_or_else(|| EngineError::ModNotFound {
+                id: mod_id.into(),
+            })?;
+        domain.enqueue_event(name, args);
+        Ok(())
+    }
+
+    /// 派发所有已启用领域的事件 inbox。
+    pub fn dispatch_script_events(
+        &mut self,
+        host: &mut dyn HostHooks,
+    ) -> Result<(), EngineError> {
+        let ids: Vec<String> = self.mods.keys().cloned().collect();
+        for id in ids {
+            let Some(m) = self.mods.get_mut(&id) else {
+                continue;
+            };
+            if !m.enabled {
+                continue;
+            }
+            let Some(domain) = m.domain.as_mut() else {
+                continue;
+            };
+            domain.dispatch_events(host)?;
+        }
+        Ok(())
     }
 
     fn compile_native_names(&self) -> Vec<&'static str> {

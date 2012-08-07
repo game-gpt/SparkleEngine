@@ -10,6 +10,7 @@ use spark_script::{ExecutableImage, HostSchema, ScriptLanguage, ScriptRuntime};
 use spark_vm::{HostHooks, Module};
 
 use crate::command_buffer::ScriptCommandBuffer;
+use crate::event_inbox::ScriptEventInbox;
 use crate::EngineError;
 
 /// 每领域每帧（或每次回调）的资源预算（初版仅记录上限，耗尽策略后续补）。
@@ -42,6 +43,8 @@ pub struct ScriptDomain {
     pub budget: ScriptBudget,
     /// 结构变更意图，同步点由引擎 `drain` 后提交。
     pub command_buffer: ScriptCommandBuffer,
+    /// 待派发事件（禁止同步回调嵌套重入）。
+    pub event_inbox: ScriptEventInbox,
     /// 领域是否仍可被调度（trap / 预算耗尽后可置 false）。
     pub enabled: bool,
 }
@@ -63,6 +66,7 @@ impl ScriptDomain {
             runtime,
             budget,
             command_buffer: ScriptCommandBuffer::new(),
+            event_inbox: ScriptEventInbox::new(),
             enabled: true,
         })
     }
@@ -134,6 +138,7 @@ impl ScriptDomain {
             runtime,
             budget,
             command_buffer: ScriptCommandBuffer::new(),
+            event_inbox: ScriptEventInbox::new(),
             enabled: true,
         }
     }
@@ -141,6 +146,39 @@ impl ScriptDomain {
     /// 取出并清空本领域命令缓冲（帧同步点调用）。
     pub fn drain_commands(&mut self) -> Vec<crate::ScriptCommand> {
         self.command_buffer.drain()
+    }
+
+    /// 取出并清空事件 inbox（在允许的 phase 批量派发前调用）。
+    pub fn drain_events(&mut self) -> Vec<crate::ScriptEvent> {
+        self.event_inbox.drain()
+    }
+
+    /// 将事件入队（不立即回调脚本）。
+    pub fn enqueue_event(&mut self, name: impl Into<Arc<str>>, args: Vec<Value>) {
+        self.event_inbox.push(name, args);
+    }
+
+    /// 派发 inbox 中全部事件到 `on_event`（若导出）或同名导出函数。
+    pub fn dispatch_events(
+        &mut self,
+        host: &mut dyn HostHooks,
+    ) -> Result<(), EngineError> {
+        let events = self.drain_events();
+        for ev in events {
+            if self.has_lifecycle("on_event") {
+                let _ = self.call("on_event", &ev.args, host)?;
+            } else if self
+                .runtime
+                .vm
+                .module
+                .functions
+                .iter()
+                .any(|f| f.name == ev.name.as_ref())
+            {
+                let _ = self.call(ev.name.as_ref(), &ev.args, host)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -216,5 +254,27 @@ mod tests {
         let cmds = domain.drain_commands();
         assert_eq!(cmds.len(), 1);
         assert!(domain.command_buffer.is_empty());
+    }
+
+    #[test]
+    fn domain_dispatches_named_event_export() {
+        let source = r#"
+            micro ping() {
+                return 7
+            }
+            return 0
+            "#;
+        let host = HostSchema::new(1);
+        let mut compiler = ScriptCompiler::new();
+        let package = compiler
+            .compile_source(ScriptLanguage::Valkyrie, source, &host)
+            .unwrap();
+        let mut domain =
+            ScriptDomain::from_image("ev.mod", &package.image, &host, ScriptBudget::default())
+                .unwrap();
+        domain.enqueue_event("ping", vec![]);
+        let mut hooks = StdHost;
+        domain.dispatch_events(&mut hooks).unwrap();
+        assert!(domain.event_inbox.is_empty());
     }
 }
