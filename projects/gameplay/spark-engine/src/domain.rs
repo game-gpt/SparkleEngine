@@ -58,22 +58,29 @@ impl ScriptDomain {
         budget: ScriptBudget,
     ) -> Result<Self, EngineError> {
         let runtime = ScriptRuntime::from_image(image, host).map_err(EngineError::Script)?;
-        Ok(Self {
+        let mut domain = Self {
             mod_id: mod_id.into(),
             host_schema_hash: runtime.host_schema_hash(),
             host_abi_version: runtime.host_abi_version(),
             lifecycle_exports: image.lifecycle_exports.clone(),
             runtime,
-            budget,
+            budget: budget.clone(),
             command_buffer: ScriptCommandBuffer::new(),
             event_inbox: ScriptEventInbox::new(),
             enabled: true,
-        })
+        };
+        domain.apply_budget();
+        Ok(domain)
     }
 
     /// 是否声明了某一生命周期导出。
     pub fn has_lifecycle(&self, name: &str) -> bool {
         self.lifecycle_exports.iter().any(|n| n.as_ref() == name)
+    }
+
+    /// 将领域预算同步到 VM（指令上限）。
+    pub fn apply_budget(&mut self) {
+        self.runtime.vm.step_limit = self.budget.instruction_limit;
     }
 
     /// 调用命名导出（生命周期或普通函数）。
@@ -130,17 +137,19 @@ impl ScriptDomain {
             .map(|f| Arc::<str>::from(f.name.as_str()))
             .collect();
         let runtime = ScriptRuntime::from_legacy_module(module, language);
-        Self {
+        let mut domain = Self {
             mod_id: mod_id.into(),
             host_schema_hash: 0,
             host_abi_version: 0,
             lifecycle_exports,
             runtime,
-            budget,
+            budget: budget.clone(),
             command_buffer: ScriptCommandBuffer::new(),
             event_inbox: ScriptEventInbox::new(),
             enabled: true,
-        }
+        };
+        domain.apply_budget();
+        domain
     }
 
     /// 取出并清空本领域命令缓冲（帧同步点调用）。
@@ -238,6 +247,26 @@ mod tests {
             .call_lifecycle("on_unload", &[], &mut hooks)
             .unwrap()
             .is_none());
+        assert_eq!(
+            domain.runtime.vm.step_limit,
+            ScriptBudget::default().instruction_limit
+        );
+    }
+
+    #[test]
+    fn custom_budget_sets_vm_step_limit() {
+        let host = HostSchema::new(1);
+        let mut compiler = ScriptCompiler::new();
+        let package = compiler
+            .compile_source(ScriptLanguage::Valkyrie, "return 1", &host)
+            .unwrap();
+        let budget = ScriptBudget {
+            instruction_limit: 1234,
+            ..ScriptBudget::default()
+        };
+        let domain =
+            ScriptDomain::from_image("budget.mod", &package.image, &host, budget).unwrap();
+        assert_eq!(domain.runtime.vm.step_limit, 1234);
     }
 
     #[test]
