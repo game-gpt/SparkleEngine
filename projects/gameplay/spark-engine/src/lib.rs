@@ -372,6 +372,7 @@ impl SparkEngine {
                 &self.shared,
                 &manifest.id,
                 &vfs,
+                &script_domain.command_buffer,
             );
             self.plugins.install_all(&mut script_domain.runtime.vm);
             let mut hooks = StdHost;
@@ -760,6 +761,41 @@ entry = "main.vk"
     }
 
     #[test]
+    fn script_queue_spawn_reaches_command_buffer() {
+        let root = std::env::temp_dir().join("spark_engine_mod_queue");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "queue_demo"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro on_load() {
+                queue_spawn("crate")
+                return 1
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        let id = eng.load_mod_dir(&root).unwrap();
+        let cmds = eng.drain_script_commands();
+        assert_eq!(cmds.len(), 1);
+        assert_eq!(cmds[0].0, id);
+        assert!(matches!(
+            &cmds[0].1[0],
+            ScriptCommand::Spawn { archetype } if archetype.as_ref() == "crate"
+        ));
+    }
+
+    #[test]
     fn tick_scripts_calls_update_lifecycle() {
         let source = r#"
             micro update() {
@@ -772,14 +808,14 @@ entry = "main.vk"
         let package = compiler
             .compile_source(ScriptLanguage::Valkyrie, source, &host)
             .unwrap();
-        let mut domain = ScriptDomain::from_image(
+        let domain = ScriptDomain::from_image(
             "tick.mod",
             &package.image,
             &host,
             ScriptBudget::default(),
         )
         .unwrap();
-        domain.command_buffer.spawn("marker");
+        domain.command_buffer.borrow_mut().spawn("marker");
         let mut eng = SparkEngine::new(".");
         eng.mods.insert(
             "tick.mod".into(),

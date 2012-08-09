@@ -3,6 +3,8 @@
 //! [`ScriptDomain`] 持有已验证映像的运行时、宿主 schema 指纹、生命周期导出与预算。
 //! **不**拥有 ECS [`spark_ecs`] 世界；结构变更须经后续命令缓冲在同步点提交。
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use spark_gc::Value;
@@ -42,7 +44,8 @@ pub struct ScriptDomain {
     pub lifecycle_exports: Vec<Arc<str>>,
     pub budget: ScriptBudget,
     /// 结构变更意图，同步点由引擎 `drain` 后提交。
-    pub command_buffer: ScriptCommandBuffer,
+    /// 与宿主 `queue_*` 原生共享同一缓冲。
+    pub command_buffer: Rc<RefCell<ScriptCommandBuffer>>,
     /// 待派发事件（禁止同步回调嵌套重入）。
     pub event_inbox: ScriptEventInbox,
     /// 领域是否仍可被调度（trap / 预算耗尽后可置 false）。
@@ -65,7 +68,7 @@ impl ScriptDomain {
             lifecycle_exports: image.lifecycle_exports.clone(),
             runtime,
             budget: budget.clone(),
-            command_buffer: ScriptCommandBuffer::new(),
+            command_buffer: Rc::new(RefCell::new(ScriptCommandBuffer::new())),
             event_inbox: ScriptEventInbox::new(),
             enabled: true,
         };
@@ -144,7 +147,7 @@ impl ScriptDomain {
             lifecycle_exports,
             runtime,
             budget: budget.clone(),
-            command_buffer: ScriptCommandBuffer::new(),
+            command_buffer: Rc::new(RefCell::new(ScriptCommandBuffer::new())),
             event_inbox: ScriptEventInbox::new(),
             enabled: true,
         };
@@ -154,7 +157,7 @@ impl ScriptDomain {
 
     /// 取出并清空本领域命令缓冲（帧同步点调用）。
     pub fn drain_commands(&mut self) -> Vec<crate::ScriptCommand> {
-        self.command_buffer.drain()
+        self.command_buffer.borrow_mut().drain()
     }
 
     /// 取出并清空事件 inbox（在允许的 phase 批量派发前调用）。
@@ -279,10 +282,10 @@ mod tests {
         let mut domain =
             ScriptDomain::from_image("buf.mod", &package.image, &host, ScriptBudget::default())
                 .unwrap();
-        domain.command_buffer.spawn("rock");
+        domain.command_buffer.borrow_mut().spawn("rock");
         let cmds = domain.drain_commands();
         assert_eq!(cmds.len(), 1);
-        assert!(domain.command_buffer.is_empty());
+        assert!(domain.command_buffer.borrow().is_empty());
     }
 
     #[test]

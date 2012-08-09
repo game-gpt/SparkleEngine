@@ -6,6 +6,7 @@ use std::rc::Rc;
 use spark_gc::{GcObject, Value};
 use spark_vm::{NativeCtx, Vm, VmError};
 
+use crate::command_buffer::ScriptCommandBuffer;
 use crate::registry::RegValue;
 use crate::vfs::ModVfs;
 use crate::EngineShared;
@@ -18,6 +19,10 @@ pub const ENGINE_NATIVES: &[&str] = &[
     "registry_get",
     "mod_id",
     "asset_path",
+    "queue_spawn",
+    "queue_despawn",
+    "queue_add_component",
+    "queue_remove_component",
 ];
 
 /// 文档用标记类型。
@@ -29,6 +34,7 @@ pub fn install_builtins(
     shared: &Rc<RefCell<EngineShared>>,
     mod_id: &str,
     vfs: &ModVfs,
+    commands: &Rc<RefCell<ScriptCommandBuffer>>,
 ) {
     let shared_log = Rc::clone(shared);
     vm.register_native("log", move |ctx, args| {
@@ -100,6 +106,68 @@ pub fn install_builtins(
             .resolve(&rel)
             .map_err(|_| VmError::BadNativeArg { name: "asset_path" })?;
         Ok(ctx.heap.alloc_string(path.to_string_lossy().into_owned()))
+    });
+
+    let cmds = Rc::clone(commands);
+    vm.register_native("queue_spawn", move |ctx, args| {
+        let archetype = args
+            .first()
+            .map(|v| value_to_string(ctx, v))
+            .transpose()?
+            .unwrap_or_default();
+        if archetype.is_empty() {
+            return Err(VmError::BadNativeArg { name: "queue_spawn" });
+        }
+        cmds.borrow_mut().spawn(archetype);
+        Ok(Value::Null)
+    });
+
+    let cmds = Rc::clone(commands);
+    vm.register_native("queue_despawn", move |_ctx, args| {
+        let entity = args
+            .first()
+            .and_then(|v| v.as_number())
+            .ok_or(VmError::BadNativeArg {
+                name: "queue_despawn",
+            })? as u64;
+        cmds.borrow_mut().despawn(entity);
+        Ok(Value::Null)
+    });
+
+    let cmds = Rc::clone(commands);
+    vm.register_native("queue_add_component", move |ctx, args| {
+        if args.len() < 2 {
+            return Err(VmError::ArityMismatch {
+                expected: 2,
+                got: args.len() as u16,
+            });
+        }
+        let entity = args[0]
+            .as_number()
+            .ok_or(VmError::BadNativeArg {
+                name: "queue_add_component",
+            })? as u64;
+        let component = value_to_string(ctx, &args[1])?;
+        cmds.borrow_mut().add_component(entity, component);
+        Ok(Value::Null)
+    });
+
+    let cmds = Rc::clone(commands);
+    vm.register_native("queue_remove_component", move |ctx, args| {
+        if args.len() < 2 {
+            return Err(VmError::ArityMismatch {
+                expected: 2,
+                got: args.len() as u16,
+            });
+        }
+        let entity = args[0]
+            .as_number()
+            .ok_or(VmError::BadNativeArg {
+                name: "queue_remove_component",
+            })? as u64;
+        let component = value_to_string(ctx, &args[1])?;
+        cmds.borrow_mut().remove_component(entity, component);
+        Ok(Value::Null)
     });
 }
 
