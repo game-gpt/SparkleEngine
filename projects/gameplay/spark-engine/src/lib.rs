@@ -9,6 +9,7 @@
 //! Rust 宿主若直接需要能力，请 path 依赖对应 crate，勿把 Rust API 伪装成插件。
 
 mod api;
+mod command_apply;
 mod command_buffer;
 mod domain;
 mod ecs_host;
@@ -20,9 +21,11 @@ mod localization;
 mod manifest;
 mod registry;
 mod run;
+mod script_system;
 mod vfs;
 
 pub use api::{BuiltinApi, ENGINE_NATIVES};
+pub use command_apply::{apply_script_commands, CommandApplyReport, ScriptArchetypeTag};
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
 pub use ecs_host::{DrawBuffer3d, EcsHost3d, FrameSnapshot};
@@ -36,6 +39,9 @@ pub use localization::LocalizationService;
 pub use manifest::{ManifestParseError, ModManifest};
 pub use registry::{DataRegistry, RegValue};
 pub use run::{run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
+pub use script_system::{
+    ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemRegistry,
+};
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
 pub use vfs::ModVfs;
 
@@ -255,6 +261,8 @@ pub struct SparkEngine {
     mods_root: PathBuf,
     /// 脚本插件（Live2D 等）；Rust 宿主能力请直接 path 依赖 crate，勿塞这里。
     plugins: PluginRegistry,
+    /// 已登记的脚本 System 描述符。
+    script_systems: ScriptSystemRegistry,
 }
 
 impl SparkEngine {
@@ -264,6 +272,7 @@ impl SparkEngine {
             mods: HashMap::new(),
             mods_root: mods_root.into(),
             plugins: PluginRegistry::new(),
+            script_systems: ScriptSystemRegistry::new(),
         }
     }
 
@@ -273,6 +282,19 @@ impl SparkEngine {
 
     pub fn plugins_mut(&mut self) -> &mut PluginRegistry {
         &mut self.plugins
+    }
+
+    pub fn script_systems(&self) -> &ScriptSystemRegistry {
+        &self.script_systems
+    }
+
+    pub fn script_systems_mut(&mut self) -> &mut ScriptSystemRegistry {
+        &mut self.script_systems
+    }
+
+    /// 登记脚本 System 描述符（同 `mod_id`+`name` 覆盖）。
+    pub fn register_script_system(&mut self, desc: ScriptSystemDescriptor) {
+        self.script_systems.register(desc);
     }
 
     /// 注册脚本插件（须在 `load_*` 之前，以便编译期声明原生名）。
@@ -382,6 +404,10 @@ impl SparkEngine {
             } else {
                 script_domain.eval_entry(&mut hooks)?;
             }
+            self.script_systems.register_lifecycle_exports(
+                manifest.id.as_str(),
+                &script_domain.lifecycle_exports,
+            );
             domain = Some(script_domain);
         }
 
@@ -453,6 +479,7 @@ impl SparkEngine {
             (m.manifest.clone(), m.root.clone(), m.enabled)
         };
         self.shared.borrow_mut().hooks.remove_mod(id);
+        self.script_systems.remove_mod(id);
         self.mods.remove(id);
         self.load_manifest_at(manifest, root)?;
         if let Some(m) = self.mods.get_mut(id) {
@@ -492,6 +519,19 @@ impl SparkEngine {
             }
         }
         out
+    }
+
+    /// 取出各领域命令并提交到 ECS [`spark_ecs::World`]。
+    pub fn apply_script_commands_to_world(
+        &mut self,
+        world: &mut spark_ecs::World,
+    ) -> CommandApplyReport {
+        let batches = self.drain_script_commands();
+        let mut report = CommandApplyReport::default();
+        for (_mod_id, cmds) in batches {
+            report.merge(apply_script_commands(world, &cmds));
+        }
+        report
     }
 
     /// 向指定模组领域入队事件（不立即派发）。
@@ -761,13 +801,13 @@ entry = "main.vk"
     }
 
     #[test]
-    fn script_queue_spawn_reaches_command_buffer() {
-        let root = std::env::temp_dir().join("spark_engine_mod_queue");
+    fn load_mod_registers_lifecycle_systems() {
+        let root = std::env::temp_dir().join("spark_engine_mod_systems");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(
             root.join("mod.von"),
-            r#"id = "queue_demo"
+            r#"id = "sys_demo"
 version = "0.1.0"
 entry = "main.vk"
 "#,
@@ -777,7 +817,42 @@ entry = "main.vk"
             root.join("main.vk"),
             r#"
             micro on_load() {
-                queue_spawn("crate")
+                return 1
+            }
+            micro update() {
+                return 2
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        eng.load_mod_dir(&root).unwrap();
+        assert!(eng.script_systems().len() >= 2);
+        assert!(eng
+            .script_systems()
+            .for_phase(spark_script::HostPhase::Update)
+            .any(|s| s.mod_id.as_ref() == "sys_demo"));
+    }
+
+    #[test]
+    fn apply_script_commands_spawns_in_world() {
+        let root = std::env::temp_dir().join("spark_engine_mod_apply");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "apply_demo"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro on_load() {
+                queue_spawn("rock")
                 return 1
             }
             return 0
@@ -785,14 +860,17 @@ entry = "main.vk"
         )
         .unwrap();
         let mut eng = SparkEngine::new(root.parent().unwrap());
-        let id = eng.load_mod_dir(&root).unwrap();
-        let cmds = eng.drain_script_commands();
-        assert_eq!(cmds.len(), 1);
-        assert_eq!(cmds[0].0, id);
-        assert!(matches!(
-            &cmds[0].1[0],
-            ScriptCommand::Spawn { archetype } if archetype.as_ref() == "crate"
-        ));
+        eng.load_mod_dir(&root).unwrap();
+        let mut world = spark_ecs::World::new();
+        let report = eng.apply_script_commands_to_world(&mut world);
+        assert_eq!(report.spawned.len(), 1);
+        let e = report.spawned[0];
+        assert_eq!(
+            world
+                .get::<ScriptArchetypeTag>(e)
+                .map(|t| t.name.as_ref()),
+            Some("rock")
+        );
     }
 
     #[test]
