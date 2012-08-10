@@ -9,6 +9,7 @@
 //! 编译器 + 运行时组合；前端仍直接产出 [`spark_vm::Module`]。
 
 mod artifact;
+mod cache;
 mod compiler;
 mod diagnostic;
 mod host_schema;
@@ -21,6 +22,7 @@ use spark_vm::{HostHooks, Module, StdHost, VmError};
 pub use artifact::{
     ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError, ARTIFACT_FORMAT_VERSION,
 };
+pub use cache::ArtifactCache;
 pub use compiler::{compile_package_with_registry, CompiledPackage, ScriptCompiler};
 pub use diagnostic::{DiagnosticBatch, ScriptDiagnostic};
 pub use host_schema::{
