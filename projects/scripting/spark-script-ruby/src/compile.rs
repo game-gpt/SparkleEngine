@@ -388,8 +388,17 @@ fn compile_expr(ctx: &mut Ctx<'_>, expr: &ExpressionNode) -> Result<(), String> 
             receiver,
             method,
             args,
+            block_params,
+            block_body,
             ..
-        } => compile_method_call(ctx, receiver.as_deref(), method, args, &[], None)?,
+        } => compile_method_call(
+            ctx,
+            receiver.as_deref(),
+            method,
+            args,
+            block_params,
+            block_body.as_deref(),
+        )?,
         ExpressionNode::BinaryOp {
             left,
             operator,
