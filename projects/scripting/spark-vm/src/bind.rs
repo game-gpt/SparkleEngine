@@ -5,7 +5,7 @@ use crate::{decode_op, FuncProto, Module, Op};
 /// 按宿主短名表把模块内 `CallNative` 绑成 `CallHost`。
 ///
 /// `slots[i]` 的下标即槽位。名字先查函数字符串池，再回退模块 `native_names`。
-/// 未出现在 `slots` 中的 `CallNative` 保持不变（兼容过渡期）。
+/// 无法解析或未出现在 `slots` 中的 `CallNative` 返回错误。
 pub fn bind_host_slots(module: &mut Module, slots: &[&str]) -> Result<(), String> {
     let native_names = module.native_names.clone();
     for func in &mut module.functions {
@@ -51,18 +51,19 @@ fn rewrite_func(func: &mut FuncProto, slots: &[&str], native_names: &[String]) -
                     .strings
                     .get(name_idx as usize)
                     .map(String::as_str)
-                    .or_else(|| native_names.get(name_idx as usize).map(String::as_str));
-                if let Some(name) = name {
-                    if let Some(slot) = slots.iter().position(|s| *s == name) {
-                        if slot > u16::MAX as usize {
-                            return Err(format!("host_slot_overflow:{slot}"));
-                        }
-                        func.code[at] = Op::CallHost as u8;
-                        let slot_u = slot as u16;
-                        func.code[ip] = (slot_u & 0xff) as u8;
-                        func.code[ip + 1] = (slot_u >> 8) as u8;
-                    }
+                    .or_else(|| native_names.get(name_idx as usize).map(String::as_str))
+                    .ok_or_else(|| format!("unbound_native:index:{name_idx}"))?;
+                let slot = slots
+                    .iter()
+                    .position(|s| *s == name)
+                    .ok_or_else(|| format!("unbound_native:{name}"))?;
+                if slot > u16::MAX as usize {
+                    return Err(format!("host_slot_overflow:{slot}"));
                 }
+                func.code[at] = Op::CallHost as u8;
+                let slot_u = slot as u16;
+                func.code[ip] = (slot_u & 0xff) as u8;
+                func.code[ip + 1] = (slot_u >> 8) as u8;
                 ip += 3;
             }
             Op::Send | Op::CallHost => {
@@ -135,5 +136,22 @@ mod tests {
         });
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(8.0));
+    }
+
+    #[test]
+    fn rejects_unbound_native() {
+        let mut f = FuncProto::new("__main", 0);
+        let si = f.add_string("missing");
+        f.emit(Op::CallNative);
+        f.emit_u16(si);
+        f.emit_u8(0);
+        f.emit(Op::Return);
+        let mut module = Module {
+            functions: vec![f],
+            entry: 0,
+            native_names: Vec::new(),
+        };
+        let err = bind_host_slots(&mut module, &["inc"]).unwrap_err();
+        assert!(err.contains("unbound_native:missing"));
     }
 }

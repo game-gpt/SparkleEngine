@@ -41,7 +41,7 @@ pub use spark_script_ir::{
 };
 pub use spark_script_ir::PackageId as IrPackageId;
 pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
-pub use spark_vm::{bind_host_slots, verify_bytecode, BytecodeVerifyError};
+pub use spark_vm::{bind_host_slots, verify_bytecode, verify_bytecode_with_host, BytecodeVerifyError};
 
 /// 脚本源语言（过渡期枚举；正式路径请用 [`LanguageProfile`]）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
