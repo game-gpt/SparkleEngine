@@ -1,14 +1,17 @@
-//! Oaks `oak-ruby` Builder → `spark-vm` 字节码。
+//! Oaks `oak-ruby` Builder → 公共 IR → `spark-vm` 字节码。
 //!
-//! 解析只走 [`RubyBuilder`]。本 crate 只做子集字节码下沉。
+//! 解析只走 [`RubyBuilder`]。优先经 `spark-script-ir`；子集不覆盖时回退旧 lowering。
 
 mod compile;
+mod lower;
 
 use compile::compile_root;
+use lower::lower_root_to_hir;
 
 use oak_core::{Builder, SourceText};
 use oak_ruby::{RubyBuilder, RubyLanguage, RubyRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
+use spark_script_ir::{emit_module_with_host, lower_module, HostEmitMode};
 use spark_vm::Module;
 
 pub use oak_ruby::RubyRoot as ParsedRoot;
@@ -72,9 +75,22 @@ impl std::fmt::Display for RubyScriptError {
 impl std::error::Error for RubyScriptError {}
 
 /// 源码 → [`Module`]。
+///
+/// 优先走 HIR→MIR→字节码；子集不覆盖则回退旧路径。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, RubyScriptError> {
     let root = parse(source)?;
-    compile_root(&root, natives).map_err(RubyScriptError::compile_opaque)
+    match lower_root_to_hir(&root, natives) {
+        Ok(hir) => {
+            let mir = lower_module(&hir).map_err(RubyScriptError::compile_opaque)?;
+            let host = if natives.is_empty() {
+                HostEmitMode::CallNativeByName
+            } else {
+                HostEmitMode::CallHostSlots(natives)
+            };
+            emit_module_with_host(&mir, host).map_err(RubyScriptError::compile_opaque)
+        }
+        Err(_) => compile_root(&root, natives).map_err(RubyScriptError::compile_opaque),
+    }
 }
 
 /// 解析为 Oaks AST。
@@ -94,7 +110,7 @@ pub fn parse(source: &str) -> Result<RubyRoot, RubyScriptError> {
 mod tests {
     use super::*;
     use spark_gc::Value;
-    use spark_vm::{StdHost, Vm};
+    use spark_vm::{Op, StdHost, Vm};
 
     #[test]
     fn arithmetic_main() {
@@ -102,6 +118,91 @@ mod tests {
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
         assert_eq!(value.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn arithmetic_via_ir_has_no_call_native() {
+        let module = compile("return 40 + 2", &[]).unwrap();
+        assert!(module.functions.iter().all(|f| {
+            !f.code
+                .iter()
+                .any(|&b| b == Op::CallNative as u8 || b == Op::CallHost as u8)
+        }));
+    }
+
+    #[test]
+    fn local_and_if_via_ir() {
+        let module = compile(
+            r#"
+            x = 1
+            if x < 2
+              return 42
+            else
+              return 0
+            end
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(module);
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn while_via_ir() {
+        let module = compile(
+            r#"
+            n = 0
+            while n < 3
+              n = n + 1
+            end
+            return n
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(module);
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(3.0));
+    }
+
+    #[test]
+    fn method_via_ir() {
+        let module = compile(
+            r#"
+            def add(a, b)
+              return a + b
+            end
+            return add(40, 2)
+            "#,
+            &[],
+        )
+        .unwrap();
+        assert!(
+            module.functions.iter().any(|f| f.name == "add"),
+            "expected IR method proto"
+        );
+        let mut vm = Vm::new(module);
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn host_call_via_ir() {
+        let module = compile("return ping(7)", &["ping"]).unwrap();
+        assert!(module
+            .functions
+            .iter()
+            .any(|f| f.code.iter().any(|&b| b == Op::CallHost as u8)));
+        let mut vm = Vm::new(module);
+        vm.prepare_host_slots(["ping"]);
+        vm.register_native("ping", |_ctx, args| {
+            let n = args.first().and_then(|v| v.as_number()).unwrap_or(0.0);
+            Ok(Value::Number(n + 1.0))
+        });
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(8.0));
     }
 
     #[test]
@@ -222,6 +323,7 @@ mod tests {
         )
         .unwrap();
         let mut vm = Vm::new(module);
+        vm.prepare_host_slots(["tick"]);
         let frames = std::rc::Rc::new(std::cell::Cell::new(0u32));
         let frames2 = frames.clone();
         vm.register_native("tick", move |_ctx, _args| {
