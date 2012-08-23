@@ -23,6 +23,8 @@ pub const ENGINE_NATIVES: &[&str] = &[
     "queue_despawn",
     "queue_add_component",
     "queue_remove_component",
+    "query_archetype_count",
+    "query_entity_at",
 ];
 
 /// 文档用标记类型。
@@ -168,6 +170,37 @@ pub fn install_builtins(
         let component = value_to_string(ctx, &args[1])?;
         cmds.borrow_mut().remove_component(entity, component);
         Ok(Value::Null)
+    });
+
+    let shared_q = Rc::clone(shared);
+    vm.register_native("query_archetype_count", move |ctx, args| {
+        let name = args
+            .first()
+            .map(|v| value_to_string(ctx, v))
+            .transpose()?
+            .unwrap_or_default();
+        let n = shared_q.borrow().query.count(&name);
+        Ok(Value::Number(n as f64))
+    });
+
+    let shared_e = Rc::clone(shared);
+    vm.register_native("query_entity_at", move |ctx, args| {
+        if args.len() < 2 {
+            return Err(VmError::ArityMismatch {
+                expected: 2,
+                got: args.len() as u16,
+            });
+        }
+        let name = value_to_string(ctx, &args[0])?;
+        let index = args[1]
+            .as_number()
+            .ok_or(VmError::BadNativeArg {
+                name: "query_entity_at",
+            })? as usize;
+        match shared_e.borrow().query.entity_at(&name, index) {
+            Some(bits) => Ok(Value::Entity(bits)),
+            None => Ok(Value::Null),
+        }
     });
 }
 
