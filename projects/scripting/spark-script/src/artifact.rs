@@ -126,6 +126,73 @@ impl LinkedProgram {
             lifecycle_exports,
         })
     }
+
+    /// 多目标链接：校验各目标宿主契约，合并方法表，以 `objects[0]` 的入口为 `__main`。
+    pub fn link_many(objects: &[SparkObject], host: &HostSchema) -> Result<Self, LinkError> {
+        if objects.is_empty() {
+            return Err(LinkError::EmptyLinkSet);
+        }
+        for object in objects {
+            if object.host_abi_version != host.abi_version {
+                return Err(LinkError::AbiVersionMismatch {
+                    object: object.host_abi_version,
+                    host: host.abi_version,
+                });
+            }
+            if object.host_schema_hash != host.content_hash() {
+                return Err(LinkError::HostSchemaMismatch);
+            }
+            for import in &object.imports {
+                if host.get_by_short_name(import).is_none() {
+                    return Err(LinkError::UnresolvedHost {
+                        name: Arc::clone(import),
+                    });
+                }
+            }
+        }
+        let mut lifecycle_exports = Vec::new();
+        for object in objects {
+            for n in &object.exports {
+                if is_lifecycle_export(n)
+                    && !lifecycle_exports.iter().any(|e: &Arc<str>| e.as_ref() == n.as_ref())
+                {
+                    lifecycle_exports.push(Arc::clone(n));
+                }
+            }
+        }
+        let modules: Vec<Module> = objects
+            .iter()
+            .map(|o| o.legacy_module.clone())
+            .collect();
+        let mut module = Module::link_with_entry(&modules, 0).map_err(|detail| {
+            LinkError::MergeFailed {
+                detail: Arc::from(detail),
+            }
+        })?;
+        let slot_names = host.short_names();
+        spark_vm::bind_host_slots(&mut module, &slot_names).map_err(|detail| {
+            if let Some(name) = detail.strip_prefix("unbound_native:") {
+                LinkError::UnboundNativeCall {
+                    name: Arc::from(name),
+                }
+            } else {
+                LinkError::HostBindFailed {
+                    detail: Arc::from(detail),
+                }
+            }
+        })?;
+        let primary = &objects[0];
+        Ok(Self {
+            format_version: ARTIFACT_FORMAT_VERSION,
+            package: primary.package.clone(),
+            language: primary.language.clone(),
+            host_schema_hash: primary.host_schema_hash,
+            host_abi_version: primary.host_abi_version,
+            host_slot_count: host.functions.len() as u32,
+            legacy_module: module,
+            lifecycle_exports,
+        })
+    }
 }
 
 fn is_lifecycle_export(name: &str) -> bool {
@@ -152,6 +219,8 @@ pub enum LinkError {
     UnresolvedHost { name: Arc<str> },
     UnboundNativeCall { name: Arc<str> },
     HostBindFailed { detail: Arc<str> },
+    EmptyLinkSet,
+    MergeFailed { detail: Arc<str> },
 }
 
 impl LinkError {
@@ -162,6 +231,8 @@ impl LinkError {
             Self::UnresolvedHost { .. } => "spark.script.link.unresolved_host",
             Self::UnboundNativeCall { .. } => "spark.script.link.unbound_native",
             Self::HostBindFailed { .. } => "spark.script.link.host_bind_failed",
+            Self::EmptyLinkSet => "spark.script.link.empty_set",
+            Self::MergeFailed { .. } => "spark.script.link.merge_failed",
         }
     }
 }
@@ -420,5 +491,75 @@ mod tests {
             err,
             VerifyError::Bytecode(BytecodeVerifyError::HostSlotOob { .. })
         ));
+    }
+
+    #[test]
+    fn link_many_merges_library_into_entry() {
+        let host = schema_with_print();
+
+        let mut lib_fn = FuncProto::new("double", 1);
+        lib_fn.locals = 1;
+        lib_fn.emit(Op::LoadLocal);
+        lib_fn.emit_u16(0);
+        lib_fn.emit(Op::LoadLocal);
+        lib_fn.emit_u16(0);
+        lib_fn.emit(Op::Add);
+        lib_fn.emit(Op::Return);
+        let mut lib_main = FuncProto::new("__main", 0);
+        lib_main.emit(Op::LoadNull);
+        lib_main.emit(Op::Return);
+        let lib_obj = SparkObject::from_legacy_module(
+            PackageId::new("lib", "1"),
+            crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
+            &host,
+            Module {
+                functions: vec![lib_fn, lib_main],
+                entry: 1,
+                native_names: Vec::new(),
+            },
+        );
+
+        let mut entry_main = FuncProto::new("__main", 0);
+        let twenty_one = entry_main.add_const_number(21.0);
+        // double 在入口模块下标 0；链接后按名重映射。
+        let double_ref = entry_main.add_const_func(0);
+        entry_main.emit(Op::LoadConst);
+        entry_main.emit_u16(double_ref);
+        entry_main.emit(Op::LoadConst);
+        entry_main.emit_u16(twenty_one);
+        entry_main.emit(Op::Call);
+        entry_main.emit_u8(1);
+        entry_main.emit(Op::Return);
+        // 入口模块也声明同名 stub，供本模块内 Func 下标解析；链接时以先出现的库函数为准。
+        let mut stub = FuncProto::new("double", 1);
+        stub.locals = 1;
+        stub.emit(Op::LoadLocal);
+        stub.emit_u16(0);
+        stub.emit(Op::Return);
+        let entry_obj = SparkObject::from_legacy_module(
+            PackageId::new("app", "1"),
+            crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
+            &host,
+            Module {
+                functions: vec![stub, entry_main],
+                entry: 1,
+                native_names: Vec::new(),
+            },
+        );
+
+        // objects[0] 为入口包。
+        let linked = LinkedProgram::link_many(&[entry_obj, lib_obj], &host).unwrap();
+        let image = ExecutableImage::verify(linked).unwrap();
+        assert!(image.module().functions.iter().any(|f| f.name == "double"));
+        let mut vm = spark_vm::Vm::new(image.clone_module());
+        let v = vm.run(&mut spark_vm::StdHost).unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn link_many_empty_fails() {
+        let host = HostSchema::new(1);
+        let err = LinkedProgram::link_many(&[], &host).unwrap_err();
+        assert!(matches!(err, LinkError::EmptyLinkSet));
     }
 }

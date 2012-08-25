@@ -346,6 +346,39 @@ impl Module {
             native_names,
         }
     }
+
+    /// 合并多个模块的方法，并把 `modules[entry_index]` 的入口函数重映射为新模块的 `__main`。
+    pub fn link_with_entry(modules: &[Module], entry_index: usize) -> Result<Module, String> {
+        if modules.is_empty() {
+            return Err("empty_link_set".into());
+        }
+        if entry_index >= modules.len() {
+            return Err(format!("entry_oob:{entry_index}"));
+        }
+        let mut linked = Self::link_methods(modules);
+        let entry_mod = &modules[entry_index];
+        let main = entry_mod
+            .functions
+            .get(entry_mod.entry)
+            .ok_or_else(|| "missing_entry_func".to_string())?;
+        let name_to_idx: HashMap<String, usize> = linked
+            .functions
+            .iter()
+            .enumerate()
+            .map(|(i, f)| (f.name.clone(), i))
+            .collect();
+        let native_to_idx: HashMap<String, u16> = linked
+            .native_names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i as u16))
+            .collect();
+        let mut remapped = remap_func_against(entry_mod, main, &name_to_idx, &native_to_idx);
+        remapped.name = "__main".into();
+        let entry = linked.entry;
+        linked.functions[entry] = remapped;
+        Ok(linked)
+    }
 }
 
 /// 按「旧模块下标 → 函数名 → 新模块下标」重写 `Value::Func`。
