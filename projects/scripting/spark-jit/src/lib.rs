@@ -88,7 +88,7 @@ impl JitEngine {
     }
 }
 
-/// 对单个函数做安全特化：`LoadConst A; LoadConst B; Add` → 单次 `LoadConst (A+B)`。
+/// 对单个函数做安全特化：`LoadConst A; LoadConst B; {Add,Sub,Mul,Div}` → 单次 `LoadConst`。
 pub fn specialize_func(f: &mut FuncProto) -> Result<(), JitError> {
     let code = f.code.clone();
     let mut out = Vec::with_capacity(code.len());
@@ -150,7 +150,11 @@ fn try_fold_const_binop(
         return Ok(false);
     }
     let bin = code[*i + 6];
-    if bin != Op::Add as u8 && bin != Op::Sub as u8 && bin != Op::Mul as u8 {
+    if bin != Op::Add as u8
+        && bin != Op::Sub as u8
+        && bin != Op::Mul as u8
+        && bin != Op::Div as u8
+    {
         return Ok(false);
     }
     let a = u16::from_le_bytes([code[*i + 1], code[*i + 2]]) as usize;
@@ -165,8 +169,12 @@ fn try_fold_const_binop(
         x + y
     } else if bin == Op::Sub as u8 {
         x - y
-    } else {
+    } else if bin == Op::Mul as u8 {
         x * y
+    } else if y == 0.0 {
+        0.0
+    } else {
+        x / y
     };
     let idx = f.add_const_number(r);
     out.push(Op::LoadConst as u8);
@@ -206,6 +214,29 @@ mod tests {
         f.emit(Op::Return);
         specialize_func(&mut f).unwrap();
         // 应变为单 LoadConst + Return
+        assert_eq!(f.code[0], Op::LoadConst as u8);
+        assert_eq!(f.code[3], Op::Return as u8);
+        let mut vm = Vm::new(VmModule {
+            functions: vec![f],
+            entry: 0,
+            native_names: Vec::new(),
+        });
+        let v = vm.run(&mut Nop).unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn fold_div() {
+        let mut f = FuncProto::new("main", 0);
+        let a = f.add_const_number(84.0);
+        let b = f.add_const_number(2.0);
+        f.emit(Op::LoadConst);
+        f.emit_u16(a);
+        f.emit(Op::LoadConst);
+        f.emit_u16(b);
+        f.emit(Op::Div);
+        f.emit(Op::Return);
+        specialize_func(&mut f).unwrap();
         assert_eq!(f.code[0], Op::LoadConst as u8);
         assert_eq!(f.code[3], Op::Return as u8);
         let mut vm = Vm::new(VmModule {
