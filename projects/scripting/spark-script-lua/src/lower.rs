@@ -1,7 +1,7 @@
 //! Lua AST → Spark HIR（子集）。
 //!
 //! 支持：顶层 / 函数内 `return`、`local`/`=`、算术比较、字面量、局部变量、
-//! `if`（无 elseif）、`while`、顶层 `function`、脚本调用与宿主调用、`print`。
+//! `if` / `elseif`、`while`、`do` 块、顶层 `function`、脚本调用与宿主调用、`print`。
 //! 不支持的构造返回错误令牌，由调用方回退旧字节码路径。
 
 use std::collections::{HashMap, HashSet};
@@ -128,6 +128,15 @@ fn lower_block_stmts(
         if matches!(stmt, LuaStatement::Function(_)) {
             continue;
         }
+        if let LuaStatement::Do(block) = stmt {
+            let (inner, is_ret) =
+                lower_block_stmts(block, locals, local_tys, fn_index, native_set)?;
+            if is_ret {
+                saw_return = true;
+            }
+            body.extend(inner);
+            continue;
+        }
         let (hir, is_ret) = lower_statement(stmt, locals, local_tys, fn_index, native_set)?;
         if is_ret {
             saw_return = true;
@@ -172,22 +181,7 @@ fn lower_statement(
             let expr = lower_expr(e, locals, fn_index, native_set)?;
             Ok((HirStmt::Expr { expr, span: None }, false))
         }
-        LuaStatement::Do(block) => {
-            // 单语句 do 展开；多语句尚无独立 HIR block。
-            if block.len() == 1 {
-                lower_statement(&block[0], locals, local_tys, fn_index, native_set)
-            } else if block.is_empty() {
-                Ok((
-                    HirStmt::Expr {
-                        expr: HirExpr::LiteralNull { span: None },
-                        span: None,
-                    },
-                    false,
-                ))
-            } else {
-                Err("ir_unsupported_do_block".into())
-            }
-        }
+        LuaStatement::Do(_) => Err("ir_do_should_be_flattened".into()),
         LuaStatement::Function(_) => Err("ir_unsupported_nested_function".into()),
         other => Err(format!("ir_unsupported_stmt:{other:?}")),
     }
@@ -253,16 +247,24 @@ fn lower_if(
     fn_index: &HashMap<String, u32>,
     native_set: &HashSet<&str>,
 ) -> Result<HirStmt, String> {
-    if !i.else_ifs.is_empty() {
-        return Err("ir_unsupported_elseif".into());
-    }
     let cond = lower_expr(&i.condition, locals, fn_index, native_set)?;
     let (then_body, _) =
         lower_block_stmts(&i.then_block, locals, local_tys, fn_index, native_set)?;
-    let else_body = match &i.else_block {
+    let mut else_body = match &i.else_block {
         Some(block) => lower_block_stmts(block, locals, local_tys, fn_index, native_set)?.0,
         None => Vec::new(),
     };
+    // elseif 折成嵌套 If：if a then .. else if b then .. else ..
+    for (cond_e, block) in i.else_ifs.iter().rev() {
+        let cond = lower_expr(cond_e, locals, fn_index, native_set)?;
+        let (then_body, _) = lower_block_stmts(block, locals, local_tys, fn_index, native_set)?;
+        else_body = vec![HirStmt::If {
+            cond,
+            then_body,
+            else_body,
+            span: None,
+        }];
+    }
     Ok(HirStmt::If {
         cond,
         then_body,
