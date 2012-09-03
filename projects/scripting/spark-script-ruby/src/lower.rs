@@ -1,8 +1,8 @@
 //! Ruby AST → Spark HIR（子集）。
 //!
 //! 支持：顶层 / `def` 内 `return`、局部赋值、算术比较、字面量、
-//! `if` / `while`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
-//! 类、实例变量、全局、`Send`、块、`for`/`each`/`until`/`break` 等回退旧路径。
+//! `if` / `while` / `until`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
+//! 类、实例变量、全局、`Send`、块、`for`/`each`/`break` 等回退旧路径。
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -194,15 +194,20 @@ fn lower_statement(
         StatementNode::While {
             condition, body, ..
         } => Ok((
-            lower_while(condition, body, locals, local_tys, fn_index, native_set)?,
+            lower_while(condition, body, false, locals, local_tys, fn_index, native_set)?,
+            false,
+        )),
+        StatementNode::Until {
+            condition, body, ..
+        } => Ok((
+            lower_while(condition, body, true, locals, local_tys, fn_index, native_set)?,
             false,
         )),
         StatementNode::Expression(expr) => {
             let expr = lower_expr(expr, locals, fn_index, native_set)?;
             Ok((HirStmt::Expr { expr, span: None }, false))
         }
-        StatementNode::Until { .. }
-        | StatementNode::For { .. }
+        StatementNode::For { .. }
         | StatementNode::Case { .. }
         | StatementNode::Break { .. }
         | StatementNode::Next { .. }
@@ -265,12 +270,22 @@ fn lower_if(
 fn lower_while(
     condition: &ExpressionNode,
     body: &[StatementNode],
+    invert: bool,
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
     native_set: &HashSet<&str>,
 ) -> Result<HirStmt, String> {
     let cond = lower_expr(condition, locals, fn_index, native_set)?;
+    let cond = if invert {
+        HirExpr::Unary {
+            op: HirUnaryOp::Not,
+            expr: Box::new(cond),
+            span: None,
+        }
+    } else {
+        cond
+    };
     let (body, _) = lower_block_stmts(body, locals, local_tys, fn_index, native_set)?;
     Ok(HirStmt::While {
         cond,
