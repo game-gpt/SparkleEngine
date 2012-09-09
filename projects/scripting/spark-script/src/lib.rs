@@ -12,6 +12,7 @@ mod artifact;
 mod cache;
 mod codec;
 mod compiler;
+mod dep_graph;
 mod diagnostic;
 mod host_schema;
 mod request;
@@ -28,6 +29,7 @@ pub use artifact::{
 pub use codec::{ArtifactIoError, SPKO_MAGIC, SPKX_MAGIC};
 pub use cache::ArtifactCache;
 pub use compiler::{compile_package_with_registry, CompiledPackage, ScriptCompiler};
+pub use dep_graph::{DepGraphError, PackageDepGraph, PackageNode};
 pub use diagnostic::{DiagnosticBatch, ScriptDiagnostic};
 pub use host_schema::{
     CapabilityId, DeterminismClass, HostEffect, HostErrorModel, HostFunction, HostFunctionId,

@@ -1,9 +1,13 @@
 //! 脚本编译门面：产出制品，不持有 VM / JIT。
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::artifact::{
     ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError,
 };
 use crate::cache::ArtifactCache;
+use crate::dep_graph::PackageDepGraph;
 use crate::host_schema::{HostFunction, HostFunctionId, HostSchema};
 use crate::request::{CompilationRequest, LanguageFrontend};
 use crate::{compile_module, compile_module_with_registry, ScriptError, ScriptLanguage};
@@ -123,6 +127,47 @@ impl ScriptCompiler {
             program,
             image,
         })
+    }
+
+    /// 按 [`PackageDepGraph`] 拓扑序重排目标，并将最后一包（通常为入口）放到 `link_many` 的第 0 位。
+    pub fn order_objects_for_link(
+        objects: Vec<SparkObject>,
+        graph: &PackageDepGraph,
+    ) -> Result<Vec<SparkObject>, ScriptError> {
+        let order = graph
+            .topo_order()
+            .map_err(|e| ScriptError::compile_reason(e.to_string()))?;
+        if order.is_empty() {
+            return Err(ScriptError::compile_reason("spark.script.link.empty_set"));
+        }
+        let entry_id = order.last().cloned().expect("non-empty");
+        let mut by_key: HashMap<(Arc<str>, Arc<str>), SparkObject> = HashMap::new();
+        for obj in objects {
+            by_key.insert(
+                (Arc::clone(&obj.package.name), Arc::clone(&obj.package.version)),
+                obj,
+            );
+        }
+        let mut ordered = Vec::with_capacity(order.len());
+        // 入口先，其余按拓扑（依赖在前）追加，供 `link_many` 使用。
+        let entry = by_key
+            .remove(&(Arc::clone(&entry_id.name), Arc::clone(&entry_id.version)))
+            .ok_or_else(|| ScriptError::compile_reason("spark.script.link.missing_entry"))?;
+        ordered.push(entry);
+        for id in &order {
+            if id == &entry_id {
+                continue;
+            }
+            let key = (Arc::clone(&id.name), Arc::clone(&id.version));
+            if let Some(obj) = by_key.remove(&key) {
+                ordered.push(obj);
+            }
+        }
+        if ordered.len() == 1 && !by_key.is_empty() {
+            // 图外残留包仍附加，保持可测。
+            ordered.extend(by_key.into_values());
+        }
+        Ok(ordered)
     }
 
     pub(crate) fn seal(
