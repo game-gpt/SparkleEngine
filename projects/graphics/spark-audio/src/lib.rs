@@ -4,6 +4,7 @@
 
 use std::f32::consts::PI;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use rodio::buffer::SamplesBuffer;
@@ -180,6 +181,117 @@ impl AudioBus {
         sink.detach();
         Ok(())
     }
+
+    /// 播放 PCM 并返回可停止句柄。静音或无设备时返回 `Ok(None)`。
+    ///
+    /// `volume` 为 0..=1，`speed` 为 1.0 原速。`looping` 为真时循环到 [`Playback`] 停止。
+    pub fn start_pcm(
+        &self,
+        pcm: &PcmAudio,
+        volume: f32,
+        speed: f32,
+        looping: bool,
+    ) -> Result<Option<Playback>, SparkError> {
+        if self.is_muted() || pcm.samples.is_empty() {
+            return Ok(None);
+        }
+        let Some(handle) = self.handle.as_ref() else {
+            return Ok(None);
+        };
+        let sink = Sink::try_new(handle)
+            .map_err(|e| SparkError::new(codes::audio_sink()).caused_by(e))?;
+        sink.set_volume(volume.clamp(0.0, 1.0));
+        sink.set_speed(speed.clamp(0.05, 4.0));
+        sink.append(PcmStream::new(pcm, looping));
+        Ok(Some(Playback { sink }))
+    }
+}
+
+/// 持有中的播放。丢弃或 [`Playback::stop`] 时停止。
+pub struct Playback {
+    sink: Sink,
+}
+
+impl Playback {
+    /// 停止并清空。
+    pub fn stop(self) {
+        self.sink.stop();
+    }
+
+    /// 调整音量（0..=1）。
+    pub fn set_volume(&self, volume: f32) {
+        self.sink.set_volume(volume.clamp(0.0, 1.0));
+    }
+}
+
+impl Drop for Playback {
+    fn drop(&mut self) {
+        self.sink.stop();
+    }
+}
+
+/// 交错 PCM 流。循环时在末尾回到 0。
+struct PcmStream {
+    samples: Arc<[f32]>,
+    channels: u16,
+    sample_rate: u32,
+    index: usize,
+    looping: bool,
+}
+
+impl PcmStream {
+    fn new(pcm: &PcmAudio, looping: bool) -> Self {
+        Self {
+            samples: Arc::from(pcm.samples.as_slice()),
+            channels: pcm.channels.max(1),
+            sample_rate: pcm.sample_rate.max(1),
+            index: 0,
+            looping,
+        }
+    }
+}
+
+impl Iterator for PcmStream {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        if self.samples.is_empty() {
+            return None;
+        }
+        if self.index >= self.samples.len() {
+            if !self.looping {
+                return None;
+            }
+            self.index = 0;
+        }
+        let sample = self.samples[self.index];
+        self.index += 1;
+        Some(sample)
+    }
+}
+
+impl Source for PcmStream {
+    fn current_frame_len(&self) -> Option<usize> {
+        None
+    }
+
+    fn channels(&self) -> u16 {
+        self.channels
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        if self.looping {
+            return None;
+        }
+        let frames = self.samples.len() / self.channels as usize;
+        Some(Duration::from_secs_f64(
+            frames as f64 / self.sample_rate as f64,
+        ))
+    }
 }
 
 /// 有限长正弦源。
@@ -260,5 +372,37 @@ mod tests {
         q.flush(&bus, Some(&mut errs));
         assert!(q.is_empty());
         assert!(errs.is_empty());
+    }
+
+    #[test]
+    fn pcm_stream_loops_then_stops() {
+        let pcm = PcmAudio {
+            sample_rate: 4,
+            channels: 1,
+            samples: vec![0.1, 0.2],
+        };
+        let mut looping = PcmStream::new(&pcm, true);
+        assert_eq!(looping.next(), Some(0.1));
+        assert_eq!(looping.next(), Some(0.2));
+        assert_eq!(looping.next(), Some(0.1));
+        let mut once = PcmStream::new(&pcm, false);
+        assert_eq!(once.next(), Some(0.1));
+        assert_eq!(once.next(), Some(0.2));
+        assert_eq!(once.next(), None);
+    }
+
+    #[test]
+    fn muted_start_pcm_returns_none() {
+        let bus = AudioBus {
+            _stream: None,
+            handle: None,
+            muted: true,
+        };
+        let pcm = PcmAudio {
+            sample_rate: 8,
+            channels: 1,
+            samples: vec![0.0, 1.0],
+        };
+        assert!(bus.start_pcm(&pcm, 1.0, 1.0, false).unwrap().is_none());
     }
 }
