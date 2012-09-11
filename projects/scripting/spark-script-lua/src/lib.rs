@@ -162,6 +162,23 @@ mod tests {
     }
 
     #[test]
+    fn repeat_until_via_ir() {
+        let m = compile(
+            r#"
+            local n = 0
+            repeat
+                n = n + 1
+            until n >= 3
+            return n
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(3.0));
+    }
+
+    #[test]
     fn function_call() {
         let m = compile(
             r#"

@@ -1,7 +1,7 @@
 //! Lua AST → Spark HIR（子集）。
 //!
 //! 支持：顶层 / 函数内 `return`、`local`/`=`、算术比较、字面量、局部变量、
-//! `if` / `elseif`、`while`、`do` 块、顶层 `function`、脚本调用与宿主调用、`print`。
+//! `if` / `elseif`、`while`、`repeat`/`until`、`do` 块、顶层 `function`、脚本调用与宿主调用、`print`。
 //! 不支持的构造返回错误令牌，由调用方回退旧字节码路径。
 
 use std::collections::{HashMap, HashSet};
@@ -9,10 +9,11 @@ use std::sync::Arc;
 
 use oak_lua::ast::{
     LuaAssignmentStatement, LuaCallExpression, LuaExpression, LuaFunctionStatement,
-    LuaIfStatement, LuaLocalStatement, LuaRoot, LuaStatement, LuaWhileStatement,
+    LuaIfStatement, LuaLocalStatement, LuaRepeatStatement, LuaRoot, LuaStatement,
+    LuaWhileStatement,
 };
 use spark_script_ir::{
-    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, PackageId, Ty,
+    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, PackageId, Ty,
 };
 
 /// 尝试将整个根降低为 HIR。
@@ -137,6 +138,16 @@ fn lower_block_stmts(
             body.extend(inner);
             continue;
         }
+        if let LuaStatement::Repeat(r) = stmt {
+            let (first, is_ret) =
+                lower_block_stmts(&r.block, locals, local_tys, fn_index, native_set)?;
+            if is_ret {
+                saw_return = true;
+            }
+            body.extend(first);
+            body.push(lower_repeat_tail(r, locals, local_tys, fn_index, native_set)?);
+            continue;
+        }
         let (hir, is_ret) = lower_statement(stmt, locals, local_tys, fn_index, native_set)?;
         if is_ret {
             saw_return = true;
@@ -182,9 +193,31 @@ fn lower_statement(
             Ok((HirStmt::Expr { expr, span: None }, false))
         }
         LuaStatement::Do(_) => Err("ir_do_should_be_flattened".into()),
+        LuaStatement::Repeat(_) => Err("ir_repeat_should_be_flattened".into()),
         LuaStatement::Function(_) => Err("ir_unsupported_nested_function".into()),
         other => Err(format!("ir_unsupported_stmt:{other:?}")),
     }
+}
+
+fn lower_repeat_tail(
+    r: &LuaRepeatStatement,
+    locals: &mut HashMap<String, u32>,
+    local_tys: &mut Vec<(Arc<str>, Ty)>,
+    fn_index: &HashMap<String, u32>,
+    native_set: &HashSet<&str>,
+) -> Result<HirStmt, String> {
+    // repeat body until cond  ≡  body; while not cond do body end
+    let cond = lower_expr(&r.condition, locals, fn_index, native_set)?;
+    let (loop_body, _) = lower_block_stmts(&r.block, locals, local_tys, fn_index, native_set)?;
+    Ok(HirStmt::While {
+        cond: HirExpr::Unary {
+            op: HirUnaryOp::Not,
+            expr: Box::new(cond),
+            span: None,
+        },
+        body: loop_body,
+        span: None,
+    })
 }
 
 fn lower_local(
