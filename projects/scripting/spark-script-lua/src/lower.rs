@@ -1,7 +1,7 @@
 //! Lua AST → Spark HIR（子集）。
 //!
 //! 支持：顶层 / 函数内 `return`、`local`/`=`、算术比较、字面量、局部变量、
-//! `if` / `elseif`、`while`、`repeat`/`until`、`do` 块、顶层 `function`、脚本调用与宿主调用、`print`。
+//! `if` / `elseif`、`while`、`repeat`/`until`、`and`/`or`、`do` 块、顶层 `function`、脚本调用与宿主调用、`print`。
 //! 不支持的构造返回错误令牌，由调用方回退旧字节码路径。
 
 use std::collections::{HashMap, HashSet};
@@ -358,6 +358,27 @@ fn lower_expr(
             Err(format!("ir_unknown_name:{name}"))
         }
         LuaExpression::Binary(b) => {
+            if b.op == "and" || b.op == "or" {
+                let lhs = lower_expr(&b.left, locals, fn_index, native_set)?;
+                let rhs = lower_expr(&b.right, locals, fn_index, native_set)?;
+                // 与旧字节码路径一致的短路：`and`/`or` 经 `HirExpr::If`。
+                // 字面量 / 局部左值重复求值无副作用；复杂左值仍可能双求值。
+                return Ok(if b.op == "and" {
+                    HirExpr::If {
+                        cond: Box::new(lhs.clone()),
+                        then_branch: Box::new(rhs),
+                        else_branch: Box::new(lhs),
+                        span: None,
+                    }
+                } else {
+                    HirExpr::If {
+                        cond: Box::new(lhs.clone()),
+                        then_branch: Box::new(lhs),
+                        else_branch: Box::new(rhs),
+                        span: None,
+                    }
+                });
+            }
             let hir_op = match b.op.as_str() {
                 "+" => HirBinaryOp::Add,
                 "-" => HirBinaryOp::Sub,
@@ -369,7 +390,6 @@ fn lower_expr(
                 "<=" => HirBinaryOp::Le,
                 ">" => HirBinaryOp::Gt,
                 ">=" => HirBinaryOp::Ge,
-                "and" | "or" => return Err(format!("ir_unsupported_binop:{}", b.op)),
                 other => return Err(format!("ir_unsupported_binop:{other}")),
             };
             Ok(HirExpr::Binary {

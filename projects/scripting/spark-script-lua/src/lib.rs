@@ -179,6 +179,27 @@ mod tests {
     }
 
     #[test]
+    fn and_or_via_ir() {
+        let m = compile(
+            r#"
+            local a = 0
+            local b = 7
+            if a and b then
+                return 1
+            end
+            if a or b then
+                return 42
+            end
+            return 0
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
+    }
+
+    #[test]
     fn function_call() {
         let m = compile(
             r#"
