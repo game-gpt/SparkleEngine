@@ -1,7 +1,7 @@
 //! Ruby AST → Spark HIR（子集）。
 //!
 //! 支持：顶层 / `def` 内 `return`、局部赋值、算术比较、字面量、
-//! `if` / `while` / `until`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
+//! `if` / `while` / `until`、`&&`/`||`/`and`/`or`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
 //! 类、实例变量、全局、`Send`、块、`for`/`each`/`break` 等回退旧路径。
 
 use std::collections::{HashMap, HashSet};
@@ -326,6 +326,26 @@ fn lower_expr(
             right,
             ..
         } => {
+            if matches!(operator.as_str(), "&&" | "and" | "||" | "or") {
+                let lhs = lower_expr(left, locals, fn_index, native_set)?;
+                let rhs = lower_expr(right, locals, fn_index, native_set)?;
+                let is_and = matches!(operator.as_str(), "&&" | "and");
+                return Ok(if is_and {
+                    HirExpr::If {
+                        cond: Box::new(lhs.clone()),
+                        then_branch: Box::new(rhs),
+                        else_branch: Box::new(lhs),
+                        span: None,
+                    }
+                } else {
+                    HirExpr::If {
+                        cond: Box::new(lhs.clone()),
+                        then_branch: Box::new(lhs),
+                        else_branch: Box::new(rhs),
+                        span: None,
+                    }
+                });
+            }
             let hir_op = match operator.as_str() {
                 "+" => HirBinaryOp::Add,
                 "-" => HirBinaryOp::Sub,
@@ -338,7 +358,7 @@ fn lower_expr(
                 "<=" => HirBinaryOp::Le,
                 ">" => HirBinaryOp::Gt,
                 ">=" => HirBinaryOp::Ge,
-                "&&" | "||" | "and" | "or" | ".." | "..." => {
+                ".." | "..." => {
                     return Err(format!("ir_unsupported_binop:{operator}"))
                 }
                 other => return Err(format!("ir_unsupported_binop:{other}")),

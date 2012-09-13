@@ -186,6 +186,28 @@ mod tests {
     }
 
     #[test]
+    fn and_or_via_ir() {
+        let module = compile(
+            r#"
+            a = false
+            b = 7
+            if a && b
+              return 1
+            end
+            if a || b
+              return 42
+            end
+            return 0
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(module);
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(42.0));
+    }
+
+    #[test]
     fn method_via_ir() {
         let module = compile(
             r#"
