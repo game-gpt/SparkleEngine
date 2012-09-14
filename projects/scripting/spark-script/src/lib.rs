@@ -318,7 +318,7 @@ pub fn compile_module(
     }
 }
 
-/// 带 [`NativeRegistry`] 编译；非 Valkyrie 前端回退为仅函数名。
+/// 带 [`NativeRegistry`] 编译；各前端经 `compile_with_registry`（当前均只用函数名）。
 pub fn compile_module_with_registry(
     language: ScriptLanguage,
     source: &str,
@@ -328,10 +328,8 @@ pub fn compile_module_with_registry(
         ScriptLanguage::Valkyrie => {
             Ok(spark_script_valkyrie::compile_with_registry(source, natives)?)
         }
-        ScriptLanguage::Lua | ScriptLanguage::Ruby => {
-            let names = natives.name_list();
-            compile_module(language, source, &names)
-        }
+        ScriptLanguage::Lua => Ok(spark_script_lua::compile_with_registry(source, natives)?),
+        ScriptLanguage::Ruby => Ok(spark_script_ruby::compile_with_registry(source, natives)?),
     }
 }
 
@@ -436,6 +434,24 @@ mod tests {
         assert!(eng.vm.module.functions.iter().any(|f| {
             f.code.iter().any(|&b| b == spark_vm::Op::CallHost as u8)
         }));
+    }
+
+    #[test]
+    fn lua_and_ruby_compile_with_registry() {
+        let mut reg = NativeRegistry::new();
+        reg.insert(
+            NativeSignature::new("ping")
+                .param(NativeParam::new("n", "Number"))
+                .returns("Number"),
+        );
+        for lang in [ScriptLanguage::Lua, ScriptLanguage::Ruby] {
+            let eng = ScriptEngine::compile_with_registry(lang, "return ping(1)", &reg).unwrap();
+            assert!(
+                eng.vm.module.native_names.iter().any(|n| n == "ping"),
+                "{lang:?}"
+            );
+            assert_eq!(eng.vm.host_slot_names, vec!["ping".to_string()]);
+        }
     }
 
     #[test]

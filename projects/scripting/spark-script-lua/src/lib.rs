@@ -73,6 +73,15 @@ pub fn compile(source: &str, natives: &[&str]) -> Result<Module, LuaScriptError>
     }
 }
 
+/// 带完整宿主签名的编译入口（当前与 [`compile`] 相同：只用函数名列表）。
+pub fn compile_with_registry(
+    source: &str,
+    natives: &spark_script_valkyrie::NativeRegistry,
+) -> Result<Module, LuaScriptError> {
+    let names = natives.name_list();
+    compile(source, &names)
+}
+
 /// 解析为 AST 根。
 pub fn parse(source: &str) -> Result<LuaRoot, LuaScriptError> {
     let language = LuaLanguage::default();
