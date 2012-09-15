@@ -217,6 +217,28 @@ mod tests {
     }
 
     #[test]
+    fn case_via_ir() {
+        let module = compile(
+            r#"
+            x = 2
+            case x
+            when 1
+              return 0
+            when 2
+              return 42
+            else
+              return 1
+            end
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(module);
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(42.0));
+    }
+
+    #[test]
     fn method_via_ir() {
         let module = compile(
             r#"
