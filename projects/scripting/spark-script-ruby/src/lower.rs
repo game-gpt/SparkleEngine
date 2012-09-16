@@ -209,14 +209,119 @@ fn lower_statement(
             let expr = lower_expr(expr, locals, fn_index, native_set)?;
             Ok((HirStmt::Expr { expr, span: None }, false))
         }
-        StatementNode::For { .. }
-        | StatementNode::Case { .. }
+        StatementNode::For {
+            var,
+            iterable,
+            body,
+            ..
+        } => Ok((
+            lower_for_range(var, iterable, body, locals, local_tys, fn_index, native_set)?,
+            false,
+        )),
+        StatementNode::Case { .. }
         | StatementNode::Break { .. }
         | StatementNode::Next { .. }
         | StatementNode::Redo { .. }
         | StatementNode::MethodDef { .. }
         | StatementNode::ClassDef { .. } => Err(format!("ir_unsupported_stmt:{stmt:?}")),
     }
+}
+
+fn alloc_local(
+    name: &str,
+    locals: &mut HashMap<String, u32>,
+    local_tys: &mut Vec<(Arc<str>, Ty)>,
+) -> u32 {
+    if let Some(&idx) = locals.get(name) {
+        return idx;
+    }
+    let idx = locals.len() as u32;
+    locals.insert(name.to_string(), idx);
+    local_tys.push((Arc::from(name), Ty::Dynamic));
+    idx
+}
+
+/// `for i in a..b` / `a...b` → while + 自增。其它可迭代回退。
+fn lower_for_range(
+    var: &str,
+    iterable: &ExpressionNode,
+    body: &[StatementNode],
+    locals: &mut HashMap<String, u32>,
+    local_tys: &mut Vec<(Arc<str>, Ty)>,
+    fn_index: &HashMap<String, u32>,
+    native_set: &HashSet<&str>,
+) -> Result<HirStmt, String> {
+    let ExpressionNode::BinaryOp {
+        left,
+        operator,
+        right,
+        ..
+    } = iterable
+    else {
+        return Err("ir_unsupported_for_iterable".into());
+    };
+    let cmp = match operator.as_str() {
+        ".." => HirBinaryOp::Le,
+        "..." => HirBinaryOp::Lt,
+        _ => return Err(format!("ir_unsupported_for_op:{operator}")),
+    };
+    let i_idx = alloc_local(var, locals, local_tys);
+    let end_name = format!("__for_end_{i_idx}");
+    let end_idx = alloc_local(&end_name, locals, local_tys);
+    let start = lower_expr(left, locals, fn_index, native_set)?;
+    let end = lower_expr(right, locals, fn_index, native_set)?;
+    let (mut loop_body, _) = lower_block_stmts(body, locals, local_tys, fn_index, native_set)?;
+    loop_body.push(HirStmt::AssignLocal {
+        index: i_idx,
+        value: HirExpr::Binary {
+            op: HirBinaryOp::Add,
+            lhs: Box::new(HirExpr::Local {
+                index: i_idx,
+                span: None,
+            }),
+            rhs: Box::new(HirExpr::LiteralNumber {
+                value: 1.0,
+                span: None,
+            }),
+            span: None,
+        },
+        span: None,
+    });
+    Ok(HirStmt::Expr {
+        expr: HirExpr::Block {
+            stmts: vec![
+                HirStmt::AssignLocal {
+                    index: i_idx,
+                    value: start,
+                    span: None,
+                },
+                HirStmt::AssignLocal {
+                    index: end_idx,
+                    value: end,
+                    span: None,
+                },
+                HirStmt::While {
+                    cond: HirExpr::Binary {
+                        op: cmp,
+                        lhs: Box::new(HirExpr::Local {
+                            index: i_idx,
+                            span: None,
+                        }),
+                        rhs: Box::new(HirExpr::Local {
+                            index: end_idx,
+                            span: None,
+                        }),
+                        span: None,
+                    },
+                    body: loop_body,
+                    span: None,
+                },
+            ],
+            result: Some(Box::new(HirExpr::LiteralNull { span: None })),
+            span: None,
+        },
+        span: None,
+    })
 }
 
 fn lower_assignment(

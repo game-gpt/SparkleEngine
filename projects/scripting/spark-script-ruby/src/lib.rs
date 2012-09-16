@@ -217,6 +217,24 @@ mod tests {
     }
 
     #[test]
+    fn for_range_via_ir() {
+        let module = compile(
+            r#"
+            n = 0
+            for i in 1..3
+              n = n + i
+            end
+            return n
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(module);
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(6.0));
+    }
+
+    #[test]
     fn method_via_ir() {
         let module = compile(
             r#"
