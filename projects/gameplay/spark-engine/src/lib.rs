@@ -58,8 +58,8 @@ use std::rc::Rc;
 use spark_core::SparkError;
 use spark_gc::Value;
 use spark_script::{
-    HostFunction, HostFunctionId, HostPhase, HostSchema, ScriptCompiler, ScriptError,
-    ScriptLanguage,
+    ArtifactCache, CompilationRequest, ExecutableImage, HostFunction, HostFunctionId, HostPhase,
+    HostSchema, ScriptCompiler, ScriptError, ScriptLanguage,
 };
 use spark_vm::{HostHooks, StdHost};
 
@@ -379,21 +379,13 @@ impl SparkEngine {
         let vfs = ModVfs::new(manifest.id.clone(), root.clone());
         let mut domain = None;
 
-        if let Some(entry) = &manifest.entry {
-            let entry_path = root.join(entry);
-            let source = std::fs::read_to_string(&entry_path).map_err(|e| {
-                EngineError::from_io(entry_path.display().to_string(), e)
-            })?;
-            let lang = resolve_language(manifest.language.as_deref(), entry);
+        if manifest.artifact.is_some() || manifest.entry.is_some() {
             let natives = self.compile_native_names();
             let host_schema = host_schema_from_names(&natives);
-            // 编译与装载必须共用同一份 schema（哈希校验）。
-            let package = ScriptCompiler::new()
-                .compile_source(lang, &source, &host_schema)
-                .map_err(EngineError::Script)?;
+            let image = load_mod_image(&manifest, &root, &host_schema)?;
             let mut script_domain = ScriptDomain::from_image(
                 manifest.id.as_str(),
-                &package.image,
+                &image,
                 &host_schema,
                 ScriptBudget::default(),
             )?;
@@ -678,6 +670,78 @@ impl SparkEngine {
     }
 }
 
+/// 装载模组脚本映像：显式 `.spkx` → 指纹磁盘缓存 → 源码编译（并回写缓存）。
+fn load_mod_image(
+    manifest: &ModManifest,
+    root: &Path,
+    host_schema: &HostSchema,
+) -> Result<ExecutableImage, EngineError> {
+    if let Some(artifact) = &manifest.artifact {
+        let path = root.join(artifact);
+        return load_spkx_checked(&path, host_schema);
+    }
+    let entry = manifest.entry.as_deref().ok_or_else(|| EngineError::Io {
+        path: root.display().to_string(),
+        kind: "missing_entry".into(),
+    })?;
+    let entry_path = root.join(entry);
+    let source = std::fs::read_to_string(&entry_path).map_err(|e| {
+        EngineError::from_io(entry_path.display().to_string(), e)
+    })?;
+    let lang = resolve_language(manifest.language.as_deref(), entry);
+    let request = CompilationRequest::repl(lang, source.as_str(), host_schema.clone());
+    let key = ArtifactCache::key_for(&request, &source);
+    let cache_dir = root.join(".spark-cache");
+    let cache_path = cache_dir.join(format!("{key:016x}.spkx"));
+    if cache_path.is_file() {
+        if let Ok(image) = load_spkx_checked(&cache_path, host_schema) {
+            tracing::info!(
+                event = "spark.engine.spkx_cache_hit",
+                mod_id = %manifest.id,
+                path = %cache_path.display()
+            );
+            return Ok(image);
+        }
+        tracing::warn!(
+            event = "spark.engine.spkx_cache_miss",
+            mod_id = %manifest.id,
+            path = %cache_path.display()
+        );
+    }
+    // 编译与装载必须共用同一份 schema（哈希校验）。
+    let package = ScriptCompiler::new()
+        .compile(&request)
+        .map_err(EngineError::Script)?;
+    if let Err(e) = std::fs::create_dir_all(&cache_dir) {
+        tracing::warn!(
+            event = "spark.engine.spkx_cache_mkdir_failed",
+            path = %cache_dir.display(),
+            error = %e
+        );
+    } else if let Err(e) = package.image.write_spkx_file(&cache_path) {
+        tracing::warn!(
+            event = "spark.engine.spkx_cache_write_failed",
+            path = %cache_path.display(),
+            error = %e
+        );
+    }
+    Ok(package.image)
+}
+
+fn load_spkx_checked(
+    path: &Path,
+    host_schema: &HostSchema,
+) -> Result<ExecutableImage, EngineError> {
+    let image = ExecutableImage::read_spkx_file(path).map_err(|e| EngineError::Io {
+        path: path.display().to_string(),
+        kind: e.code().into(),
+    })?;
+    image
+        .check_host_schema(host_schema)
+        .map_err(|e| EngineError::Script(ScriptError::compile_reason(e.code())))?;
+    Ok(image)
+}
+
 fn host_schema_from_names(names: &[&str]) -> HostSchema {
     let mut schema = HostSchema::new(1);
     for name in names {
@@ -809,6 +873,7 @@ dependencies = ["core"]
                     name: "Hand".into(),
                     version: "0.0.1".into(),
                     entry: None,
+                    artifact: None,
                     language: None,
                     dependencies: vec![],
                 },
@@ -860,6 +925,67 @@ entry = "main.vk"
             domain.runtime.vm.step_limit,
             ScriptBudget::default().instruction_limit
         );
+    }
+
+    #[test]
+    fn load_mod_writes_and_reuses_spkx_cache() {
+        let root = std::env::temp_dir().join("spark_engine_mod_spkx_cache");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "cache_demo"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro on_load() {
+                return 42
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        eng.load_mod_dir(&root).unwrap();
+        let cache_dir = root.join(".spark-cache");
+        assert!(cache_dir.is_dir());
+        let spkx: Vec<_> = std::fs::read_dir(&cache_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    == Some("spkx")
+            })
+            .collect();
+        assert_eq!(spkx.len(), 1);
+        let published = root.join("published.spkx");
+        std::fs::copy(spkx[0].path(), &published).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "cache_demo"
+version = "0.1.0"
+artifact = "published.spkx"
+"#,
+        )
+        .unwrap();
+        // 删掉源码：显式 artifact 路径不得再依赖入口编译。
+        let _ = std::fs::remove_file(root.join("main.vk"));
+        let mut eng2 = SparkEngine::new(root.parent().unwrap());
+        let id = eng2.load_mod_dir(&root).unwrap();
+        assert!(eng2
+            .get_mod(&id)
+            .unwrap()
+            .domain
+            .as_ref()
+            .unwrap()
+            .has_lifecycle("on_load"));
     }
 
     #[test]
@@ -1050,6 +1176,7 @@ entry = "main.vk"
                     name: "Tick".into(),
                     version: "0.0.1".into(),
                     entry: None,
+                    artifact: None,
                     language: None,
                     dependencies: vec![],
                 },
