@@ -179,6 +179,10 @@ pub enum HirStmt {
         body: Vec<HirStmt>,
         span: Option<SourceSpan>,
     },
+    /// 跳出最近一层 `While`。
+    Break {
+        span: Option<SourceSpan>,
+    },
 }
 
 /// HIR 函数。
