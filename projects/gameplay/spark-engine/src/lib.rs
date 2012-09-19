@@ -443,22 +443,13 @@ impl SparkEngine {
             );
             self.plugins.install_all(&mut script_domain.runtime.vm);
             let mut hooks = StdHost;
-            // 有 `on_load` 则走生命周期；否则过渡期仍执行顶层（`register_hook` 等）。
-            if script_domain.has_lifecycle("on_load") {
-                self.shared
-                    .borrow_mut()
-                    .begin_script_call(HostPhase::OnLoad, None);
-                let load_result = script_domain.call_lifecycle("on_load", &[], &mut hooks);
-                self.shared.borrow_mut().end_script_call();
-                let _ = load_result?;
-            } else {
-                self.shared
-                    .borrow_mut()
-                    .begin_script_call(HostPhase::OnLoad, None);
-                let eval_result = script_domain.eval_entry(&mut hooks);
-                self.shared.borrow_mut().end_script_call();
-                eval_result?;
-            }
+            // 装载只跑 `on_load`（顶层块已在封目标时提升为 `on_load`）。
+            self.shared
+                .borrow_mut()
+                .begin_script_call(HostPhase::OnLoad, None);
+            let load_result = script_domain.call_lifecycle("on_load", &[], &mut hooks);
+            self.shared.borrow_mut().end_script_call();
+            let _ = load_result?;
             self.script_systems.register_lifecycle_exports(
                 manifest.id.as_str(),
                 &script_domain.lifecycle_exports,
@@ -875,7 +866,6 @@ fn resolve_language(explicit: Option<&str>, entry: &str) -> ScriptLanguage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use spark_vm::{FuncProto, Module, Op};
 
     #[test]
     fn registry_and_hooks_shared() {
@@ -923,14 +913,26 @@ dependencies = ["core"]
 
     #[test]
     fn hook_calls_script_function() {
-        let mut f = FuncProto::new("on_init", 0);
-        f.emit(Op::LoadNull);
-        f.emit(Op::Return);
-        let module = Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        };
+        let host = HostSchema::new(1);
+        let package = ScriptCompiler::new()
+            .compile_source(
+                ScriptLanguage::Valkyrie,
+                r#"
+                micro on_init() {
+                    return null
+                }
+                return 0
+                "#,
+                &host,
+            )
+            .unwrap();
+        let domain = ScriptDomain::from_image(
+            "hand",
+            &package.image,
+            &host,
+            ScriptBudget::default(),
+        )
+        .unwrap();
         let mut eng = SparkEngine::new(".");
         eng.shared
             .borrow_mut()
@@ -950,12 +952,7 @@ dependencies = ["core"]
                 },
                 root: PathBuf::from("."),
                 vfs: ModVfs::new("hand", PathBuf::from(".")),
-                domain: Some(ScriptDomain::from_legacy_module(
-                    "hand",
-                    module,
-                    ScriptLanguage::Valkyrie,
-                    ScriptBudget::default(),
-                )),
+                domain: Some(domain),
                 enabled: true,
             },
         );

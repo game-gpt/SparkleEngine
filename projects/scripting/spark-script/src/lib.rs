@@ -1,12 +1,9 @@
-//! Spark 脚本编译门面与过渡期运行包装。
+//! Spark 脚本编译门面与运行时。
 //!
-//! **目标分层**（见工作区规划）：
+//! 分层：
 //! - [`ScriptCompiler`]：编译 → [`SparkObject`] / [`LinkedProgram`] / [`ExecutableImage`]
 //! - [`ScriptRuntime`]：装载映像并执行（持有 VM / JIT）
-//! - 语言前端最终只降低到公共 IR，不得直接发射 `spark-vm::Op`
-//!
-//! **过渡期**：[`ScriptEngine`] 仍保留给 `spark-engine` 等调用方，内部改为
-//! 编译器 + 运行时组合；前端仍直接产出 [`spark_vm::Module`]。
+//! - 语言前端经公共 IR 降低，不得在正式路径直接发射 `spark-vm::Op`
 
 mod artifact;
 mod cache;
@@ -21,7 +18,7 @@ mod spko;
 mod spkx;
 
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
-use spark_vm::{HostHooks, Module, StdHost, VmError};
+use spark_vm::{Module, VmError};
 
 pub use artifact::{
     ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError, ARTIFACT_FORMAT_VERSION,
@@ -49,7 +46,7 @@ pub use spark_script_ir::PackageId as IrPackageId;
 pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 pub use spark_vm::{bind_host_slots, verify_bytecode, verify_bytecode_with_host, BytecodeVerifyError};
 
-/// 脚本源语言（过渡期枚举；正式路径请用 [`LanguageProfile`]）。
+/// 脚本源语言（便利枚举；配置面请用 [`LanguageProfile`]）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScriptLanguage {
     /// Oaks Valkyrie（默认）。
@@ -215,97 +212,7 @@ impl From<spark_script_ruby::RubyScriptError> for ScriptError {
     }
 }
 
-/// 过渡期门面：编译 + 运行揉在一起。新代码请拆用 [`ScriptCompiler`] / [`ScriptRuntime`]。
-///
-/// 字段仍公开以兼容 `spark-engine` 插件安装路径；语义上 `vm`/`jit` 属于运行时。
-pub struct ScriptEngine {
-    pub vm: spark_vm::Vm,
-    pub jit: spark_jit::JitEngine,
-    pub language: ScriptLanguage,
-}
-
-impl ScriptEngine {
-    fn from_runtime(rt: ScriptRuntime) -> Self {
-        Self {
-            vm: rt.vm,
-            jit: rt.jit,
-            language: rt.language.frontend.into(),
-        }
-    }
-
-    /// 默认按 Valkyrie 编译。
-    pub fn compile(source: &str) -> Result<Self, ScriptError> {
-        Self::compile_with(ScriptLanguage::Valkyrie, source, &[])
-    }
-
-    pub fn compile_with_natives(source: &str, natives: &[&str]) -> Result<Self, ScriptError> {
-        Self::compile_with(ScriptLanguage::Valkyrie, source, natives)
-    }
-
-    /// 使用完整宿主签名编译（经 [`HostSchema`]）。
-    pub fn compile_with_registry(
-        language: ScriptLanguage,
-        source: &str,
-        natives: &NativeRegistry,
-    ) -> Result<Self, ScriptError> {
-        let package = compile_package_with_registry(language, source, natives)?;
-        let host = HostSchema::from_native_registry(natives);
-        let runtime = ScriptRuntime::from_image(&package.image, &host)?;
-        Ok(Self::from_runtime(runtime))
-    }
-
-    /// 指定前端语言编译。
-    pub fn compile_with(
-        language: ScriptLanguage,
-        source: &str,
-        natives: &[&str],
-    ) -> Result<Self, ScriptError> {
-        let package = ScriptCompiler::new().compile_with_native_names(language, source, natives)?;
-        let host = stub_schema_from_names(natives);
-        let runtime = ScriptRuntime::from_image(&package.image, &host)?;
-        Ok(Self::from_runtime(runtime))
-    }
-
-    pub fn from_module(module: Module) -> Self {
-        Self::from_runtime(ScriptRuntime::from_legacy_module(
-            module,
-            ScriptLanguage::Valkyrie,
-        ))
-    }
-
-    pub fn eval(&mut self) -> Result<spark_gc::Value, ScriptError> {
-        let mut host = StdHost;
-        self.eval_with(&mut host)
-    }
-
-    pub fn eval_with(&mut self, host: &mut dyn HostHooks) -> Result<spark_gc::Value, ScriptError> {
-        let v = self.vm.run(host)?;
-        let _ = self.jit.optimize_hot(&mut self.vm);
-        Ok(v)
-    }
-
-    /// 供 ECS System 调用命名函数。
-    pub fn call(
-        &mut self,
-        name: &str,
-        args: &[spark_gc::Value],
-        host: &mut dyn HostHooks,
-    ) -> Result<spark_gc::Value, ScriptError> {
-        let v = self.vm.call_function(name, args, host)?;
-        let _ = self.jit.optimize_hot(&mut self.vm);
-        Ok(v)
-    }
-}
-
-fn stub_schema_from_names(names: &[&str]) -> HostSchema {
-    let mut schema = HostSchema::new(1);
-    for name in names {
-        schema.insert(HostFunction::new(HostFunctionId::new("host", *name, 1)));
-    }
-    schema
-}
-
-/// 仅编译为 [`Module`]（不建 VM）。过渡期 API。
+/// 仅编译为 [`Module`]（不建 VM；供前端单测与 `compile_package_with_registry`）。
 pub fn compile_module(
     language: ScriptLanguage,
     source: &str,
@@ -333,44 +240,36 @@ pub fn compile_module_with_registry(
     }
 }
 
-/// 一键执行源码（默认 Valkyrie，跑 `__main`）。
-pub fn run(source: &str) -> Result<spark_gc::Value, ScriptError> {
-    let mut eng = ScriptEngine::compile(source)?;
-    eng.eval()
-}
-
-/// 指定语言一键执行。
-pub fn run_with(language: ScriptLanguage, source: &str) -> Result<spark_gc::Value, ScriptError> {
-    let mut eng = ScriptEngine::compile_with(language, source, &[])?;
-    eng.eval()
-}
 
 /// 调试：列出 Valkyrie 根上 `micro` 名。
 pub fn list_micros(source: &str) -> Result<Vec<String>, ScriptError> {
     Ok(spark_script_valkyrie::list_micros(source)?)
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use spark_vm::StdHost;
 
-    struct Buf(String);
-    impl HostHooks for Buf {
-        fn print(&mut self, t: &str) {
-            self.0.push_str(t);
-            self.0.push(';');
-        }
+    fn eval_source(language: ScriptLanguage, source: &str) -> spark_gc::Value {
+        let host = HostSchema::new(1);
+        let package = ScriptCompiler::new()
+            .compile_source(language, source, &host)
+            .unwrap();
+        let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
+        rt.call_on_load_std().unwrap()
     }
 
     #[test]
     fn valkyrie_arithmetic() {
-        let v = run("return 40 + 2").unwrap();
+        let v = eval_source(ScriptLanguage::Valkyrie, "return 40 + 2");
         assert_eq!(v.as_number(), Some(42.0));
     }
 
     #[test]
     fn lua_function() {
-        let v = run_with(
+        let v = eval_source(
             ScriptLanguage::Lua,
             r#"
             function add(a, b)
@@ -378,39 +277,37 @@ mod tests {
             end
             return add(40, 2)
             "#,
-        )
-        .unwrap();
+        );
         assert_eq!(v.as_number(), Some(42.0));
     }
 
     #[test]
     fn ruby_method() {
-        let v = run_with(
+        let v = eval_source(
             ScriptLanguage::Ruby,
-            r#"
-            def add(a, b)
-              return a + b
-            end
-            return add(40, 2)
-            "#,
-        )
-        .unwrap();
+            "def add(a, b)\n  return a + b\nend\nreturn add(40, 2)\n",
+        );
         assert_eq!(v.as_number(), Some(42.0));
     }
 
     #[test]
     fn call_micro_from_host() {
-        let mut eng = ScriptEngine::compile(
-            r#"
-            micro double(x) {
-                return x * 2
-            }
-            "#,
-        )
-        .unwrap();
-        let mut host = Buf(String::new());
-        let v = eng
-            .call("double", &[spark_gc::Value::Number(21.0)], &mut host)
+        let host = HostSchema::new(1);
+        let package = ScriptCompiler::new()
+            .compile_source(
+                ScriptLanguage::Valkyrie,
+                r#"
+                micro add(a, b) {
+                    return a + b
+                }
+                return 0
+                "#,
+                &host,
+            )
+            .unwrap();
+        let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
+        let v = rt
+            .call("add", &[spark_gc::Value::Number(40.0), spark_gc::Value::Number(2.0)], &mut StdHost)
             .unwrap();
         assert_eq!(v.as_number(), Some(42.0));
     }
@@ -418,88 +315,67 @@ mod tests {
     #[test]
     fn compile_with_native_registry() {
         let mut reg = NativeRegistry::new();
-        reg.insert(
-            NativeSignature::new("ping")
-                .param(NativeParam::new("n", "Number"))
-                .returns("Number"),
-        );
-        let eng = ScriptEngine::compile_with_registry(
+        reg.insert(NativeSignature::new("ping"));
+        let package = compile_package_with_registry(
             ScriptLanguage::Valkyrie,
-            "return ping(1)",
+            "return ping()",
             &reg,
         )
         .unwrap();
-        assert!(eng.vm.module.native_names.iter().any(|n| n == "ping"));
-        assert_eq!(eng.vm.host_slot_names, vec!["ping".to_string()]);
-        assert!(eng.vm.module.functions.iter().any(|f| {
-            f.code.iter().any(|&b| b == spark_vm::Op::CallHost as u8)
-        }));
+        let host = HostSchema::from_native_registry(&reg);
+        let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
+        rt.vm.register_native("ping", |_ctx, _args| Ok(spark_gc::Value::Number(7.0)));
+        let v = rt.call_on_load_std().unwrap();
+        assert_eq!(v.as_number(), Some(7.0));
     }
 
     #[test]
     fn lua_and_ruby_compile_with_registry() {
         let mut reg = NativeRegistry::new();
-        reg.insert(
-            NativeSignature::new("ping")
-                .param(NativeParam::new("n", "Number"))
-                .returns("Number"),
-        );
+        reg.insert(NativeSignature::new("ping"));
         for lang in [ScriptLanguage::Lua, ScriptLanguage::Ruby] {
-            let eng = ScriptEngine::compile_with_registry(lang, "return ping(1)", &reg).unwrap();
-            assert!(
-                eng.vm.module.native_names.iter().any(|n| n == "ping"),
-                "{lang:?}"
-            );
-            assert_eq!(eng.vm.host_slot_names, vec!["ping".to_string()]);
+            let source = match lang {
+                ScriptLanguage::Lua => "return ping(1)",
+                ScriptLanguage::Ruby => "return ping(1)",
+                ScriptLanguage::Valkyrie => unreachable!(),
+            };
+            let package = compile_package_with_registry(lang, source, &reg).unwrap();
+            let host = HostSchema::from_native_registry(&reg);
+            let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
+            rt.vm.register_native("ping", |_ctx, args| {
+                Ok(args.first().cloned().unwrap_or(spark_gc::Value::Null))
+            });
+            let v = rt.call_on_load_std().unwrap();
+            assert_eq!(v.as_number(), Some(1.0));
         }
     }
 
     #[test]
-    fn runtime_host_slot_call_executes_registered_native() {
-        let mut host_schema = HostSchema::new(1);
-        host_schema.insert(HostFunction::new(HostFunctionId::new("host", "triple", 1)));
-        let mut compiler = ScriptCompiler::new();
-        let package = compiler
-            .compile_source(
-                ScriptLanguage::Valkyrie,
-                "return triple(14)",
-                &host_schema,
-            )
-            .unwrap();
-        let mut rt = ScriptRuntime::from_image(&package.image, &host_schema).unwrap();
-        rt.vm.register_native("triple", |_ctx, args| {
-            let n = args
-                .first()
-                .and_then(|v| v.as_number())
-                .unwrap_or(0.0);
-            Ok(spark_gc::Value::Number(n * 3.0))
-        });
-        let v = rt.eval().unwrap();
-        assert_eq!(v.as_number(), Some(42.0));
+    fn valkyrie_parse_error_propagates_span() {
+        let err = compile_module(ScriptLanguage::Valkyrie, "@@@", &[]).expect_err("bare attributes");
+        assert_eq!(err.code(), "spark.script.parse");
     }
 
     #[test]
     fn compiler_produces_executable_image() {
-        let mut compiler = ScriptCompiler::new();
-        let package = compiler
-            .compile_with_native_names(ScriptLanguage::Valkyrie, "return 1 + 2", &[])
-            .unwrap();
-        assert_eq!(package.image.format_version, ARTIFACT_FORMAT_VERSION);
         let host = HostSchema::new(1);
+        let package = ScriptCompiler::new()
+            .compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host)
+            .unwrap();
+        assert!(package.image.module().functions.iter().any(|f| f.name == "on_load"));
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
-        let v = rt.eval().unwrap();
-        assert_eq!(v.as_number(), Some(3.0));
+        assert_eq!(rt.call_on_load_std().unwrap().as_number(), Some(3.0));
     }
 
     #[test]
-    fn valkyrie_parse_error_propagates_span() {
-        let err =
-            compile_module(ScriptLanguage::Valkyrie, "@@@", &[]).expect_err("bare attributes");
-        assert_eq!(err.code(), "spark.script.parse");
-        assert!(err.span().is_some());
-        assert!(matches!(
-            err.args().get("reason"),
-            Some(ErrorArg::String(s)) if s.as_ref() == "parse_failed"
-        ));
+    fn runtime_host_slot_call_executes_registered_native() {
+        let mut host = HostSchema::new(1);
+        host.insert(HostFunction::new(HostFunctionId::new("host", "ping", 1)));
+        let package = ScriptCompiler::new()
+            .compile_source(ScriptLanguage::Valkyrie, "return ping()", &host)
+            .unwrap();
+        let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
+        rt.vm.register_native("ping", |_ctx, _args| Ok(spark_gc::Value::Number(9.0)));
+        assert_eq!(rt.call_on_load_std().unwrap().as_number(), Some(9.0));
     }
 }

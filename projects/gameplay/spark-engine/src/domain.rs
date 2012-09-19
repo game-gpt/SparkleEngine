@@ -8,8 +8,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use spark_gc::Value;
-use spark_script::{ExecutableImage, HostPhase, HostSchema, ScriptLanguage, ScriptRuntime};
-use spark_vm::{HostHooks, Module};
+use spark_script::{ExecutableImage, HostPhase, HostSchema, ScriptRuntime};
+use spark_vm::HostHooks;
 
 use crate::command_buffer::ScriptCommandBuffer;
 use crate::event_inbox::ScriptEventInbox;
@@ -120,7 +120,7 @@ impl ScriptDomain {
             .map_err(EngineError::Script)
     }
 
-    /// 若存在则调用生命周期导出；不存在则返回 `None`（不跑隐式 `__main`）。
+    /// 若存在则调用生命周期导出；不存在则返回 `None`。
     pub fn call_lifecycle(
         &mut self,
         name: &str,
@@ -131,45 +131,6 @@ impl ScriptDomain {
             return Ok(None);
         }
         self.call(name, args, host).map(Some)
-    }
-
-    /// 过渡期：执行映像入口（旧 `__main` / 顶层）。新模组应改用生命周期导出。
-    pub fn eval_entry(&mut self, host: &mut dyn HostHooks) -> Result<Value, EngineError> {
-        if !self.enabled {
-            return Err(EngineError::ScriptDomainDisabled {
-                mod_id: self.mod_id.to_string(),
-            });
-        }
-        self.runtime.eval_with(host).map_err(EngineError::Script)
-    }
-
-    /// 过渡期：从裸 [`Module`] 创建领域（跳过制品校验，供测试与旧路径）。
-    pub fn from_legacy_module(
-        mod_id: impl Into<Arc<str>>,
-        module: Module,
-        language: ScriptLanguage,
-        budget: ScriptBudget,
-    ) -> Self {
-        let lifecycle_exports = module
-            .functions
-            .iter()
-            .filter(|f| is_lifecycle_name(&f.name))
-            .map(|f| Arc::<str>::from(f.name.as_str()))
-            .collect();
-        let runtime = ScriptRuntime::from_legacy_module(module, language);
-        let mut domain = Self {
-            mod_id: mod_id.into(),
-            host_schema_hash: 0,
-            host_abi_version: 0,
-            lifecycle_exports,
-            runtime,
-            budget: budget.clone(),
-            command_buffer: Rc::new(RefCell::new(ScriptCommandBuffer::new())),
-            event_inbox: ScriptEventInbox::new(),
-            enabled: true,
-        };
-        domain.apply_budget();
-        domain
     }
 
     /// 取出并清空本领域命令缓冲（帧同步点调用）。
@@ -209,22 +170,6 @@ impl ScriptDomain {
         }
         Ok(())
     }
-}
-
-fn is_lifecycle_name(name: &str) -> bool {
-    matches!(
-        name,
-        "on_load"
-            | "on_start"
-            | "fixed_update"
-            | "update"
-            | "late_update"
-            | "render_prepare"
-            | "on_event"
-            | "on_unload"
-            | "save_state"
-            | "load_state"
-    )
 }
 
 #[cfg(test)]

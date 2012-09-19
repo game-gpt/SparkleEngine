@@ -9,7 +9,7 @@
 //!   [`Op::JitEnter`] 预留原生 stub 槽（解释路径跳过）。
 //! - **栈式**：操作数在值栈，调用帧只记 `func` / `ip` / `stack_base`，利于特化与调试。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 
@@ -273,7 +273,7 @@ impl FuncProto {
 #[derive(Debug, Clone)]
 pub struct Module {
     pub functions: Vec<FuncProto>,
-    /// 入口函数下标（通常为隐式 `__main`）。
+    /// 入口函数下标（块初始化 / REPL；模组语义入口用命名导出）。
     pub entry: usize,
     pub native_names: Vec<String>,
 }
@@ -301,11 +301,14 @@ impl Module {
         i
     }
 
-    /// 把多个脚本模块的方法链进同一命名空间（同名后者覆盖）；不含各脚本 `__main`。
+    /// 把多个脚本模块的方法链进同一命名空间（同名**先到先得**，依赖包应排在入口之前）。
+    ///
+    /// 跳过名为 `__main` 的旧块入口（应由上层提升为 `on_load`）。不合成假入口。
     pub fn link_methods(modules: &[Module]) -> Module {
         let mut name_to_idx: HashMap<String, usize> = HashMap::new();
         let mut functions: Vec<FuncProto> = Vec::new();
         let mut native_names: Vec<String> = Vec::new();
+        let mut filled: HashSet<String> = HashSet::new();
 
         for module in modules {
             for name in &module.native_names {
@@ -335,25 +338,33 @@ impl Module {
                 if func.name == "__main" {
                     continue;
                 }
+                if filled.contains(&func.name) {
+                    continue;
+                }
+                filled.insert(func.name.clone());
                 let idx = name_to_idx[&func.name];
                 functions[idx] =
                     remap_func_against(module, func, &name_to_idx, &native_to_idx);
             }
         }
 
-        let entry = functions.len();
-        functions.push(FuncProto::new("__main", 0));
-        functions[entry].emit(Op::LoadNull);
-        functions[entry].emit(Op::Return);
+        if functions.is_empty() {
+            let mut stub = FuncProto::new("on_load", 0);
+            stub.emit(Op::LoadNull);
+            stub.emit(Op::Return);
+            functions.push(stub);
+        }
 
         Module {
             functions,
-            entry,
+            entry: 0,
             native_names,
         }
     }
 
-    /// 合并多个模块的方法，并把 `modules[entry_index]` 的入口函数重映射为新模块的 `__main`。
+    /// 合并多个模块，并把 `modules[entry_index]` 的入口函数设为链接结果的 `entry`。
+    ///
+    /// 保留入口函数原名（通常为 `on_load`）；若仍为 `__main` 则提升为 `on_load`。
     pub fn link_with_entry(modules: &[Module], entry_index: usize) -> Result<Module, String> {
         if modules.is_empty() {
             return Err("empty_link_set".into());
@@ -367,7 +378,7 @@ impl Module {
             .functions
             .get(entry_mod.entry)
             .ok_or_else(|| "missing_entry_func".to_string())?;
-        let name_to_idx: HashMap<String, usize> = linked
+        let mut name_to_idx: HashMap<String, usize> = linked
             .functions
             .iter()
             .enumerate()
@@ -380,9 +391,18 @@ impl Module {
             .map(|(i, n)| (n.clone(), i as u16))
             .collect();
         let mut remapped = remap_func_against(entry_mod, main, &name_to_idx, &native_to_idx);
-        remapped.name = "__main".into();
-        let entry = linked.entry;
-        linked.functions[entry] = remapped;
+        if remapped.name == "__main" {
+            remapped.name = "on_load".into();
+        }
+        let entry_name = remapped.name.clone();
+        if let Some(&idx) = name_to_idx.get(&entry_name) {
+            linked.functions[idx] = remapped;
+            linked.entry = idx;
+        } else {
+            linked.entry = linked.functions.len();
+            name_to_idx.insert(entry_name, linked.entry);
+            linked.functions.push(remapped);
+        }
         Ok(linked)
     }
 }
@@ -498,13 +518,13 @@ impl Vm {
         self.natives.insert(name.into(), Box::new(f));
     }
 
-    /// 从模块入口运行（脚本顶层 / `__main`）。
+    /// 从模块入口运行（块初始化 / REPL；模组请用命名导出）。
     pub fn run(&mut self, host: &mut dyn HostHooks) -> Result<Value, VmError> {
         let entry = self.module.entry;
         self.call_index(entry, &[], host)
     }
 
-    /// 在已链接方法表上执行某一脚本的 `__main`（重写其函数下标）。
+    /// 在已链接方法表上执行某一脚本的入口函数（按 `script.entry` 重写下标后调用）。
     pub fn run_script_main(
         &mut self,
         script: &Module,

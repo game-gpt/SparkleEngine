@@ -13,7 +13,7 @@ use crate::script_system::ScriptSystemDescriptor;
 /// 当前脚本调用的组件访问策略。
 #[derive(Debug, Clone, Default)]
 pub enum ScriptAccessPolicy {
-    /// 未挂 System 描述符（钩子 / 过渡 `eval_entry`）：不强制访问集。
+    /// 未挂 System 描述符（钩子 / 装载回调）：不强制访问集。
     #[default]
     Unrestricted,
     /// 已挂描述符：只能写声明的组件；写集为空则禁止一切组件变更。
@@ -71,7 +71,7 @@ pub fn check_host_phase(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use spark_script::{HostEffect, HostFunctionId};
+    use spark_script::{HostEffect, HostFunction, HostFunctionId};
 
     #[test]
     fn declared_empty_write_set_blocks_component_mutation() {

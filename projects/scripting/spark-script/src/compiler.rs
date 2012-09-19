@@ -59,7 +59,7 @@ impl ScriptCompiler {
         Ok(package)
     }
 
-    /// 过渡期便利：语言 + 源码 + schema。
+    /// 语言 + 源码 + schema 的便利入口。
     pub fn compile_source(
         &mut self,
         language: ScriptLanguage,
@@ -70,7 +70,7 @@ impl ScriptCompiler {
         self.compile(&request)
     }
 
-    /// 过渡期：仅函数名列表（自动生成最小 schema 桩，走正式缓存键）。
+    /// 仅函数名列表（自动生成最小 schema 桩，走正式缓存键）。
     pub fn compile_with_native_names(
         &mut self,
         language: ScriptLanguage,
@@ -101,7 +101,7 @@ impl ScriptCompiler {
             ScriptLanguage::Lua => spark_script_lua::compile_with_binds(source, &binds)?,
             ScriptLanguage::Ruby => spark_script_ruby::compile_with_binds(source, &binds)?,
         };
-        Ok(SparkObject::from_legacy_module(
+        Ok(SparkObject::from_module(
             request.package.clone(),
             request.language.clone(),
             &request.host_schema,
@@ -110,28 +110,35 @@ impl ScriptCompiler {
     }
 
     /// 将已有目标链接并验证为完整包。
+    ///
+    /// 多目标时 `entry_package` 指定入口包；单目标可传该目标的 `package`。
     pub fn link_objects(
         &mut self,
         objects: &[SparkObject],
         host: &HostSchema,
+        entry_package: &crate::request::PackageId,
     ) -> Result<CompiledPackage, ScriptError> {
         let program = if objects.len() == 1 {
             LinkedProgram::link_single(objects[0].clone(), host).map_err(script_link_error)?
         } else {
-            LinkedProgram::link_many(objects, host).map_err(script_link_error)?
+            LinkedProgram::link_many(objects, host, entry_package).map_err(script_link_error)?
         };
         let image = ExecutableImage::verify(program.clone()).map_err(script_verify_error)?;
+        let object = objects
+            .iter()
+            .find(|o| {
+                o.package.name == entry_package.name && o.package.version == entry_package.version
+            })
+            .cloned()
+            .ok_or_else(|| ScriptError::compile_reason("spark.script.link.missing_entry_package"))?;
         Ok(CompiledPackage {
-            object: objects
-                .first()
-                .cloned()
-                .ok_or_else(|| ScriptError::compile_reason("spark.script.link.empty_set"))?,
+            object,
             program,
             image,
         })
     }
 
-    /// 按 [`PackageDepGraph`] 拓扑序重排目标，并将最后一包（通常为入口）放到 `link_many` 的第 0 位。
+    /// 按 [`PackageDepGraph`] 拓扑序重排目标（依赖在前，不把入口挪到下标 0）。
     pub fn order_objects_for_link(
         objects: Vec<SparkObject>,
         graph: &PackageDepGraph,
@@ -142,7 +149,6 @@ impl ScriptCompiler {
         if order.is_empty() {
             return Err(ScriptError::compile_reason("spark.script.link.empty_set"));
         }
-        let entry_id = order.last().cloned().expect("non-empty");
         let mut by_key: HashMap<(Arc<str>, Arc<str>), SparkObject> = HashMap::new();
         for obj in objects {
             by_key.insert(
@@ -151,24 +157,13 @@ impl ScriptCompiler {
             );
         }
         let mut ordered = Vec::with_capacity(order.len());
-        // 入口先，其余按拓扑（依赖在前）追加，供 `link_many` 使用。
-        let entry = by_key
-            .remove(&(Arc::clone(&entry_id.name), Arc::clone(&entry_id.version)))
-            .ok_or_else(|| ScriptError::compile_reason("spark.script.link.missing_entry"))?;
-        ordered.push(entry);
         for id in &order {
-            if id == &entry_id {
-                continue;
-            }
             let key = (Arc::clone(&id.name), Arc::clone(&id.version));
             if let Some(obj) = by_key.remove(&key) {
                 ordered.push(obj);
             }
         }
-        if ordered.len() == 1 && !by_key.is_empty() {
-            // 图外残留包仍附加，保持可测。
-            ordered.extend(by_key.into_values());
-        }
+        ordered.extend(by_key.into_values());
         Ok(ordered)
     }
 
@@ -177,7 +172,7 @@ impl ScriptCompiler {
         request: &CompilationRequest,
         module: spark_vm::Module,
     ) -> Result<CompiledPackage, ScriptError> {
-        let object = SparkObject::from_legacy_module(
+        let object = SparkObject::from_module(
             request.package.clone(),
             request.language.clone(),
             &request.host_schema,
@@ -254,9 +249,11 @@ mod tests {
         let obj = compiler.compile_object(&req).unwrap();
         let bytes = obj.to_spko_bytes().unwrap();
         let loaded = SparkObject::from_spko_bytes(&bytes).unwrap();
-        let package = compiler.link_objects(&[loaded], &host).unwrap();
+        let package = compiler
+            .link_objects(&[loaded], &host, &req.package)
+            .unwrap();
         let mut rt = crate::ScriptRuntime::from_image(&package.image, &host).unwrap();
-        let v = rt.eval().unwrap();
+        let v = rt.call_on_load_std().unwrap();
         assert_eq!(v.as_number(), Some(3.0));
     }
 }

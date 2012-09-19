@@ -31,7 +31,7 @@ impl SparkObject {
         for i in &self.imports {
             w.str(i.as_ref());
         }
-        write_module(&mut w, &self.legacy_module)?;
+        write_module(&mut w, &self.module)?;
         Ok(w.buf)
     }
 
@@ -63,7 +63,7 @@ impl SparkObject {
         for _ in 0..import_n {
             imports.push(Arc::<str>::from(r.str()?));
         }
-        let legacy_module = read_module(&mut r)?;
+        let module = read_module(&mut r)?;
         Ok(Self {
             format_version,
             compiler_version,
@@ -71,7 +71,7 @@ impl SparkObject {
             language,
             host_schema_hash,
             host_abi_version,
-            legacy_module,
+            module,
             exports,
             imports,
         })
@@ -114,13 +114,13 @@ mod tests {
 
     #[test]
     fn spko_roundtrip_then_link() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let c = f.add_const_number(7.0);
         f.emit(Op::LoadConst);
         f.emit_u16(c);
         f.emit(Op::Return);
         let host = schema_with_print();
-        let obj = SparkObject::from_legacy_module(
+        let obj = SparkObject::from_module(
             PackageId::new("unit", "0.1"),
             LanguageProfile::default_for(ScriptLanguage::Valkyrie),
             &host,

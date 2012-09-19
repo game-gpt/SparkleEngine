@@ -1,12 +1,12 @@
 //! 脚本运行时：装载已验证映像并执行，不负责编译。
 
 use spark_jit::JitEngine;
-use spark_vm::{HostHooks, Module, StdHost, Vm};
+use spark_vm::{HostHooks, StdHost, Vm};
 
 use crate::artifact::{ExecutableImage, LinkError};
 use crate::host_schema::HostSchema;
 use crate::request::LanguageProfile;
-use crate::{ScriptError, ScriptLanguage};
+use crate::ScriptError;
 
 /// 运行时实例：VM + 可选 JIT。由映像创建，不解析源码。
 pub struct ScriptRuntime {
@@ -34,17 +34,6 @@ impl ScriptRuntime {
         })
     }
 
-    /// 过渡期：直接从已有 [`Module`] 创建（跳过制品校验，仅供旧路径）。
-    pub fn from_legacy_module(module: Module, language: ScriptLanguage) -> Self {
-        Self {
-            vm: Vm::new(module),
-            jit: JitEngine::new(256),
-            language: crate::request::LanguageProfile::default_for(language),
-            host_schema_hash: 0,
-            host_abi_version: 0,
-        }
-    }
-
     pub fn host_schema_hash(&self) -> u64 {
         self.host_schema_hash
     }
@@ -53,15 +42,18 @@ impl ScriptRuntime {
         self.host_abi_version
     }
 
-    pub fn eval(&mut self) -> Result<spark_gc::Value, ScriptError> {
-        let mut host = StdHost;
-        self.eval_with(&mut host)
+    /// 调用模组 `on_load` 生命周期（顶层语句块已封为目标时的入口）。
+    pub fn call_on_load(
+        &mut self,
+        host: &mut dyn HostHooks,
+    ) -> Result<spark_gc::Value, ScriptError> {
+        self.call("on_load", &[], host)
     }
 
-    pub fn eval_with(&mut self, host: &mut dyn HostHooks) -> Result<spark_gc::Value, ScriptError> {
-        let v = self.vm.run(host)?;
-        let _ = self.jit.optimize_hot(&mut self.vm);
-        Ok(v)
+    /// 无宿主钩子时调用 `on_load`。
+    pub fn call_on_load_std(&mut self) -> Result<spark_gc::Value, ScriptError> {
+        let mut host = StdHost;
+        self.call_on_load(&mut host)
     }
 
     pub fn call(

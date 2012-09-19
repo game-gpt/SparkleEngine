@@ -106,13 +106,13 @@ mod tests {
     }
 
     fn sample_image() -> ExecutableImage {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let c = f.add_const_number(42.0);
         f.emit(Op::LoadConst);
         f.emit_u16(c);
         f.emit(Op::Return);
         let host = schema_with_print();
-        let obj = SparkObject::from_legacy_module(
+        let obj = SparkObject::from_module(
             PackageId::new("demo", "1"),
             LanguageProfile::default_for(ScriptLanguage::Valkyrie),
             &host,

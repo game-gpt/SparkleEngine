@@ -1,9 +1,10 @@
 //! 编译制品层次：目标文件 → 已链接程序 → 可执行映像。
 //!
-//! [`spark_vm::Module`] 仍是过渡期字节码载体；正式边界要求：
-//! - 前端不直接构造最终映像
-//! - VM 只接受 [`ExecutableImage`]
-//! - 源码模块 / 目标 / 链接结果 / 运行实例分离
+//! 字节码载体仍是 [`spark_vm::Module`]（实现细节，不是公共语义入口）。
+//! 正式边界：
+//! - 前端经 IR 产出模块，再封为 [`SparkObject`]
+//! - 运行只装载 [`ExecutableImage`]
+//! - 模组入口是生命周期导出（`on_load` 等），不是隐式 `__main`
 
 use std::sync::Arc;
 
@@ -24,19 +25,21 @@ pub struct SparkObject {
     pub language: LanguageProfile,
     pub host_schema_hash: u64,
     pub host_abi_version: u32,
-    /// 过渡期：仍携带前端直接生成的 [`Module`]。后续改为 MIR / 可重定位字节码。
-    pub legacy_module: Module,
+    /// 本单元字节码（入口为 `on_load`）。
+    pub module: Module,
     pub exports: Vec<Arc<str>>,
     pub imports: Vec<Arc<str>>,
 }
 
 impl SparkObject {
-    pub fn from_legacy_module(
+    /// 由前端字节码封成目标。若仍见旧入口名 `__main` 则提升为 `on_load`。
+    pub fn from_module(
         package: PackageId,
         language: LanguageProfile,
         host: &HostSchema,
-        module: Module,
+        mut module: Module,
     ) -> Self {
+        promote_legacy_main_to_on_load(&mut module);
         let exports = module
             .functions
             .iter()
@@ -55,9 +58,22 @@ impl SparkObject {
             language,
             host_schema_hash: host.content_hash(),
             host_abi_version: host.abi_version,
-            legacy_module: module,
+            module,
             exports,
             imports,
+        }
+    }
+}
+
+/// 消化仍带 `__main` 的旧夹具；正式前端已直接发射 `on_load`。
+fn promote_legacy_main_to_on_load(module: &mut Module) {
+    if module.functions.iter().any(|f| f.name == "on_load") {
+        return;
+    }
+    let entry = module.entry;
+    if let Some(f) = module.functions.get_mut(entry) {
+        if f.name == "__main" {
+            f.name = "on_load".into();
         }
     }
 }
@@ -72,13 +88,13 @@ pub struct LinkedProgram {
     pub host_abi_version: u32,
     /// 链接时宿主函数槽位数（与 [`HostSchema`] 插入顺序一致）。
     pub host_slot_count: u32,
-    pub legacy_module: Module,
+    pub module: Module,
     /// 导出生命周期名（若存在）。
     pub lifecycle_exports: Vec<Arc<str>>,
 }
 
 impl LinkedProgram {
-    /// 过渡期单目标「链接」：校验宿主导入、把 `CallNative` 绑成 `CallHost`、记录生命周期导出。
+    /// 单目标链接：校验宿主导入、把 `CallNative` 绑成 `CallHost`、记录生命周期导出。
     pub fn link_single(object: SparkObject, host: &HostSchema) -> Result<Self, LinkError> {
         if object.host_abi_version != host.abi_version {
             return Err(LinkError::AbiVersionMismatch {
@@ -102,7 +118,7 @@ impl LinkedProgram {
             .filter(|n| is_lifecycle_export(n))
             .cloned()
             .collect();
-        let mut module = object.legacy_module;
+        let mut module = object.module;
         let slot_names = host.short_names();
         spark_vm::bind_host_slots(&mut module, &slot_names).map_err(|detail| {
             if let Some(name) = detail.strip_prefix("unbound_native:") {
@@ -122,16 +138,28 @@ impl LinkedProgram {
             host_schema_hash: object.host_schema_hash,
             host_abi_version: object.host_abi_version,
             host_slot_count: host.functions.len() as u32,
-            legacy_module: module,
+            module,
             lifecycle_exports,
         })
     }
 
-    /// 多目标链接：校验各目标宿主契约，合并方法表，以 `objects[0]` 的入口为 `__main`。
-    pub fn link_many(objects: &[SparkObject], host: &HostSchema) -> Result<Self, LinkError> {
+    /// 多目标链接：须显式指定入口包（不再默认 `objects[0]`）。
+    pub fn link_many(
+        objects: &[SparkObject],
+        host: &HostSchema,
+        entry_package: &PackageId,
+    ) -> Result<Self, LinkError> {
         if objects.is_empty() {
             return Err(LinkError::EmptyLinkSet);
         }
+        let entry_index = objects
+            .iter()
+            .position(|o| {
+                o.package.name == entry_package.name && o.package.version == entry_package.version
+            })
+            .ok_or_else(|| LinkError::MissingEntryPackage {
+                name: Arc::clone(&entry_package.name),
+            })?;
         for object in objects {
             if object.host_abi_version != host.abi_version {
                 return Err(LinkError::AbiVersionMismatch {
@@ -154,17 +182,16 @@ impl LinkedProgram {
         for object in objects {
             for n in &object.exports {
                 if is_lifecycle_export(n)
-                    && !lifecycle_exports.iter().any(|e: &Arc<str>| e.as_ref() == n.as_ref())
+                    && !lifecycle_exports
+                        .iter()
+                        .any(|e: &Arc<str>| e.as_ref() == n.as_ref())
                 {
                     lifecycle_exports.push(Arc::clone(n));
                 }
             }
         }
-        let modules: Vec<Module> = objects
-            .iter()
-            .map(|o| o.legacy_module.clone())
-            .collect();
-        let mut module = Module::link_with_entry(&modules, 0).map_err(|detail| {
+        let modules: Vec<Module> = objects.iter().map(|o| o.module.clone()).collect();
+        let mut module = Module::link_with_entry(&modules, entry_index).map_err(|detail| {
             LinkError::MergeFailed {
                 detail: Arc::from(detail),
             }
@@ -181,7 +208,7 @@ impl LinkedProgram {
                 }
             }
         })?;
-        let primary = &objects[0];
+        let primary = &objects[entry_index];
         Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
             package: primary.package.clone(),
@@ -189,7 +216,7 @@ impl LinkedProgram {
             host_schema_hash: primary.host_schema_hash,
             host_abi_version: primary.host_abi_version,
             host_slot_count: host.functions.len() as u32,
-            legacy_module: module,
+            module,
             lifecycle_exports,
         })
     }
@@ -220,6 +247,7 @@ pub enum LinkError {
     UnboundNativeCall { name: Arc<str> },
     HostBindFailed { detail: Arc<str> },
     EmptyLinkSet,
+    MissingEntryPackage { name: Arc<str> },
     MergeFailed { detail: Arc<str> },
 }
 
@@ -232,6 +260,7 @@ impl LinkError {
             Self::UnboundNativeCall { .. } => "spark.script.link.unbound_native",
             Self::HostBindFailed { .. } => "spark.script.link.host_bind_failed",
             Self::EmptyLinkSet => "spark.script.link.empty_set",
+            Self::MissingEntryPackage { .. } => "spark.script.link.missing_entry_package",
             Self::MergeFailed { .. } => "spark.script.link.merge_failed",
         }
     }
@@ -288,7 +317,7 @@ pub struct ExecutableImage {
 impl ExecutableImage {
     /// 对已链接程序做字节码验证后封存（含宿主槽位契约）。
     pub fn verify(program: LinkedProgram) -> Result<Self, VerifyError> {
-        verify_bytecode_with_host(&program.legacy_module, program.host_slot_count)?;
+        verify_bytecode_with_host(&program.module, program.host_slot_count)?;
         Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
             package: program.package,
@@ -297,7 +326,7 @@ impl ExecutableImage {
             host_abi_version: program.host_abi_version,
             host_slot_count: program.host_slot_count,
             lifecycle_exports: program.lifecycle_exports,
-            module: program.legacy_module,
+            module: program.module,
         })
     }
 
@@ -319,7 +348,7 @@ impl ExecutableImage {
         &self.module
     }
 
-    /// 克隆内部模块供过渡期 [`crate::ScriptRuntime`] 装载。
+    /// 克隆内部模块供 [`crate::ScriptRuntime`] 装载。
     pub fn clone_module(&self) -> Module {
         self.module.clone()
     }
@@ -356,7 +385,7 @@ mod tests {
     use spark_vm::{FuncProto, Op};
 
     fn sample_module() -> Module {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         f.emit(Op::LoadNull);
         f.emit(Op::Return);
         Module {
@@ -379,7 +408,7 @@ mod tests {
     #[test]
     fn link_and_verify_roundtrip() {
         let host = schema_with_print();
-        let obj = SparkObject::from_legacy_module(
+        let obj = SparkObject::from_module(
             PackageId::anonymous(),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
@@ -394,7 +423,7 @@ mod tests {
     #[test]
     fn unresolved_host_fails_link() {
         let host = HostSchema::new(1);
-        let obj = SparkObject::from_legacy_module(
+        let obj = SparkObject::from_module(
             PackageId::anonymous(),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &HostSchema::new(1),
@@ -406,7 +435,7 @@ mod tests {
 
     #[test]
     fn link_rewrites_call_native_to_call_host() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let si = f.add_string("print");
         f.emit(Op::LoadNull);
         f.emit(Op::CallNative);
@@ -414,7 +443,7 @@ mod tests {
         f.emit_u8(1);
         f.emit(Op::Return);
         let host = schema_with_print();
-        let obj = SparkObject::from_legacy_module(
+        let obj = SparkObject::from_module(
             PackageId::anonymous(),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
@@ -426,13 +455,13 @@ mod tests {
         );
         let linked = LinkedProgram::link_single(obj, &host).unwrap();
         assert!(linked
-            .legacy_module
+            .module
             .functions[0]
             .code
             .iter()
             .any(|&b| b == Op::CallHost as u8));
         assert!(!linked
-            .legacy_module
+            .module
             .functions[0]
             .code
             .iter()
@@ -441,7 +470,7 @@ mod tests {
 
     #[test]
     fn unbound_call_native_fails_link() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let si = f.add_string("sneaky");
         f.emit(Op::LoadNull);
         f.emit(Op::CallNative);
@@ -449,7 +478,7 @@ mod tests {
         f.emit_u8(1);
         f.emit(Op::Return);
         let host = schema_with_print();
-        let obj = SparkObject::from_legacy_module(
+        let obj = SparkObject::from_module(
             PackageId::anonymous(),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
@@ -466,7 +495,7 @@ mod tests {
 
     #[test]
     fn verify_rejects_host_slot_oob() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         f.emit(Op::LoadNull);
         f.emit(Op::CallHost);
         f.emit_u16(5);
@@ -479,7 +508,7 @@ mod tests {
             host_schema_hash: 0,
             host_abi_version: 1,
             host_slot_count: 1,
-            legacy_module: Module {
+            module: Module {
                 functions: vec![f],
                 entry: 0,
                 native_names: vec!["print".into()],
@@ -505,10 +534,10 @@ mod tests {
         lib_fn.emit_u16(0);
         lib_fn.emit(Op::Add);
         lib_fn.emit(Op::Return);
-        let mut lib_main = FuncProto::new("__main", 0);
+        let mut lib_main = FuncProto::new("on_load", 0);
         lib_main.emit(Op::LoadNull);
         lib_main.emit(Op::Return);
-        let lib_obj = SparkObject::from_legacy_module(
+        let lib_obj = SparkObject::from_module(
             PackageId::new("lib", "1"),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
@@ -519,7 +548,7 @@ mod tests {
             },
         );
 
-        let mut entry_main = FuncProto::new("__main", 0);
+        let mut entry_main = FuncProto::new("on_load", 0);
         let twenty_one = entry_main.add_const_number(21.0);
         // double 在入口模块下标 0；链接后按名重映射。
         let double_ref = entry_main.add_const_func(0);
@@ -536,7 +565,7 @@ mod tests {
         stub.emit(Op::LoadLocal);
         stub.emit_u16(0);
         stub.emit(Op::Return);
-        let entry_obj = SparkObject::from_legacy_module(
+        let entry_obj = SparkObject::from_module(
             PackageId::new("app", "1"),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
@@ -547,10 +576,12 @@ mod tests {
             },
         );
 
-        // objects[0] 为入口包。
-        let linked = LinkedProgram::link_many(&[entry_obj, lib_obj], &host).unwrap();
+        // 显式入口包 `app`。
+        let entry_pkg = PackageId::new("app", "1");
+        let linked = LinkedProgram::link_many(&[lib_obj, entry_obj], &host, &entry_pkg).unwrap();
         let image = ExecutableImage::verify(linked).unwrap();
         assert!(image.module().functions.iter().any(|f| f.name == "double"));
+        assert!(image.module().functions.iter().any(|f| f.name == "on_load"));
         let mut vm = spark_vm::Vm::new(image.clone_module());
         let v = vm.run(&mut spark_vm::StdHost).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
@@ -559,7 +590,7 @@ mod tests {
     #[test]
     fn link_many_empty_fails() {
         let host = HostSchema::new(1);
-        let err = LinkedProgram::link_many(&[], &host).unwrap_err();
+        let err = LinkedProgram::link_many(&[], &host, &PackageId::anonymous()).unwrap_err();
         assert!(matches!(err, LinkError::EmptyLinkSet));
     }
 }

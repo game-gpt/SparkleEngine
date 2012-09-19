@@ -45,15 +45,18 @@ pub(crate) fn lower_root_to_hir(
         });
     }
 
-    functions.push(HirFunction {
-        name: Arc::from("__main"),
-        symbol: None,
-        params: Vec::new(),
-        return_ty: Ty::Dynamic,
-        locals: local_tys,
-        body,
-        span: None,
-    });
+    // 模组入口是 `on_load`；若源码已声明则丢弃顶层块。
+    if !functions.iter().any(|f| f.name.as_ref() == "on_load") {
+        functions.push(HirFunction {
+            name: Arc::from("on_load"),
+            symbol: None,
+            params: Vec::new(),
+            return_ty: Ty::Dynamic,
+            locals: local_tys,
+            body,
+            span: None,
+        });
+    }
 
     Ok(HirModule {
         package: PackageId::anonymous(),

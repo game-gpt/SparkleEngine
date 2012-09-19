@@ -35,8 +35,13 @@ pub fn emit_module_with_host(
     };
     let mut functions = Vec::with_capacity(module.functions.len());
     let mut entry = 0usize;
+    let mut found_entry = false;
     for (i, f) in module.functions.iter().enumerate() {
-        if f.name.as_ref() == "__main" {
+        // 正式入口为 `on_load`；仍识别 `__main` 以便消化旧字节码夹具。
+        if f.name.as_ref() == "on_load" {
+            entry = i;
+            found_entry = true;
+        } else if !found_entry && f.name.as_ref() == "__main" {
             entry = i;
         }
         functions.push(emit_function(f, host)?);
@@ -363,7 +368,7 @@ mod tests {
             package: PackageId::anonymous(),
             name: Arc::from("main"),
             functions: vec![HirFunction {
-                name: Arc::from("__main"),
+                name: Arc::from("on_load"),
                 symbol: None,
                 params: Vec::new(),
                 return_ty: Ty::Float,
@@ -427,7 +432,7 @@ mod tests {
                     span: None,
                 },
                 HirFunction {
-                    name: Arc::from("__main"),
+                    name: Arc::from("on_load"),
                     symbol: None,
                     params: Vec::new(),
                     return_ty: Ty::Float,
@@ -471,7 +476,7 @@ mod tests {
             package: PackageId::anonymous(),
             name: Arc::from("main"),
             functions: vec![HirFunction {
-                name: Arc::from("__main"),
+                name: Arc::from("on_load"),
                 symbol: None,
                 params: Vec::new(),
                 return_ty: Ty::Float,

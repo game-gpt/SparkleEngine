@@ -221,7 +221,7 @@ impl HostFunction {
 
     /// 当前调度阶段是否允许调用本函数。
     ///
-    /// `HostPhase::Any` 作为调用方阶段表示“未声明阶段”（过渡 `call`），一律放行。
+    /// `HostPhase::Any` 作为调用方阶段表示“未声明阶段”（如钩子 `call`），一律放行。
     /// 函数侧含 `Any` 或空列表也表示不限制。
     pub fn allows_phase(&self, phase: HostPhase) -> bool {
         if phase == HostPhase::Any {
