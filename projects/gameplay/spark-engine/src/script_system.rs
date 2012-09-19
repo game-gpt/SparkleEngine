@@ -1,8 +1,11 @@
 //! 脚本 System 描述符：进入与 Rust System 同一调度图前的声明契约。
 //!
-//! 初版只登记元数据；真正的查询游标与并行调度后续接入。
+//! 串行模式下已强制：before/after 拓扑序、同 phase 组件访问冲突检测、
+//! `Exclusive` 不得与其它同 phase System 并存。
+//! 查询游标过滤与并行批次仍后续接入。
 //! 同一 [`crate::ScriptDomain`] 的执行默认视为串行资源。
 
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use spark_script::{DeterminismClass, HostPhase};
@@ -104,9 +107,42 @@ impl ScriptSystemDescriptor {
         self.parallelism = policy;
         self
     }
+
+    /// 调度图节点键：`mod_id/name`。
+    pub fn graph_key(&self) -> String {
+        format!("{}/{}", self.mod_id, self.name)
+    }
 }
 
-/// 引擎侧脚本 System 登记表（按插入顺序；同域串行由调度器保证）。
+/// System 登记 / 调度声明错误。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScriptSystemError {
+    Cycle { detail: String },
+    AccessConflict { detail: String },
+    ExclusiveConflict { detail: String },
+    UnknownOrderTarget { detail: String },
+}
+
+impl std::fmt::Display for ScriptSystemError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cycle { detail } => write!(f, "spark.engine.script_system.cycle:{detail}"),
+            Self::AccessConflict { detail } => {
+                write!(f, "spark.engine.script_system.access_conflict:{detail}")
+            }
+            Self::ExclusiveConflict { detail } => {
+                write!(f, "spark.engine.script_system.exclusive_conflict:{detail}")
+            }
+            Self::UnknownOrderTarget { detail } => {
+                write!(f, "spark.engine.script_system.unknown_order:{detail}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ScriptSystemError {}
+
+/// 引擎侧脚本 System 登记表。
 #[derive(Debug, Default, Clone)]
 pub struct ScriptSystemRegistry {
     systems: Vec<ScriptSystemDescriptor>,
@@ -137,6 +173,15 @@ impl ScriptSystemRegistry {
         }
     }
 
+    /// 登记并立即校验当前全表声明（环 / 冲突）。
+    pub fn register_checked(
+        &mut self,
+        desc: ScriptSystemDescriptor,
+    ) -> Result<(), ScriptSystemError> {
+        self.register(desc);
+        self.validate_all()
+    }
+
     pub fn remove_mod(&mut self, mod_id: &str) {
         self.systems.retain(|s| s.mod_id.as_ref() != mod_id);
     }
@@ -149,6 +194,100 @@ impl ScriptSystemRegistry {
         self.systems
             .iter()
             .filter(move |s| s.phase == phase || s.phase == HostPhase::Any)
+    }
+
+    /// 校验全表：Exclusive、访问冲突、before/after 环。
+    pub fn validate_all(&self) -> Result<(), ScriptSystemError> {
+        let phases: HashSet<HostPhase> = self.systems.iter().map(|s| s.phase).collect();
+        for phase in phases {
+            let _ = self.ordered_for_phase(phase)?;
+        }
+        Ok(())
+    }
+
+    /// 按 before/after 拓扑序返回某一 phase 的 System；并检查访问冲突。
+    pub fn ordered_for_phase(
+        &self,
+        phase: HostPhase,
+    ) -> Result<Vec<&ScriptSystemDescriptor>, ScriptSystemError> {
+        let jobs: Vec<&ScriptSystemDescriptor> = self.for_phase(phase).collect();
+        if jobs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let exclusive: Vec<_> = jobs
+            .iter()
+            .filter(|s| s.parallelism == ScriptParallelism::Exclusive)
+            .collect();
+        if exclusive.len() > 1 {
+            return Err(ScriptSystemError::ExclusiveConflict {
+                detail: format!("phase={phase:?} exclusive_count={}", exclusive.len()),
+            });
+        }
+        if exclusive.len() == 1 && jobs.len() > 1 {
+            return Err(ScriptSystemError::ExclusiveConflict {
+                detail: format!(
+                    "phase={phase:?} exclusive={} peers={}",
+                    exclusive[0].graph_key(),
+                    jobs.len() - 1
+                ),
+            });
+        }
+
+        check_access_conflicts(&jobs)?;
+
+        // 图：edge A→B 表示 A 必须在 B 之前。
+        let keys: Vec<String> = jobs.iter().map(|s| s.graph_key()).collect();
+        let key_set: HashSet<&str> = keys.iter().map(|s| s.as_str()).collect();
+        let index: HashMap<&str, usize> = keys
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (k.as_str(), i))
+            .collect();
+
+        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); jobs.len()];
+        let mut indeg = vec![0usize; jobs.len()];
+
+        for (i, sys) in jobs.iter().enumerate() {
+            for after_name in &sys.after {
+                let pred = resolve_order_target(&jobs, after_name.as_ref(), &key_set)?;
+                let Some(&p) = index.get(pred.as_str()) else {
+                    continue;
+                };
+                adj[p].push(i);
+                indeg[i] += 1;
+            }
+            for before_name in &sys.before {
+                let succ = resolve_order_target(&jobs, before_name.as_ref(), &key_set)?;
+                let Some(&s) = index.get(succ.as_str()) else {
+                    continue;
+                };
+                adj[i].push(s);
+                indeg[s] += 1;
+            }
+        }
+
+        let mut queue: VecDeque<usize> = indeg
+            .iter()
+            .enumerate()
+            .filter_map(|(i, d)| (*d == 0).then_some(i))
+            .collect();
+        let mut ordered = Vec::with_capacity(jobs.len());
+        while let Some(i) = queue.pop_front() {
+            ordered.push(jobs[i]);
+            for &n in &adj[i] {
+                indeg[n] -= 1;
+                if indeg[n] == 0 {
+                    queue.push_back(n);
+                }
+            }
+        }
+        if ordered.len() != jobs.len() {
+            return Err(ScriptSystemError::Cycle {
+                detail: format!("phase={phase:?}"),
+            });
+        }
+        Ok(ordered)
     }
 
     /// 由领域生命周期导出生成默认 System（每导出一条）。
@@ -170,6 +309,57 @@ impl ScriptSystemRegistry {
             ));
         }
     }
+}
+
+fn resolve_order_target(
+    jobs: &[&ScriptSystemDescriptor],
+    target: &str,
+    key_set: &HashSet<&str>,
+) -> Result<String, ScriptSystemError> {
+    if key_set.contains(target) {
+        return Ok(target.to_string());
+    }
+    let matches: Vec<_> = jobs
+        .iter()
+        .filter(|s| s.name.as_ref() == target || s.entry.as_ref() == target)
+        .map(|s| s.graph_key())
+        .collect();
+    match matches.as_slice() {
+        [one] => Ok(one.clone()),
+        [] => Err(ScriptSystemError::UnknownOrderTarget {
+            detail: target.into(),
+        }),
+        _ => Err(ScriptSystemError::UnknownOrderTarget {
+            detail: format!("ambiguous:{target}"),
+        }),
+    }
+}
+
+fn check_access_conflicts(jobs: &[&ScriptSystemDescriptor]) -> Result<(), ScriptSystemError> {
+    // 串行执行仍要求声明互不矛盾：同一组件不得被两个 System 同时声明 write，
+    // 或 write 与另一 read（声明层冲突——真正并行前的契约检查）。
+    for (i, a) in jobs.iter().enumerate() {
+        for b in jobs.iter().skip(i + 1) {
+            for aa in &a.access {
+                for ba in &b.access {
+                    if aa.component != ba.component {
+                        continue;
+                    }
+                    if aa.write || ba.write {
+                        return Err(ScriptSystemError::AccessConflict {
+                            detail: format!(
+                                "{} vs {} on {}",
+                                a.graph_key(),
+                                b.graph_key(),
+                                aa.component
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn lifecycle_phase(name: &str) -> Option<HostPhase> {
@@ -221,5 +411,37 @@ mod tests {
         assert!(reg
             .for_phase(HostPhase::Update)
             .any(|s| s.entry.as_ref() == "update"));
+    }
+
+    #[test]
+    fn before_after_orders_systems() {
+        let mut reg = ScriptSystemRegistry::new();
+        reg.register(ScriptSystemDescriptor::new("m", "b", "b", HostPhase::Update).after("a"));
+        reg.register(ScriptSystemDescriptor::new("m", "a", "a", HostPhase::Update).before("b"));
+        let ordered = reg.ordered_for_phase(HostPhase::Update).unwrap();
+        assert_eq!(ordered[0].name.as_ref(), "a");
+        assert_eq!(ordered[1].name.as_ref(), "b");
+    }
+
+    #[test]
+    fn write_write_access_conflicts() {
+        let mut reg = ScriptSystemRegistry::new();
+        reg.register(
+            ScriptSystemDescriptor::new("m", "a", "a", HostPhase::Update).write("Transform"),
+        );
+        reg.register(
+            ScriptSystemDescriptor::new("m", "b", "b", HostPhase::Update).write("Transform"),
+        );
+        let err = reg.ordered_for_phase(HostPhase::Update).unwrap_err();
+        assert!(matches!(err, ScriptSystemError::AccessConflict { .. }));
+    }
+
+    #[test]
+    fn cycle_is_rejected() {
+        let mut reg = ScriptSystemRegistry::new();
+        reg.register(ScriptSystemDescriptor::new("m", "a", "a", HostPhase::Update).before("b"));
+        reg.register(ScriptSystemDescriptor::new("m", "b", "b", HostPhase::Update).before("a"));
+        let err = reg.ordered_for_phase(HostPhase::Update).unwrap_err();
+        assert!(matches!(err, ScriptSystemError::Cycle { .. }));
     }
 }

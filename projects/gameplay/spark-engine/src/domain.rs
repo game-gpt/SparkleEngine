@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use spark_gc::Value;
-use spark_script::{ExecutableImage, HostSchema, ScriptLanguage, ScriptRuntime};
+use spark_script::{ExecutableImage, HostPhase, HostSchema, ScriptLanguage, ScriptRuntime};
 use spark_vm::{HostHooks, Module};
 
 use crate::command_buffer::ScriptCommandBuffer;
@@ -96,11 +96,25 @@ impl ScriptDomain {
         args: &[Value],
         host: &mut dyn HostHooks,
     ) -> Result<Value, EngineError> {
+        self.call_in_phase(name, args, HostPhase::Any, host)
+    }
+
+    /// 在指定 [`HostPhase`] 下调用导出（调度器须先在 [`EngineShared`] 写入阶段与访问策略）。
+    pub fn call_in_phase(
+        &mut self,
+        name: &str,
+        args: &[Value],
+        phase: HostPhase,
+        host: &mut dyn HostHooks,
+    ) -> Result<Value, EngineError> {
         if !self.enabled {
             return Err(EngineError::ScriptDomainDisabled {
                 mod_id: self.mod_id.to_string(),
             });
         }
+        // 阶段门禁由引擎在 `EngineShared.active_phase` + 内置原生 `gate` 强制；
+        // 此处保留参数供调用方审计与未来 VM 级槽位检查。
+        let _ = phase;
         self.runtime
             .call(name, args, host)
             .map_err(EngineError::Script)

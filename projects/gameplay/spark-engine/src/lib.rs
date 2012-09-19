@@ -8,6 +8,7 @@
 //! **不**提供游戏内容权威（方块 / 配方等由游戏仓解释 [`DataRegistry`]）。
 //! Rust 宿主若直接需要能力，请 path 依赖对应 crate，勿把 Rust API 伪装成插件。
 
+mod access_policy;
 mod api;
 mod command_apply;
 mod command_buffer;
@@ -25,7 +26,8 @@ mod run;
 mod script_system;
 mod vfs;
 
-pub use api::{BuiltinApi, ENGINE_NATIVES};
+pub use access_policy::{ScriptAccessPolicy, check_host_phase};
+pub use api::{BuiltinApi, ENGINE_NATIVES, engine_host_schema};
 pub use command_apply::{
     apply_script_commands, apply_script_commands_with, CommandApplyReport, ComponentDescriptorId,
     ScriptArchetypeTag, ScriptComponentCatalog, ScriptMarker, SCRIPT_MARKER_NAME,
@@ -45,7 +47,8 @@ pub use query_view::{ScriptQuerySnapshot, ScriptQueryView};
 pub use registry::{DataRegistry, RegValue};
 pub use run::{run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
 pub use script_system::{
-    ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemRegistry,
+    ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError,
+    ScriptSystemRegistry,
 };
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
 pub use vfs::ModVfs;
@@ -91,6 +94,8 @@ pub enum EngineError {
     },
     /// 脚本领域已被禁用（trap / 预算等）。
     ScriptDomainDisabled { mod_id: String },
+    /// 脚本 System 声明 / 调度契约失败。
+    ScriptSystem(ScriptSystemError),
 }
 
 impl EngineError {
@@ -108,6 +113,7 @@ impl EngineError {
             Self::Io { .. } => "spark.engine.io".into(),
             Self::HookFailed { .. } => "spark.engine.hook_failed".into(),
             Self::ScriptDomainDisabled { .. } => "spark.engine.script_domain_disabled".into(),
+            Self::ScriptSystem(_) => "spark.engine.script_system".into(),
         }
     }
 
@@ -147,6 +153,8 @@ impl EngineError {
                 .with("function", ErrorArg::String(Arc::from(function.as_str()))),
             Self::ScriptDomainDisabled { mod_id } => ErrorArgs::new()
                 .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str()))),
+            Self::ScriptSystem(e) => ErrorArgs::new()
+                .with("detail", ErrorArg::String(Arc::from(e.to_string()))),
         }
     }
 
@@ -227,6 +235,12 @@ impl From<PluginError> for EngineError {
     }
 }
 
+impl From<ScriptSystemError> for EngineError {
+    fn from(value: ScriptSystemError) -> Self {
+        Self::ScriptSystem(value)
+    }
+}
+
 impl From<EngineError> for SparkError {
     fn from(e: EngineError) -> Self {
         match e {
@@ -251,6 +265,12 @@ pub struct EngineShared {
     pub localization: LocalizationService,
     /// 帧同步点拍摄的 ECS 只读查询快照（脚本 `query_*` 读取）。
     pub query: ScriptQuerySnapshot,
+    /// 当前脚本调用的生命周期阶段（由调度器写入）。
+    pub active_phase: HostPhase,
+    /// 当前脚本调用的组件访问策略。
+    pub access: ScriptAccessPolicy,
+    /// 与编译期一致的宿主 ABI（阶段 / 效果门禁）。
+    pub host_schema: HostSchema,
 }
 
 impl EngineShared {
@@ -259,6 +279,25 @@ impl EngineShared {
         let changed = self.localization.commit_pending(&mut self.events);
         self.events.update_all();
         changed
+    }
+
+    /// 进入一次脚本导出调用前设置阶段与访问契约。
+    pub fn begin_script_call(
+        &mut self,
+        phase: HostPhase,
+        desc: Option<&ScriptSystemDescriptor>,
+    ) {
+        self.active_phase = phase;
+        self.access = match desc {
+            Some(d) => ScriptAccessPolicy::from_descriptor(d),
+            None => ScriptAccessPolicy::Unrestricted,
+        };
+    }
+
+    /// 调用结束后恢复为未声明阶段 + 无限制访问。
+    pub fn end_script_call(&mut self) {
+        self.active_phase = HostPhase::Any;
+        self.access = ScriptAccessPolicy::Unrestricted;
     }
 }
 
@@ -275,8 +314,10 @@ pub struct SparkEngine {
 
 impl SparkEngine {
     pub fn new(mods_root: impl Into<PathBuf>) -> Self {
+        let mut shared = EngineShared::default();
+        shared.host_schema = crate::api::engine_host_schema();
         Self {
-            shared: Rc::new(RefCell::new(EngineShared::default())),
+            shared: Rc::new(RefCell::new(shared)),
             mods: HashMap::new(),
             mods_root: mods_root.into(),
             plugins: PluginRegistry::new(),
@@ -300,9 +341,13 @@ impl SparkEngine {
         &mut self.script_systems
     }
 
-    /// 登记脚本 System 描述符（同 `mod_id`+`name` 覆盖）。
-    pub fn register_script_system(&mut self, desc: ScriptSystemDescriptor) {
-        self.script_systems.register(desc);
+    /// 登记脚本 System 描述符（同 `mod_id`+`name` 覆盖），并校验声明契约。
+    pub fn register_script_system(
+        &mut self,
+        desc: ScriptSystemDescriptor,
+    ) -> Result<(), EngineError> {
+        self.script_systems.register_checked(desc)?;
+        Ok(())
     }
 
     /// 注册脚本插件（须在 `load_*` 之前，以便编译期声明原生名）。
@@ -380,8 +425,8 @@ impl SparkEngine {
         let mut domain = None;
 
         if manifest.artifact.is_some() || manifest.entry.is_some() {
-            let natives = self.compile_native_names();
-            let host_schema = host_schema_from_names(&natives);
+            let host_schema = self.build_host_schema();
+            self.shared.borrow_mut().host_schema = host_schema.clone();
             let image = load_mod_image(&manifest, &root, &host_schema)?;
             let mut script_domain = ScriptDomain::from_image(
                 manifest.id.as_str(),
@@ -400,9 +445,19 @@ impl SparkEngine {
             let mut hooks = StdHost;
             // 有 `on_load` 则走生命周期；否则过渡期仍执行顶层（`register_hook` 等）。
             if script_domain.has_lifecycle("on_load") {
-                let _ = script_domain.call_lifecycle("on_load", &[], &mut hooks)?;
+                self.shared
+                    .borrow_mut()
+                    .begin_script_call(HostPhase::OnLoad, None);
+                let load_result = script_domain.call_lifecycle("on_load", &[], &mut hooks);
+                self.shared.borrow_mut().end_script_call();
+                let _ = load_result?;
             } else {
-                script_domain.eval_entry(&mut hooks)?;
+                self.shared
+                    .borrow_mut()
+                    .begin_script_call(HostPhase::OnLoad, None);
+                let eval_result = script_domain.eval_entry(&mut hooks);
+                self.shared.borrow_mut().end_script_call();
+                eval_result?;
             }
             self.script_systems.register_lifecycle_exports(
                 manifest.id.as_str(),
@@ -605,6 +660,7 @@ impl SparkEngine {
 
     /// 按 [`HostPhase`] 调度已登记的脚本 System（同域串行）。
     ///
+    /// 调度前按 `before`/`after` 拓扑排序，并检查组件访问声明冲突。
     /// 每个描述符调用其 `entry` 导出；调用后不自动提交命令（由宿主调用
     /// [`Self::apply_script_commands_to_world`]）。
     pub fn run_script_phase(
@@ -612,12 +668,19 @@ impl SparkEngine {
         phase: HostPhase,
         host: &mut dyn HostHooks,
     ) -> Result<(), EngineError> {
-        let jobs: Vec<(String, String)> = self
+        let jobs: Vec<(String, String, Option<ScriptSystemDescriptor>)> = self
             .script_systems
-            .for_phase(phase)
-            .map(|s| (s.mod_id.to_string(), s.entry.to_string()))
+            .ordered_for_phase(phase)?
+            .into_iter()
+            .map(|s| {
+                (
+                    s.mod_id.to_string(),
+                    s.entry.to_string(),
+                    Some(s.clone()),
+                )
+            })
             .collect();
-        for (mod_id, entry) in jobs {
+        for (mod_id, entry, desc) in jobs {
             let Some(m) = self.mods.get_mut(&mod_id) else {
                 continue;
             };
@@ -638,7 +701,12 @@ impl SparkEngine {
                 .iter()
                 .any(|f| f.name == entry);
             if has_entry {
-                let _ = domain.call(&entry, &[], host)?;
+                self.shared
+                    .borrow_mut()
+                    .begin_script_call(phase, desc.as_ref());
+                let call_result = domain.call_in_phase(&entry, &[], phase, host);
+                self.shared.borrow_mut().end_script_call();
+                let _ = call_result?;
             }
         }
         Ok(())
@@ -667,6 +735,21 @@ impl SparkEngine {
             }
         }
         names
+    }
+
+    /// 编译/装载共用的宿主 schema：引擎内置 ABI + 插件短名桩。
+    fn build_host_schema(&self) -> HostSchema {
+        let mut schema = crate::api::engine_host_schema();
+        for name in self.compile_native_names() {
+            let known = schema
+                .functions
+                .iter()
+                .any(|f| f.short_name() == name);
+            if !known {
+                schema.insert(HostFunction::new(HostFunctionId::new("plugin", name, 1)));
+            }
+        }
+        schema
     }
 }
 
@@ -740,18 +823,6 @@ fn load_spkx_checked(
         .check_host_schema(host_schema)
         .map_err(|e| EngineError::Script(ScriptError::compile_reason(e.code())))?;
     Ok(image)
-}
-
-fn host_schema_from_names(names: &[&str]) -> HostSchema {
-    let mut schema = HostSchema::new(1);
-    for name in names {
-        schema.insert(HostFunction::new(HostFunctionId::new(
-            "spark.engine",
-            *name,
-            1,
-        )));
-    }
-    schema
 }
 
 fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
@@ -1144,6 +1215,97 @@ entry = "main.vk"
         assert_eq!(report.spawned.len(), 1);
         let view = ScriptQueryView::new(&world);
         assert_eq!(view.entities_with_archetype("npc").len(), 1);
+    }
+
+    #[test]
+    fn render_prepare_denies_queue_spawn() {
+        let root = std::env::temp_dir().join("spark_engine_mod_phase_deny");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "phase_deny"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro render_prepare() {
+                queue_spawn("ghost")
+                return 0
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        eng.load_mod_dir(&root).unwrap();
+        eng.script_systems_mut().register(ScriptSystemDescriptor::new(
+            "phase_deny",
+            "draw",
+            "render_prepare",
+            HostPhase::RenderPrepare,
+        ));
+        let mut world = spark_ecs::World::new();
+        let mut hooks = StdHost;
+        let err = eng
+            .run_script_systems(HostPhase::RenderPrepare, &mut world, &mut hooks)
+            .unwrap_err();
+        assert!(
+            err.code().contains("script") || format!("{err:?}").contains("HostDenied"),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn system_without_write_access_denies_add_component() {
+        let root = std::env::temp_dir().join("spark_engine_mod_access_deny");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "access_deny"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro on_load() {
+                queue_spawn("rock")
+                return 0
+            }
+            micro update() {
+                queue_add_component(query_entity_at("rock", 0), "Transform")
+                return 0
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        eng.load_mod_dir(&root).unwrap();
+        // 覆盖默认空访问生命周期：显式 Declared 且无写集。
+        eng.script_systems_mut().register(
+            ScriptSystemDescriptor::new("access_deny", "update", "update", HostPhase::Update)
+                .read("Transform"),
+        );
+        let mut world = spark_ecs::World::new();
+        let _ = eng.apply_script_commands_to_world(&mut world);
+        let mut hooks = StdHost;
+        let err = eng
+            .run_script_systems(HostPhase::Update, &mut world, &mut hooks)
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("host_access_denied") || msg.contains("HostDenied") || msg.contains("script"),
+            "{msg}"
+        );
     }
 
     #[test]
