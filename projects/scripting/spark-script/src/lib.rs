@@ -41,9 +41,9 @@ pub use request::{
 };
 pub use runtime::ScriptRuntime;
 pub use spark_script_ir::{
-    BasicBlock, HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostEmitMode,
-    HostRef, MirFunction, MirInst, MirModule, MirTerminator, MirValue, SymbolId, Ty, emit_module,
-    emit_module_with_host, lower_module,
+    BasicBlock, HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindEntry,
+    HostBindTable, HostEmitMode, HostId, HostRef, MirFunction, MirInst, MirModule, MirTerminator,
+    MirValue, SymbolId, Ty, emit_module, emit_module_with_host, lower_module,
 };
 pub use spark_script_ir::PackageId as IrPackageId;
 pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};

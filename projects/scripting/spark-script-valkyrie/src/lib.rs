@@ -1,19 +1,19 @@
 //! Oaks `oak-valkyrie` Builder → Spark HIR → 公共 IR → `spark-vm` 字节码。
 //!
-//! 解析只走 [`ValkyrieBuilder`]。优先经 `spark-script-ir` 管线；子集不覆盖时回退旧 lowering。
+//! 解析只走 [`ValkyrieBuilder`]。正式编译只经 `spark-script-ir`；不支持的构造必须报错。
 
-mod compile;
 mod lower;
 mod native_sig;
 
-use compile::compile_root;
 use lower::lower_root_to_hir;
 
 use oak_core::{Builder, SourceText};
 use oak_core::errors::OakErrorKind;
 use oak_valkyrie::{ValkyrieBuilder, ValkyrieLanguage, ValkyrieRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
-use spark_script_ir::{emit_module_with_host, lower_module, HostEmitMode};
+use spark_script_ir::{
+    emit_module_with_host, lower_module, HostBindTable, HostEmitMode,
+};
 use spark_vm::Module;
 
 pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
@@ -82,26 +82,31 @@ impl std::error::Error for ValkyrieScriptError {}
 
 /// 源码 → [`Module`]。
 ///
-/// `natives` 仅提供函数名，**不足以**支撑补全与类型检查。
-/// 新代码请优先使用 [`compile_with_registry`]。
-/// 优先走 HIR→MIR→字节码；子集不覆盖则回退旧路径。
+/// `natives` 仅提供函数短名；正式路径请用 [`compile_with_binds`]。
+/// 只走 HIR→MIR→字节码；降低失败必须报错，不得回退旧编译器。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, ValkyrieScriptError> {
-    let root = parse(source)?;
-    match lower_root_to_hir(&root, natives) {
-        Ok(hir) => {
-            let mir = lower_module(&hir).map_err(ValkyrieScriptError::compile_opaque)?;
-            let host = if natives.is_empty() {
-                HostEmitMode::CallNativeByName
-            } else {
-                HostEmitMode::CallHostSlots(natives)
-            };
-            emit_module_with_host(&mir, host).map_err(ValkyrieScriptError::compile_opaque)
-        }
-        Err(_) => compile_root(&root, natives).map_err(ValkyrieScriptError::compile_opaque),
-    }
+    let binds = HostBindTable::from_short_names(natives)
+        .map_err(ValkyrieScriptError::compile_opaque)?;
+    compile_with_binds(source, &binds)
 }
 
-/// 带完整宿主签名的编译入口。
+/// 带完整宿主绑定表的编译入口（稳定身份 + 槽位）。
+pub fn compile_with_binds(
+    source: &str,
+    hosts: &HostBindTable,
+) -> Result<Module, ValkyrieScriptError> {
+    let root = parse(source)?;
+    let hir = lower_root_to_hir(&root, hosts).map_err(ValkyrieScriptError::compile_opaque)?;
+    let mir = lower_module(&hir).map_err(ValkyrieScriptError::compile_opaque)?;
+    let mode = if hosts.is_empty() {
+        HostEmitMode::NoHost
+    } else {
+        HostEmitMode::Bound(hosts)
+    };
+    emit_module_with_host(&mir, mode).map_err(ValkyrieScriptError::compile_opaque)
+}
+
+/// 带完整宿主签名的编译入口（经短名绑定表；短名冲突即失败）。
 pub fn compile_with_registry(
     source: &str,
     natives: &NativeRegistry,

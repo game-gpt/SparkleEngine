@@ -2,24 +2,24 @@
 //!
 //! 支持：顶层 / `def` 内 `return`、局部赋值、算术比较、字面量、
 //! `if` / `while` / `until` / `break`、数值 `for .. in a..b`、`&&`/`||`/`and`/`or`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
-//! 类、实例变量、全局、`Send`、块、`each`/`case` 等回退旧路径。
+//! 类、实例变量、全局、`Send`、块、`each`/`case` 等返回 Unsupported。
 //!
 //! 注：Oaks 当前 builder 不产出 `Case`，且 `case`/`when` 解析会卡死，故不走 IR。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use oak_ruby::ast::{ExpressionNode, LiteralNode, RubyRoot, StatementNode};
 use spark_script_ir::{
-    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, PackageId, Ty,
+    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindTable,
+    PackageId, Ty,
 };
 
 /// 尝试将整个根降低为 HIR。
 pub(crate) fn lower_root_to_hir(
     root: &RubyRoot,
-    native_names: &[&str],
+    hosts: &HostBindTable,
 ) -> Result<HirModule, String> {
-    let native_set: HashSet<&str> = native_names.iter().copied().collect();
     let mut methods = Vec::new();
     collect_top_methods(&root.statements, &mut methods)?;
 
@@ -30,13 +30,13 @@ pub(crate) fn lower_root_to_hir(
 
     let mut functions: Vec<HirFunction> = Vec::new();
     for method in &methods {
-        functions.push(lower_method(method, &fn_index, &native_set)?);
+        functions.push(lower_method(method, &fn_index, hosts)?);
     }
 
     let mut locals: HashMap<String, u32> = HashMap::new();
     let mut local_tys: Vec<(Arc<str>, Ty)> = Vec::new();
     let (mut body, saw_return) =
-        lower_block_stmts(&root.statements, &mut locals, &mut local_tys, &fn_index, &native_set)?;
+        lower_block_stmts(&root.statements, &mut locals, &mut local_tys, &fn_index, hosts)?;
 
     if !saw_return {
         body.push(HirStmt::Return {
@@ -112,7 +112,7 @@ fn collect_top_methods(stmts: &[StatementNode], out: &mut Vec<MethodRef>) -> Res
 fn lower_method(
     method: &MethodRef,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirFunction, String> {
     let mut locals: HashMap<String, u32> = HashMap::new();
     let mut params: Vec<(Arc<str>, Ty)> = Vec::new();
@@ -122,7 +122,7 @@ fn lower_method(
     }
     let mut local_tys: Vec<(Arc<str>, Ty)> = Vec::new();
     let (mut body, saw_return) =
-        lower_block_stmts(&method.body, &mut locals, &mut local_tys, fn_index, native_set)?;
+        lower_block_stmts(&method.body, &mut locals, &mut local_tys, fn_index, hosts)?;
     if !saw_return {
         body.push(HirStmt::Return {
             value: Some(HirExpr::LiteralNull { span: None }),
@@ -145,7 +145,7 @@ fn lower_block_stmts(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<(Vec<HirStmt>, bool), String> {
     let mut body = Vec::new();
     let mut saw_return = false;
@@ -156,7 +156,13 @@ fn lower_block_stmts(
         ) {
             continue;
         }
-        let (hir, is_ret) = lower_statement(stmt, locals, local_tys, fn_index, native_set)?;
+        // Oaks `ForStatement` 会把 iterable（`a..b`）再塞进 body 一次；跳过孤立范围表达式。
+        if let StatementNode::Expression(ExpressionNode::BinaryOp { operator, .. }) = stmt {
+            if operator == ".." || operator == "..." {
+                continue;
+            }
+        }
+        let (hir, is_ret) = lower_statement(stmt, locals, local_tys, fn_index, hosts)?;
         if is_ret {
             saw_return = true;
         }
@@ -170,18 +176,18 @@ fn lower_statement(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<(HirStmt, bool), String> {
     match stmt {
         StatementNode::Return { value, .. } => {
             let value = match value {
-                Some(e) => Some(lower_expr(e, locals, fn_index, native_set)?),
+                Some(e) => Some(lower_expr(e, locals, fn_index, hosts)?),
                 None => Some(HirExpr::LiteralNull { span: None }),
             };
             Ok((HirStmt::Return { value, span: None }, true))
         }
         StatementNode::Assignment { target, value, .. } => Ok((
-            lower_assignment(target, value, locals, local_tys, fn_index, native_set)?,
+            lower_assignment(target, value, locals, local_tys, fn_index, hosts)?,
             false,
         )),
         StatementNode::If {
@@ -190,23 +196,23 @@ fn lower_statement(
             else_body,
             ..
         } => Ok((
-            lower_if(condition, then_body, else_body.as_deref(), locals, local_tys, fn_index, native_set)?,
+            lower_if(condition, then_body, else_body.as_deref(), locals, local_tys, fn_index, hosts)?,
             false,
         )),
         StatementNode::While {
             condition, body, ..
         } => Ok((
-            lower_while(condition, body, false, locals, local_tys, fn_index, native_set)?,
+            lower_while(condition, body, false, locals, local_tys, fn_index, hosts)?,
             false,
         )),
         StatementNode::Until {
             condition, body, ..
         } => Ok((
-            lower_while(condition, body, true, locals, local_tys, fn_index, native_set)?,
+            lower_while(condition, body, true, locals, local_tys, fn_index, hosts)?,
             false,
         )),
         StatementNode::Expression(expr) => {
-            let expr = lower_expr(expr, locals, fn_index, native_set)?;
+            let expr = lower_expr(expr, locals, fn_index, hosts)?;
             Ok((HirStmt::Expr { expr, span: None }, false))
         }
         StatementNode::For {
@@ -215,7 +221,7 @@ fn lower_statement(
             body,
             ..
         } => Ok((
-            lower_for_range(var, iterable, body, locals, local_tys, fn_index, native_set)?,
+            lower_for_range(var, iterable, body, locals, local_tys, fn_index, hosts)?,
             false,
         )),
         StatementNode::Break { .. } => Ok((HirStmt::Break { span: None }, false)),
@@ -249,7 +255,7 @@ fn lower_for_range(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
     let ExpressionNode::BinaryOp {
         left,
@@ -268,9 +274,9 @@ fn lower_for_range(
     let i_idx = alloc_local(var, locals, local_tys);
     let end_name = format!("__for_end_{i_idx}");
     let end_idx = alloc_local(&end_name, locals, local_tys);
-    let start = lower_expr(left, locals, fn_index, native_set)?;
-    let end = lower_expr(right, locals, fn_index, native_set)?;
-    let (mut loop_body, _) = lower_block_stmts(body, locals, local_tys, fn_index, native_set)?;
+    let start = lower_expr(left, locals, fn_index, hosts)?;
+    let end = lower_expr(right, locals, fn_index, hosts)?;
+    let (mut loop_body, _) = lower_block_stmts(body, locals, local_tys, fn_index, hosts)?;
     loop_body.push(HirStmt::AssignLocal {
         index: i_idx,
         value: HirExpr::Binary {
@@ -330,12 +336,12 @@ fn lower_assignment(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
     if target.starts_with('$') || target.starts_with('@') {
         return Err(format!("ir_unsupported_assign_target:{target}"));
     }
-    let value = lower_expr(value, locals, fn_index, native_set)?;
+    let value = lower_expr(value, locals, fn_index, hosts)?;
     let index = if let Some(&idx) = locals.get(target) {
         idx
     } else {
@@ -358,12 +364,12 @@ fn lower_if(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
-    let cond = lower_expr(condition, locals, fn_index, native_set)?;
-    let (then_body, _) = lower_block_stmts(then_body, locals, local_tys, fn_index, native_set)?;
+    let cond = lower_expr(condition, locals, fn_index, hosts)?;
+    let (then_body, _) = lower_block_stmts(then_body, locals, local_tys, fn_index, hosts)?;
     let else_body = match else_body {
-        Some(block) => lower_block_stmts(block, locals, local_tys, fn_index, native_set)?.0,
+        Some(block) => lower_block_stmts(block, locals, local_tys, fn_index, hosts)?.0,
         None => Vec::new(),
     };
     Ok(HirStmt::If {
@@ -381,9 +387,9 @@ fn lower_while(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
-    let cond = lower_expr(condition, locals, fn_index, native_set)?;
+    let cond = lower_expr(condition, locals, fn_index, hosts)?;
     let cond = if invert {
         HirExpr::Unary {
             op: HirUnaryOp::Not,
@@ -393,7 +399,7 @@ fn lower_while(
     } else {
         cond
     };
-    let (body, _) = lower_block_stmts(body, locals, local_tys, fn_index, native_set)?;
+    let (body, _) = lower_block_stmts(body, locals, local_tys, fn_index, hosts)?;
     Ok(HirStmt::While {
         cond,
         body,
@@ -405,7 +411,7 @@ fn lower_expr(
     expr: &ExpressionNode,
     locals: &HashMap<String, u32>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirExpr, String> {
     match expr {
         ExpressionNode::Literal(lit) => lower_literal(lit),
@@ -434,8 +440,8 @@ fn lower_expr(
             ..
         } => {
             if matches!(operator.as_str(), "&&" | "and" | "||" | "or") {
-                let lhs = lower_expr(left, locals, fn_index, native_set)?;
-                let rhs = lower_expr(right, locals, fn_index, native_set)?;
+                let lhs = lower_expr(left, locals, fn_index, hosts)?;
+                let rhs = lower_expr(right, locals, fn_index, hosts)?;
                 let is_and = matches!(operator.as_str(), "&&" | "and");
                 return Ok(if is_and {
                     HirExpr::If {
@@ -472,8 +478,8 @@ fn lower_expr(
             };
             Ok(HirExpr::Binary {
                 op: hir_op,
-                lhs: Box::new(lower_expr(left, locals, fn_index, native_set)?),
-                rhs: Box::new(lower_expr(right, locals, fn_index, native_set)?),
+                lhs: Box::new(lower_expr(left, locals, fn_index, hosts)?),
+                rhs: Box::new(lower_expr(right, locals, fn_index, hosts)?),
                 span: None,
             })
         }
@@ -487,7 +493,7 @@ fn lower_expr(
             };
             Ok(HirExpr::Unary {
                 op,
-                expr: Box::new(lower_expr(operand, locals, fn_index, native_set)?),
+                expr: Box::new(lower_expr(operand, locals, fn_index, hosts)?),
                 span: None,
             })
         }
@@ -513,7 +519,7 @@ fn lower_expr(
                     });
                 }
             }
-            lower_bare_call(method, args, locals, fn_index, native_set)
+            lower_bare_call(method, args, locals, fn_index, hosts)
         }
         ExpressionNode::Array { .. } | ExpressionNode::Hash { .. } => {
             Err(format!("ir_unsupported_expr:{expr:?}"))
@@ -550,11 +556,11 @@ fn lower_bare_call(
     args: &[ExpressionNode],
     locals: &HashMap<String, u32>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirExpr, String> {
     let argv: Result<Vec<_>, _> = args
         .iter()
-        .map(|a| lower_expr(a, locals, fn_index, native_set))
+        .map(|a| lower_expr(a, locals, fn_index, hosts))
         .collect();
     let argv = argv?;
 
@@ -565,9 +571,17 @@ fn lower_bare_call(
             span: None,
         });
     }
-    if native_set.contains(name) {
+    if let Ok(entry) = hosts.resolve(name) {
+        if entry.param_count != u16::MAX && args.len() as u16 != entry.param_count {
+            return Err(format!(
+                "host_arity:{}:expected_{}_got_{}",
+                entry.id.qualified_name(),
+                entry.param_count,
+                args.len()
+            ));
+        }
         return Ok(HirExpr::HostCall {
-            host_name: Arc::from(name),
+            host: entry.id.clone(),
             args: argv,
             span: None,
         });

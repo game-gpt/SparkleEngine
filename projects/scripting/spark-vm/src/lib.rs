@@ -50,6 +50,8 @@ pub enum VmError {
     CallDepthExceeded,
     /// 堆分配次数预算耗尽。
     AllocationLimitExceeded,
+    /// 宿主 ABI / 阶段 / 能力门禁拒绝（`detail` 为稳定令牌）。
+    HostDenied { detail: String },
 }
 
 impl VmError {
@@ -72,6 +74,7 @@ impl VmError {
             Self::HostCallLimitExceeded => "spark.vm.host_call_limit",
             Self::CallDepthExceeded => "spark.vm.call_depth_limit",
             Self::AllocationLimitExceeded => "spark.vm.allocation_limit",
+            Self::HostDenied { .. } => "spark.vm.host_denied",
         }
     }
 
@@ -92,6 +95,9 @@ impl VmError {
                 .with("got", ErrorArg::Unsigned(u64::from(*got))),
             Self::BadNativeArg { name } => {
                 ErrorArgs::new().with("name", ErrorArg::String(Arc::from(*name)))
+            }
+            Self::HostDenied { detail } => {
+                ErrorArgs::new().with("detail", ErrorArg::String(Arc::from(detail.as_str())))
             }
             Self::StackUnderflow
             | Self::CodeOob

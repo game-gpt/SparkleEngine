@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use spark_script_ir::{HostBindEntry, HostBindTable, HostId};
 use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 
 /// 宿主调用的效果分类（编译器内部约束，不必全部暴露为用户语法）。
@@ -33,7 +34,7 @@ pub enum DeterminismClass {
 }
 
 /// 允许执行的生命周期阶段。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum HostPhase {
     OnLoad,
     OnStart,
@@ -43,6 +44,7 @@ pub enum HostPhase {
     RenderPrepare,
     OnEvent,
     OnUnload,
+    #[default]
     Any,
 }
 
@@ -216,6 +218,22 @@ impl HostFunction {
     pub fn short_name(&self) -> &str {
         self.id.name.as_ref()
     }
+
+    /// 当前调度阶段是否允许调用本函数。
+    ///
+    /// `HostPhase::Any` 作为调用方阶段表示“未声明阶段”（过渡 `call`），一律放行。
+    /// 函数侧含 `Any` 或空列表也表示不限制。
+    pub fn allows_phase(&self, phase: HostPhase) -> bool {
+        if phase == HostPhase::Any {
+            return true;
+        }
+        if self.allowed_phases.is_empty() {
+            return true;
+        }
+        self.allowed_phases
+            .iter()
+            .any(|p| *p == HostPhase::Any || *p == phase)
+    }
 }
 
 /// 一整份宿主 ABI schema（编译与运行必须同一份）。
@@ -250,7 +268,54 @@ impl HostSchema {
     }
 
     pub fn get_by_short_name(&self, name: &str) -> Option<&HostFunction> {
-        self.functions.iter().find(|f| f.id.name.as_ref() == name)
+        let mut found = None;
+        for f in &self.functions {
+            if f.id.name.as_ref() == name {
+                if found.is_some() {
+                    // 短名歧义：调用方应改用 [`Self::get`] 或 [`Self::to_bind_table`]。
+                    return None;
+                }
+                found = Some(f);
+            }
+        }
+        found
+    }
+
+    /// 按短名解析；冲突或缺失时返回错误令牌。
+    pub fn resolve_short_name(&self, name: &str) -> Result<&HostFunction, String> {
+        let matches: Vec<_> = self
+            .functions
+            .iter()
+            .filter(|f| f.id.name.as_ref() == name)
+            .collect();
+        match matches.as_slice() {
+            [f] => Ok(f),
+            [] => Err(format!("host_unknown:{name}")),
+            _ => Err(format!("host_short_name_conflict:{name}")),
+        }
+    }
+
+    /// 导出编译期 [`HostBindTable`]（短名冲突即失败）。
+    pub fn to_bind_table(&self) -> Result<HostBindTable, String> {
+        let mut table = HostBindTable::new();
+        for (i, func) in self.functions.iter().enumerate() {
+            let param_count = if func.params.is_empty() {
+                // 空参数表 = 未声明 arity（桩 / 动态脚本）；非空才做个数检查。
+                u16::MAX
+            } else {
+                func.params.len() as u16
+            };
+            table.push(HostBindEntry {
+                id: HostId::new(
+                    Arc::clone(&func.id.namespace),
+                    Arc::clone(&func.id.name),
+                    func.id.abi_version,
+                ),
+                slot: i as u32,
+                param_count,
+            })?;
+        }
+        Ok(table)
     }
 
     /// 链接后的稳定槽位下标（按插入顺序）。
@@ -361,9 +426,26 @@ mod tests {
         let spawn_id = HostFunctionId::new("spark.ecs", "spawn", 1);
         assert_eq!(schema.slot_of(&spawn_id), Some(0));
         assert_eq!(schema.short_names(), vec!["spawn", "print"]);
+        let binds = schema.to_bind_table().unwrap();
+        assert_eq!(binds.len(), 2);
+        assert_eq!(
+            binds.resolve("spawn").unwrap().id.namespace.as_ref(),
+            "spark.ecs"
+        );
         let h1 = schema.content_hash();
         let h2 = schema.content_hash();
         assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn short_name_conflict_rejected_by_bind_table() {
+        let mut schema = HostSchema::new(1);
+        schema.insert(HostFunction::new(HostFunctionId::new("graphics", "draw", 1)));
+        schema.insert(HostFunction::new(HostFunctionId::new("ui", "draw", 1)));
+        let err = schema.to_bind_table().unwrap_err();
+        assert!(err.contains("host_short_name_conflict"), "{err}");
+        assert!(schema.get_by_short_name("draw").is_none());
+        assert!(schema.resolve_short_name("draw").unwrap_err().contains("conflict"));
     }
 
     #[test]
@@ -378,5 +460,16 @@ mod tests {
         assert!(schema.get_by_short_name("ping").is_some());
         let back = schema.to_native_registry();
         assert_eq!(back.names(), vec!["ping"]);
+    }
+
+    #[test]
+    fn allows_phase_respects_function_and_caller() {
+        let f = HostFunction::new(HostFunctionId::new("ecs", "spawn", 1))
+            .phases([HostPhase::FixedUpdate, HostPhase::Update]);
+        assert!(f.allows_phase(HostPhase::Update));
+        assert!(!f.allows_phase(HostPhase::RenderPrepare));
+        assert!(f.allows_phase(HostPhase::Any));
+        let open = HostFunction::new(HostFunctionId::new("log", "print", 1));
+        assert!(open.allows_phase(HostPhase::RenderPrepare));
     }
 }

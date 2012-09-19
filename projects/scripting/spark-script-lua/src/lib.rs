@@ -2,18 +2,18 @@
 //!
 //! 面向游戏脚本的 Lua 5.x **子集**（函数 / local / 控制流 / 算术）。
 //! 完整语义（table、元表、协程）不在本前端范围。
-//! 优先经 `spark-script-ir`；子集不覆盖时回退旧 lowering。
+//! 正式编译只经 `spark-script-ir`；不支持的构造必须报错。
 
-mod compile;
 mod lower;
 
-use compile::compile_root;
 use lower::lower_root_to_hir;
 
 use oak_core::{Builder, SourceText};
 use oak_lua::{LuaBuilder, LuaLanguage, LuaRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
-use spark_script_ir::{emit_module_with_host, lower_module, HostEmitMode};
+use spark_script_ir::{
+    emit_module_with_host, lower_module, HostBindTable, HostEmitMode,
+};
 use spark_vm::Module;
 
 #[derive(Debug)]
@@ -56,24 +56,29 @@ impl std::error::Error for LuaScriptError {}
 
 /// 源码 → [`Module`]。
 ///
-/// 优先走 HIR→MIR→字节码；子集不覆盖则回退旧路径。
+/// 只走 HIR→MIR→字节码；降低失败必须报错，不得回退旧编译器。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, LuaScriptError> {
-    let root = parse(source)?;
-    match lower_root_to_hir(&root, natives) {
-        Ok(hir) => {
-            let mir = lower_module(&hir).map_err(LuaScriptError::compile_opaque)?;
-            let host = if natives.is_empty() {
-                HostEmitMode::CallNativeByName
-            } else {
-                HostEmitMode::CallHostSlots(natives)
-            };
-            emit_module_with_host(&mir, host).map_err(LuaScriptError::compile_opaque)
-        }
-        Err(_) => compile_root(&root, natives).map_err(LuaScriptError::compile_opaque),
-    }
+    let binds = HostBindTable::from_short_names(natives).map_err(LuaScriptError::compile_opaque)?;
+    compile_with_binds(source, &binds)
 }
 
-/// 带完整宿主签名的编译入口（当前与 [`compile`] 相同：只用函数名列表）。
+/// 带完整宿主绑定表的编译入口。
+pub fn compile_with_binds(
+    source: &str,
+    hosts: &HostBindTable,
+) -> Result<Module, LuaScriptError> {
+    let root = parse(source)?;
+    let hir = lower_root_to_hir(&root, hosts).map_err(LuaScriptError::compile_opaque)?;
+    let mir = lower_module(&hir).map_err(LuaScriptError::compile_opaque)?;
+    let mode = if hosts.is_empty() {
+        HostEmitMode::NoHost
+    } else {
+        HostEmitMode::Bound(hosts)
+    };
+    emit_module_with_host(&mir, mode).map_err(LuaScriptError::compile_opaque)
+}
+
+/// 带完整宿主签名的编译入口（经短名绑定表）。
 pub fn compile_with_registry(
     source: &str,
     natives: &spark_script_valkyrie::NativeRegistry,
@@ -99,6 +104,17 @@ pub fn parse(source: &str) -> Result<LuaRoot, LuaScriptError> {
 mod tests {
     use super::*;
     use spark_vm::{Op, StdHost, Vm};
+
+    #[test]
+    fn unsupported_does_not_fallback_to_legacy() {
+        // table 构造不在 IR 子集；必须明确失败，不得静默走旧 compile_root。
+        let err = compile("return {a=1}", &[]).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("ir_unsupported") || msg.contains("unsupported") || msg.contains("reason"),
+            "{msg}"
+        );
+    }
 
     #[test]
     fn arithmetic_main() {

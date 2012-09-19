@@ -1,17 +1,17 @@
 //! Oaks `oak-ruby` Builder → 公共 IR → `spark-vm` 字节码。
 //!
-//! 解析只走 [`RubyBuilder`]。优先经 `spark-script-ir`；子集不覆盖时回退旧 lowering。
+//! 解析只走 [`RubyBuilder`]。正式编译只经 `spark-script-ir`；不支持的构造必须报错。
 
-mod compile;
 mod lower;
 
-use compile::compile_root;
 use lower::lower_root_to_hir;
 
 use oak_core::{Builder, SourceText};
 use oak_ruby::{RubyBuilder, RubyLanguage, RubyRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
-use spark_script_ir::{emit_module_with_host, lower_module, HostEmitMode};
+use spark_script_ir::{
+    emit_module_with_host, lower_module, HostBindTable, HostEmitMode,
+};
 use spark_vm::Module;
 
 pub use oak_ruby::RubyRoot as ParsedRoot;
@@ -76,24 +76,29 @@ impl std::error::Error for RubyScriptError {}
 
 /// 源码 → [`Module`]。
 ///
-/// 优先走 HIR→MIR→字节码；子集不覆盖则回退旧路径。
+/// 只走 HIR→MIR→字节码；降低失败必须报错，不得回退旧编译器。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, RubyScriptError> {
-    let root = parse(source)?;
-    match lower_root_to_hir(&root, natives) {
-        Ok(hir) => {
-            let mir = lower_module(&hir).map_err(RubyScriptError::compile_opaque)?;
-            let host = if natives.is_empty() {
-                HostEmitMode::CallNativeByName
-            } else {
-                HostEmitMode::CallHostSlots(natives)
-            };
-            emit_module_with_host(&mir, host).map_err(RubyScriptError::compile_opaque)
-        }
-        Err(_) => compile_root(&root, natives).map_err(RubyScriptError::compile_opaque),
-    }
+    let binds = HostBindTable::from_short_names(natives).map_err(RubyScriptError::compile_opaque)?;
+    compile_with_binds(source, &binds)
 }
 
-/// 带完整宿主签名的编译入口（当前与 [`compile`] 相同：只用函数名列表）。
+/// 带完整宿主绑定表的编译入口。
+pub fn compile_with_binds(
+    source: &str,
+    hosts: &HostBindTable,
+) -> Result<Module, RubyScriptError> {
+    let root = parse(source)?;
+    let hir = lower_root_to_hir(&root, hosts).map_err(RubyScriptError::compile_opaque)?;
+    let mir = lower_module(&hir).map_err(RubyScriptError::compile_opaque)?;
+    let mode = if hosts.is_empty() {
+        HostEmitMode::NoHost
+    } else {
+        HostEmitMode::Bound(hosts)
+    };
+    emit_module_with_host(&mir, mode).map_err(RubyScriptError::compile_opaque)
+}
+
+/// 带完整宿主签名的编译入口（经短名绑定表）。
 pub fn compile_with_registry(
     source: &str,
     natives: &spark_script_valkyrie::NativeRegistry,
@@ -118,6 +123,8 @@ pub fn parse(source: &str) -> Result<RubyRoot, RubyScriptError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
     use spark_gc::Value;
     use spark_vm::{Op, StdHost, Vm};
 
@@ -311,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn receiver_call_and_hex() {
+    fn hex_literal_via_ir() {
         let module = compile(
             r#"
             return 0x2A
@@ -322,8 +329,11 @@ mod tests {
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
         assert_eq!(value.as_number(), Some(42.0));
+    }
 
-        let module = compile(
+    #[test]
+    fn receiver_call_is_unsupported() {
+        let err = compile(
             r#"
             def Foo_bar
               return 7
@@ -332,15 +342,17 @@ mod tests {
             "#,
             &[],
         )
-        .unwrap();
-        let mut vm = Vm::new(module);
-        let value = vm.run(&mut StdHost).unwrap();
-        assert_eq!(value.as_number(), Some(7.0));
+        .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("ir_unsupported") || msg.contains("unsupported"),
+            "{msg}"
+        );
     }
 
     #[test]
-    fn class_new_ivar_and_global() {
-        let module = compile(
+    fn class_is_unsupported() {
+        let err = compile(
             r#"
             class Counter
               def initialize
@@ -356,15 +368,14 @@ mod tests {
             "#,
             &[],
         )
-        .unwrap();
-        let mut vm = Vm::new(module);
-        let value = vm.run(&mut StdHost).unwrap();
-        assert_eq!(value.as_number(), Some(1.0));
+        .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
     }
 
     #[test]
-    fn each_loop_and_range() {
-        let module = compile(
+    fn each_block_is_unsupported() {
+        let err = compile(
             r#"
             xs = [10, 20]
             s = 0
@@ -375,11 +386,13 @@ mod tests {
             "#,
             &[],
         )
-        .unwrap();
-        let mut vm = Vm::new(module);
-        let value = vm.run(&mut StdHost).unwrap();
-        assert_eq!(value.as_number(), Some(30.0));
+        .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
+    }
 
+    #[test]
+    fn for_range_still_works_without_each() {
         let module = compile(
             r#"
             s = 0
@@ -424,8 +437,9 @@ mod tests {
     }
 
     #[test]
-    fn graphics_update_is_call_native() {
-        let module = compile(
+    fn qualified_host_call_is_unsupported_without_ir() {
+        // `Graphics.update` 需接收者调用；公共 IR 未覆盖前必须明确失败。
+        let err = compile(
             r#"
             i = 0
             while i < 3
@@ -436,27 +450,9 @@ mod tests {
             "#,
             &["Graphics_update"],
         )
-        .unwrap();
-        assert!(
-            module.functions[module.entry]
-                .strings
-                .iter()
-                .any(|s| s == "Graphics_update"),
-            "strings={:?}",
-            module.functions[module.entry].strings
-        );
-        let frames = std::rc::Rc::new(std::cell::Cell::new(0u32));
-        let mut vm = Vm::new(module);
-        {
-            let frames = frames.clone();
-            vm.register_native("Graphics_update", move |_ctx, _| {
-                frames.set(frames.get() + 1);
-                Ok(Value::Null)
-            });
-        }
-        let value = vm.run(&mut StdHost).unwrap();
-        assert_eq!(value.as_number(), Some(3.0));
-        assert_eq!(frames.get(), 3);
+        .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
     }
 
     #[test]
@@ -479,8 +475,8 @@ mod tests {
     }
 
     #[test]
-    fn default_param_stops_recursive_new() {
-        let module = compile(
+    fn default_param_class_is_unsupported() {
+        let err = compile(
             r#"
             class Game_Variables
               def initialize(base=false)
@@ -493,16 +489,8 @@ mod tests {
             "#,
             &[],
         )
-        .unwrap();
-        let init = module
-            .functions
-            .iter()
-            .find(|f| f.name == "Game_Variables_initialize")
-            .expect("initialize");
-        assert_eq!(init.arity, 2, "self + base");
-        let mut vm = Vm::new(module);
-        vm.step_limit = 100_000;
-        let value = vm.run(&mut StdHost).unwrap();
-        assert_eq!(value.as_number(), Some(1.0));
+        .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
     }
 }

@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use spark_diagnostics::SourceSpan;
 
+use crate::host::HostId;
+
 /// 包身份（IR 层轻量表示）。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PackageId {
@@ -99,7 +101,7 @@ pub enum HirExpr {
         span: Option<SourceSpan>,
     },
     HostCall {
-        host_name: Arc<str>,
+        host: HostId,
         args: Vec<HirExpr>,
         span: Option<SourceSpan>,
     },

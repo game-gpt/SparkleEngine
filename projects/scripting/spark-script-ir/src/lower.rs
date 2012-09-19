@@ -311,9 +311,7 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
             cx.emit(MirInst::Print { src });
             Ok(src)
         }
-        HirExpr::HostCall {
-            host_name, args, ..
-        } => {
+        HirExpr::HostCall { host, args, .. } => {
             cx.note_effect(IrEffect::HostCall);
             let mut argv = Vec::with_capacity(args.len());
             for a in args {
@@ -322,7 +320,7 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
             let dst = cx.alloc();
             cx.emit(MirInst::HostCall {
                 dst: Some(dst),
-                host_slot_or_name: HostRef::Name(host_name.clone()),
+                host_slot_or_name: HostRef::Id(host.clone()),
                 args: argv,
             });
             Ok(dst)

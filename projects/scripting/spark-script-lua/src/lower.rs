@@ -2,9 +2,9 @@
 //!
 //! 支持：顶层 / 函数内 `return`、`local`/`=`、算术比较、字面量、局部变量、
 //! `if` / `elseif`、`while`、`repeat`/`until`、`and`/`or`、`do` 块、顶层 `function`、脚本调用与宿主调用、`print`。
-//! 不支持的构造返回错误令牌，由调用方回退旧字节码路径。
+//! 不支持的构造返回错误令牌；调用方必须拒绝，不得回退旧编译器。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use oak_lua::ast::{
@@ -13,15 +13,15 @@ use oak_lua::ast::{
     LuaWhileStatement,
 };
 use spark_script_ir::{
-    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, PackageId, Ty,
+    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindTable,
+    PackageId, Ty,
 };
 
 /// 尝试将整个根降低为 HIR。
 pub(crate) fn lower_root_to_hir(
     root: &LuaRoot,
-    native_names: &[&str],
+    hosts: &HostBindTable,
 ) -> Result<HirModule, String> {
-    let native_set: HashSet<&str> = native_names.iter().copied().collect();
     let mut fn_index: HashMap<String, u32> = HashMap::new();
     let mut fn_count = 0u32;
     for stmt in &root.statements {
@@ -35,14 +35,14 @@ pub(crate) fn lower_root_to_hir(
     let mut functions: Vec<HirFunction> = Vec::new();
     for stmt in &root.statements {
         if let LuaStatement::Function(f) = stmt {
-            functions.push(lower_function(f, &fn_index, &native_set)?);
+            functions.push(lower_function(f, &fn_index, hosts)?);
         }
     }
 
     let mut locals: HashMap<String, u32> = HashMap::new();
     let mut local_tys: Vec<(Arc<str>, Ty)> = Vec::new();
     let (mut body, saw_return) =
-        lower_block_stmts(&root.statements, &mut locals, &mut local_tys, &fn_index, &native_set)?;
+        lower_block_stmts(&root.statements, &mut locals, &mut local_tys, &fn_index, hosts)?;
 
     if !saw_return {
         body.push(HirStmt::Return {
@@ -87,7 +87,7 @@ fn function_name(f: &LuaFunctionStatement) -> Result<String, String> {
 fn lower_function(
     f: &LuaFunctionStatement,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirFunction, String> {
     let name = function_name(f)?;
     let mut locals: HashMap<String, u32> = HashMap::new();
@@ -98,7 +98,7 @@ fn lower_function(
     }
     let mut local_tys: Vec<(Arc<str>, Ty)> = Vec::new();
     let (mut body, saw_return) =
-        lower_block_stmts(&f.block, &mut locals, &mut local_tys, fn_index, native_set)?;
+        lower_block_stmts(&f.block, &mut locals, &mut local_tys, fn_index, hosts)?;
     if !saw_return {
         body.push(HirStmt::Return {
             value: Some(HirExpr::LiteralNull { span: None }),
@@ -121,7 +121,7 @@ fn lower_block_stmts(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<(Vec<HirStmt>, bool), String> {
     let mut body = Vec::new();
     let mut saw_return = false;
@@ -131,7 +131,7 @@ fn lower_block_stmts(
         }
         if let LuaStatement::Do(block) = stmt {
             let (inner, is_ret) =
-                lower_block_stmts(block, locals, local_tys, fn_index, native_set)?;
+                lower_block_stmts(block, locals, local_tys, fn_index, hosts)?;
             if is_ret {
                 saw_return = true;
             }
@@ -140,15 +140,15 @@ fn lower_block_stmts(
         }
         if let LuaStatement::Repeat(r) = stmt {
             let (first, is_ret) =
-                lower_block_stmts(&r.block, locals, local_tys, fn_index, native_set)?;
+                lower_block_stmts(&r.block, locals, local_tys, fn_index, hosts)?;
             if is_ret {
                 saw_return = true;
             }
             body.extend(first);
-            body.push(lower_repeat_tail(r, locals, local_tys, fn_index, native_set)?);
+            body.push(lower_repeat_tail(r, locals, local_tys, fn_index, hosts)?);
             continue;
         }
-        let (hir, is_ret) = lower_statement(stmt, locals, local_tys, fn_index, native_set)?;
+        let (hir, is_ret) = lower_statement(stmt, locals, local_tys, fn_index, hosts)?;
         if is_ret {
             saw_return = true;
         }
@@ -162,7 +162,7 @@ fn lower_statement(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<(HirStmt, bool), String> {
     match stmt {
         LuaStatement::Return(r) => {
@@ -170,26 +170,26 @@ fn lower_statement(
                 return Err("ir_unsupported_multi_return".into());
             }
             let value = match r.values.first() {
-                Some(e) => Some(lower_expr(e, locals, fn_index, native_set)?),
+                Some(e) => Some(lower_expr(e, locals, fn_index, hosts)?),
                 None => Some(HirExpr::LiteralNull { span: None }),
             };
             Ok((HirStmt::Return { value, span: None }, true))
         }
         LuaStatement::Local(l) => Ok((
-            lower_local(l, locals, local_tys, fn_index, native_set)?,
+            lower_local(l, locals, local_tys, fn_index, hosts)?,
             false,
         )),
         LuaStatement::Assignment(a) => Ok((
-            lower_assignment(a, locals, fn_index, native_set)?,
+            lower_assignment(a, locals, fn_index, hosts)?,
             false,
         )),
-        LuaStatement::If(i) => Ok((lower_if(i, locals, local_tys, fn_index, native_set)?, false)),
+        LuaStatement::If(i) => Ok((lower_if(i, locals, local_tys, fn_index, hosts)?, false)),
         LuaStatement::While(w) => Ok((
-            lower_while(w, locals, local_tys, fn_index, native_set)?,
+            lower_while(w, locals, local_tys, fn_index, hosts)?,
             false,
         )),
         LuaStatement::Expression(e) => {
-            let expr = lower_expr(e, locals, fn_index, native_set)?;
+            let expr = lower_expr(e, locals, fn_index, hosts)?;
             Ok((HirStmt::Expr { expr, span: None }, false))
         }
         LuaStatement::Do(_) => Err("ir_do_should_be_flattened".into()),
@@ -204,11 +204,11 @@ fn lower_repeat_tail(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
     // repeat body until cond  ≡  body; while not cond do body end
-    let cond = lower_expr(&r.condition, locals, fn_index, native_set)?;
-    let (loop_body, _) = lower_block_stmts(&r.block, locals, local_tys, fn_index, native_set)?;
+    let cond = lower_expr(&r.condition, locals, fn_index, hosts)?;
+    let (loop_body, _) = lower_block_stmts(&r.block, locals, local_tys, fn_index, hosts)?;
     Ok(HirStmt::While {
         cond: HirExpr::Unary {
             op: HirUnaryOp::Not,
@@ -225,14 +225,14 @@ fn lower_local(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
     if l.names.len() != 1 {
         return Err("ir_unsupported_multi_local".into());
     }
     let name = l.names[0].clone();
     let value = match l.values.first() {
-        Some(e) => lower_expr(e, locals, fn_index, native_set)?,
+        Some(e) => lower_expr(e, locals, fn_index, hosts)?,
         None => HirExpr::LiteralNull { span: None },
     };
     let index = if let Some(&idx) = locals.get(&name) {
@@ -254,7 +254,7 @@ fn lower_assignment(
     a: &LuaAssignmentStatement,
     locals: &mut HashMap<String, u32>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
     if a.targets.len() != 1 || a.values.len() != 1 {
         return Err("ir_unsupported_multi_assign".into());
@@ -265,7 +265,7 @@ fn lower_assignment(
     let Some(&index) = locals.get(name) else {
         return Err(format!("ir_unknown_local:{name}"));
     };
-    let value = lower_expr(&a.values[0], locals, fn_index, native_set)?;
+    let value = lower_expr(&a.values[0], locals, fn_index, hosts)?;
     Ok(HirStmt::AssignLocal {
         index,
         value,
@@ -278,19 +278,19 @@ fn lower_if(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
-    let cond = lower_expr(&i.condition, locals, fn_index, native_set)?;
+    let cond = lower_expr(&i.condition, locals, fn_index, hosts)?;
     let (then_body, _) =
-        lower_block_stmts(&i.then_block, locals, local_tys, fn_index, native_set)?;
+        lower_block_stmts(&i.then_block, locals, local_tys, fn_index, hosts)?;
     let mut else_body = match &i.else_block {
-        Some(block) => lower_block_stmts(block, locals, local_tys, fn_index, native_set)?.0,
+        Some(block) => lower_block_stmts(block, locals, local_tys, fn_index, hosts)?.0,
         None => Vec::new(),
     };
     // elseif 折成嵌套 If：if a then .. else if b then .. else ..
     for (cond_e, block) in i.else_ifs.iter().rev() {
-        let cond = lower_expr(cond_e, locals, fn_index, native_set)?;
-        let (then_body, _) = lower_block_stmts(block, locals, local_tys, fn_index, native_set)?;
+        let cond = lower_expr(cond_e, locals, fn_index, hosts)?;
+        let (then_body, _) = lower_block_stmts(block, locals, local_tys, fn_index, hosts)?;
         else_body = vec![HirStmt::If {
             cond,
             then_body,
@@ -311,10 +311,10 @@ fn lower_while(
     locals: &mut HashMap<String, u32>,
     local_tys: &mut Vec<(Arc<str>, Ty)>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
-    let cond = lower_expr(&w.condition, locals, fn_index, native_set)?;
-    let (body, _) = lower_block_stmts(&w.block, locals, local_tys, fn_index, native_set)?;
+    let cond = lower_expr(&w.condition, locals, fn_index, hosts)?;
+    let (body, _) = lower_block_stmts(&w.block, locals, local_tys, fn_index, hosts)?;
     Ok(HirStmt::While {
         cond,
         body,
@@ -326,7 +326,7 @@ fn lower_expr(
     expr: &LuaExpression,
     locals: &HashMap<String, u32>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirExpr, String> {
     match expr {
         LuaExpression::Nil => Ok(HirExpr::LiteralNull { span: None }),
@@ -359,8 +359,8 @@ fn lower_expr(
         }
         LuaExpression::Binary(b) => {
             if b.op == "and" || b.op == "or" {
-                let lhs = lower_expr(&b.left, locals, fn_index, native_set)?;
-                let rhs = lower_expr(&b.right, locals, fn_index, native_set)?;
+                let lhs = lower_expr(&b.left, locals, fn_index, hosts)?;
+                let rhs = lower_expr(&b.right, locals, fn_index, hosts)?;
                 // 与旧字节码路径一致的短路：`and`/`or` 经 `HirExpr::If`。
                 // 字面量 / 局部左值重复求值无副作用；复杂左值仍可能双求值。
                 return Ok(if b.op == "and" {
@@ -394,8 +394,8 @@ fn lower_expr(
             };
             Ok(HirExpr::Binary {
                 op: hir_op,
-                lhs: Box::new(lower_expr(&b.left, locals, fn_index, native_set)?),
-                rhs: Box::new(lower_expr(&b.right, locals, fn_index, native_set)?),
+                lhs: Box::new(lower_expr(&b.left, locals, fn_index, hosts)?),
+                rhs: Box::new(lower_expr(&b.right, locals, fn_index, hosts)?),
                 span: None,
             })
         }
@@ -408,11 +408,11 @@ fn lower_expr(
             };
             Ok(HirExpr::Unary {
                 op,
-                expr: Box::new(lower_expr(&u.operand, locals, fn_index, native_set)?),
+                expr: Box::new(lower_expr(&u.operand, locals, fn_index, hosts)?),
                 span: None,
             })
         }
-        LuaExpression::Call(c) => lower_call(c, locals, fn_index, native_set),
+        LuaExpression::Call(c) => lower_call(c, locals, fn_index, hosts),
         other => Err(format!("ir_unsupported_expr:{other:?}")),
     }
 }
@@ -421,7 +421,7 @@ fn lower_call(
     c: &LuaCallExpression,
     locals: &HashMap<String, u32>,
     fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
+    hosts: &HostBindTable,
 ) -> Result<HirExpr, String> {
     let LuaExpression::Identifier(name) = &c.function else {
         return Err("ir_unsupported_callee".into());
@@ -429,7 +429,7 @@ fn lower_call(
     let argv: Result<Vec<_>, _> = c
         .arguments
         .iter()
-        .map(|a| lower_expr(a, locals, fn_index, native_set))
+        .map(|a| lower_expr(a, locals, fn_index, hosts))
         .collect();
     let argv = argv?;
 
@@ -442,9 +442,17 @@ fn lower_call(
             span: None,
         });
     }
-    if native_set.contains(name.as_str()) {
+    if let Ok(entry) = hosts.resolve(name.as_str()) {
+        if entry.param_count != u16::MAX && argv.len() as u16 != entry.param_count {
+            return Err(format!(
+                "host_arity:{}:expected_{}_got_{}",
+                entry.id.qualified_name(),
+                entry.param_count,
+                argv.len()
+            ));
+        }
         return Ok(HirExpr::HostCall {
-            host_name: Arc::from(name.as_str()),
+            host: entry.id.clone(),
             args: argv,
             span: None,
         });

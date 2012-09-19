@@ -3,20 +3,21 @@
 use spark_vm::{FuncProto, Module, Op};
 
 use crate::hir::{HirBinaryOp, HirUnaryOp};
+use crate::host::HostBindTable;
 use crate::mir::{HostRef, MirFunction, MirInst, MirModule, MirTerminator, MirValue};
 
 /// 宿主调用发射策略。
 #[derive(Debug, Clone, Copy)]
 pub enum HostEmitMode<'a> {
-    /// 过渡期：按名字发射 [`Op::CallNative`]（函数字符串池）。
-    CallNativeByName,
-    /// 按 schema 短名顺序绑定槽位，发射 [`Op::CallHost`]。
-    CallHostSlots(&'a [&'a str]),
+    /// 无宿主绑定：模块内不得出现 [`MirInst::HostCall`]。
+    NoHost,
+    /// 按绑定表槽位发射 [`Op::CallHost`]。
+    Bound(&'a HostBindTable),
 }
 
-/// 将已验证语义的 MIR 发射为 VM 模块（宿主调用按名字）。
+/// 将已验证语义的 MIR 发射为 VM 模块（无宿主调用）。
 pub fn emit_module(module: &MirModule) -> Result<Module, String> {
-    emit_module_with_host(module, HostEmitMode::CallNativeByName)
+    emit_module_with_host(module, HostEmitMode::NoHost)
 }
 
 /// 将已验证语义的 MIR 发射为 VM 模块。
@@ -25,8 +26,12 @@ pub fn emit_module_with_host(
     host: HostEmitMode<'_>,
 ) -> Result<Module, String> {
     let native_names = match host {
-        HostEmitMode::CallNativeByName => collect_native_names(module),
-        HostEmitMode::CallHostSlots(slots) => slots.iter().map(|s| (*s).to_string()).collect(),
+        HostEmitMode::NoHost => Vec::new(),
+        HostEmitMode::Bound(table) => table
+            .entries()
+            .iter()
+            .map(|e| e.id.short_name().to_string())
+            .collect(),
     };
     let mut functions = Vec::with_capacity(module.functions.len());
     let mut entry = 0usize;
@@ -44,26 +49,6 @@ pub fn emit_module_with_host(
         entry,
         native_names,
     })
-}
-
-fn collect_native_names(module: &MirModule) -> Vec<String> {
-    let mut names = Vec::new();
-    for f in &module.functions {
-        for b in &f.blocks {
-            for inst in &b.insts {
-                if let MirInst::HostCall {
-                    host_slot_or_name: HostRef::Name(n),
-                    ..
-                } = inst
-                {
-                    if !names.iter().any(|x| x == n.as_ref()) {
-                        names.push(n.as_ref().to_string());
-                    }
-                }
-            }
-        }
-    }
-    names
 }
 
 fn emit_function(func: &MirFunction, host: HostEmitMode<'_>) -> Result<FuncProto, String> {
@@ -310,40 +295,29 @@ fn emit_host_call(
     host: HostEmitMode<'_>,
 ) -> Result<(), String> {
     match host {
-        HostEmitMode::CallNativeByName => {
-            let name = match host_ref {
-                HostRef::Name(n) => n.as_ref(),
-                HostRef::Slot(s) => {
-                    return Err(format!("host_slot_requires_schema:{s}"));
-                }
-            };
-            let si = f.add_string(name);
-            f.emit(Op::CallNative);
-            f.emit_u16(si);
-            f.emit_u8(argc);
-        }
-        HostEmitMode::CallHostSlots(slots) => {
+        HostEmitMode::NoHost => Err("host_call_without_bind_table".into()),
+        HostEmitMode::Bound(table) => {
             let slot = match host_ref {
                 HostRef::Slot(s) => *s,
-                HostRef::Name(n) => {
-                    let Some(idx) = slots.iter().position(|s| *s == n.as_ref()) else {
-                        return Err(format!("host_missing:{n}"));
+                HostRef::Id(id) => {
+                    let Some(entry) = table.get(id) else {
+                        return Err(format!("host_missing:{}", id.qualified_name()));
                     };
-                    idx as u32
+                    entry.slot
                 }
             };
             if slot > u16::MAX as u32 {
                 return Err(format!("host_slot_overflow:{slot}"));
             }
-            if (slot as usize) >= slots.len() {
+            if (slot as usize) >= table.len() {
                 return Err(format!("host_slot_oob:{slot}"));
             }
             f.emit(Op::CallHost);
             f.emit_u16(slot as u16);
             f.emit_u8(argc);
+            Ok(())
         }
     }
-    Ok(())
 }
 
 fn store(f: &mut FuncProto, slot: u16) {
@@ -492,6 +466,7 @@ mod tests {
 
     #[test]
     fn host_call_emits_call_host_slots() {
+        use crate::host::{HostBindTable, HostId};
         let hir = HirModule {
             package: PackageId::anonymous(),
             name: Arc::from("main"),
@@ -503,7 +478,7 @@ mod tests {
                 locals: Vec::new(),
                 body: vec![HirStmt::Return {
                     value: Some(HirExpr::HostCall {
-                        host_name: Arc::from("double"),
+                        host: HostId::new("host", "double", 1),
                         args: vec![HirExpr::LiteralNumber {
                             value: 21.0,
                             span: None,
@@ -516,8 +491,8 @@ mod tests {
             }],
         };
         let mir = lower_module(&hir).unwrap();
-        let module =
-            emit_module_with_host(&mir, HostEmitMode::CallHostSlots(&["double"])).unwrap();
+        let binds = HostBindTable::from_short_names(&["double"]).unwrap();
+        let module = emit_module_with_host(&mir, HostEmitMode::Bound(&binds)).unwrap();
         assert!(module.functions[0]
             .code
             .iter()

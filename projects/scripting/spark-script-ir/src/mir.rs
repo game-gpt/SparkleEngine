@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use crate::hir::{HirBinaryOp, HirUnaryOp, PackageId, Ty};
+use crate::host::HostId;
 
 /// MIR 层效果标记（与宿主 schema 效果对齐的子集）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -71,10 +72,12 @@ pub enum MirInst {
     },
 }
 
-/// 宿主引用（链接前名字 / 链接后槽位）。
+/// 宿主引用（降低后身份 / 已解析槽位）。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HostRef {
-    Name(Arc<str>),
+    /// 稳定身份；codegen 按 [`crate::HostBindTable`] 解析槽位。
+    Id(HostId),
+    /// 已解析槽位（链接或显式绑定后）。
     Slot(u32),
 }
 

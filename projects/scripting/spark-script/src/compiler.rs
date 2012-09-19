@@ -43,13 +43,16 @@ impl ScriptCompiler {
             return Ok(hit);
         }
         let language = ScriptLanguage::from(request.language.frontend);
-        let reg = request.host_schema.to_native_registry();
+        let binds = request
+            .host_schema
+            .to_bind_table()
+            .map_err(ScriptError::compile_reason)?;
         let module = match language {
             ScriptLanguage::Valkyrie => {
-                spark_script_valkyrie::compile_with_registry(source, &reg)?
+                spark_script_valkyrie::compile_with_binds(source, &binds)?
             }
-            ScriptLanguage::Lua => spark_script_lua::compile_with_registry(source, &reg)?,
-            ScriptLanguage::Ruby => spark_script_ruby::compile_with_registry(source, &reg)?,
+            ScriptLanguage::Lua => spark_script_lua::compile_with_binds(source, &binds)?,
+            ScriptLanguage::Ruby => spark_script_ruby::compile_with_binds(source, &binds)?,
         };
         let package = self.seal(request, module)?;
         self.cache.insert(key, package.clone());
@@ -87,13 +90,16 @@ impl ScriptCompiler {
             ScriptError::compile_reason("compilation_request_missing_source")
         })?;
         let language = ScriptLanguage::from(request.language.frontend);
-        let reg = request.host_schema.to_native_registry();
+        let binds = request
+            .host_schema
+            .to_bind_table()
+            .map_err(ScriptError::compile_reason)?;
         let module = match language {
             ScriptLanguage::Valkyrie => {
-                spark_script_valkyrie::compile_with_registry(source, &reg)?
+                spark_script_valkyrie::compile_with_binds(source, &binds)?
             }
-            ScriptLanguage::Lua => spark_script_lua::compile_with_registry(source, &reg)?,
-            ScriptLanguage::Ruby => spark_script_ruby::compile_with_registry(source, &reg)?,
+            ScriptLanguage::Lua => spark_script_lua::compile_with_binds(source, &binds)?,
+            ScriptLanguage::Ruby => spark_script_ruby::compile_with_binds(source, &binds)?,
         };
         Ok(SparkObject::from_legacy_module(
             request.package.clone(),
