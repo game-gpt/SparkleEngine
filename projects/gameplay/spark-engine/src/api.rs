@@ -322,7 +322,11 @@ pub fn install_builtins(
             .map(|v| value_to_string(ctx, v))
             .transpose()?
             .unwrap_or_default();
-        let n = shared_q.borrow().query.count(&name);
+        let shared = shared_q.borrow();
+        if !shared.access.allows_query_archetype(&name) {
+            return Ok(Value::Number(0.0));
+        }
+        let n = shared.query.count(&name);
         Ok(Value::Number(n as f64))
     });
 
@@ -342,7 +346,11 @@ pub fn install_builtins(
             .ok_or(VmError::BadNativeArg {
                 name: "query_entity_at",
             })? as usize;
-        match shared_e.borrow().query.entity_at(&name, index) {
+        let shared = shared_e.borrow();
+        if !shared.access.allows_query_archetype(&name) {
+            return Ok(Value::Null);
+        }
+        match shared.query.entity_at(&name, index) {
             Some(bits) => Ok(Value::Entity(bits)),
             None => Ok(Value::Null),
         }

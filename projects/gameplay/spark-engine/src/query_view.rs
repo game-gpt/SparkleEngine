@@ -1,12 +1,11 @@
 //! 脚本查询视图：受控只读访问 ECS，禁止在遍历中改结构。
 //!
-//! 初版仅提供按 [`crate::ScriptArchetypeTag`] 的原型名过滤。
-//! 组件名 → 稳定槽位解析接入后再扩展通用查询。
+//! 世界在同步点拍成全量 [`ScriptQuerySnapshot`]（`query_base`）。
+//! 每次脚本 System 调用再按描述符安装受限视图到 `query`，供 `query_*` 读取。
 //!
-//! VM **不**持有 [`World`]：宿主在同步点把世界拍成 [`ScriptQuerySnapshot`]，
-//! 脚本经 `query_*` 原生只读快照。
+//! VM **不**持有 [`World`]。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use spark_ecs::{Entity, World};
@@ -98,6 +97,25 @@ impl ScriptQuerySnapshot {
     pub fn archetypes(&self) -> impl Iterator<Item = &str> {
         self.by_archetype.keys().map(|k| k.as_ref())
     }
+
+    /// 仅保留 `allow` 中的原型；`allow` 为空则原样克隆。
+    pub fn filtered_by_archetypes(&self, allow: &HashSet<Arc<str>>) -> Self {
+        if allow.is_empty() {
+            return self.clone();
+        }
+        let mut by_archetype = HashMap::new();
+        for (name, entities) in &self.by_archetype {
+            if allow.iter().any(|a| a.as_ref() == name.as_ref()) {
+                by_archetype.insert(Arc::clone(name), entities.clone());
+            }
+        }
+        Self { by_archetype }
+    }
+
+    /// 原型是否在本快照中可见。
+    pub fn contains_archetype(&self, archetype: &str) -> bool {
+        self.by_archetype.contains_key(archetype)
+    }
 }
 
 #[cfg(test)]
@@ -149,5 +167,27 @@ mod tests {
         assert_eq!(snap.count("missing"), 0);
         assert!(snap.entity_at("rock", 0).is_some());
         assert!(snap.entity_at("rock", 2).is_none());
+    }
+
+    #[test]
+    fn filtered_snapshot_hides_other_archetypes() {
+        let mut world = World::new();
+        apply_script_commands(
+            &mut world,
+            &[
+                ScriptCommand::Spawn {
+                    archetype: Arc::from("rock"),
+                },
+                ScriptCommand::Spawn {
+                    archetype: Arc::from("tree"),
+                },
+            ],
+        );
+        let full = ScriptQuerySnapshot::from_world(&world);
+        let allow: HashSet<Arc<str>> = [Arc::from("rock")].into_iter().collect();
+        let view = full.filtered_by_archetypes(&allow);
+        assert_eq!(view.count("rock"), 1);
+        assert_eq!(view.count("tree"), 0);
+        assert!(!view.contains_archetype("tree"));
     }
 }

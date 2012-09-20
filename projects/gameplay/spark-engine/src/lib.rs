@@ -263,7 +263,9 @@ pub struct EngineShared {
     pub logs: Vec<String>,
     pub events: spark_event::EventBus,
     pub localization: LocalizationService,
-    /// 帧同步点拍摄的 ECS 只读查询快照（脚本 `query_*` 读取）。
+    /// 帧同步点拍摄的全量 ECS 只读快照。
+    pub query_base: ScriptQuerySnapshot,
+    /// 当前脚本调用可见的查询视图（可能经原型过滤）。
     pub query: ScriptQuerySnapshot,
     /// 当前脚本调用的生命周期阶段（由调度器写入）。
     pub active_phase: HostPhase,
@@ -283,7 +285,7 @@ impl EngineShared {
         changed
     }
 
-    /// 进入一次脚本导出调用前设置阶段与访问契约。
+    /// 进入一次脚本导出调用前设置阶段、访问契约与受限查询视图。
     pub fn begin_script_call(
         &mut self,
         phase: HostPhase,
@@ -297,13 +299,23 @@ impl EngineShared {
             Some(d) => ScriptAccessPolicy::from_descriptor(d),
             None => ScriptAccessPolicy::Unrestricted,
         };
+        self.install_query_view();
     }
 
-    /// 调用结束后恢复为未声明阶段 + 无限制访问。
+    /// 按当前 `access` 从 `query_base` 安装可见查询快照。
+    pub fn install_query_view(&mut self) {
+        self.query = match self.access.archetype_filter() {
+            Some(allow) => self.query_base.filtered_by_archetypes(allow),
+            None => self.query_base.clone(),
+        };
+    }
+
+    /// 调用结束后恢复为未声明阶段 + 无限制访问 + 全量查询视图。
     pub fn end_script_call(&mut self) {
         self.active_phase = HostPhase::Any;
         self.active_determinism = DeterminismClass::Nondeterministic;
         self.access = ScriptAccessPolicy::Unrestricted;
+        self.query = self.query_base.clone();
     }
 }
 
@@ -589,7 +601,9 @@ impl SparkEngine {
 
     /// 从当前世界刷新脚本可读查询快照（应在提交命令后、跑脚本前调用）。
     pub fn refresh_script_query(&mut self, world: &spark_ecs::World) {
-        self.shared.borrow_mut().query = ScriptQuerySnapshot::from_world(world);
+        let mut shared = self.shared.borrow_mut();
+        shared.query_base = ScriptQuerySnapshot::from_world(world);
+        shared.install_query_view();
     }
 
     /// 向指定模组领域入队事件（不立即派发）。
@@ -1353,6 +1367,69 @@ entry = "main.vk"
             msg.contains("read_world") || msg.contains("HostDenied") || msg.contains("script"),
             "{msg}"
         );
+    }
+
+    #[test]
+    fn system_query_archetype_filters_snapshot() {
+        let root = std::env::temp_dir().join("spark_engine_mod_query_filter");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "query_filter"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro on_load() {
+                queue_spawn("rock")
+                queue_spawn("tree")
+                return 0
+            }
+            micro update() {
+                return query_archetype_count("rock") + query_archetype_count("tree")
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        eng.load_mod_dir(&root).unwrap();
+        let desc = ScriptSystemDescriptor::new(
+            "query_filter",
+            "update",
+            "update",
+            HostPhase::Update,
+        )
+        .read("Transform")
+        .query_archetype("rock");
+        eng.script_systems_mut().register(desc.clone());
+        let mut world = spark_ecs::World::new();
+        let _ = eng.apply_script_commands_to_world(&mut world);
+        assert_eq!(eng.shared.borrow().query_base.count("rock"), 1);
+        assert_eq!(eng.shared.borrow().query_base.count("tree"), 1);
+
+        eng.shared
+            .borrow_mut()
+            .begin_script_call(HostPhase::Update, Some(&desc));
+        assert_eq!(eng.shared.borrow().query.count("rock"), 1);
+        assert_eq!(eng.shared.borrow().query.count("tree"), 0);
+        let mut hooks = StdHost;
+        let v = eng
+            .get_mod_mut("query_filter")
+            .unwrap()
+            .domain
+            .as_mut()
+            .unwrap()
+            .call_in_phase("update", &[], HostPhase::Update, &mut hooks)
+            .unwrap();
+        eng.shared.borrow_mut().end_script_call();
+        assert_eq!(v.as_number(), Some(1.0));
+        assert_eq!(eng.shared.borrow().query.count("tree"), 1);
     }
 
     #[test]

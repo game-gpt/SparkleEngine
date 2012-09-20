@@ -1,8 +1,8 @@
 //! 脚本 System 描述符：进入与 Rust System 同一调度图前的声明契约。
 //!
 //! 串行模式下已强制：before/after 拓扑序、同 phase 组件访问冲突检测、
-//! `Exclusive` 不得与其它同 phase System 并存。
-//! 查询游标过滤与并行批次仍后续接入。
+//! `Exclusive` 不得与其它同 phase System 并存、按 `query_archetypes` 安装受限查询视图。
+//! 并行批次仍后续接入。
 //! 同一 [`crate::ScriptDomain`] 的执行默认视为串行资源。
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -52,6 +52,8 @@ pub struct ScriptSystemDescriptor {
     pub entry: Arc<str>,
     pub phase: HostPhase,
     pub access: Vec<ComponentAccess>,
+    /// 查询可见的脚本原型名；空 = 不按原型过滤（仍受读写集门禁）。
+    pub query_archetypes: Vec<Arc<str>>,
     pub before: Vec<Arc<str>>,
     pub after: Vec<Arc<str>>,
     pub determinism: DeterminismClass,
@@ -71,6 +73,7 @@ impl ScriptSystemDescriptor {
             entry: entry.into(),
             phase,
             access: Vec::new(),
+            query_archetypes: Vec::new(),
             before: Vec::new(),
             after: Vec::new(),
             determinism: DeterminismClass::Deterministic,
@@ -85,6 +88,12 @@ impl ScriptSystemDescriptor {
 
     pub fn write(mut self, component: impl Into<Arc<str>>) -> Self {
         self.access.push(ComponentAccess::write(component));
+        self
+    }
+
+    /// 限制 `query_*` 可见的脚本原型。
+    pub fn query_archetype(mut self, archetype: impl Into<Arc<str>>) -> Self {
+        self.query_archetypes.push(archetype.into());
         self
     }
 
