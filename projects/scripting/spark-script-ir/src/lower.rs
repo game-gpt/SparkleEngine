@@ -311,8 +311,16 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
             cx.emit(MirInst::Print { src });
             Ok(src)
         }
-        HirExpr::HostCall { host, args, .. } => {
+        HirExpr::HostCall {
+            host,
+            args,
+            effects,
+            ..
+        } => {
             cx.note_effect(IrEffect::HostCall);
+            for e in effects {
+                cx.note_effect(IrEffect::from_host(*e));
+            }
             let mut argv = Vec::with_capacity(args.len());
             for a in args {
                 argv.push(lower_expr(cx, a)?);

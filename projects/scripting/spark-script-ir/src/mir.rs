@@ -5,12 +5,39 @@ use std::sync::Arc;
 use crate::hir::{HirBinaryOp, HirUnaryOp, PackageId, Ty};
 use crate::host::HostId;
 
-/// MIR 层效果标记（与宿主 schema 效果对齐的子集）。
+/// MIR 层效果标记（与宿主 schema 效果对齐）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IrEffect {
     Pure,
     HostCall,
+    ReadWorld,
+    WriteComponent,
+    SpawnEntity,
+    DespawnEntity,
+    AssetRead,
+    NetworkSend,
+    Nondeterministic,
+    Suspend,
+    EditorOnly,
     Dynamic,
+}
+
+impl IrEffect {
+    pub fn from_host(kind: crate::host::HostEffectKind) -> Self {
+        match kind {
+            crate::host::HostEffectKind::Pure => Self::Pure,
+            crate::host::HostEffectKind::ReadWorld => Self::ReadWorld,
+            crate::host::HostEffectKind::WriteComponent => Self::WriteComponent,
+            crate::host::HostEffectKind::SpawnEntity => Self::SpawnEntity,
+            crate::host::HostEffectKind::DespawnEntity => Self::DespawnEntity,
+            crate::host::HostEffectKind::AssetRead => Self::AssetRead,
+            crate::host::HostEffectKind::AudioEmit => Self::Nondeterministic,
+            crate::host::HostEffectKind::NetworkSend => Self::NetworkSend,
+            crate::host::HostEffectKind::Nondeterministic => Self::Nondeterministic,
+            crate::host::HostEffectKind::Suspend => Self::Suspend,
+            crate::host::HostEffectKind::EditorOnly => Self::EditorOnly,
+        }
+    }
 }
 
 /// MIR 值引用。

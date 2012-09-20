@@ -6,7 +6,10 @@
 
 use std::sync::Arc;
 
-use spark_script_ir::{HostBindEntry, HostBindTable, HostId};
+use spark_script_ir::{
+    DeterminismKind, HostBindEntry, HostBindTable, HostCompilePolicy, HostEffectKind, HostId,
+    HostPhaseKind,
+};
 use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 
 /// 宿主调用的效果分类（编译器内部约束，不必全部暴露为用户语法）。
@@ -26,10 +29,11 @@ pub enum HostEffect {
 }
 
 /// 确定性分类。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum DeterminismClass {
     Deterministic,
     FrameLocal,
+    #[default]
     Nondeterministic,
 }
 
@@ -297,7 +301,15 @@ impl HostSchema {
 
     /// 导出编译期 [`HostBindTable`]（短名冲突即失败）。
     pub fn to_bind_table(&self) -> Result<HostBindTable, String> {
-        let mut table = HostBindTable::new();
+        self.to_bind_table_with_policy(HostCompilePolicy::open())
+    }
+
+    /// 带编译策略导出绑定表（能力 / 确定性来自 [`CompilationRequest`]）。
+    pub fn to_bind_table_with_policy(
+        &self,
+        policy: HostCompilePolicy,
+    ) -> Result<HostBindTable, String> {
+        let mut table = HostBindTable::new().with_policy(policy);
         for (i, func) in self.functions.iter().enumerate() {
             let param_count = if func.params.is_empty() {
                 // 空参数表 = 未声明 arity（桩 / 动态脚本）；非空才做个数检查。
@@ -305,6 +317,12 @@ impl HostSchema {
             } else {
                 func.params.len() as u16
             };
+            let param_tys = func
+                .params
+                .iter()
+                .map(|p| Arc::clone(&p.ty.path))
+                .collect();
+            let return_ty = func.return_ty.as_ref().map(|t| Arc::clone(&t.path));
             table.push(HostBindEntry {
                 id: HostId::new(
                     Arc::clone(&func.id.namespace),
@@ -313,6 +331,16 @@ impl HostSchema {
                 ),
                 slot: i as u32,
                 param_count,
+                param_tys,
+                return_ty,
+                effects: func.effects.iter().map(|e| map_effect(*e)).collect(),
+                allowed_phases: func.allowed_phases.iter().map(|p| map_phase(*p)).collect(),
+                required_capabilities: func
+                    .required_capabilities
+                    .iter()
+                    .map(|c| Arc::clone(&c.path))
+                    .collect(),
+                determinism: map_determinism(func.determinism),
             })?;
         }
         Ok(table)
@@ -394,6 +422,56 @@ impl From<&NativeRegistry> for HostSchema {
     }
 }
 
+fn map_effect(e: HostEffect) -> HostEffectKind {
+    match e {
+        HostEffect::Pure => HostEffectKind::Pure,
+        HostEffect::ReadWorld => HostEffectKind::ReadWorld,
+        HostEffect::WriteComponent => HostEffectKind::WriteComponent,
+        HostEffect::SpawnEntity => HostEffectKind::SpawnEntity,
+        HostEffect::DespawnEntity => HostEffectKind::DespawnEntity,
+        HostEffect::AssetRead => HostEffectKind::AssetRead,
+        HostEffect::AudioEmit => HostEffectKind::AudioEmit,
+        HostEffect::NetworkSend => HostEffectKind::NetworkSend,
+        HostEffect::Nondeterministic => HostEffectKind::Nondeterministic,
+        HostEffect::Suspend => HostEffectKind::Suspend,
+        HostEffect::EditorOnly => HostEffectKind::EditorOnly,
+    }
+}
+
+fn map_phase(p: HostPhase) -> HostPhaseKind {
+    match p {
+        HostPhase::OnLoad => HostPhaseKind::OnLoad,
+        HostPhase::OnStart => HostPhaseKind::OnStart,
+        HostPhase::FixedUpdate => HostPhaseKind::FixedUpdate,
+        HostPhase::Update => HostPhaseKind::Update,
+        HostPhase::LateUpdate => HostPhaseKind::LateUpdate,
+        HostPhase::RenderPrepare => HostPhaseKind::RenderPrepare,
+        HostPhase::OnEvent => HostPhaseKind::OnEvent,
+        HostPhase::OnUnload => HostPhaseKind::OnUnload,
+        HostPhase::Any => HostPhaseKind::Any,
+    }
+}
+
+fn map_determinism(d: DeterminismClass) -> DeterminismKind {
+    match d {
+        DeterminismClass::Deterministic => DeterminismKind::Deterministic,
+        DeterminismClass::FrameLocal => DeterminismKind::FrameLocal,
+        DeterminismClass::Nondeterministic => DeterminismKind::Nondeterministic,
+    }
+}
+
+/// 由编译请求构造绑定策略。
+pub fn compile_policy_from_request(request: &crate::request::CompilationRequest) -> HostCompilePolicy {
+    HostCompilePolicy {
+        granted_capabilities: request
+            .required_capabilities
+            .iter()
+            .map(|c| Arc::clone(&c.path))
+            .collect(),
+        determinism: map_determinism(request.determinism),
+    }
+}
+
 impl From<&HostSchema> for NativeRegistry {
     fn from(value: &HostSchema) -> Self {
         value.to_native_registry()
@@ -403,6 +481,8 @@ impl From<&HostSchema> for NativeRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::request::CompilationRequest;
+    use crate::{ScriptCompiler, ScriptLanguage};
 
     #[test]
     fn schema_slots_and_hash_are_stable() {
@@ -463,6 +543,29 @@ mod tests {
     }
 
     #[test]
+    fn compile_rejects_missing_capability() {
+        let mut host = HostSchema::new(1);
+        host.insert(
+            HostFunction::new(HostFunctionId::new("ecs", "spawn", 1))
+                .capability("ecs.command")
+                .effect(HostEffect::SpawnEntity)
+                .determinism(DeterminismClass::Deterministic),
+        );
+        let mut request = CompilationRequest::repl(
+            ScriptLanguage::Valkyrie,
+            "return spawn()",
+            host,
+        );
+        request.required_capabilities = vec![CapabilityId::new("other")];
+        request.determinism = DeterminismClass::Deterministic;
+        let err = ScriptCompiler::new().compile(&request).unwrap_err();
+        assert!(
+            format!("{err:?}").contains("capability") || err.code().contains("compile"),
+            "{err:?}"
+        );
+    }
+
+    #[test]
     fn allows_phase_respects_function_and_caller() {
         let f = HostFunction::new(HostFunctionId::new("ecs", "spawn", 1))
             .phases([HostPhase::FixedUpdate, HostPhase::Update]);
@@ -471,5 +574,24 @@ mod tests {
         assert!(f.allows_phase(HostPhase::Any));
         let open = HostFunction::new(HostFunctionId::new("log", "print", 1));
         assert!(open.allows_phase(HostPhase::RenderPrepare));
+    }
+
+    #[test]
+    fn bind_table_carries_effects_and_types() {
+        let mut schema = HostSchema::new(1);
+        schema.insert(
+            HostFunction::new(HostFunctionId::new("ecs", "spawn", 1))
+                .param(NativeParam::new("archetype", "ArchetypeHandle"))
+                .returns("PendingEntity")
+                .effect(HostEffect::SpawnEntity)
+                .capability("ecs.command"),
+        );
+        let binds = schema.to_bind_table().unwrap();
+        let e = binds.resolve("spawn").unwrap();
+        assert_eq!(e.param_count, 1);
+        assert_eq!(e.param_tys[0].as_ref(), "ArchetypeHandle");
+        assert_eq!(e.return_ty.as_deref(), Some("PendingEntity"));
+        assert!(e.effects.contains(&HostEffectKind::SpawnEntity));
+        assert_eq!(e.required_capabilities[0].as_ref(), "ecs.command");
     }
 }

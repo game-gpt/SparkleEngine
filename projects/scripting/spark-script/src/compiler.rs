@@ -45,7 +45,7 @@ impl ScriptCompiler {
         let language = ScriptLanguage::from(request.language.frontend);
         let binds = request
             .host_schema
-            .to_bind_table()
+            .to_bind_table_with_policy(crate::compile_policy_from_request(request))
             .map_err(ScriptError::compile_reason)?;
         let module = match language {
             ScriptLanguage::Valkyrie => {
@@ -92,7 +92,7 @@ impl ScriptCompiler {
         let language = ScriptLanguage::from(request.language.frontend);
         let binds = request
             .host_schema
-            .to_bind_table()
+            .to_bind_table_with_policy(crate::compile_policy_from_request(request))
             .map_err(ScriptError::compile_reason)?;
         let module = match language {
             ScriptLanguage::Valkyrie => {

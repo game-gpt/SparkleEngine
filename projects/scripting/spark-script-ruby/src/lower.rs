@@ -574,20 +574,17 @@ fn lower_bare_call(
             span: None,
         });
     }
-    if let Ok(entry) = hosts.resolve(name) {
-        if entry.param_count != u16::MAX && args.len() as u16 != entry.param_count {
-            return Err(format!(
-                "host_arity:{}:expected_{}_got_{}",
-                entry.id.qualified_name(),
-                entry.param_count,
-                args.len()
-            ));
+    match hosts.resolve_call(name, args.len()) {
+        Ok(entry) => {
+            return Ok(HirExpr::HostCall {
+                host: entry.id.clone(),
+                args: argv,
+                effects: entry.effects.clone(),
+                span: None,
+            });
         }
-        return Ok(HirExpr::HostCall {
-            host: entry.id.clone(),
-            args: argv,
-            span: None,
-        });
+        Err(e) if e.starts_with("host_unknown:") => {}
+        Err(e) => return Err(e),
     }
     if let Some(&fidx) = fn_index.get(name) {
         return Ok(HirExpr::Call {

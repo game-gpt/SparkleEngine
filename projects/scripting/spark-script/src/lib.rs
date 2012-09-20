@@ -29,8 +29,8 @@ pub use compiler::{compile_package_with_registry, CompiledPackage, ScriptCompile
 pub use dep_graph::{DepGraphError, PackageDepGraph, PackageNode};
 pub use diagnostic::{DiagnosticBatch, ScriptDiagnostic};
 pub use host_schema::{
-    CapabilityId, DeterminismClass, HostEffect, HostErrorModel, HostFunction, HostFunctionId,
-    HostPhase, HostSchema, SuspensionBehavior, ThreadAffinity,
+    compile_policy_from_request, CapabilityId, DeterminismClass, HostEffect, HostErrorModel,
+    HostFunction, HostFunctionId, HostPhase, HostSchema, SuspensionBehavior, ThreadAffinity,
 };
 pub use request::{
     CompilationRequest, DebugInfoLevel, LanguageFrontend, LanguageProfile, LanguageProfileId,
@@ -38,9 +38,10 @@ pub use request::{
 };
 pub use runtime::ScriptRuntime;
 pub use spark_script_ir::{
-    BasicBlock, HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindEntry,
-    HostBindTable, HostEmitMode, HostId, HostRef, MirFunction, MirInst, MirModule, MirTerminator,
-    MirValue, SymbolId, Ty, emit_module, emit_module_with_host, lower_module,
+    emit_module, emit_module_with_host, lower_module, BasicBlock, DeterminismKind, HirBinaryOp,
+    HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindEntry, HostBindTable,
+    HostCompilePolicy, HostEffectKind, HostEmitMode, HostId, HostPhaseKind, HostRef, MirFunction,
+    MirInst, MirModule, MirTerminator, MirValue, SymbolId, Ty,
 };
 pub use spark_script_ir::PackageId as IrPackageId;
 pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};

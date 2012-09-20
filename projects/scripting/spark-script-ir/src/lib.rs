@@ -13,7 +13,10 @@ pub use codegen::{emit_module, emit_module_with_host, HostEmitMode};
 pub use hir::{
     HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, PackageId, SymbolId, Ty,
 };
-pub use host::{HostBindEntry, HostBindTable, HostId};
+pub use host::{
+    DeterminismKind, HostBindEntry, HostBindTable, HostCompilePolicy, HostEffectKind, HostId,
+    HostPhaseKind,
+};
 pub use lower::lower_module;
 pub use mir::{
     BasicBlock, HostRef, IrEffect, MirFunction, MirInst, MirModule, MirTerminator, MirValue,

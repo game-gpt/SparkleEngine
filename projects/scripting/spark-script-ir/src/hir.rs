@@ -103,6 +103,8 @@ pub enum HirExpr {
     HostCall {
         host: HostId,
         args: Vec<HirExpr>,
+        /// 来自绑定表的效果快照（供 MIR 汇总）。
+        effects: Vec<crate::host::HostEffectKind>,
         span: Option<SourceSpan>,
     },
     Binary {

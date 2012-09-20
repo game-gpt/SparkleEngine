@@ -488,6 +488,7 @@ mod tests {
                             value: 21.0,
                             span: None,
                         }],
+                        effects: Vec::new(),
                         span: None,
                     }),
                     span: None,
