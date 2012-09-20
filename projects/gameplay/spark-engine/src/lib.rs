@@ -61,8 +61,8 @@ use std::rc::Rc;
 use spark_core::SparkError;
 use spark_gc::Value;
 use spark_script::{
-    ArtifactCache, CompilationRequest, ExecutableImage, HostFunction, HostFunctionId, HostPhase,
-    HostSchema, ScriptCompiler, ScriptError, ScriptLanguage,
+    ArtifactCache, CompilationRequest, DeterminismClass, ExecutableImage, HostFunction,
+    HostFunctionId, HostPhase, HostSchema, ScriptCompiler, ScriptError, ScriptLanguage,
 };
 use spark_vm::{HostHooks, StdHost};
 
@@ -267,6 +267,8 @@ pub struct EngineShared {
     pub query: ScriptQuerySnapshot,
     /// 当前脚本调用的生命周期阶段（由调度器写入）。
     pub active_phase: HostPhase,
+    /// 当前脚本调用的确定性要求。
+    pub active_determinism: DeterminismClass,
     /// 当前脚本调用的组件访问策略。
     pub access: ScriptAccessPolicy,
     /// 与编译期一致的宿主 ABI（阶段 / 效果门禁）。
@@ -288,6 +290,9 @@ impl EngineShared {
         desc: Option<&ScriptSystemDescriptor>,
     ) {
         self.active_phase = phase;
+        self.active_determinism = desc
+            .map(|d| d.determinism)
+            .unwrap_or(DeterminismClass::Nondeterministic);
         self.access = match desc {
             Some(d) => ScriptAccessPolicy::from_descriptor(d),
             None => ScriptAccessPolicy::Unrestricted,
@@ -297,6 +302,7 @@ impl EngineShared {
     /// 调用结束后恢复为未声明阶段 + 无限制访问。
     pub fn end_script_call(&mut self) {
         self.active_phase = HostPhase::Any;
+        self.active_determinism = DeterminismClass::Nondeterministic;
         self.access = ScriptAccessPolicy::Unrestricted;
     }
 }
@@ -1301,6 +1307,50 @@ entry = "main.vk"
         let msg = format!("{err:?}");
         assert!(
             msg.contains("host_access_denied") || msg.contains("HostDenied") || msg.contains("script"),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn system_without_world_access_denies_query() {
+        let root = std::env::temp_dir().join("spark_engine_mod_query_deny");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "query_deny"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro update() {
+                return query_archetype_count("rock")
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        eng.load_mod_dir(&root).unwrap();
+        // 空访问 Declared：禁止 query_*
+        eng.script_systems_mut().register(ScriptSystemDescriptor::new(
+            "query_deny",
+            "update",
+            "update",
+            HostPhase::Update,
+        ));
+        let mut world = spark_ecs::World::new();
+        let mut hooks = StdHost;
+        let err = eng
+            .run_script_systems(HostPhase::Update, &mut world, &mut hooks)
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("read_world") || msg.contains("HostDenied") || msg.contains("script"),
             "{msg}"
         );
     }

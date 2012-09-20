@@ -9,7 +9,7 @@ use spark_script::{
 };
 use spark_vm::{NativeCtx, Vm, VmError};
 
-use crate::access_policy::check_host_phase;
+use crate::access_policy::{check_host_determinism, check_host_phase};
 use crate::command_buffer::ScriptCommandBuffer;
 use crate::registry::RegValue;
 use crate::vfs::ModVfs;
@@ -48,7 +48,10 @@ pub fn engine_host_schema() -> HostSchema {
     let any = [HostPhase::Any];
 
     schema.insert(
-        HostFunction::new(HostFunctionId::new("engine", "log", 1)).phases(any),
+        HostFunction::new(HostFunctionId::new("engine", "log", 1))
+            .phases(any)
+            .determinism(spark_script::DeterminismClass::Nondeterministic)
+            .effect(HostEffect::Nondeterministic),
     );
     schema.insert(
         HostFunction::new(HostFunctionId::new("engine", "register_hook", 1))
@@ -111,7 +114,14 @@ pub fn engine_host_schema() -> HostSchema {
 fn gate(shared: &EngineShared, short_name: &str) -> Result<(), VmError> {
     check_host_phase(&shared.host_schema, short_name, shared.active_phase).map_err(|detail| {
         VmError::HostDenied { detail }
-    })
+    })?;
+    check_host_determinism(
+        &shared.host_schema,
+        short_name,
+        shared.active_determinism,
+    )
+    .map_err(|detail| VmError::HostDenied { detail })?;
+    Ok(())
 }
 
 fn gate_component_write(shared: &EngineShared, component: &str) -> Result<(), VmError> {
@@ -120,6 +130,16 @@ fn gate_component_write(shared: &EngineShared, component: &str) -> Result<(), Vm
     } else {
         Err(VmError::HostDenied {
             detail: format!("host_access_denied:write:{component}"),
+        })
+    }
+}
+
+fn gate_read_world(shared: &EngineShared) -> Result<(), VmError> {
+    if shared.access.allows_read_world() {
+        Ok(())
+    } else {
+        Err(VmError::HostDenied {
+            detail: "host_access_denied:read_world".into(),
         })
     }
 }
@@ -296,6 +316,7 @@ pub fn install_builtins(
     let shared_q = Rc::clone(shared);
     vm.register_native("query_archetype_count", move |ctx, args| {
         gate(&shared_q.borrow(), "query_archetype_count")?;
+        gate_read_world(&shared_q.borrow())?;
         let name = args
             .first()
             .map(|v| value_to_string(ctx, v))
@@ -308,6 +329,7 @@ pub fn install_builtins(
     let shared_e = Rc::clone(shared);
     vm.register_native("query_entity_at", move |ctx, args| {
         gate(&shared_e.borrow(), "query_entity_at")?;
+        gate_read_world(&shared_e.borrow())?;
         if args.len() < 2 {
             return Err(VmError::ArityMismatch {
                 expected: 2,
