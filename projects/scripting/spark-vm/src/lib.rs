@@ -303,7 +303,7 @@ impl Module {
 
     /// 把多个脚本模块的方法链进同一命名空间（同名**先到先得**，依赖包应排在入口之前）。
     ///
-    /// 跳过名为 `__main` 的旧块入口（应由上层提升为 `on_load`）。不合成假入口。
+    /// 不合成假入口；若无函数则插入空 `on_load` stub。
     pub fn link_methods(modules: &[Module]) -> Module {
         let mut name_to_idx: HashMap<String, usize> = HashMap::new();
         let mut functions: Vec<FuncProto> = Vec::new();
@@ -317,9 +317,6 @@ impl Module {
                 }
             }
             for func in &module.functions {
-                if func.name == "__main" {
-                    continue;
-                }
                 if !name_to_idx.contains_key(&func.name) {
                     name_to_idx.insert(func.name.clone(), functions.len());
                     functions.push(FuncProto::new(func.name.clone(), func.arity));
@@ -335,9 +332,6 @@ impl Module {
 
         for module in modules {
             for func in &module.functions {
-                if func.name == "__main" {
-                    continue;
-                }
                 if filled.contains(&func.name) {
                     continue;
                 }
@@ -364,7 +358,7 @@ impl Module {
 
     /// 合并多个模块，并把 `modules[entry_index]` 的入口函数设为链接结果的 `entry`。
     ///
-    /// 保留入口函数原名（通常为 `on_load`）；若仍为 `__main` 则提升为 `on_load`。
+    /// 保留入口函数原名（通常为 `on_load`）。
     pub fn link_with_entry(modules: &[Module], entry_index: usize) -> Result<Module, String> {
         if modules.is_empty() {
             return Err("empty_link_set".into());
@@ -390,10 +384,7 @@ impl Module {
             .enumerate()
             .map(|(i, n)| (n.clone(), i as u16))
             .collect();
-        let mut remapped = remap_func_against(entry_mod, main, &name_to_idx, &native_to_idx);
-        if remapped.name == "__main" {
-            remapped.name = "on_load".into();
-        }
+        let remapped = remap_func_against(entry_mod, main, &name_to_idx, &native_to_idx);
         let entry_name = remapped.name.clone();
         if let Some(&idx) = name_to_idx.get(&entry_name) {
             linked.functions[idx] = remapped;
@@ -1485,7 +1476,7 @@ mod tests {
         add.emit_u16(1);
         add.emit(Op::Add);
         add.emit(Op::Return);
-        let main = FuncProto::new("__main", 0);
+        let main = FuncProto::new("on_load", 0);
         let mut vm = Vm::new(Module {
             functions: vec![add, main],
             entry: 1,
@@ -1500,7 +1491,7 @@ mod tests {
 
     #[test]
     fn call_host_slot_dispatches_by_prepared_name() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let c = f.add_const_number(21.0);
         f.emit(Op::LoadConst);
         f.emit_u16(c);
@@ -1526,7 +1517,7 @@ mod tests {
 
     #[test]
     fn host_call_limit_is_enforced() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         f.emit(Op::CallHost);
         f.emit_u16(0);
         f.emit_u8(0);
@@ -1545,7 +1536,7 @@ mod tests {
 
     #[test]
     fn step_limit_is_enforced() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         // Jump 操作数读完后 ip=3，相对 -3 回到 Jump。
         f.emit(Op::Jump);
         f.emit_i16(-3);
@@ -1569,7 +1560,7 @@ mod tests {
         recur.emit(Op::Call);
         recur.emit_u8(0);
         recur.emit(Op::Return);
-        let mut main = FuncProto::new("__main", 0);
+        let mut main = FuncProto::new("on_load", 0);
         let slot = main.add_const_func(0);
         main.emit(Op::LoadConst);
         main.emit_u16(slot);
@@ -1588,7 +1579,7 @@ mod tests {
 
     #[test]
     fn allocation_limit_is_enforced() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let s = f.add_string("x");
         // 循环：每次 LoadString 触发堆分配。
         f.emit(Op::LoadString);

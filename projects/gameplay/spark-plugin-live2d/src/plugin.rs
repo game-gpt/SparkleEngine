@@ -194,7 +194,7 @@ mod tests {
             native_names: Vec::new(),
         };
         let load = module.intern_native("live2d_load");
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let s = f.add_string("demo");
         f.emit(Op::LoadString);
         f.emit_u16(s);

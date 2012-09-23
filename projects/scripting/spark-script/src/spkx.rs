@@ -121,7 +121,8 @@ mod tests {
                 entry: 0,
                 native_names: vec!["print".into()],
             },
-        );
+        )
+        .unwrap();
         let linked = LinkedProgram::link_single(obj, &host).unwrap();
         ExecutableImage::verify(linked).unwrap()
     }

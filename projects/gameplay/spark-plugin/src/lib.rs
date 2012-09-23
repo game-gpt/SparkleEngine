@@ -192,7 +192,7 @@ mod tests {
             native_names: Vec::new(),
         };
         let ni = module.intern_native("echo_ping");
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let c = f.add_const_number(7.0);
         f.emit(Op::LoadConst);
         f.emit_u16(c);

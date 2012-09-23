@@ -260,7 +260,7 @@ mod tests {
             native_names: Vec::new(),
         };
         let ni = module.intern_native("steam_app_id");
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         f.emit(Op::CallNative);
         f.emit_u16(ni);
         f.emit_u8(0);

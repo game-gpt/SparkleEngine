@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn rewrites_call_native_to_call_host() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let c = f.add_const_number(7.0);
         f.emit(Op::LoadConst);
         f.emit_u16(c);
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn rejects_unbound_native() {
-        let mut f = FuncProto::new("__main", 0);
+        let mut f = FuncProto::new("on_load", 0);
         let si = f.add_string("missing");
         f.emit(Op::CallNative);
         f.emit_u16(si);

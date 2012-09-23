@@ -4,7 +4,7 @@
 //! 正式边界：
 //! - 前端经 IR 产出模块，再封为 [`SparkObject`]
 //! - 运行只装载 [`ExecutableImage`]
-//! - 模组入口是生命周期导出（`on_load` 等），不是隐式 `__main`
+//! - 模组入口是生命周期导出（`on_load` 等）
 
 use std::sync::Arc;
 
@@ -25,25 +25,32 @@ pub struct SparkObject {
     pub language: LanguageProfile,
     pub host_schema_hash: u64,
     pub host_abi_version: u32,
-    /// 本单元字节码（入口为 `on_load`）。
+    /// 本单元字节码（入口函数名必须为 `on_load`）。
     pub module: Module,
     pub exports: Vec<Arc<str>>,
     pub imports: Vec<Arc<str>>,
 }
 
 impl SparkObject {
-    /// 由前端字节码封成目标。若仍见旧入口名 `__main` 则提升为 `on_load`。
+    /// 由前端字节码封成目标。入口函数名必须为 `on_load`。
     pub fn from_module(
         package: PackageId,
         language: LanguageProfile,
         host: &HostSchema,
-        mut module: Module,
-    ) -> Self {
-        promote_legacy_main_to_on_load(&mut module);
+        module: Module,
+    ) -> Result<Self, LinkError> {
+        let entry = module
+            .functions
+            .get(module.entry)
+            .ok_or(LinkError::MissingEntryFunction)?;
+        if entry.name != "on_load" {
+            return Err(LinkError::EntryMustBeOnLoad {
+                name: Arc::from(entry.name.as_str()),
+            });
+        }
         let exports = module
             .functions
             .iter()
-            .filter(|f| f.name != "__main")
             .map(|f| Arc::<str>::from(f.name.as_str()))
             .collect();
         let imports = module
@@ -51,7 +58,7 @@ impl SparkObject {
             .iter()
             .map(|n| Arc::<str>::from(n.as_str()))
             .collect();
-        Self {
+        Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
             compiler_version: Arc::from(env!("CARGO_PKG_VERSION")),
             package,
@@ -61,20 +68,7 @@ impl SparkObject {
             module,
             exports,
             imports,
-        }
-    }
-}
-
-/// 消化仍带 `__main` 的旧夹具；正式前端已直接发射 `on_load`。
-fn promote_legacy_main_to_on_load(module: &mut Module) {
-    if module.functions.iter().any(|f| f.name == "on_load") {
-        return;
-    }
-    let entry = module.entry;
-    if let Some(f) = module.functions.get_mut(entry) {
-        if f.name == "__main" {
-            f.name = "on_load".into();
-        }
+        })
     }
 }
 
@@ -249,6 +243,9 @@ pub enum LinkError {
     EmptyLinkSet,
     MissingEntryPackage { name: Arc<str> },
     MergeFailed { detail: Arc<str> },
+    MissingEntryFunction,
+    EntryMustBeOnLoad { name: Arc<str> },
+    ResidualCallNative,
 }
 
 impl LinkError {
@@ -262,6 +259,9 @@ impl LinkError {
             Self::EmptyLinkSet => "spark.script.link.empty_set",
             Self::MissingEntryPackage { .. } => "spark.script.link.missing_entry_package",
             Self::MergeFailed { .. } => "spark.script.link.merge_failed",
+            Self::MissingEntryFunction => "spark.script.link.missing_entry_function",
+            Self::EntryMustBeOnLoad { .. } => "spark.script.link.entry_must_be_on_load",
+            Self::ResidualCallNative => "spark.script.link.residual_call_native",
         }
     }
 }
@@ -413,7 +413,8 @@ mod tests {
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
             sample_module(),
-        );
+        )
+        .unwrap();
         let linked = LinkedProgram::link_single(obj, &host).unwrap();
         let image = ExecutableImage::verify(linked).unwrap();
         image.check_host_schema(&host).unwrap();
@@ -428,7 +429,8 @@ mod tests {
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &HostSchema::new(1),
             sample_module(),
-        );
+        )
+        .unwrap();
         let err = LinkedProgram::link_single(obj, &host).unwrap_err();
         assert!(matches!(err, LinkError::UnresolvedHost { .. }));
     }
@@ -452,7 +454,8 @@ mod tests {
                 entry: 0,
                 native_names: vec!["print".into()],
             },
-        );
+        )
+        .unwrap();
         let linked = LinkedProgram::link_single(obj, &host).unwrap();
         assert!(linked
             .module
@@ -488,7 +491,8 @@ mod tests {
                 // 故意不进 imports：只靠字符串池里的 CallNative
                 native_names: Vec::new(),
             },
-        );
+        )
+        .unwrap();
         let err = LinkedProgram::link_single(obj, &host).unwrap_err();
         assert!(matches!(err, LinkError::UnboundNativeCall { .. }));
     }
@@ -546,7 +550,8 @@ mod tests {
                 entry: 1,
                 native_names: Vec::new(),
             },
-        );
+        )
+        .unwrap();
 
         let mut entry_main = FuncProto::new("on_load", 0);
         let twenty_one = entry_main.add_const_number(21.0);
@@ -574,7 +579,8 @@ mod tests {
                 entry: 1,
                 native_names: Vec::new(),
             },
-        );
+        )
+        .unwrap();
 
         // 显式入口包 `app`。
         let entry_pkg = PackageId::new("app", "1");

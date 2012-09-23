@@ -101,12 +101,13 @@ impl ScriptCompiler {
             ScriptLanguage::Lua => spark_script_lua::compile_with_binds(source, &binds)?,
             ScriptLanguage::Ruby => spark_script_ruby::compile_with_binds(source, &binds)?,
         };
-        Ok(SparkObject::from_module(
+        SparkObject::from_module(
             request.package.clone(),
             request.language.clone(),
             &request.host_schema,
             module,
-        ))
+        )
+        .map_err(script_link_error)
     }
 
     /// 将已有目标链接并验证为完整包。
@@ -177,7 +178,8 @@ impl ScriptCompiler {
             request.language.clone(),
             &request.host_schema,
             module,
-        );
+        )
+        .map_err(script_link_error)?;
         let program = LinkedProgram::link_single(object.clone(), &request.host_schema)
             .map_err(script_link_error)?;
         let image = ExecutableImage::verify(program.clone()).map_err(script_verify_error)?;

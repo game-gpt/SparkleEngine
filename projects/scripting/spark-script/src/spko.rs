@@ -129,7 +129,8 @@ mod tests {
                 entry: 0,
                 native_names: vec!["print".into()],
             },
-        );
+        )
+        .unwrap();
         let bytes = obj.to_spko_bytes().unwrap();
         assert_eq!(&bytes[..4], SPKO_MAGIC);
         let loaded = SparkObject::from_spko_bytes(&bytes).unwrap();

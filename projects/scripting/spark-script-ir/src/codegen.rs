@@ -34,21 +34,17 @@ pub fn emit_module_with_host(
             .collect(),
     };
     let mut functions = Vec::with_capacity(module.functions.len());
-    let mut entry = 0usize;
-    let mut found_entry = false;
+    let mut entry = None;
     for (i, f) in module.functions.iter().enumerate() {
-        // 正式入口为 `on_load`；仍识别 `__main` 以便消化旧字节码夹具。
         if f.name.as_ref() == "on_load" {
-            entry = i;
-            found_entry = true;
-        } else if !found_entry && f.name.as_ref() == "__main" {
-            entry = i;
+            entry = Some(i);
         }
         functions.push(emit_function(f, host)?);
     }
     if functions.is_empty() {
         return Err("empty_mir_module".into());
     }
+    let entry = entry.ok_or_else(|| "missing_on_load_entry".to_string())?;
     Ok(Module {
         functions,
         entry,
