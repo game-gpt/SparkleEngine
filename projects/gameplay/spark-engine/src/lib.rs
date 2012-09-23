@@ -748,7 +748,7 @@ impl SparkEngine {
         names
     }
 
-    /// 编译/装载共用的宿主 schema：引擎内置 ABI + 插件短名桩。
+    /// 编译/装载共用的宿主 schema：引擎内置 ABI + 插件宿主桩（`plugin` 命名空间）。
     fn build_host_schema(&self) -> HostSchema {
         let mut schema = crate::api::engine_host_schema();
         for name in self.compile_native_names() {

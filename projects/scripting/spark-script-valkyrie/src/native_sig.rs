@@ -1,7 +1,4 @@
-//! 宿主原生函数的完整类型描述。
-//!
-//! 旧入口只传 `&[&str]` 函数名，无法支撑补全与类型检查。
-//! 内容 DSL / 编辑器应使用本模块的签名契约。
+//! 宿主函数参数与类型路径（供 [`spark_script::HostFunction`] 等复用）。
 
 use std::sync::Arc;
 
@@ -50,91 +47,15 @@ impl NativeParam {
     }
 }
 
-/// 宿主原生函数签名。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeSignature {
-    pub name: Arc<str>,
-    pub params: Vec<NativeParam>,
-    pub return_ty: Option<TypeRef>,
-    pub docs: Option<Arc<str>>,
-}
-
-impl NativeSignature {
-    pub fn new(name: impl Into<Arc<str>>) -> Self {
-        Self {
-            name: name.into(),
-            params: Vec::new(),
-            return_ty: None,
-            docs: None,
-        }
-    }
-
-    pub fn param(mut self, param: NativeParam) -> Self {
-        self.params.push(param);
-        self
-    }
-
-    pub fn returns(mut self, ty: impl Into<TypeRef>) -> Self {
-        self.return_ty = Some(ty.into());
-        self
-    }
-
-    pub fn with_docs(mut self, docs: impl Into<Arc<str>>) -> Self {
-        self.docs = Some(docs.into());
-        self
-    }
-}
-
-/// 一组宿主绑定（供编译器 / 编辑器共享）。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NativeRegistry {
-    pub signatures: Vec<NativeSignature>,
-}
-
-impl NativeRegistry {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn insert(&mut self, sig: NativeSignature) {
-        if let Some(existing) = self.signatures.iter_mut().find(|s| s.name == sig.name) {
-            *existing = sig;
-        } else {
-            self.signatures.push(sig);
-        }
-    }
-
-    pub fn get(&self, name: &str) -> Option<&NativeSignature> {
-        self.signatures.iter().find(|s| s.name.as_ref() == name)
-    }
-
-    pub fn names(&self) -> Vec<&str> {
-        self.signatures.iter().map(|s| s.name.as_ref()).collect()
-    }
-
-    /// 兼容旧编译入口：仅取函数名列表。
-    pub fn name_list(&self) -> Vec<&str> {
-        self.names()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn registry_exposes_names_and_params() {
-        let mut reg = NativeRegistry::new();
-        reg.insert(
-            NativeSignature::new("register_block")
-                .with_docs("装载器内部用，非作者 DSL")
-                .param(NativeParam::new("id", "u32"))
-                .param(NativeParam::new("key", "String"))
-                .returns("Null"),
-        );
-        let sig = reg.get("register_block").unwrap();
-        assert_eq!(sig.params.len(), 2);
-        assert_eq!(sig.params[0].name.as_ref(), "id");
-        assert_eq!(reg.names(), vec!["register_block"]);
+    fn param_carries_name_and_type() {
+        let p = NativeParam::new("id", "u32").with_docs("实体编号");
+        assert_eq!(p.name.as_ref(), "id");
+        assert_eq!(p.ty.as_str(), "u32");
+        assert!(p.docs.is_some());
     }
 }

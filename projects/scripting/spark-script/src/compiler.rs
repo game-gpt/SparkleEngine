@@ -8,10 +8,9 @@ use crate::artifact::{
 };
 use crate::cache::ArtifactCache;
 use crate::dep_graph::PackageDepGraph;
-use crate::host_schema::{HostFunction, HostFunctionId, HostSchema};
+use crate::host_schema::HostSchema;
 use crate::request::{CompilationRequest, LanguageFrontend};
-use crate::{compile_module_with_registry, ScriptError, ScriptLanguage};
-use spark_script_valkyrie::NativeRegistry;
+use crate::{ScriptError, ScriptLanguage};
 
 /// 编译产物（目标 → 链接 → 映像）。
 #[derive(Debug, Clone)]
@@ -68,17 +67,6 @@ impl ScriptCompiler {
     ) -> Result<CompiledPackage, ScriptError> {
         let request = CompilationRequest::repl(language, source, host.clone());
         self.compile(&request)
-    }
-
-    /// 仅函数名列表（自动生成最小 schema 桩，走正式缓存键）。
-    pub fn compile_with_native_names(
-        &mut self,
-        language: ScriptLanguage,
-        source: &str,
-        natives: &[&str],
-    ) -> Result<CompiledPackage, ScriptError> {
-        let host = stub_schema_from_names(natives);
-        self.compile_source(language, source, &host)
     }
 
     /// 只编译为目标 [`SparkObject`]（不链接），供写出 `.spko` 或后续 `link_many`。
@@ -191,14 +179,6 @@ impl ScriptCompiler {
     }
 }
 
-fn stub_schema_from_names(names: &[&str]) -> HostSchema {
-    let mut schema = HostSchema::new(1);
-    for name in names {
-        schema.insert(HostFunction::new(HostFunctionId::new("host", *name, 1)));
-    }
-    schema
-}
-
 fn script_link_error(err: LinkError) -> ScriptError {
     ScriptError::compile_reason(err.code())
 }
@@ -231,19 +211,6 @@ mod tests {
     }
 
     #[test]
-    fn compile_with_native_names_uses_cache() {
-        let mut compiler = ScriptCompiler::new();
-        let _ = compiler
-            .compile_with_native_names(ScriptLanguage::Valkyrie, "return 40 + 2", &[])
-            .unwrap();
-        assert_eq!(compiler.cache.misses, 1);
-        let _ = compiler
-            .compile_with_native_names(ScriptLanguage::Valkyrie, "return 40 + 2", &[])
-            .unwrap();
-        assert_eq!(compiler.cache.hits, 1);
-    }
-
-    #[test]
     fn compile_object_and_link_roundtrip() {
         let host = HostSchema::new(1);
         let req = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1 + 2", host.clone());
@@ -258,18 +225,6 @@ mod tests {
         let v = rt.call_on_load_std().unwrap();
         assert_eq!(v.as_number(), Some(3.0));
     }
-}
-
-/// 用 registry 编译各前端（均经 `compile_with_registry`）。
-pub fn compile_package_with_registry(
-    language: ScriptLanguage,
-    source: &str,
-    natives: &NativeRegistry,
-) -> Result<CompiledPackage, ScriptError> {
-    let host = HostSchema::from_native_registry(natives);
-    let module = compile_module_with_registry(language, source, natives)?;
-    let request = CompilationRequest::repl(language, source, host);
-    ScriptCompiler::new().seal(&request, module)
 }
 
 impl LanguageFrontend {

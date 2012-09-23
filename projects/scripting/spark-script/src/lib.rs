@@ -25,7 +25,7 @@ pub use artifact::{
 };
 pub use codec::{ArtifactIoError, SPKO_MAGIC, SPKX_MAGIC};
 pub use cache::ArtifactCache;
-pub use compiler::{compile_package_with_registry, CompiledPackage, ScriptCompiler};
+pub use compiler::{CompiledPackage, ScriptCompiler};
 pub use dep_graph::{DepGraphError, PackageDepGraph, PackageNode};
 pub use diagnostic::{DiagnosticBatch, ScriptDiagnostic};
 pub use host_schema::{
@@ -44,8 +44,10 @@ pub use spark_script_ir::{
     MirInst, MirModule, MirTerminator, MirValue, SymbolId, Ty,
 };
 pub use spark_script_ir::PackageId as IrPackageId;
-pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
-pub use spark_vm::{bind_host_slots, verify_bytecode, verify_bytecode_with_host, BytecodeVerifyError};
+pub use spark_script_valkyrie::{NativeParam, TypeRef};
+pub use spark_vm::{
+    reject_residual_call_native, verify_bytecode, verify_bytecode_with_host, BytecodeVerifyError,
+};
 
 /// 脚本源语言（便利枚举；配置面请用 [`LanguageProfile`]）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -213,34 +215,18 @@ impl From<spark_script_ruby::RubyScriptError> for ScriptError {
     }
 }
 
-/// 仅编译为 [`Module`]（不建 VM；供前端单测与 `compile_package_with_registry`）。
+/// 仅编译为 [`Module`]（不建 VM；供前端单测）。
 pub fn compile_module(
     language: ScriptLanguage,
     source: &str,
-    natives: &[&str],
+    hosts: &HostBindTable,
 ) -> Result<Module, ScriptError> {
     match language {
-        ScriptLanguage::Valkyrie => Ok(spark_script_valkyrie::compile(source, natives)?),
-        ScriptLanguage::Lua => Ok(spark_script_lua::compile(source, natives)?),
-        ScriptLanguage::Ruby => Ok(spark_script_ruby::compile(source, natives)?),
+        ScriptLanguage::Valkyrie => Ok(spark_script_valkyrie::compile_with_binds(source, hosts)?),
+        ScriptLanguage::Lua => Ok(spark_script_lua::compile_with_binds(source, hosts)?),
+        ScriptLanguage::Ruby => Ok(spark_script_ruby::compile_with_binds(source, hosts)?),
     }
 }
-
-/// 带 [`NativeRegistry`] 编译；各前端经 `compile_with_registry`（当前均只用函数名）。
-pub fn compile_module_with_registry(
-    language: ScriptLanguage,
-    source: &str,
-    natives: &NativeRegistry,
-) -> Result<Module, ScriptError> {
-    match language {
-        ScriptLanguage::Valkyrie => {
-            Ok(spark_script_valkyrie::compile_with_registry(source, natives)?)
-        }
-        ScriptLanguage::Lua => Ok(spark_script_lua::compile_with_registry(source, natives)?),
-        ScriptLanguage::Ruby => Ok(spark_script_ruby::compile_with_registry(source, natives)?),
-    }
-}
-
 
 /// 调试：列出 Valkyrie 根上 `micro` 名。
 pub fn list_micros(source: &str) -> Result<Vec<String>, ScriptError> {
@@ -314,16 +300,12 @@ mod tests {
     }
 
     #[test]
-    fn compile_with_native_registry() {
-        let mut reg = NativeRegistry::new();
-        reg.insert(NativeSignature::new("ping"));
-        let package = compile_package_with_registry(
-            ScriptLanguage::Valkyrie,
-            "return ping()",
-            &reg,
-        )
-        .unwrap();
-        let host = HostSchema::from_native_registry(&reg);
+    fn host_schema_compile_and_call() {
+        let mut host = HostSchema::new(1);
+        host.insert(HostFunction::new(HostFunctionId::new("host", "ping", 1)));
+        let package = ScriptCompiler::new()
+            .compile_source(ScriptLanguage::Valkyrie, "return ping()", &host)
+            .unwrap();
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
         rt.vm.register_native("ping", |_ctx, _args| Ok(spark_gc::Value::Number(7.0)));
         let v = rt.call_on_load_std().unwrap();
@@ -331,17 +313,18 @@ mod tests {
     }
 
     #[test]
-    fn lua_and_ruby_compile_with_registry() {
-        let mut reg = NativeRegistry::new();
-        reg.insert(NativeSignature::new("ping"));
+    fn lua_and_ruby_host_schema_compile() {
+        let mut host = HostSchema::new(1);
+        host.insert(HostFunction::new(HostFunctionId::new("host", "ping", 1)));
         for lang in [ScriptLanguage::Lua, ScriptLanguage::Ruby] {
             let source = match lang {
                 ScriptLanguage::Lua => "return ping(1)",
                 ScriptLanguage::Ruby => "return ping(1)",
                 ScriptLanguage::Valkyrie => unreachable!(),
             };
-            let package = compile_package_with_registry(lang, source, &reg).unwrap();
-            let host = HostSchema::from_native_registry(&reg);
+            let package = ScriptCompiler::new()
+                .compile_source(lang, source, &host)
+                .unwrap();
             let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
             rt.vm.register_native("ping", |_ctx, args| {
                 Ok(args.first().cloned().unwrap_or(spark_gc::Value::Null))
@@ -353,7 +336,8 @@ mod tests {
 
     #[test]
     fn valkyrie_parse_error_propagates_span() {
-        let err = compile_module(ScriptLanguage::Valkyrie, "@@@", &[]).expect_err("bare attributes");
+        let err = compile_module(ScriptLanguage::Valkyrie, "@@@", &HostBindTable::new())
+            .expect_err("bare attributes");
         assert_eq!(err.code(), "spark.script.parse");
     }
 

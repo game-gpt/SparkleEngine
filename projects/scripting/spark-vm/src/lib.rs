@@ -3,7 +3,7 @@
 //! # 与 ECS / JIT 的边界
 //!
 //! - **ECS**：世界与 Component 在 `spark-ecs`；脚本经 [`Value::Entity`] 与
-//!   [`Op::CallHost`] / [`Op::CallNative`] 交换不透明 ID。调度侧用 [`Vm::call_function`]
+//!   [`Op::CallHost`] 交换不透明 ID。调度侧用 [`Vm::call_function`]
 //!   调脚本导出，勿把 World 塞进 VM。
 //! - **JIT**：每帧解释累加 [`Vm::hotness`]；`spark-jit` 对热点 [`FuncProto`] 做字节码特化，
 //!   [`Op::JitEnter`] 预留原生 stub 槽（解释路径跳过）。
@@ -19,7 +19,7 @@ use spark_gc::{GcObject, Heap, Value};
 mod bind;
 mod verify;
 
-pub use bind::bind_host_slots;
+pub use bind::reject_residual_call_native;
 pub use verify::{verify_bytecode, verify_bytecode_with_host, BytecodeVerifyError};
 
 /// VM 结构化错误。`Display` 只输出稳定码。
@@ -168,7 +168,8 @@ pub enum Op {
     JitEnter,
     /// 后跟 u16 字符串池下标；运行时分配到堆。
     LoadString,
-    /// 后跟 u16 原生名下标 + u8 参数个数。
+    /// 保留操作码：正式制品禁止出现；链接 / 验证拒绝，解释期 trap。
+    /// 宿主调用一律用 [`Op::CallHost`]。
     CallNative,
     /// 取模。
     Mod,
@@ -399,7 +400,6 @@ impl Module {
 }
 
 /// 按「旧模块下标 → 函数名 → 新模块下标」重写 `Value::Func`。
-/// `CallNative` 名走函数字符串池，链接后不改操作数。
 fn remap_func_against(
     old_module: &Module,
     func: &FuncProto,
@@ -457,11 +457,11 @@ pub struct Vm {
     /// 每条函数解释步热度（供 JIT）。
     pub hotness: Vec<u32>,
     pub natives: HashMap<String, NativeFn>,
-    /// 宿主槽位 → 短名（与编译期 `HostSchema` 插入顺序一致）。
+    /// 宿主槽位 → 调度名（与 [`HostFunctionId::name`] / `register_native` 键一致，顺序 = 槽位）。
     pub host_slot_names: Vec<String>,
     /// 单次 `interpret` 步数上限。
     pub step_limit: u64,
-    /// 单次 `interpret` 宿主调用（`CallNative` / `CallHost` / `Send` 内建以外）上限。
+    /// 单次 `interpret` 宿主调用（`CallHost` / `Send` 内建以外）上限。
     pub host_call_limit: u64,
     /// 脚本调用帧深度上限。
     pub call_depth_limit: u16,
@@ -471,7 +471,7 @@ pub struct Vm {
     host_calls: u64,
     /// 当前 `interpret` 入口时的堆分配计数快照。
     allocs_at_entry: u64,
-    /// CallNative / Send / CallHost 调用计数（诊断用）。
+    /// CallHost / Send 调用计数（诊断用）。
     pub call_hits: HashMap<String, u32>,
 }
 
@@ -497,7 +497,7 @@ impl Vm {
         }
     }
 
-    /// 装载编译期宿主槽位表（短名顺序 = 槽位下标）。
+    /// 装载编译期宿主槽位表（调度名顺序 = [`HostSchema`] / `HostId` 槽位下标）。
     pub fn prepare_host_slots(&mut self, names: impl IntoIterator<Item = impl Into<String>>) {
         self.host_slot_names = names.into_iter().map(Into::into).collect();
     }
@@ -1023,27 +1023,8 @@ impl Vm {
                     self.stack.push(v);
                 }
                 Op::CallNative => {
-                    let mut ip = self.frames[fi].ip;
-                    let name_idx = Self::read_u16(&self.module.functions[func_idx].code, &mut ip)?;
-                    let argc = Self::read_u8(&self.module.functions[func_idx].code, &mut ip)?;
-                    self.frames[fi].ip = ip;
-                    // CallNative 操作数 = 本函数字符串池下标（脚本前端）；旧字节码回退 native_names。
-                    let name = self.module.functions[func_idx]
-                        .strings
-                        .get(name_idx as usize)
-                        .cloned()
-                        .or_else(|| self.module.native_names.get(name_idx as usize).cloned())
-                        .ok_or(VmError::CodeOob)?;
-                    if self.stack.len() < argc as usize {
-                        return Err(VmError::StackUnderflow);
-                    }
-                    let args: Vec<Value> = self
-                        .stack
-                        .drain(self.stack.len() - argc as usize..)
-                        .collect();
-                    *self.call_hits.entry(format!("native:{name}")).or_insert(0) += 1;
-                    let result = self.invoke_native(&name, args)?;
-                    self.stack.push(result);
+                    // 正式路径只发射 CallHost；残留 CallNative 一律 trap。
+                    return Err(VmError::UnknownOpcode(Op::CallNative as u8));
                 }
                 Op::CallHost => {
                     let mut ip = self.frames[fi].ip;

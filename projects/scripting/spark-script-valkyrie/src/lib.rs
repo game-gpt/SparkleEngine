@@ -16,7 +16,7 @@ use spark_script_ir::{
 };
 use spark_vm::Module;
 
-pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
+pub use native_sig::{NativeParam, TypeRef};
 
 #[derive(Debug)]
 pub enum ValkyrieScriptError {
@@ -80,14 +80,9 @@ impl std::fmt::Display for ValkyrieScriptError {
 
 impl std::error::Error for ValkyrieScriptError {}
 
-/// 源码 → [`Module`]。
-///
-/// `natives` 仅提供函数短名；正式路径请用 [`compile_with_binds`]。
-/// 只走 HIR→MIR→字节码；降低失败必须报错，不得回退旧编译器。
-pub fn compile(source: &str, natives: &[&str]) -> Result<Module, ValkyrieScriptError> {
-    let binds = HostBindTable::from_short_names(natives)
-        .map_err(ValkyrieScriptError::compile_opaque)?;
-    compile_with_binds(source, &binds)
+/// 无宿主绑定的源码 → [`Module`]。有宿主时请用 [`compile_with_binds`]。
+pub fn compile(source: &str) -> Result<Module, ValkyrieScriptError> {
+    compile_with_binds(source, &HostBindTable::new())
 }
 
 /// 带完整宿主绑定表的编译入口（稳定身份 + 槽位）。
@@ -104,15 +99,6 @@ pub fn compile_with_binds(
         HostEmitMode::Bound(hosts)
     };
     emit_module_with_host(&mir, mode).map_err(ValkyrieScriptError::compile_opaque)
-}
-
-/// 带完整宿主签名的编译入口（经短名绑定表；短名冲突即失败）。
-pub fn compile_with_registry(
-    source: &str,
-    natives: &NativeRegistry,
-) -> Result<Module, ValkyrieScriptError> {
-    let names = natives.name_list();
-    compile(source, &names)
 }
 
 /// 解析为 Oaks [`ValkyrieRoot`]。
@@ -165,7 +151,7 @@ mod tests {
 
     #[test]
     fn arithmetic_main() {
-        let m = compile("return 40 + 2", &[]).unwrap();
+        let m = compile("return 40 + 2").unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
@@ -179,9 +165,7 @@ mod tests {
                 return a + b
             }
             return add(40, 2)
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -192,12 +176,12 @@ mod tests {
     fn short_circuit_and_or() {
         use spark_gc::Value;
         // Oaks 当前对 `false && …` / `if true` 解析不稳，用比较表达式覆盖短路。
-        let m = compile("return 1 < 0 && 99", &[]).unwrap();
+        let m = compile("return 1 < 0 && 99").unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
         assert!(matches!(v, Value::Bool(false)));
 
-        let m = compile("return 1 < 2 || 0", &[]).unwrap();
+        let m = compile("return 1 < 2 || 0").unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
         assert!(matches!(v, Value::Bool(true)));
@@ -211,9 +195,7 @@ mod tests {
                 return 40 + 2
             }
             return 0
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -225,9 +207,7 @@ mod tests {
                 return 1
             }
             return 42
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -238,9 +218,9 @@ mod tests {
     fn native_register_block() {
         use spark_gc::Value;
 
-        let m = compile(
+        let m = compile_with_binds(
             r#"register_block(1, "astracraft3:dirt", "泥土", "textures/dirt.png", 1, 1, 30, "none")"#,
-            &["register_block"],
+            &HostBindTable::from_short_names(&["register_block"]).unwrap(),
         )
         .unwrap();
         let mut vm = Vm::new(m);

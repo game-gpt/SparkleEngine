@@ -88,7 +88,7 @@ pub struct LinkedProgram {
 }
 
 impl LinkedProgram {
-    /// 单目标链接：校验宿主导入、把 `CallNative` 绑成 `CallHost`、记录生命周期导出。
+    /// 单目标链接：校验宿主导入、拒绝残留 `CallNative`、记录生命周期导出。
     pub fn link_single(object: SparkObject, host: &HostSchema) -> Result<Self, LinkError> {
         if object.host_abi_version != host.abi_version {
             return Err(LinkError::AbiVersionMismatch {
@@ -100,7 +100,7 @@ impl LinkedProgram {
             return Err(LinkError::HostSchemaMismatch);
         }
         for import in &object.imports {
-            if host.get_by_short_name(import).is_none() {
+            if host.resolve_import(import).is_err() {
                 return Err(LinkError::UnresolvedHost {
                     name: Arc::clone(import),
                 });
@@ -113,18 +113,16 @@ impl LinkedProgram {
             .cloned()
             .collect();
         let mut module = object.module;
-        let slot_names = host.short_names();
-        spark_vm::bind_host_slots(&mut module, &slot_names).map_err(|detail| {
-            if let Some(name) = detail.strip_prefix("unbound_native:") {
-                LinkError::UnboundNativeCall {
-                    name: Arc::from(name),
-                }
+        spark_vm::reject_residual_call_native(&module).map_err(|detail| {
+            if detail.starts_with("residual_call_native") {
+                LinkError::ResidualCallNative
             } else {
                 LinkError::HostBindFailed {
                     detail: Arc::from(detail),
                 }
             }
         })?;
+        module.native_names = host.qualified_names();
         Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
             package: object.package,
@@ -165,7 +163,7 @@ impl LinkedProgram {
                 return Err(LinkError::HostSchemaMismatch);
             }
             for import in &object.imports {
-                if host.get_by_short_name(import).is_none() {
+                if host.resolve_import(import).is_err() {
                     return Err(LinkError::UnresolvedHost {
                         name: Arc::clone(import),
                     });
@@ -190,18 +188,16 @@ impl LinkedProgram {
                 detail: Arc::from(detail),
             }
         })?;
-        let slot_names = host.short_names();
-        spark_vm::bind_host_slots(&mut module, &slot_names).map_err(|detail| {
-            if let Some(name) = detail.strip_prefix("unbound_native:") {
-                LinkError::UnboundNativeCall {
-                    name: Arc::from(name),
-                }
+        spark_vm::reject_residual_call_native(&module).map_err(|detail| {
+            if detail.starts_with("residual_call_native") {
+                LinkError::ResidualCallNative
             } else {
                 LinkError::HostBindFailed {
                     detail: Arc::from(detail),
                 }
             }
         })?;
+        module.native_names = host.qualified_names();
         let primary = &objects[entry_index];
         Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
@@ -238,7 +234,6 @@ pub enum LinkError {
     AbiVersionMismatch { object: u32, host: u32 },
     HostSchemaMismatch,
     UnresolvedHost { name: Arc<str> },
-    UnboundNativeCall { name: Arc<str> },
     HostBindFailed { detail: Arc<str> },
     EmptyLinkSet,
     MissingEntryPackage { name: Arc<str> },
@@ -254,7 +249,6 @@ impl LinkError {
             Self::AbiVersionMismatch { .. } => "spark.script.link.abi_mismatch",
             Self::HostSchemaMismatch => "spark.script.link.host_schema_mismatch",
             Self::UnresolvedHost { .. } => "spark.script.link.unresolved_host",
-            Self::UnboundNativeCall { .. } => "spark.script.link.unbound_native",
             Self::HostBindFailed { .. } => "spark.script.link.host_bind_failed",
             Self::EmptyLinkSet => "spark.script.link.empty_set",
             Self::MissingEntryPackage { .. } => "spark.script.link.missing_entry_package",
@@ -418,7 +412,7 @@ mod tests {
         let linked = LinkedProgram::link_single(obj, &host).unwrap();
         let image = ExecutableImage::verify(linked).unwrap();
         image.check_host_schema(&host).unwrap();
-        assert_eq!(image.module().native_names, vec!["print".to_string()]);
+        assert_eq!(image.module().native_names, vec!["host.print".to_string()]);
     }
 
     #[test]
@@ -436,7 +430,7 @@ mod tests {
     }
 
     #[test]
-    fn link_rewrites_call_native_to_call_host() {
+    fn link_rejects_residual_call_native() {
         let mut f = FuncProto::new("on_load", 0);
         let si = f.add_string("print");
         f.emit(Op::LoadNull);
@@ -456,23 +450,43 @@ mod tests {
             },
         )
         .unwrap();
+        let err = LinkedProgram::link_single(obj, &host).unwrap_err();
+        assert!(matches!(err, LinkError::ResidualCallNative));
+    }
+
+    #[test]
+    fn link_accepts_call_host() {
+        let mut f = FuncProto::new("on_load", 0);
+        f.emit(Op::LoadNull);
+        f.emit(Op::CallHost);
+        f.emit_u16(0);
+        f.emit_u8(1);
+        f.emit(Op::Return);
+        let host = schema_with_print();
+        let obj = SparkObject::from_module(
+            PackageId::anonymous(),
+            crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
+            &host,
+            Module {
+                functions: vec![f],
+                entry: 0,
+                native_names: vec!["print".into()],
+            },
+        )
+        .unwrap();
         let linked = LinkedProgram::link_single(obj, &host).unwrap();
-        assert!(linked
-            .module
-            .functions[0]
+        assert!(linked.module.functions[0]
             .code
             .iter()
             .any(|&b| b == Op::CallHost as u8));
-        assert!(!linked
-            .module
-            .functions[0]
+        assert!(!linked.module.functions[0]
             .code
             .iter()
             .any(|&b| b == Op::CallNative as u8));
     }
 
     #[test]
-    fn unbound_call_native_fails_link() {
+    fn residual_call_native_outside_imports_fails_link() {
         let mut f = FuncProto::new("on_load", 0);
         let si = f.add_string("sneaky");
         f.emit(Op::LoadNull);
@@ -488,13 +502,13 @@ mod tests {
             Module {
                 functions: vec![f],
                 entry: 0,
-                // 故意不进 imports：只靠字符串池里的 CallNative
+                // 故意不进 imports：残留 CallNative 仍须在链接期拒绝
                 native_names: Vec::new(),
             },
         )
         .unwrap();
         let err = LinkedProgram::link_single(obj, &host).unwrap_err();
-        assert!(matches!(err, LinkError::UnboundNativeCall { .. }));
+        assert!(matches!(err, LinkError::ResidualCallNative));
     }
 
     #[test]

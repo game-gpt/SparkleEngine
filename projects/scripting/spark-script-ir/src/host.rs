@@ -1,6 +1,6 @@
 //! 宿主绑定表：HIR / MIR / codegen 共用的稳定身份、槽位与 ABI 约束。
 //!
-//! 短名仅用于 REPL 与诊断解析；链接与字节码一律按 [`HostId`] 对应槽位。
+//! 脚本源码可写未限定短名；解析时映射到唯一 [`HostId`] 槽位。制品与链接按限定名，字节码按槽位。
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -122,7 +122,7 @@ pub struct HostBindEntry {
 }
 
 impl HostBindEntry {
-    /// 最小桩（短名列表 / 测试）。
+    /// 最小桩（测试用短名表）。
     pub fn stub(id: HostId, slot: u32) -> Self {
         Self {
             id,
@@ -228,7 +228,7 @@ impl HostBindTable {
         Ok(())
     }
 
-    /// 由短名列表构建（默认 namespace=`host`，abi=`1`）。重复短名失败。
+    /// 由短名列表构建测试桩（默认 namespace=`host`，abi=`1`）。重复短名失败。
     pub fn from_short_names(names: &[&str]) -> Result<Self, String> {
         let mut table = Self::new();
         for (i, name) in names.iter().enumerate() {
@@ -261,12 +261,17 @@ impl HostBindTable {
         self.entries.get(slot as usize)
     }
 
-    /// 槽位诊断名（顺序 = 槽位）；VM `prepare_host_slots` 仍按此顺序注册。
-    pub fn slot_names(&self) -> Vec<&str> {
+    /// 槽位诊断名（限定名，顺序 = 槽位）。
+    pub fn slot_names(&self) -> Vec<String> {
         self.entries
             .iter()
-            .map(|e| e.id.short_name())
+            .map(|e| e.id.qualified_name())
             .collect()
+    }
+
+    /// VM `prepare_host_slots` 调度名（取短名，与 `register_native` 一致）。
+    pub fn dispatch_names(&self) -> Vec<&str> {
+        self.entries.iter().map(|e| e.id.short_name()).collect()
     }
 
     pub fn contains_short(&self, name: &str) -> bool {

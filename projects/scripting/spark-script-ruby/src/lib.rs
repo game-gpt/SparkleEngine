@@ -9,12 +9,11 @@ use lower::lower_root_to_hir;
 use oak_core::{Builder, SourceText};
 use oak_ruby::{RubyBuilder, RubyLanguage, RubyRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
-use spark_script_ir::{
-    emit_module_with_host, lower_module, HostBindTable, HostEmitMode,
-};
+use spark_script_ir::{emit_module_with_host, lower_module, HostEmitMode};
 use spark_vm::Module;
 
 pub use oak_ruby::RubyRoot as ParsedRoot;
+pub use spark_script_ir::HostBindTable;
 
 #[derive(Debug)]
 pub enum RubyScriptError {
@@ -74,12 +73,9 @@ impl std::fmt::Display for RubyScriptError {
 
 impl std::error::Error for RubyScriptError {}
 
-/// 源码 → [`Module`]。
-///
-/// 只走 HIR→MIR→字节码；降低失败必须报错，不得回退旧编译器。
-pub fn compile(source: &str, natives: &[&str]) -> Result<Module, RubyScriptError> {
-    let binds = HostBindTable::from_short_names(natives).map_err(RubyScriptError::compile_opaque)?;
-    compile_with_binds(source, &binds)
+/// 无宿主绑定的源码 → [`Module`]。有宿主时请用 [`compile_with_binds`]。
+pub fn compile(source: &str) -> Result<Module, RubyScriptError> {
+    compile_with_binds(source, &HostBindTable::new())
 }
 
 /// 带完整宿主绑定表的编译入口。
@@ -96,15 +92,6 @@ pub fn compile_with_binds(
         HostEmitMode::Bound(hosts)
     };
     emit_module_with_host(&mir, mode).map_err(RubyScriptError::compile_opaque)
-}
-
-/// 带完整宿主签名的编译入口（经短名绑定表）。
-pub fn compile_with_registry(
-    source: &str,
-    natives: &spark_script_valkyrie::NativeRegistry,
-) -> Result<Module, RubyScriptError> {
-    let names = natives.name_list();
-    compile(source, &names)
 }
 
 /// 解析为 Oaks AST。
@@ -130,7 +117,7 @@ mod tests {
 
     #[test]
     fn arithmetic_main() {
-        let module = compile("return 40 + 2", &[]).unwrap();
+        let module = compile("return 40 + 2").unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
         assert_eq!(value.as_number(), Some(42.0));
@@ -138,7 +125,7 @@ mod tests {
 
     #[test]
     fn arithmetic_via_ir_has_no_call_native() {
-        let module = compile("return 40 + 2", &[]).unwrap();
+        let module = compile("return 40 + 2").unwrap();
         assert!(module.functions.iter().all(|f| {
             !f.code
                 .iter()
@@ -156,9 +143,7 @@ mod tests {
             else
               return 0
             end
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -174,9 +159,7 @@ mod tests {
               n = n + 1
             end
             return n
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -192,9 +175,7 @@ mod tests {
               n = n + 1
             end
             return n
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -214,9 +195,7 @@ mod tests {
               return 42
             end
             return 0
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -232,9 +211,7 @@ mod tests {
               n = n + i
             end
             return n
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -253,9 +230,7 @@ mod tests {
               end
             end
             return n
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -270,9 +245,7 @@ mod tests {
               return a + b
             end
             return add(40, 2)
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         assert!(
             module.functions.iter().any(|f| f.name == "add"),
@@ -285,7 +258,7 @@ mod tests {
 
     #[test]
     fn host_call_via_ir() {
-        let module = compile("return ping(7)", &["ping"]).unwrap();
+        let module = compile_with_binds("return ping(7)", &HostBindTable::from_short_names(&["ping"]).unwrap()).unwrap();
         assert!(module
             .functions
             .iter()
@@ -308,9 +281,7 @@ mod tests {
               return a + b
             end
             return add(40, 2)
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -322,9 +293,7 @@ mod tests {
         let module = compile(
             r#"
             return 0x2A
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -339,9 +308,7 @@ mod tests {
               return 7
             end
             return Foo.bar()
-            "#,
-            &[],
-        )
+            "#)
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(
@@ -365,9 +332,7 @@ mod tests {
             end
             $c = Counter.new()
             return $c.bump()
-            "#,
-            &[],
-        )
+            "#)
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
@@ -383,9 +348,7 @@ mod tests {
               s = s + v
             }
             return s
-            "#,
-            &[],
-        )
+            "#)
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
@@ -400,9 +363,7 @@ mod tests {
               s = s + i
             end
             return s
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -411,7 +372,7 @@ mod tests {
 
     #[test]
     fn break_on_scene_nil() {
-        let module = compile(
+        let module = compile_with_binds(
             r#"
             n = 0
             while n < 5
@@ -420,7 +381,7 @@ mod tests {
             end
             return n
             "#,
-            &["tick"],
+            &HostBindTable::from_short_names(&["tick"]).unwrap(),
         )
         .unwrap();
         let mut vm = Vm::new(module);
@@ -439,7 +400,7 @@ mod tests {
     #[test]
     fn qualified_host_call_is_unsupported_without_ir() {
         // `Graphics.update` 需接收者调用；公共 IR 未覆盖前必须明确失败。
-        let err = compile(
+        let err = compile_with_binds(
             r#"
             i = 0
             while i < 3
@@ -447,9 +408,7 @@ mod tests {
               i = i + 1
             end
             return i
-            "#,
-            &["Graphics_update"],
-        )
+            "#, &HostBindTable::from_short_names(&["Graphics_update"]).unwrap())
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
@@ -464,9 +423,7 @@ mod tests {
               n = n + 1
             end
             return n
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(module);
         vm.step_limit = 50_000_000;
@@ -486,9 +443,7 @@ mod tests {
             end
             $v = Game_Variables.new
             return 1
-            "#,
-            &[],
-        )
+            "#)
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");

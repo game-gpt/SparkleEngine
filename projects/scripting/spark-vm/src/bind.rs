@@ -1,21 +1,18 @@
-//! 链接期：将 [`Op::CallNative`] 重写为 [`Op::CallHost`] 槽位调用。
+//! 链接期校验：正式字节码不得残留 [`Op::CallNative`]。
+//!
+//! 宿主调用须在 codegen 阶段按 [`Op::CallHost`] 槽位发射；链接只校验、不重写。
 
 use crate::{decode_op, FuncProto, Module, Op};
 
-/// 按宿主短名表把模块内 `CallNative` 绑成 `CallHost`。
-///
-/// `slots[i]` 的下标即槽位。名字先查函数字符串池，再回退模块 `native_names`。
-/// 无法解析或未出现在 `slots` 中的 `CallNative` 返回错误。
-pub fn bind_host_slots(module: &mut Module, slots: &[&str]) -> Result<(), String> {
-    let native_names = module.native_names.clone();
-    for func in &mut module.functions {
-        rewrite_func(func, slots, &native_names)?;
+/// 扫描模块：发现任何 `CallNative` 即失败。
+pub fn reject_residual_call_native(module: &Module) -> Result<(), String> {
+    for (fi, func) in module.functions.iter().enumerate() {
+        scan_func(func, fi)?;
     }
-    module.native_names = slots.iter().map(|s| (*s).to_string()).collect();
     Ok(())
 }
 
-fn rewrite_func(func: &mut FuncProto, slots: &[&str], native_names: &[String]) -> Result<(), String> {
+fn scan_func(func: &FuncProto, fi: usize) -> Result<(), String> {
     let mut ip = 0usize;
     while ip < func.code.len() {
         let at = ip;
@@ -45,26 +42,7 @@ fn rewrite_func(func: &mut FuncProto, slots: &[&str], native_names: &[String]) -
                 ip = skip(func, ip, 4, at)?;
             }
             Op::CallNative => {
-                let name_idx = read_u16_at(func, ip, at)?;
-                let _argc = read_u8_at(func, ip + 2, at)?;
-                let name = func
-                    .strings
-                    .get(name_idx as usize)
-                    .map(String::as_str)
-                    .or_else(|| native_names.get(name_idx as usize).map(String::as_str))
-                    .ok_or_else(|| format!("unbound_native:index:{name_idx}"))?;
-                let slot = slots
-                    .iter()
-                    .position(|s| *s == name)
-                    .ok_or_else(|| format!("unbound_native:{name}"))?;
-                if slot > u16::MAX as usize {
-                    return Err(format!("host_slot_overflow:{slot}"));
-                }
-                func.code[at] = Op::CallHost as u8;
-                let slot_u = slot as u16;
-                func.code[ip] = (slot_u & 0xff) as u8;
-                func.code[ip + 1] = (slot_u >> 8) as u8;
-                ip += 3;
+                return Err(format!("residual_call_native:func_{fi}@{at}"));
             }
             Op::Send | Op::CallHost => {
                 ip = skip(func, ip, 3, at)?;
@@ -82,76 +60,39 @@ fn skip(func: &FuncProto, ip: usize, n: usize, at: usize) -> Result<usize, Strin
     Ok(ip + n)
 }
 
-fn read_u8_at(func: &FuncProto, ip: usize, at: usize) -> Result<u8, String> {
-    if ip >= func.code.len() {
-        return Err(format!("truncated_operand@{at}"));
-    }
-    Ok(func.code[ip])
-}
-
-fn read_u16_at(func: &FuncProto, ip: usize, at: usize) -> Result<u16, String> {
-    if ip + 1 >= func.code.len() {
-        return Err(format!("truncated_operand@{at}"));
-    }
-    Ok(u16::from_le_bytes([func.code[ip], func.code[ip + 1]]))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{StdHost, Vm};
-    use spark_gc::Value;
 
     #[test]
-    fn rewrites_call_native_to_call_host() {
+    fn accepts_call_host_only() {
         let mut f = FuncProto::new("on_load", 0);
-        let c = f.add_const_number(7.0);
-        f.emit(Op::LoadConst);
-        f.emit_u16(c);
-        let si = f.add_string("inc");
-        f.emit(Op::CallNative);
-        f.emit_u16(si);
-        f.emit_u8(1);
+        f.emit(Op::CallHost);
+        f.emit_u16(0);
+        f.emit_u8(0);
         f.emit(Op::Return);
-        let mut module = Module {
+        let module = Module {
             functions: vec![f],
             entry: 0,
             native_names: vec!["inc".into()],
         };
-        bind_host_slots(&mut module, &["inc"]).unwrap();
-        assert!(module.functions[0]
-            .code
-            .iter()
-            .any(|&b| b == Op::CallHost as u8));
-        assert!(!module.functions[0]
-            .code
-            .iter()
-            .any(|&b| b == Op::CallNative as u8));
-
-        let mut vm = Vm::new(module);
-        vm.prepare_host_slots(["inc"]);
-        vm.register_native("inc", |_ctx, args| {
-            let n = args.first().and_then(|v| v.as_number()).unwrap_or(0.0);
-            Ok(Value::Number(n + 1.0))
-        });
-        let v = vm.run(&mut StdHost).unwrap();
-        assert_eq!(v.as_number(), Some(8.0));
+        reject_residual_call_native(&module).unwrap();
     }
 
     #[test]
-    fn rejects_unbound_native() {
+    fn rejects_call_native() {
         let mut f = FuncProto::new("on_load", 0);
-        let si = f.add_string("missing");
+        let si = f.add_string("inc");
         f.emit(Op::CallNative);
         f.emit_u16(si);
         f.emit_u8(0);
         f.emit(Op::Return);
-        let mut module = Module {
+        let module = Module {
             functions: vec![f],
             entry: 0,
             native_names: Vec::new(),
         };
-        let err = bind_host_slots(&mut module, &["inc"]).unwrap_err();
-        assert!(err.contains("unbound_native:missing"));
+        let err = reject_residual_call_native(&module).unwrap_err();
+        assert!(err.contains("residual_call_native"), "{err}");
     }
 }

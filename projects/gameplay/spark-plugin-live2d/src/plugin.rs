@@ -191,20 +191,20 @@ mod tests {
         let mut module = Module {
             functions: vec![],
             entry: 0,
-            native_names: Vec::new(),
+            native_names: vec!["live2d_load".into()],
         };
-        let load = module.intern_native("live2d_load");
         let mut f = FuncProto::new("on_load", 0);
         let s = f.add_string("demo");
         f.emit(Op::LoadString);
         f.emit_u16(s);
-        f.emit(Op::CallNative);
-        f.emit_u16(load);
+        f.emit(Op::CallHost);
+        f.emit_u16(0);
         f.emit_u8(1);
         f.emit(Op::Return);
         module.functions.push(f);
 
         let mut vm = spark_vm::Vm::new(module);
+        vm.prepare_host_slots(["live2d_load"]);
         reg.install_all(&mut vm);
         let idv = vm.run(&mut StdHost).unwrap();
         assert_eq!(idv.as_number(), Some(0.0));

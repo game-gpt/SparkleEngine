@@ -257,17 +257,17 @@ mod tests {
         let mut module = Module {
             functions: vec![],
             entry: 0,
-            native_names: Vec::new(),
+            native_names: vec!["steam_app_id".into()],
         };
-        let ni = module.intern_native("steam_app_id");
         let mut f = FuncProto::new("on_load", 0);
-        f.emit(Op::CallNative);
-        f.emit_u16(ni);
+        f.emit(Op::CallHost);
+        f.emit_u16(0);
         f.emit_u8(0);
         f.emit(Op::Return);
         module.functions.push(f);
 
         let mut vm = spark_vm::Vm::new(module);
+        vm.prepare_host_slots(["steam_app_id"]);
         reg.install_all(&mut vm);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(1234.0));

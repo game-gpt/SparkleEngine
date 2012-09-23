@@ -97,7 +97,7 @@ impl LanguageProfile {
         self
     }
 
-    /// 由旧 [`ScriptLanguage`] 选择默认 Spark profile（不是完整语言兼容声明）。
+    /// 由 [`ScriptLanguage`] 选择默认 Spark profile（便利映射，非完整语言生态声明）。
     pub fn default_for(language: ScriptLanguage) -> Self {
         match language {
             ScriptLanguage::Valkyrie => Self::new(

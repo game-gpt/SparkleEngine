@@ -1,8 +1,7 @@
 //! 编译期与运行期共用的结构化宿主 ABI。
 //!
-//! 旧 [`NativeRegistry`] 仅含函数名与简单类型路径，不足以支撑效果检查、
-//! 能力校验与槽位绑定。新代码应使用本模块的 [`HostSchema`]；
-//! [`NativeRegistry`] 可通过 [`HostSchema::from_native_registry`] 升级。
+//! 正式路径一律使用 [`HostSchema`] 与 [`HostBindTable`]：效果、能力、确定性与槽位
+//! 在编译期绑定；链接与制品按 [`HostFunctionId`] 限定名校验，字节码按槽位发射 [`spark_vm::Op::CallHost`]。
 
 use std::sync::Arc;
 
@@ -10,7 +9,7 @@ use spark_script_ir::{
     DeterminismKind, HostBindEntry, HostBindTable, HostCompilePolicy, HostEffectKind, HostId,
     HostPhaseKind,
 };
-use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
+use spark_script_valkyrie::{NativeParam, TypeRef};
 
 /// 宿主调用的效果分类（编译器内部约束，不必全部暴露为用户语法）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -160,15 +159,6 @@ impl HostFunction {
         }
     }
 
-    /// 从旧 [`NativeSignature`] 升级；命名空间默认 `host`，ABI 版本 `1`。
-    pub fn from_native_signature(sig: &NativeSignature) -> Self {
-        let mut f = Self::new(HostFunctionId::new("host", Arc::clone(&sig.name), 1));
-        f.params = sig.params.clone();
-        f.return_ty = sig.return_ty.clone();
-        f.docs = sig.docs.clone();
-        f
-    }
-
     pub fn param(mut self, param: NativeParam) -> Self {
         self.params.push(param);
         self
@@ -218,7 +208,7 @@ impl HostFunction {
         self
     }
 
-    /// 兼容旧编译入口的短名（不含命名空间）。
+    /// 脚本侧未限定命名空间时的名字（`id.name`）。
     pub fn short_name(&self) -> &str {
         self.id.name.as_ref()
     }
@@ -271,18 +261,20 @@ impl HostSchema {
         self.functions.iter().find(|f| f.id == *id)
     }
 
-    pub fn get_by_short_name(&self, name: &str) -> Option<&HostFunction> {
-        let mut found = None;
-        for f in &self.functions {
-            if f.id.name.as_ref() == name {
-                if found.is_some() {
-                    // 短名歧义：调用方应改用 [`Self::get`] 或 [`Self::to_bind_table`]。
-                    return None;
-                }
-                found = Some(f);
-            }
+    /// 解析宿主导入名：优先完整 [`HostFunctionId::qualified_name`]，否则要求短名全局唯一。
+    pub fn resolve_import(&self, import: &str) -> Result<&HostFunction, String> {
+        if let Some(f) = self
+            .functions
+            .iter()
+            .find(|f| f.id.qualified_name() == import)
+        {
+            return Ok(f);
         }
-        found
+        self.resolve_short_name(import)
+    }
+
+    pub fn get_by_short_name(&self, name: &str) -> Option<&HostFunction> {
+        self.resolve_short_name(name).ok()
     }
 
     /// 按短名解析；冲突或缺失时返回错误令牌。
@@ -354,38 +346,23 @@ impl HostSchema {
             .map(|i| i as u32)
     }
 
-    /// 按短名查找槽位。
+    /// 按短名查找槽位（短名须唯一）。
     pub fn slot_of_short_name(&self, name: &str) -> Option<u32> {
+        let f = self.resolve_short_name(name).ok()?;
+        self.slot_of(&f.id)
+    }
+
+    /// 制品 / 链接用的稳定键：[`HostFunctionId::qualified_name`] 顺序 = 槽位。
+    pub fn qualified_names(&self) -> Vec<String> {
         self.functions
             .iter()
-            .position(|f| f.id.name.as_ref() == name)
-            .map(|i| i as u32)
+            .map(|f| f.id.qualified_name())
+            .collect()
     }
 
-    pub fn short_names(&self) -> Vec<&str> {
+    /// VM `register_native` / `prepare_host_slots` 调度名（取 [`HostFunctionId::name`]，与槽位同序）。
+    pub fn dispatch_names(&self) -> Vec<&str> {
         self.functions.iter().map(|f| f.short_name()).collect()
-    }
-
-    /// 由旧 [`NativeRegistry`] 升级。
-    pub fn from_native_registry(reg: &NativeRegistry) -> Self {
-        let mut schema = Self::new(1);
-        for sig in &reg.signatures {
-            schema.insert(HostFunction::from_native_signature(sig));
-        }
-        schema
-    }
-
-    /// 导出兼容旧入口的 [`NativeRegistry`]（丢失效果 / 能力等元数据）。
-    pub fn to_native_registry(&self) -> NativeRegistry {
-        let mut reg = NativeRegistry::new();
-        for func in &self.functions {
-            let mut sig = NativeSignature::new(Arc::clone(&func.id.name));
-            sig.params = func.params.clone();
-            sig.return_ty = func.return_ty.clone();
-            sig.docs = func.docs.clone();
-            reg.insert(sig);
-        }
-        reg
     }
 
     /// schema 内容指纹（缓存键 / 装载校验用）。
@@ -413,12 +390,6 @@ impl HostSchema {
             }
         }
         h.finish()
-    }
-}
-
-impl From<&NativeRegistry> for HostSchema {
-    fn from(value: &NativeRegistry) -> Self {
-        Self::from_native_registry(value)
     }
 }
 
@@ -472,12 +443,6 @@ pub fn compile_policy_from_request(request: &crate::request::CompilationRequest)
     }
 }
 
-impl From<&HostSchema> for NativeRegistry {
-    fn from(value: &HostSchema) -> Self {
-        value.to_native_registry()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,7 +470,7 @@ mod tests {
 
         let spawn_id = HostFunctionId::new("spark.ecs", "spawn", 1);
         assert_eq!(schema.slot_of(&spawn_id), Some(0));
-        assert_eq!(schema.short_names(), vec!["spawn", "print"]);
+        assert_eq!(schema.dispatch_names(), vec!["spawn", "print"]);
         let binds = schema.to_bind_table().unwrap();
         assert_eq!(binds.len(), 2);
         assert_eq!(
@@ -526,20 +491,6 @@ mod tests {
         assert!(err.contains("host_short_name_conflict"), "{err}");
         assert!(schema.get_by_short_name("draw").is_none());
         assert!(schema.resolve_short_name("draw").unwrap_err().contains("conflict"));
-    }
-
-    #[test]
-    fn native_registry_roundtrip_preserves_names() {
-        let mut reg = NativeRegistry::new();
-        reg.insert(
-            NativeSignature::new("ping")
-                .param(NativeParam::new("n", "Number"))
-                .returns("Number"),
-        );
-        let schema = HostSchema::from_native_registry(&reg);
-        assert!(schema.get_by_short_name("ping").is_some());
-        let back = schema.to_native_registry();
-        assert_eq!(back.names(), vec!["ping"]);
     }
 
     #[test]

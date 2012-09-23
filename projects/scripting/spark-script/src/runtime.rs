@@ -24,7 +24,7 @@ impl ScriptRuntime {
             .check_host_schema(host)
             .map_err(link_to_script_error)?;
         let mut vm = Vm::new(image.clone_module());
-        vm.prepare_host_slots(host.short_names().into_iter().map(str::to_string));
+        vm.prepare_host_slots(host.dispatch_names().into_iter().map(str::to_string));
         Ok(Self {
             vm,
             jit: JitEngine::new(256),

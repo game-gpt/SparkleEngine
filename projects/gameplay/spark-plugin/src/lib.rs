@@ -2,7 +2,7 @@
 //!
 //! # 定位
 //!
-//! - **给 scripting / `spark-vm` 用**：宿主在启动时把插件装进 VM，脚本经 `CallNative` 调用。
+//! - **给 scripting / `spark-vm` 用**：宿主在启动时把插件装进 VM，脚本经编译期绑定的 [`spark_vm::Op::CallHost`] 槽位调用。
 //! - **不是** Rust 扩展点：Rust 代码需要能力时直接 `path` / crates.io 依赖对应 crate 即可。
 //!
 //! 插件只负责声明元信息，并把原生函数注册到 [`Vm`]。
@@ -189,20 +189,20 @@ mod tests {
         let mut module = Module {
             functions: vec![],
             entry: 0,
-            native_names: Vec::new(),
+            native_names: vec!["echo_ping".into()],
         };
-        let ni = module.intern_native("echo_ping");
         let mut f = FuncProto::new("on_load", 0);
         let c = f.add_const_number(7.0);
         f.emit(Op::LoadConst);
         f.emit_u16(c);
-        f.emit(Op::CallNative);
-        f.emit_u16(ni);
+        f.emit(Op::CallHost);
+        f.emit_u16(0);
         f.emit_u8(1);
         f.emit(Op::Return);
         module.functions.push(f);
 
         let mut vm = Vm::new(module);
+        vm.prepare_host_slots(["echo_ping"]);
         reg.install_all(&mut vm);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(7.0));

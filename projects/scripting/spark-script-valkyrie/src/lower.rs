@@ -380,7 +380,7 @@ fn lower_expr(
             lower_call(callee, args, locals, fn_index, hosts)
         }
         TermExpression::Block(body) => {
-            // 表达式块：隔离局部（与旧前端「块内 let 外溢」不同，避免复杂别名）。
+            // 表达式块：隔离局部，块内 let 不外溢。
             let mut block_locals = locals.clone();
             let mut block_tys = Vec::new();
             let (stmts, _) = lower_block_stmts(

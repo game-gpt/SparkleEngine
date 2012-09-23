@@ -37,7 +37,7 @@ impl LuaScriptError {
         }
     }
 
-    /// 兼容旧调用：仍写入 `reason`，禁止把 oak Display 句子塞进 opaque。
+    /// 写入 `reason` 参数（机器令牌，非 Locale 句子）。
     pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
         Self::compile_reason(detail)
     }
@@ -54,12 +54,9 @@ impl std::fmt::Display for LuaScriptError {
 
 impl std::error::Error for LuaScriptError {}
 
-/// 源码 → [`Module`]。
-///
-/// 只走 HIR→MIR→字节码；降低失败必须报错，不得回退旧编译器。
-pub fn compile(source: &str, natives: &[&str]) -> Result<Module, LuaScriptError> {
-    let binds = HostBindTable::from_short_names(natives).map_err(LuaScriptError::compile_opaque)?;
-    compile_with_binds(source, &binds)
+/// 无宿主绑定的源码 → [`Module`]。有宿主时请用 [`compile_with_binds`]。
+pub fn compile(source: &str) -> Result<Module, LuaScriptError> {
+    compile_with_binds(source, &HostBindTable::new())
 }
 
 /// 带完整宿主绑定表的编译入口。
@@ -76,15 +73,6 @@ pub fn compile_with_binds(
         HostEmitMode::Bound(hosts)
     };
     emit_module_with_host(&mir, mode).map_err(LuaScriptError::compile_opaque)
-}
-
-/// 带完整宿主签名的编译入口（经短名绑定表）。
-pub fn compile_with_registry(
-    source: &str,
-    natives: &spark_script_valkyrie::NativeRegistry,
-) -> Result<Module, LuaScriptError> {
-    let names = natives.name_list();
-    compile(source, &names)
 }
 
 /// 解析为 AST 根。
@@ -106,9 +94,9 @@ mod tests {
     use spark_vm::{Op, StdHost, Vm};
 
     #[test]
-    fn unsupported_does_not_fallback_to_legacy() {
-        // table 构造不在 IR 子集；必须明确失败，不得静默走旧 compile_root。
-        let err = compile("return {a=1}", &[]).unwrap_err();
+    fn unsupported_table_literal_fails() {
+        // table 构造不在 IR 子集；必须明确失败，必须明确失败。
+        let err = compile("return {a=1}").unwrap_err();
         let msg = format!("{err:?}");
         assert!(
             msg.contains("ir_unsupported") || msg.contains("unsupported") || msg.contains("reason"),
@@ -118,7 +106,7 @@ mod tests {
 
     #[test]
     fn arithmetic_main() {
-        let m = compile("return 40 + 2", &[]).unwrap();
+        let m = compile("return 40 + 2").unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
@@ -126,7 +114,7 @@ mod tests {
 
     #[test]
     fn arithmetic_via_ir_has_no_call_native() {
-        let m = compile("return 40 + 2", &[]).unwrap();
+        let m = compile("return 40 + 2").unwrap();
         assert!(m.functions.iter().all(|f| {
             !f.code.iter().any(|&b| b == Op::CallNative as u8 || b == Op::CallHost as u8)
         }));
@@ -142,9 +130,7 @@ mod tests {
             else
                 return 0
             end
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -163,9 +149,7 @@ mod tests {
             else
                 return 1
             end
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
@@ -178,9 +162,7 @@ mod tests {
                 n = n + 2
             end
             return n
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
@@ -195,9 +177,7 @@ mod tests {
                 n = n + 1
             until n >= 3
             return n
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(3.0));
@@ -216,9 +196,7 @@ mod tests {
                 return 42
             end
             return 0
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
@@ -232,9 +210,7 @@ mod tests {
                 return n * 2
             end
             return double(21)
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         assert!(
             m.functions.iter().any(|f| f.name == "double"),
@@ -254,9 +230,7 @@ mod tests {
                 n = n + 1
             end
             return n
-            "#,
-            &[],
-        )
+            "#)
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -266,7 +240,7 @@ mod tests {
     #[test]
     fn host_call_via_ir() {
         use spark_gc::Value;
-        let m = compile("return ping(7)", &["ping"]).unwrap();
+        let m = compile_with_binds("return ping(7)", &HostBindTable::from_short_names(&["ping"]).unwrap()).unwrap();
         assert!(m
             .functions
             .iter()

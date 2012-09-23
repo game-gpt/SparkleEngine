@@ -30,7 +30,7 @@ pub fn emit_module_with_host(
         HostEmitMode::Bound(table) => table
             .entries()
             .iter()
-            .map(|e| e.id.short_name().to_string())
+            .map(|e| e.id.qualified_name())
             .collect(),
     };
     let mut functions = Vec::with_capacity(module.functions.len());
