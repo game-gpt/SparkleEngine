@@ -9,7 +9,7 @@ mod pose;
 mod skeleton;
 
 pub use blend::{add_local_poses, blend_local_poses, blend_masked};
-pub use clip::{sample_clip, AnimationChannel, AnimationClip, JointTrack, Vec3Key, QuatKey};
+pub use clip::{sample_clip, AnimationClip, JointTrack, Vec3Key, QuatKey};
 pub use player::{AnimationPlayer, LoopMode};
 pub use pose::{
     build_skin_palette, evaluate_pose, socket_world_matrix, socket_world_position, LocalPose,

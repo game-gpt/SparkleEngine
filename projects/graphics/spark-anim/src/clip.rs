@@ -26,9 +26,6 @@ pub struct JointTrack {
     pub scales: Vec<Vec3Key>,
 }
 
-/// 兼容旧名。
-pub type AnimationChannel = JointTrack;
-
 #[derive(Debug, Clone)]
 pub struct AnimationClip {
     pub name: String,

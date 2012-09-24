@@ -66,7 +66,7 @@ impl LocaleSnapshot {
         }
     }
 
-    /// 测试 / 过渡：从扁平字符串表构造（内部编译为 bundle）。
+    /// 测试用：从扁平字符串表构造（内部编译为 bundle）。
     ///
     /// `entries`：`(namespace, message, locale_tag, pattern)`。
     pub fn from_entries(

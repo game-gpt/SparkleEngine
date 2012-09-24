@@ -156,11 +156,6 @@ impl EventBus {
         self.queues.len()
     }
 
-    /// 兼容旧名。
-    pub fn push<T: Send + Sync + 'static>(&mut self, event: T) {
-        self.send(event);
-    }
-
     pub fn len(&self) -> usize {
         self.queues.values().map(|q| q.total_len()).sum()
     }
