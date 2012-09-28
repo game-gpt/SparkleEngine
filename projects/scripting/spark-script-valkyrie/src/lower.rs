@@ -12,7 +12,7 @@ use oak_valkyrie::ast::{
     Block, ExprStmt, Let, MicroDeclaration, Pattern, Statement, StatementNode, StringLiteral,
     StringSegment, TermExpression, ValkyrieRoot,
 };
-use spark_script_ir::{
+use spark_ir::{
     HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindTable,
     PackageId, Ty,
 };

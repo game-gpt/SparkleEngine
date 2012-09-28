@@ -37,13 +37,13 @@ pub use request::{
     OptimizationLevel, PackageId, SourceFile,
 };
 pub use runtime::ScriptRuntime;
-pub use spark_script_ir::{
+pub use spark_ir::{
     emit_module, emit_module_with_host, lower_module, BasicBlock, DeterminismKind, HirBinaryOp,
     HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindEntry, HostBindTable,
     HostCompilePolicy, HostEffectKind, HostEmitMode, HostId, HostPhaseKind, HostRef, MirFunction,
     MirInst, MirModule, MirTerminator, MirValue, SymbolId, Ty,
 };
-pub use spark_script_ir::PackageId as IrPackageId;
+pub use spark_ir::PackageId as IrPackageId;
 pub use spark_script_valkyrie::{NativeParam, TypeRef};
 pub use spark_vm::{
     reject_residual_call_native, verify_bytecode, verify_bytecode_with_host, BytecodeVerifyError,
@@ -307,7 +307,7 @@ mod tests {
             .compile_source(ScriptLanguage::Valkyrie, "return ping()", &host)
             .unwrap();
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
-        rt.vm.register_native("ping", |_ctx, _args| Ok(spark_gc::Value::Number(7.0)));
+        rt.vm.register_native("host.ping", |_ctx, _args| Ok(spark_gc::Value::Number(7.0)));
         let v = rt.call_on_load_std().unwrap();
         assert_eq!(v.as_number(), Some(7.0));
     }
@@ -326,7 +326,7 @@ mod tests {
                 .compile_source(lang, source, &host)
                 .unwrap();
             let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
-            rt.vm.register_native("ping", |_ctx, args| {
+            rt.vm.register_native("host.ping", |_ctx, args| {
                 Ok(args.first().cloned().unwrap_or(spark_gc::Value::Null))
             });
             let v = rt.call_on_load_std().unwrap();
@@ -360,7 +360,7 @@ mod tests {
             .compile_source(ScriptLanguage::Valkyrie, "return ping()", &host)
             .unwrap();
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
-        rt.vm.register_native("ping", |_ctx, _args| Ok(spark_gc::Value::Number(9.0)));
+        rt.vm.register_native("host.ping", |_ctx, _args| Ok(spark_gc::Value::Number(9.0)));
         assert_eq!(rt.call_on_load_std().unwrap().as_number(), Some(9.0));
     }
 }

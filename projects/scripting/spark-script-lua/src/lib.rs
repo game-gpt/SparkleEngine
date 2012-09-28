@@ -2,7 +2,7 @@
 //!
 //! 面向游戏脚本的 Lua 5.x **子集**（函数 / local / 控制流 / 算术）。
 //! 完整语义（table、元表、协程）不在本前端范围。
-//! 正式编译只经 `spark-script-ir`；不支持的构造必须报错。
+//! 正式编译只经 `spark-ir`；不支持的构造必须报错。
 
 mod lower;
 
@@ -11,7 +11,7 @@ use lower::lower_root_to_hir;
 use oak_core::{Builder, SourceText};
 use oak_lua::{LuaBuilder, LuaLanguage, LuaRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
-use spark_script_ir::{
+use spark_ir::{
     emit_module_with_host, lower_module, HostBindTable, HostEmitMode,
 };
 use spark_vm::Module;
@@ -242,7 +242,7 @@ mod tests {
         use spark_gc::Value;
         let m = compile_with_binds(
             "return ping(7)",
-            &HostBindTable::from_ids([spark_script_ir::HostId::new("host", "ping", 1)]).unwrap(),
+            &HostBindTable::from_ids([spark_ir::HostId::new("host", "ping", 1)]).unwrap(),
         )
         .unwrap();
         assert!(m
@@ -250,8 +250,8 @@ mod tests {
             .iter()
             .any(|f| f.code.iter().any(|&b| b == Op::CallHost as u8)));
         let mut vm = Vm::new(m);
-        vm.prepare_host_slots(["ping"]);
-        vm.register_native("ping", |_ctx, args| {
+        vm.prepare_host_slots(["host.ping"]);
+        vm.register_native("host.ping", |_ctx, args| {
             let n = args.first().and_then(|v| v.as_number()).unwrap_or(0.0);
             Ok(Value::Number(n + 1.0))
         });

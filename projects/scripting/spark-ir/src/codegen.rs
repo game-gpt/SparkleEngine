@@ -500,8 +500,8 @@ mod tests {
             .iter()
             .any(|&b| b == Op::CallHost as u8));
         let mut vm = Vm::new(module);
-        vm.prepare_host_slots(["double"]);
-        vm.register_native("double", |_ctx, args| {
+        vm.prepare_host_slots(["host.double"]);
+        vm.register_native("host.double", |_ctx, args| {
             let n = args.first().and_then(|v| v.as_number()).unwrap_or(0.0);
             Ok(spark_gc::Value::Number(n * 2.0))
         });

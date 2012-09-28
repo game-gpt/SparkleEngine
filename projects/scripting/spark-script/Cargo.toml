@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 脚本编译门面（多前端 → 公共制品 → spark-vm）"
+description = "Spark 脚本编译门面（多前端 AST → spark-ir → 制品）"
 keywords = ["spark", "script", "vm"]
 categories = ["game-development"]
 publish = false
@@ -16,7 +16,7 @@ spark-diagnostics = { workspace = true }
 spark-gc = { workspace = true }
 spark-vm = { workspace = true }
 spark-jit = { workspace = true }
-spark-script-ir = { workspace = true }
+spark-ir = { workspace = true }
 spark-script-valkyrie = { workspace = true }
 spark-script-lua = { workspace = true }
 spark-script-ruby = { workspace = true }

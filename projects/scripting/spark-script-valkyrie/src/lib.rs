@@ -1,6 +1,6 @@
 //! Oaks `oak-valkyrie` Builder → Spark HIR → 公共 IR → `spark-vm` 字节码。
 //!
-//! 解析只走 [`ValkyrieBuilder`]。正式编译只经 `spark-script-ir`；不支持的构造必须报错。
+//! 解析只走 [`ValkyrieBuilder`]。正式编译只经 `spark-ir`；不支持的构造必须报错。
 
 mod lower;
 mod native_sig;
@@ -11,7 +11,7 @@ use oak_core::{Builder, SourceText};
 use oak_core::errors::OakErrorKind;
 use oak_valkyrie::{ValkyrieBuilder, ValkyrieLanguage, ValkyrieRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
-use spark_script_ir::{
+use spark_ir::{
     emit_module_with_host, lower_module, HostBindTable, HostEmitMode,
 };
 use spark_vm::Module;
@@ -220,7 +220,7 @@ mod tests {
 
         let m = compile_with_binds(
             r#"register_block(1, "astracraft3:dirt", "泥土", "textures/dirt.png", 1, 1, 30, "none")"#,
-            &HostBindTable::from_ids([spark_script_ir::HostId::new(
+            &HostBindTable::from_ids([spark_ir::HostId::new(
                 "host",
                 "register_block",
                 1,
@@ -229,17 +229,17 @@ mod tests {
         )
         .unwrap();
         let mut vm = Vm::new(m);
-        vm.prepare_host_slots(["register_block"]);
+        vm.prepare_host_slots(["host.register_block"]);
         let called = std::rc::Rc::new(std::cell::Cell::new(0u32));
         let c2 = called.clone();
-        vm.register_native("register_block", move |_ctx, args: Vec<Value>| {
+        vm.register_native("host.register_block", move |_ctx, args: Vec<Value>| {
             assert_eq!(args.len(), 8);
             c2.set(c2.get() + 1);
             Ok(Value::Null)
         });
         let _ = vm.run(&mut StdHost).unwrap();
         assert_eq!(called.get(), 1);
-        assert_eq!(vm.call_hits.get("host:0:register_block"), Some(&1));
+        assert_eq!(vm.call_hits.get("host:0:host.register_block"), Some(&1));
     }
 
     #[test]

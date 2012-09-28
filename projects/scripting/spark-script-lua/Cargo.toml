@@ -13,7 +13,7 @@ publish = false
 [dependencies]
 spark-diagnostics = { workspace = true }
 spark-gc = { workspace = true }
-spark-script-ir = { workspace = true }
+spark-ir = { workspace = true }
 spark-script-valkyrie = { workspace = true }
 spark-vm = { workspace = true }
 oak-core = { workspace = true }

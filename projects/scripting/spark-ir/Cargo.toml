@@ -1,11 +1,11 @@
 [package]
-name = "spark-script-ir"
+name = "spark-ir"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 脚本公共 IR（HIR / MIR）与字节码生成"
+description = "Spark 语言无关 IR（HIR / MIR / LIR）与字节码生成"
 keywords = ["spark", "script", "ir"]
 categories = ["game-development"]
 publish = false

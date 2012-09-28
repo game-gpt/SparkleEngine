@@ -269,9 +269,9 @@ impl HostBindTable {
             .collect()
     }
 
-    /// VM `prepare_host_slots` 调度名（取 [`HostId::name`]，与 `register_native` 键一致）。
-    pub fn dispatch_names(&self) -> Vec<&str> {
-        self.entries.iter().map(|e| e.id.short_name()).collect()
+    /// VM `prepare_host_slots` 调度名（限定名，与 `register_native` 键一致）。
+    pub fn dispatch_names(&self) -> Vec<String> {
+        self.slot_names()
     }
 
     pub fn contains_short(&self, name: &str) -> bool {

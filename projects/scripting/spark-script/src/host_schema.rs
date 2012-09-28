@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use spark_script_ir::{
+use spark_ir::{
     DeterminismKind, HostBindEntry, HostBindTable, HostCompilePolicy, HostEffectKind, HostId,
     HostPhaseKind,
 };
@@ -360,9 +360,9 @@ impl HostSchema {
             .collect()
     }
 
-    /// VM `register_native` / `prepare_host_slots` 调度名（取 [`HostFunctionId::name`]，与槽位同序）。
-    pub fn dispatch_names(&self) -> Vec<&str> {
-        self.functions.iter().map(|f| f.short_name()).collect()
+    /// VM `register_native` / `prepare_host_slots` 调度名（限定名，与槽位同序）。
+    pub fn dispatch_names(&self) -> Vec<String> {
+        self.qualified_names()
     }
 
     /// schema 内容指纹（缓存键 / 装载校验用）。
@@ -470,7 +470,10 @@ mod tests {
 
         let spawn_id = HostFunctionId::new("spark.ecs", "spawn", 1);
         assert_eq!(schema.slot_of(&spawn_id), Some(0));
-        assert_eq!(schema.dispatch_names(), vec!["spawn", "print"]);
+        assert_eq!(
+            schema.dispatch_names(),
+            vec!["spark.ecs.spawn".to_string(), "spark.log.print".to_string()]
+        );
         let binds = schema.to_bind_table().unwrap();
         assert_eq!(binds.len(), 2);
         assert_eq!(

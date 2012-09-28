@@ -12,7 +12,7 @@ use oak_lua::ast::{
     LuaIfStatement, LuaLocalStatement, LuaRepeatStatement, LuaRoot, LuaStatement,
     LuaWhileStatement,
 };
-use spark_script_ir::{
+use spark_ir::{
     HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindTable,
     PackageId, Ty,
 };
@@ -403,7 +403,7 @@ fn lower_expr(
             })
         }
         LuaExpression::Unary(u) => {
-            use spark_script_ir::HirUnaryOp;
+            use spark_ir::HirUnaryOp;
             let op = match u.op.as_str() {
                 "-" => HirUnaryOp::Neg,
                 "not" => HirUnaryOp::Not,

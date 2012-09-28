@@ -1,7 +1,7 @@
-//! Spark 脚本公共 IR：HIR / MIR、降低与字节码生成。
+//! Spark 语言无关 IR：HIR → MIR → LIR、验证、优化与字节码生成。
 //!
-//! 语言前端将语义明确后的构造降到 HIR。共享优化与字节码生成只认本 crate。
-//! `spark-vm` 字节码不是公共编译器 IR。
+//! 语言前端完成 AST 语义分析后降低到 HIR。本 crate 不依赖任何语言前端，
+//! 也不出现源语言枚举或语言专属节点。`spark-vm` 字节码不是编译器 IR。
 
 mod codegen;
 mod hir;

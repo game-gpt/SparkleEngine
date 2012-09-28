@@ -1,6 +1,6 @@
 //! Oaks `oak-ruby` Builder → 公共 IR → `spark-vm` 字节码。
 //!
-//! 解析只走 [`RubyBuilder`]。正式编译只经 `spark-script-ir`；不支持的构造必须报错。
+//! 解析只走 [`RubyBuilder`]。正式编译只经 `spark-ir`；不支持的构造必须报错。
 
 mod lower;
 
@@ -9,11 +9,11 @@ use lower::lower_root_to_hir;
 use oak_core::{Builder, SourceText};
 use oak_ruby::{RubyBuilder, RubyLanguage, RubyRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
-use spark_script_ir::{emit_module_with_host, lower_module, HostEmitMode};
+use spark_ir::{emit_module_with_host, lower_module, HostEmitMode};
 use spark_vm::Module;
 
 pub use oak_ruby::RubyRoot as ParsedRoot;
-pub use spark_script_ir::HostBindTable;
+pub use spark_ir::HostBindTable;
 
 #[derive(Debug)]
 pub enum RubyScriptError {
@@ -260,7 +260,7 @@ mod tests {
     fn host_call_via_ir() {
         let module = compile_with_binds(
             "return ping(7)",
-            &HostBindTable::from_ids([spark_script_ir::HostId::new("host", "ping", 1)]).unwrap(),
+            &HostBindTable::from_ids([spark_ir::HostId::new("host", "ping", 1)]).unwrap(),
         )
         .unwrap();
         assert!(module
@@ -268,8 +268,8 @@ mod tests {
             .iter()
             .any(|f| f.code.iter().any(|&b| b == Op::CallHost as u8)));
         let mut vm = Vm::new(module);
-        vm.prepare_host_slots(["ping"]);
-        vm.register_native("ping", |_ctx, args| {
+        vm.prepare_host_slots(["host.ping"]);
+        vm.register_native("host.ping", |_ctx, args| {
             let n = args.first().and_then(|v| v.as_number()).unwrap_or(0.0);
             Ok(Value::Number(n + 1.0))
         });
@@ -385,14 +385,14 @@ mod tests {
             end
             return n
             "#,
-            &HostBindTable::from_ids([spark_script_ir::HostId::new("host", "tick", 1)]).unwrap(),
+            &HostBindTable::from_ids([spark_ir::HostId::new("host", "tick", 1)]).unwrap(),
         )
         .unwrap();
         let mut vm = Vm::new(module);
-        vm.prepare_host_slots(["tick"]);
+        vm.prepare_host_slots(["host.tick"]);
         let frames = std::rc::Rc::new(std::cell::Cell::new(0u32));
         let frames2 = frames.clone();
-        vm.register_native("tick", move |_ctx, _args| {
+        vm.register_native("host.tick", move |_ctx, _args| {
             frames2.set(frames2.get() + 1);
             Ok(Value::Null)
         });
@@ -413,7 +413,7 @@ mod tests {
             end
             return i
             "#,
-            &HostBindTable::from_ids([spark_script_ir::HostId::new(
+            &HostBindTable::from_ids([spark_ir::HostId::new(
                 "host",
                 "Graphics_update",
                 1,
