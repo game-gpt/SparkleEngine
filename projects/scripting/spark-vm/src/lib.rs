@@ -457,7 +457,7 @@ pub struct Vm {
     /// 每条函数解释步热度（供 JIT）。
     pub hotness: Vec<u32>,
     pub natives: HashMap<String, NativeFn>,
-    /// 宿主槽位 → 调度名（与 [`HostFunctionId::name`] / `register_native` 键一致，顺序 = 槽位）。
+    /// 宿主槽位 → 调度名（与 [`HostFunctionId::qualified_name`] / `register_native` 键一致，顺序 = 槽位）。
     pub host_slot_names: Vec<String>,
     /// 单次 `interpret` 步数上限。
     pub step_limit: u64,
@@ -507,6 +507,16 @@ impl Vm {
         F: FnMut(&mut NativeCtx<'_>, Vec<Value>) -> Result<Value, VmError> + 'static,
     {
         self.natives.insert(name.into(), Box::new(f));
+    }
+
+    /// 注册已装箱的原生闭包（插件重映射限定名用）。
+    pub fn register_native_fn(&mut self, name: impl Into<String>, f: NativeFn) {
+        self.natives.insert(name.into(), f);
+    }
+
+    /// 取出已注册原生（不存在则 `None`）。
+    pub fn take_native(&mut self, name: &str) -> Option<NativeFn> {
+        self.natives.remove(name)
     }
 
     /// 从模块入口运行（块初始化 / REPL；模组请用命名导出）。
