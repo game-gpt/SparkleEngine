@@ -220,7 +220,12 @@ mod tests {
 
         let m = compile_with_binds(
             r#"register_block(1, "astracraft3:dirt", "泥土", "textures/dirt.png", 1, 1, 30, "none")"#,
-            &HostBindTable::from_short_names(&["register_block"]).unwrap(),
+            &HostBindTable::from_ids([spark_script_ir::HostId::new(
+                "host",
+                "register_block",
+                1,
+            )])
+            .unwrap(),
         )
         .unwrap();
         let mut vm = Vm::new(m);

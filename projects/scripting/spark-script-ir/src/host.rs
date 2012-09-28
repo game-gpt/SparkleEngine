@@ -122,7 +122,7 @@ pub struct HostBindEntry {
 }
 
 impl HostBindEntry {
-    /// 最小桩（测试用短名表）。
+    /// 最小测试桩（完整 [`HostId`]，未知 arity）。
     pub fn stub(id: HostId, slot: u32) -> Self {
         Self {
             id,
@@ -228,11 +228,11 @@ impl HostBindTable {
         Ok(())
     }
 
-    /// 由短名列表构建测试桩（默认 namespace=`host`，abi=`1`）。重复短名失败。
-    pub fn from_short_names(names: &[&str]) -> Result<Self, String> {
+    /// 由 [`HostId`] 列表构建测试桩（插入顺序 = 槽位）。重复短名或限定名失败。
+    pub fn from_ids(ids: impl IntoIterator<Item = HostId>) -> Result<Self, String> {
         let mut table = Self::new();
-        for (i, name) in names.iter().enumerate() {
-            table.push(HostBindEntry::stub(HostId::new("host", *name, 1), i as u32))?;
+        for (i, id) in ids.into_iter().enumerate() {
+            table.push(HostBindEntry::stub(id, i as u32))?;
         }
         Ok(table)
     }
@@ -269,7 +269,7 @@ impl HostBindTable {
             .collect()
     }
 
-    /// VM `prepare_host_slots` 调度名（取短名，与 `register_native` 一致）。
+    /// VM `prepare_host_slots` 调度名（取 [`HostId::name`]，与 `register_native` 键一致）。
     pub fn dispatch_names(&self) -> Vec<&str> {
         self.entries.iter().map(|e| e.id.short_name()).collect()
     }

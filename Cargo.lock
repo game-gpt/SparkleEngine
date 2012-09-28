@@ -1857,7 +1857,7 @@ dependencies = [
 [[package]]
 name = "oak-dejavu"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#c842f0000267c430b66119d2d3e7419ff87b65e8"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "arcstr",
  "bigdecimal",
@@ -1874,7 +1874,7 @@ dependencies = [
 [[package]]
 name = "oak-lua"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#c842f0000267c430b66119d2d3e7419ff87b65e8"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "oak-core",
  "serde",
@@ -1884,7 +1884,7 @@ dependencies = [
 [[package]]
 name = "oak-macros"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#c842f0000267c430b66119d2d3e7419ff87b65e8"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1903,7 +1903,7 @@ dependencies = [
 [[package]]
 name = "oak-valkyrie"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#c842f0000267c430b66119d2d3e7419ff87b65e8"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "oak-core",
  "oak-dejavu",

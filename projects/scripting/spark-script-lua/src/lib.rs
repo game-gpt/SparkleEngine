@@ -240,7 +240,11 @@ mod tests {
     #[test]
     fn host_call_via_ir() {
         use spark_gc::Value;
-        let m = compile_with_binds("return ping(7)", &HostBindTable::from_short_names(&["ping"]).unwrap()).unwrap();
+        let m = compile_with_binds(
+            "return ping(7)",
+            &HostBindTable::from_ids([spark_script_ir::HostId::new("host", "ping", 1)]).unwrap(),
+        )
+        .unwrap();
         assert!(m
             .functions
             .iter()

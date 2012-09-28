@@ -493,7 +493,7 @@ mod tests {
             }],
         };
         let mir = lower_module(&hir).unwrap();
-        let binds = HostBindTable::from_short_names(&["double"]).unwrap();
+        let binds = HostBindTable::from_ids([HostId::new("host", "double", 1)]).unwrap();
         let module = emit_module_with_host(&mir, HostEmitMode::Bound(&binds)).unwrap();
         assert!(module.functions[0]
             .code

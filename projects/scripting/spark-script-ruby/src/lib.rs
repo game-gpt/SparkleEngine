@@ -258,7 +258,11 @@ mod tests {
 
     #[test]
     fn host_call_via_ir() {
-        let module = compile_with_binds("return ping(7)", &HostBindTable::from_short_names(&["ping"]).unwrap()).unwrap();
+        let module = compile_with_binds(
+            "return ping(7)",
+            &HostBindTable::from_ids([spark_script_ir::HostId::new("host", "ping", 1)]).unwrap(),
+        )
+        .unwrap();
         assert!(module
             .functions
             .iter()
@@ -381,7 +385,7 @@ mod tests {
             end
             return n
             "#,
-            &HostBindTable::from_short_names(&["tick"]).unwrap(),
+            &HostBindTable::from_ids([spark_script_ir::HostId::new("host", "tick", 1)]).unwrap(),
         )
         .unwrap();
         let mut vm = Vm::new(module);
@@ -408,7 +412,14 @@ mod tests {
               i = i + 1
             end
             return i
-            "#, &HostBindTable::from_short_names(&["Graphics_update"]).unwrap())
+            "#,
+            &HostBindTable::from_ids([spark_script_ir::HostId::new(
+                "host",
+                "Graphics_update",
+                1,
+            )])
+            .unwrap(),
+        )
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
