@@ -134,10 +134,17 @@ impl PluginRegistry {
         out
     }
 
-    /// 把全部插件的原生函数装进指定 VM。
+    /// 把全部插件的原生函数装进指定 VM（调度键为 `plugin.<short>`）。
     pub fn install_all(&mut self, vm: &mut Vm) {
         for p in &mut self.plugins {
+            let names: Vec<&'static str> = p.native_names().to_vec();
             p.install(vm);
+            for n in names {
+                let qualified = format!("plugin.{n}");
+                if let Some(native) = vm.take_native(n) {
+                    vm.register_native_fn(qualified, native);
+                }
+            }
         }
     }
 
@@ -146,7 +153,14 @@ impl PluginRegistry {
         let Some(p) = self.plugins.iter_mut().find(|p| p.info().id == id) else {
             return Err(PluginError::NotFound { id: id.into() });
         };
+        let names: Vec<&'static str> = p.native_names().to_vec();
         p.install(vm);
+        for n in names {
+            let qualified = format!("plugin.{n}");
+            if let Some(native) = vm.take_native(n) {
+                vm.register_native_fn(qualified, native);
+            }
+        }
         Ok(())
     }
 }
@@ -189,7 +203,7 @@ mod tests {
         let mut module = Module {
             functions: vec![],
             entry: 0,
-            native_names: vec!["echo_ping".into()],
+            native_names: vec!["plugin.echo_ping".into()],
         };
         let mut f = FuncProto::new("on_load", 0);
         let c = f.add_const_number(7.0);
@@ -202,7 +216,7 @@ mod tests {
         module.functions.push(f);
 
         let mut vm = Vm::new(module);
-        vm.prepare_host_slots(["echo_ping"]);
+        vm.prepare_host_slots(["plugin.echo_ping"]);
         reg.install_all(&mut vm);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(7.0));

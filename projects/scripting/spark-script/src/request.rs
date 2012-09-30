@@ -186,7 +186,7 @@ pub struct CompilationRequest {
 }
 
 impl CompilationRequest {
-    /// REPL / 测试便利：单文件 + 默认 profile。
+    /// REPL / 测试便利：单文件 + 默认 profile。正式模组请用 [`Self::for_mod`]。
     pub fn repl(
         language: ScriptLanguage,
         source: impl Into<Arc<str>>,
@@ -201,6 +201,42 @@ impl CompilationRequest {
             required_capabilities: Vec::new(),
             determinism: DeterminismClass::Nondeterministic,
             optimization: OptimizationLevel::None,
+            debug_info: DebugInfoLevel::LineTables,
+            feature_flags: Vec::new(),
+        }
+    }
+
+    /// 正式模组装载：包身份、入口路径与默认 profile（`rgss` → `rgss-compat`）。
+    pub fn for_mod(
+        package: PackageId,
+        language: ScriptLanguage,
+        language_token: Option<&str>,
+        entry_path: PathBuf,
+        entry_name: impl Into<Arc<str>>,
+        source: impl Into<Arc<str>>,
+        host_schema: HostSchema,
+    ) -> Self {
+        let entry_name = entry_name.into();
+        let language = match language_token.map(|s| s.to_ascii_lowercase()).as_deref() {
+            Some("rgss") => LanguageProfile::new(
+                LanguageFrontend::Ruby,
+                LanguageProfileId::rgss_compat(),
+            ),
+            _ => LanguageProfile::default_for(language),
+        };
+        Self {
+            package,
+            sources: vec![SourceFile {
+                path: Some(entry_path),
+                name: Arc::clone(&entry_name),
+                source: source.into(),
+            }],
+            entry_modules: vec![entry_name],
+            language,
+            host_schema,
+            required_capabilities: Vec::new(),
+            determinism: DeterminismClass::Nondeterministic,
+            optimization: OptimizationLevel::Basic,
             debug_info: DebugInfoLevel::LineTables,
             feature_flags: Vec::new(),
         }

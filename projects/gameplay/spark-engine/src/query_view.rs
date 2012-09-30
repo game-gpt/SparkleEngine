@@ -141,7 +141,7 @@ mod tests {
                     archetype: Arc::from("rock"),
                 },
             ],
-        );
+        ).unwrap();
         let view = ScriptQueryView::new(&world);
         assert_eq!(view.entities_with_archetype("rock").len(), 2);
         assert_eq!(view.entities_with_archetype("tree").len(), 1);
@@ -161,7 +161,7 @@ mod tests {
                     archetype: Arc::from("rock"),
                 },
             ],
-        );
+        ).unwrap();
         let snap = ScriptQuerySnapshot::from_world(&world);
         assert_eq!(snap.count("rock"), 2);
         assert_eq!(snap.count("missing"), 0);
@@ -182,7 +182,7 @@ mod tests {
                     archetype: Arc::from("tree"),
                 },
             ],
-        );
+        ).unwrap();
         let full = ScriptQuerySnapshot::from_world(&world);
         let allow: HashSet<Arc<str>> = [Arc::from("rock")].into_iter().collect();
         let view = full.filtered_by_archetypes(&allow);

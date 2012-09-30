@@ -2,6 +2,7 @@
 //!
 //! `Spawn` 生成带 [`ScriptArchetypeTag`] 的实体；`Despawn` 按位模式句柄销毁。
 //! 按名增删组件经 [`ScriptComponentCatalog`] 解析为稳定 [`ComponentDescriptorId`]。
+//! 未知或尚无类型体的组件名必须报错，不得静默跳过。
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -74,6 +75,32 @@ impl ScriptComponentCatalog {
     }
 }
 
+/// 组件应用失败（稳定机器令牌）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommandApplyError {
+    UnknownComponent { component: Arc<str> },
+    UnsupportedComponent { component: Arc<str> },
+    EntityNotAlive { entity: u64, component: Arc<str> },
+}
+
+impl CommandApplyError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::UnknownComponent { .. } => "spark.engine.command.unknown_component",
+            Self::UnsupportedComponent { .. } => "spark.engine.command.unsupported_component",
+            Self::EntityNotAlive { .. } => "spark.engine.command.entity_not_alive",
+        }
+    }
+}
+
+impl std::fmt::Display for CommandApplyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for CommandApplyError {}
+
 /// 单次提交报告。
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct CommandApplyReport {
@@ -81,7 +108,6 @@ pub struct CommandApplyReport {
     pub despawned: Vec<Entity>,
     pub added_components: usize,
     pub removed_components: usize,
-    pub skipped_named_components: usize,
     pub failed_despawns: usize,
 }
 
@@ -91,7 +117,6 @@ impl CommandApplyReport {
         self.despawned.extend(other.despawned);
         self.added_components += other.added_components;
         self.removed_components += other.removed_components;
-        self.skipped_named_components += other.skipped_named_components;
         self.failed_despawns += other.failed_despawns;
     }
 }
@@ -100,7 +125,7 @@ impl CommandApplyReport {
 pub fn apply_script_commands(
     world: &mut World,
     commands: &[ScriptCommand],
-) -> CommandApplyReport {
+) -> Result<CommandApplyReport, CommandApplyError> {
     apply_script_commands_with(world, commands, &ScriptComponentCatalog::with_builtins())
 }
 
@@ -109,7 +134,7 @@ pub fn apply_script_commands_with(
     world: &mut World,
     commands: &[ScriptCommand],
     catalog: &ScriptComponentCatalog,
-) -> CommandApplyReport {
+) -> Result<CommandApplyReport, CommandApplyError> {
     let mut report = CommandApplyReport::default();
     for cmd in commands {
         match cmd {
@@ -134,15 +159,21 @@ pub fn apply_script_commands_with(
                         if world.insert(e, ScriptMarker) {
                             report.added_components += 1;
                         } else {
-                            report.skipped_named_components += 1;
+                            return Err(CommandApplyError::EntityNotAlive {
+                                entity: *entity,
+                                component: Arc::clone(component),
+                            });
                         }
                     }
                     Some(_) => {
-                        // 已登记但本 crate 尚无类型体：计入跳过，避免静默当成功。
-                        report.skipped_named_components += 1;
+                        return Err(CommandApplyError::UnsupportedComponent {
+                            component: Arc::clone(component),
+                        });
                     }
                     None => {
-                        report.skipped_named_components += 1;
+                        return Err(CommandApplyError::UnknownComponent {
+                            component: Arc::clone(component),
+                        });
                     }
                 }
             }
@@ -153,17 +184,27 @@ pub fn apply_script_commands_with(
                         if world.remove::<ScriptMarker>(e).is_some() {
                             report.removed_components += 1;
                         } else {
-                            report.skipped_named_components += 1;
+                            return Err(CommandApplyError::EntityNotAlive {
+                                entity: *entity,
+                                component: Arc::clone(component),
+                            });
                         }
                     }
-                    Some(_) | None => {
-                        report.skipped_named_components += 1;
+                    Some(_) => {
+                        return Err(CommandApplyError::UnsupportedComponent {
+                            component: Arc::clone(component),
+                        });
+                    }
+                    None => {
+                        return Err(CommandApplyError::UnknownComponent {
+                            component: Arc::clone(component),
+                        });
                     }
                 }
             }
         }
     }
-    report
+    Ok(report)
 }
 
 #[cfg(test)]
@@ -179,7 +220,8 @@ mod tests {
             &[ScriptCommand::Spawn {
                 archetype: Arc::from("rock"),
             }],
-        );
+        )
+        .unwrap();
         assert_eq!(report.spawned.len(), 1);
         let e = report.spawned[0];
         assert_eq!(
@@ -191,23 +233,27 @@ mod tests {
             &[ScriptCommand::Despawn {
                 entity: e.to_bits(),
             }],
-        );
+        )
+        .unwrap();
         assert_eq!(report2.despawned, vec![e]);
         assert!(!world.is_alive(e));
     }
 
     #[test]
-    fn unknown_component_edits_are_skipped() {
+    fn unknown_component_edits_fail() {
         let mut world = World::new();
-        let report = apply_script_commands(
+        let err = apply_script_commands(
             &mut world,
             &[ScriptCommand::AddComponent {
                 entity: 0,
                 component: Arc::from("Health"),
             }],
-        );
-        assert_eq!(report.skipped_named_components, 1);
-        assert_eq!(report.added_components, 0);
+        )
+        .unwrap_err();
+        assert!(matches!(
+            err,
+            CommandApplyError::UnknownComponent { ref component } if component.as_ref() == "Health"
+        ));
     }
 
     #[test]
@@ -218,13 +264,10 @@ mod tests {
             &[ScriptCommand::Spawn {
                 archetype: Arc::from("unit"),
             }],
-        );
+        )
+        .unwrap();
         let e = spawn.spawned[0];
         let catalog = ScriptComponentCatalog::with_builtins();
-        assert_eq!(
-            catalog.id_of(SCRIPT_MARKER_NAME),
-            Some(ComponentDescriptorId(0))
-        );
         let added = apply_script_commands_with(
             &mut world,
             &[ScriptCommand::AddComponent {
@@ -232,7 +275,8 @@ mod tests {
                 component: Arc::from(SCRIPT_MARKER_NAME),
             }],
             &catalog,
-        );
+        )
+        .unwrap();
         assert_eq!(added.added_components, 1);
         assert!(world.get::<ScriptMarker>(e).is_some());
         let removed = apply_script_commands_with(
@@ -242,7 +286,8 @@ mod tests {
                 component: Arc::from(SCRIPT_MARKER_NAME),
             }],
             &catalog,
-        );
+        )
+        .unwrap();
         assert_eq!(removed.removed_components, 1);
         assert!(world.get::<ScriptMarker>(e).is_none());
     }

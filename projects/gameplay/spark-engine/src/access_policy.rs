@@ -80,46 +80,36 @@ impl ScriptAccessPolicy {
     }
 }
 
-/// 按 schema + 当前阶段检查宿主短名是否可调用。
+/// 按 schema + 当前阶段检查宿主导入名是否可调用（限定名或唯一短名）。
 pub fn check_host_phase(
     schema: &HostSchema,
-    short_name: &str,
+    import: &str,
     phase: HostPhase,
 ) -> Result<(), String> {
-    match schema.resolve_short_name(short_name) {
-        Ok(func) => {
-            if func.allows_phase(phase) {
-                Ok(())
-            } else {
-                Err(format!(
-                    "host_phase_denied:{short_name}:phase={phase:?}"
-                ))
-            }
-        }
-        Err(e) if e.starts_with("host_unknown:") => Ok(()),
-        Err(e) => Err(e),
+    let func = schema.resolve_import(import)?;
+    if func.allows_phase(phase) {
+        Ok(())
+    } else {
+        Err(format!(
+            "host_phase_denied:{import}:phase={phase:?}"
+        ))
     }
 }
 
-/// System 确定性要求是否允许调用该宿主短名。
+/// System 确定性要求是否允许调用该宿主导入名。
 pub fn check_host_determinism(
     schema: &HostSchema,
-    short_name: &str,
+    import: &str,
     required: DeterminismClass,
 ) -> Result<(), String> {
-    match schema.resolve_short_name(short_name) {
-        Ok(func) => {
-            if determinism_allows(required, func.determinism) {
-                Ok(())
-            } else {
-                Err(format!(
-                    "host_determinism_denied:{short_name}:policy={required:?}:host={:?}",
-                    func.determinism
-                ))
-            }
-        }
-        Err(e) if e.starts_with("host_unknown:") => Ok(()),
-        Err(e) => Err(e),
+    let func = schema.resolve_import(import)?;
+    if determinism_allows(required, func.determinism) {
+        Ok(())
+    } else {
+        Err(format!(
+            "host_determinism_denied:{import}:policy={required:?}:host={:?}",
+            func.determinism
+        ))
     }
 }
 
@@ -172,8 +162,11 @@ mod tests {
                 .effect(HostEffect::SpawnEntity),
         );
         assert!(check_host_phase(&schema, "queue_spawn", HostPhase::Update).is_ok());
+        assert!(check_host_phase(&schema, "engine.queue_spawn", HostPhase::Update).is_ok());
         let err = check_host_phase(&schema, "queue_spawn", HostPhase::RenderPrepare).unwrap_err();
         assert!(err.contains("host_phase_denied"), "{err}");
+        let unknown = check_host_phase(&schema, "no_such_host", HostPhase::Update).unwrap_err();
+        assert!(unknown.contains("host_unknown:"), "{unknown}");
     }
 
     #[test]
@@ -185,7 +178,7 @@ mod tests {
         );
         let err = check_host_determinism(
             &schema,
-            "log",
+            "engine.log",
             DeterminismClass::Deterministic,
         )
         .unwrap_err();

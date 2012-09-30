@@ -29,8 +29,9 @@ mod vfs;
 pub use access_policy::{ScriptAccessPolicy, check_host_phase};
 pub use api::{BuiltinApi, ENGINE_NATIVES, engine_host_schema};
 pub use command_apply::{
-    apply_script_commands, apply_script_commands_with, CommandApplyReport, ComponentDescriptorId,
-    ScriptArchetypeTag, ScriptComponentCatalog, ScriptMarker, SCRIPT_MARKER_NAME,
+    apply_script_commands, apply_script_commands_with, CommandApplyError, CommandApplyReport,
+    ComponentDescriptorId, ScriptArchetypeTag, ScriptComponentCatalog, ScriptMarker,
+    SCRIPT_MARKER_NAME,
 };
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
@@ -62,7 +63,7 @@ use spark_core::SparkError;
 use spark_gc::Value;
 use spark_script::{
     ArtifactCache, CompilationRequest, DeterminismClass, ExecutableImage, HostFunction,
-    HostFunctionId, HostPhase, HostSchema, ScriptCompiler, ScriptError, ScriptLanguage,
+    HostFunctionId, HostPhase, HostSchema, PackageId, ScriptCompiler, ScriptError, ScriptLanguage,
 };
 use spark_vm::{HostHooks, StdHost};
 
@@ -96,6 +97,10 @@ pub enum EngineError {
     ScriptDomainDisabled { mod_id: String },
     /// 脚本 System 声明 / 调度契约失败。
     ScriptSystem(ScriptSystemError),
+    /// 脚本命令提交失败（未知 / 不支持组件等）。
+    CommandApply(crate::command_apply::CommandApplyError),
+    /// 模组语言无法解析（显式字段或入口扩展名）。
+    UnknownLanguage { token: String },
 }
 
 impl EngineError {
@@ -114,6 +119,8 @@ impl EngineError {
             Self::HookFailed { .. } => "spark.engine.hook_failed".into(),
             Self::ScriptDomainDisabled { .. } => "spark.engine.script_domain_disabled".into(),
             Self::ScriptSystem(_) => "spark.engine.script_system".into(),
+            Self::CommandApply(e) => e.code().into(),
+            Self::UnknownLanguage { .. } => "spark.engine.unknown_language".into(),
         }
     }
 
@@ -155,6 +162,17 @@ impl EngineError {
                 .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str()))),
             Self::ScriptSystem(e) => ErrorArgs::new()
                 .with("detail", ErrorArg::String(Arc::from(e.to_string()))),
+            Self::CommandApply(e) => match e {
+                crate::command_apply::CommandApplyError::UnknownComponent { component }
+                | crate::command_apply::CommandApplyError::UnsupportedComponent { component }
+                | crate::command_apply::CommandApplyError::EntityNotAlive {
+                    component,
+                    ..
+                } => ErrorArgs::new()
+                    .with("component", ErrorArg::String(Arc::clone(component))),
+            },
+            Self::UnknownLanguage { token } => ErrorArgs::new()
+                .with("token", ErrorArg::String(Arc::from(token.as_str()))),
         }
     }
 
@@ -238,6 +256,12 @@ impl From<PluginError> for EngineError {
 impl From<ScriptSystemError> for EngineError {
     fn from(value: ScriptSystemError) -> Self {
         Self::ScriptSystem(value)
+    }
+}
+
+impl From<crate::command_apply::CommandApplyError> for EngineError {
+    fn from(value: crate::command_apply::CommandApplyError) -> Self {
+        Self::CommandApply(value)
     }
 }
 
@@ -589,14 +613,14 @@ impl SparkEngine {
     pub fn apply_script_commands_to_world(
         &mut self,
         world: &mut spark_ecs::World,
-    ) -> CommandApplyReport {
+    ) -> Result<CommandApplyReport, EngineError> {
         let batches = self.drain_script_commands();
         let mut report = CommandApplyReport::default();
         for (_mod_id, cmds) in batches {
-            report.merge(apply_script_commands(world, &cmds));
+            report.merge(apply_script_commands(world, &cmds)?);
         }
         self.refresh_script_query(world);
-        report
+        Ok(report)
     }
 
     /// 从当前世界刷新脚本可读查询快照（应在提交命令后、跑脚本前调用）。
@@ -735,27 +759,18 @@ impl SparkEngine {
         self.refresh_script_query(world);
         self.run_script_phase(phase, host)?;
         self.dispatch_script_events(host)?;
-        Ok(self.apply_script_commands_to_world(world))
-    }
-
-    fn compile_native_names(&self) -> Vec<&'static str> {
-        let mut names: Vec<&'static str> = ENGINE_NATIVES.to_vec();
-        for n in self.plugins.native_names() {
-            if !names.iter().any(|x| *x == n) {
-                names.push(n);
-            }
-        }
-        names
+        Ok(self.apply_script_commands_to_world(world)?)
     }
 
     /// 编译/装载共用的宿主 schema：引擎内置 ABI + 插件宿主桩（`plugin` 命名空间）。
     fn build_host_schema(&self) -> HostSchema {
         let mut schema = crate::api::engine_host_schema();
-        for name in self.compile_native_names() {
+        for name in self.plugins.native_names() {
+            let qualified = format!("plugin.{name}");
             let known = schema
                 .functions
                 .iter()
-                .any(|f| f.short_name() == name);
+                .any(|f| f.id.qualified_name() == qualified);
             if !known {
                 schema.insert(HostFunction::new(HostFunctionId::new("plugin", name, 1)));
             }
@@ -782,8 +797,16 @@ fn load_mod_image(
     let source = std::fs::read_to_string(&entry_path).map_err(|e| {
         EngineError::from_io(entry_path.display().to_string(), e)
     })?;
-    let lang = resolve_language(manifest.language.as_deref(), entry);
-    let request = CompilationRequest::repl(lang, source.as_str(), host_schema.clone());
+    let lang = resolve_language(manifest.language.as_deref(), entry)?;
+    let request = CompilationRequest::for_mod(
+        PackageId::new(manifest.id.as_str(), manifest.version.as_str()),
+        lang,
+        manifest.language.as_deref(),
+        entry_path.clone(),
+        entry,
+        source.as_str(),
+        host_schema.clone(),
+    );
     let key = ArtifactCache::key_for(&request, &source);
     let cache_dir = root.join(".spark-cache");
     let cache_path = cache_dir.join(format!("{key:016x}.spkx"));
@@ -862,14 +885,16 @@ fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
     Err(EngineError::ModNotFound { id: id.into() })
 }
 
-fn resolve_language(explicit: Option<&str>, entry: &str) -> ScriptLanguage {
+fn resolve_language(explicit: Option<&str>, entry: &str) -> Result<ScriptLanguage, EngineError> {
     if let Some(s) = explicit {
-        match s.to_ascii_lowercase().as_str() {
-            "lua" => return ScriptLanguage::Lua,
-            "ruby" | "rgss" => return ScriptLanguage::Ruby,
-            "valkyrie" | "vk" | "v" => return ScriptLanguage::Valkyrie,
-            _ => {}
-        }
+        return match s.to_ascii_lowercase().as_str() {
+            "lua" => Ok(ScriptLanguage::Lua),
+            "ruby" | "rgss" => Ok(ScriptLanguage::Ruby),
+            "valkyrie" | "vk" | "v" => Ok(ScriptLanguage::Valkyrie),
+            other => Err(EngineError::UnknownLanguage {
+                token: other.into(),
+            }),
+        };
     }
     let ext = Path::new(entry)
         .extension()
@@ -877,9 +902,15 @@ fn resolve_language(explicit: Option<&str>, entry: &str) -> ScriptLanguage {
         .unwrap_or("")
         .to_ascii_lowercase();
     match ext.as_str() {
-        "lua" => ScriptLanguage::Lua,
-        "rb" | "rgss" => ScriptLanguage::Ruby,
-        _ => ScriptLanguage::Valkyrie,
+        "lua" => Ok(ScriptLanguage::Lua),
+        "rb" | "rgss" => Ok(ScriptLanguage::Ruby),
+        "vk" | "valkyrie" | "vky" => Ok(ScriptLanguage::Valkyrie),
+        "" => Err(EngineError::UnknownLanguage {
+            token: "missing".into(),
+        }),
+        other => Err(EngineError::UnknownLanguage {
+            token: format!("ext:{other}"),
+        }),
     }
 }
 
@@ -1138,7 +1169,7 @@ entry = "main.vk"
         let mut eng = SparkEngine::new(root.parent().unwrap());
         eng.load_mod_dir(&root).unwrap();
         let mut world = spark_ecs::World::new();
-        let report = eng.apply_script_commands_to_world(&mut world);
+        let report = eng.apply_script_commands_to_world(&mut world).unwrap();
         assert_eq!(report.spawned.len(), 1);
         let e = report.spawned[0];
         assert_eq!(
@@ -1180,7 +1211,7 @@ entry = "main.vk"
         let mut eng = SparkEngine::new(root.parent().unwrap());
         eng.load_mod_dir(&root).unwrap();
         let mut world = spark_ecs::World::new();
-        let _ = eng.apply_script_commands_to_world(&mut world);
+        eng.apply_script_commands_to_world(&mut world).unwrap();
         let mut host = StdHost;
         let v = eng
             .get_mod_mut("query_demo")
@@ -1313,7 +1344,7 @@ entry = "main.vk"
                 .read("Transform"),
         );
         let mut world = spark_ecs::World::new();
-        let _ = eng.apply_script_commands_to_world(&mut world);
+        eng.apply_script_commands_to_world(&mut world).unwrap();
         let mut hooks = StdHost;
         let err = eng
             .run_script_systems(HostPhase::Update, &mut world, &mut hooks)
@@ -1409,7 +1440,7 @@ entry = "main.vk"
         .query_archetype("rock");
         eng.script_systems_mut().register(desc.clone());
         let mut world = spark_ecs::World::new();
-        let _ = eng.apply_script_commands_to_world(&mut world);
+        eng.apply_script_commands_to_world(&mut world).unwrap();
         assert_eq!(eng.shared.borrow().query_base.count("rock"), 1);
         assert_eq!(eng.shared.borrow().query_base.count("tree"), 1);
 

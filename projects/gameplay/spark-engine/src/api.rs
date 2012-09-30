@@ -15,20 +15,20 @@ use crate::registry::RegValue;
 use crate::vfs::ModVfs;
 use crate::EngineShared;
 
-/// 编译期声明的原生名（须与 [`install_builtins`] / [`engine_host_schema`] 一致）。
+/// 编译/装载声明的调度名（限定名，须与 [`install_builtins`] / [`engine_host_schema`] 一致）。
 pub const ENGINE_NATIVES: &[&str] = &[
-    "log",
-    "register_hook",
-    "registry_set",
-    "registry_get",
-    "mod_id",
-    "asset_path",
-    "queue_spawn",
-    "queue_despawn",
-    "queue_add_component",
-    "queue_remove_component",
-    "query_archetype_count",
-    "query_entity_at",
+    "engine.log",
+    "engine.register_hook",
+    "engine.registry_set",
+    "engine.registry_get",
+    "engine.mod_id",
+    "engine.asset_path",
+    "engine.queue_spawn",
+    "engine.queue_despawn",
+    "engine.queue_add_component",
+    "engine.queue_remove_component",
+    "engine.query_archetype_count",
+    "engine.query_entity_at",
 ];
 
 /// 文档用标记类型。
@@ -111,13 +111,13 @@ pub fn engine_host_schema() -> HostSchema {
     schema
 }
 
-fn gate(shared: &EngineShared, short_name: &str) -> Result<(), VmError> {
-    check_host_phase(&shared.host_schema, short_name, shared.active_phase).map_err(|detail| {
+fn gate(shared: &EngineShared, import: &str) -> Result<(), VmError> {
+    check_host_phase(&shared.host_schema, import, shared.active_phase).map_err(|detail| {
         VmError::HostDenied { detail }
     })?;
     check_host_determinism(
         &shared.host_schema,
-        short_name,
+        import,
         shared.active_determinism,
     )
     .map_err(|detail| VmError::HostDenied { detail })?;
@@ -153,8 +153,8 @@ pub fn install_builtins(
     commands: &Rc<RefCell<ScriptCommandBuffer>>,
 ) {
     let shared_log = Rc::clone(shared);
-    vm.register_native("log", move |ctx, args| {
-        gate(&shared_log.borrow(), "log")?;
+    vm.register_native("engine.log", move |ctx, args| {
+        gate(&shared_log.borrow(), "engine.log")?;
         let msg = args
             .first()
             .map(|v| value_to_string(ctx, v))
@@ -167,8 +167,8 @@ pub fn install_builtins(
 
     let shared_hook = Rc::clone(shared);
     let mid = mod_id.to_string();
-    vm.register_native("register_hook", move |ctx, args| {
-        gate(&shared_hook.borrow(), "register_hook")?;
+    vm.register_native("engine.register_hook", move |ctx, args| {
+        gate(&shared_hook.borrow(), "engine.register_hook")?;
         if args.len() < 2 {
             return Err(VmError::ArityMismatch {
                 expected: 2,
@@ -185,8 +185,8 @@ pub fn install_builtins(
     });
 
     let shared_set = Rc::clone(shared);
-    vm.register_native("registry_set", move |ctx, args| {
-        gate(&shared_set.borrow(), "registry_set")?;
+    vm.register_native("engine.registry_set", move |ctx, args| {
+        gate(&shared_set.borrow(), "engine.registry_set")?;
         if args.len() < 3 {
             return Err(VmError::ArityMismatch {
                 expected: 3,
@@ -201,8 +201,8 @@ pub fn install_builtins(
     });
 
     let shared_get = Rc::clone(shared);
-    vm.register_native("registry_get", move |ctx, args| {
-        gate(&shared_get.borrow(), "registry_get")?;
+    vm.register_native("engine.registry_get", move |ctx, args| {
+        gate(&shared_get.borrow(), "engine.registry_get")?;
         if args.len() < 2 {
             return Err(VmError::ArityMismatch {
                 expected: 2,
@@ -222,15 +222,15 @@ pub fn install_builtins(
 
     let shared_mid = Rc::clone(shared);
     let mid = mod_id.to_string();
-    vm.register_native("mod_id", move |ctx, _args| {
-        gate(&shared_mid.borrow(), "mod_id")?;
+    vm.register_native("engine.mod_id", move |ctx, _args| {
+        gate(&shared_mid.borrow(), "engine.mod_id")?;
         Ok(ctx.heap.alloc_string(mid.clone()))
     });
 
     let shared_asset = Rc::clone(shared);
     let vfs = vfs.clone();
-    vm.register_native("asset_path", move |ctx, args| {
-        gate(&shared_asset.borrow(), "asset_path")?;
+    vm.register_native("engine.asset_path", move |ctx, args| {
+        gate(&shared_asset.borrow(), "engine.asset_path")?;
         let rel = match args.first() {
             Some(v) => value_to_string(ctx, v)?,
             None => String::new(),
@@ -243,8 +243,8 @@ pub fn install_builtins(
 
     let shared_spawn = Rc::clone(shared);
     let cmds = Rc::clone(commands);
-    vm.register_native("queue_spawn", move |ctx, args| {
-        gate(&shared_spawn.borrow(), "queue_spawn")?;
+    vm.register_native("engine.queue_spawn", move |ctx, args| {
+        gate(&shared_spawn.borrow(), "engine.queue_spawn")?;
         let archetype = args
             .first()
             .map(|v| value_to_string(ctx, v))
@@ -259,8 +259,8 @@ pub fn install_builtins(
 
     let shared_despawn = Rc::clone(shared);
     let cmds = Rc::clone(commands);
-    vm.register_native("queue_despawn", move |_ctx, args| {
-        gate(&shared_despawn.borrow(), "queue_despawn")?;
+    vm.register_native("engine.queue_despawn", move |_ctx, args| {
+        gate(&shared_despawn.borrow(), "engine.queue_despawn")?;
         let entity = args
             .first()
             .and_then(|v| v.as_number())
@@ -273,8 +273,8 @@ pub fn install_builtins(
 
     let shared_add = Rc::clone(shared);
     let cmds = Rc::clone(commands);
-    vm.register_native("queue_add_component", move |ctx, args| {
-        gate(&shared_add.borrow(), "queue_add_component")?;
+    vm.register_native("engine.queue_add_component", move |ctx, args| {
+        gate(&shared_add.borrow(), "engine.queue_add_component")?;
         if args.len() < 2 {
             return Err(VmError::ArityMismatch {
                 expected: 2,
@@ -294,8 +294,8 @@ pub fn install_builtins(
 
     let shared_rm = Rc::clone(shared);
     let cmds = Rc::clone(commands);
-    vm.register_native("queue_remove_component", move |ctx, args| {
-        gate(&shared_rm.borrow(), "queue_remove_component")?;
+    vm.register_native("engine.queue_remove_component", move |ctx, args| {
+        gate(&shared_rm.borrow(), "engine.queue_remove_component")?;
         if args.len() < 2 {
             return Err(VmError::ArityMismatch {
                 expected: 2,
@@ -314,8 +314,8 @@ pub fn install_builtins(
     });
 
     let shared_q = Rc::clone(shared);
-    vm.register_native("query_archetype_count", move |ctx, args| {
-        gate(&shared_q.borrow(), "query_archetype_count")?;
+    vm.register_native("engine.query_archetype_count", move |ctx, args| {
+        gate(&shared_q.borrow(), "engine.query_archetype_count")?;
         gate_read_world(&shared_q.borrow())?;
         let name = args
             .first()
@@ -331,8 +331,8 @@ pub fn install_builtins(
     });
 
     let shared_e = Rc::clone(shared);
-    vm.register_native("query_entity_at", move |ctx, args| {
-        gate(&shared_e.borrow(), "query_entity_at")?;
+    vm.register_native("engine.query_entity_at", move |ctx, args| {
+        gate(&shared_e.borrow(), "engine.query_entity_at")?;
         gate_read_world(&shared_e.borrow())?;
         if args.len() < 2 {
             return Err(VmError::ArityMismatch {
