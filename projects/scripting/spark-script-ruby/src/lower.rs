@@ -218,12 +218,22 @@ fn lower_statement(
             let expr = lower_expr(expr, locals, fn_index, hosts)?;
             Ok((HirStmt::Expr { expr, span: None }, false))
         }
+        StatementNode::For {
+            var,
+            iterable,
+            body,
+            ..
+        } => Ok((
+            lower_for_range(var, iterable, body, locals, local_tys, fn_index, hosts)?,
+            false,
+        )),
+        StatementNode::Break { .. } => Ok((HirStmt::Break { span: None }, false)),
         StatementNode::Case { .. }
         | StatementNode::Next { .. }
         | StatementNode::Redo { .. }
         | StatementNode::MethodDef { .. }
         | StatementNode::ClassDef { .. } => Err(format!("ir_unsupported_stmt:{stmt:?}")),
-        // oak-ruby 版本间语句变体不稳定；未显式支持的一律拒绝。
+        // oak-ruby 版本间其它语句变体一律拒绝，不得静默忽略。
         other => Err(format!("ir_unsupported_stmt:{other:?}")),
     }
 }
@@ -496,8 +506,12 @@ fn lower_expr(
             receiver,
             method,
             args,
+            block_body,
             ..
         } => {
+            if block_body.is_some() {
+                return Err("ir_unsupported_block".into());
+            }
             if receiver.is_some() {
                 return Err("ir_unsupported_receiver_call".into());
             }
