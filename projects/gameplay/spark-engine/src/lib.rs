@@ -1,6 +1,6 @@
 //! Spark 引擎壳：帧主循环编排 + ECS 宿主桥 + 在 `spark-vm` / `spark-script` 之上的 **modder** 能力。
 //!
-//! 提供：固定步 / update·draw 相位编排、[`EcsHost3d`]（`Schedule` ↔ `GameHost3d`）、
+//! 提供：固定步 / update·draw 相位编排、[`EcsHost2d`] / [`EcsHost3d`]（`Schedule` ↔ `GameHost`）、
 //! 模组清单与发现、依赖排序加载、脚本入口、命名钩子、
 //! 通用数据表、模组资源路径、脚本插件挂载（[`PluginRegistry`]）。模组逻辑一律跑在
 //! [`ScriptDomain`]（经 [`spark_script`] 编译为映像后装载），与宿主目标平台无关。
@@ -35,7 +35,9 @@ pub use command_apply::{
 };
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
-pub use ecs_host::{DrawBuffer3d, EcsHost3d, FrameSnapshot};
+pub use ecs_host::{
+    AppExit, DrawBuffer2d, DrawBuffer3d, DrawScratch2d, EcsHost2d, EcsHost3d, FrameSnapshot,
+};
 pub use event_inbox::{ScriptEvent, ScriptEventInbox};
 pub use frame::{
     FrameLoop, FrameLoopConfig, LoopedHost2d, LoopedHost3d, StepMode,
@@ -46,7 +48,10 @@ pub use localization::LocalizationService;
 pub use manifest::{ManifestParseError, ModManifest};
 pub use query_view::{ScriptQuerySnapshot, ScriptQueryView};
 pub use registry::{DataRegistry, RegValue};
-pub use run::{run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
+pub use run::{
+    run_ecs_game, run_ecs_game_2d, run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with,
+    run_game_with,
+};
 pub use script_system::{
     ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError,
     ScriptSystemRegistry,

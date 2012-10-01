@@ -654,6 +654,14 @@ impl Schedule {
             sys.run(world);
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.systems.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.systems.is_empty()
+    }
 }
 
 #[cfg(test)]

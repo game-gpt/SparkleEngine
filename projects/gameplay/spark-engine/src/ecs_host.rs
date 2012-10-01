@@ -1,8 +1,10 @@
-//! ECS 与 3D 宿主桥：把 `Schedule` 挂到 `GameHost3d` 帧相位上。
+//! ECS 与帧宿主桥：把 `Schedule` 挂到 `GameHost` / `GameHost3d`。
+//!
+//! 窗口泵与 GPU 提交仍在 `spark-renderer-wgpu`。本模块只接 ECS 与绘制相位。
 
 use spark_ecs::{Schedule, World};
 use spark_input::Input;
-use spark_renderer::{DrawList3d, FrameCtx, GameHost3d};
+use spark_renderer::{DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d};
 
 /// 每帧写入 `World` 资源的帧快照（不含生命周期引用）。
 #[derive(Debug, Clone)]
@@ -13,10 +15,135 @@ pub struct FrameSnapshot {
     pub input: Input,
 }
 
+/// 进程退出请求（游戏系统写入，宿主在 `should_exit` 读取）。
+#[derive(Debug, Default, Clone, Copy)]
+pub struct AppExit {
+    pub requested: bool,
+}
+
+impl AppExit {
+    pub fn request(&mut self) {
+        self.requested = true;
+    }
+}
+
+/// 由游戏 / 渲染系统填充的 2D 绘制缓冲（系统写入，宿主在 draw 相位取走）。
+#[derive(Debug, Default)]
+pub struct DrawBuffer2d {
+    pub list: Option<DrawList>,
+}
+
 /// 由游戏填充的 3D 绘制缓冲资源（系统写入，宿主在 draw 相位取走）。
 #[derive(Debug, Default)]
 pub struct DrawBuffer3d {
     pub list: Option<DrawList3d>,
+}
+
+fn insert_frame_snapshot(world: &mut World, frame: &FrameCtx<'_>) {
+    let snap = FrameSnapshot {
+        dt: frame.dt,
+        screen_w: frame.screen_w,
+        screen_h: frame.screen_h,
+        input: frame.input.clone(),
+    };
+    world.resources.insert(snap);
+}
+
+fn exit_requested(world: &World, host_exit: bool) -> bool {
+    host_exit
+        || world
+            .resources
+            .get::<AppExit>()
+            .is_some_and(|e| e.requested)
+}
+
+/// ECS 驱动的 2D 宿主。
+///
+/// `update`：写入 [`FrameSnapshot`] 后跑仿真 [`Schedule`]。  
+/// `draw`：优先消费 [`DrawBuffer2d`]；否则跑可选的 `draw_schedule`；再否则 `draw_fallback`。
+///
+/// `draw_fallback` / `draw_schedule` 持有 `&mut World`，以便图集上传等只读仿真外的准备。
+pub struct EcsHost2d {
+    pub world: World,
+    pub schedule: Schedule,
+    /// 可选的绘制相位调度（在 `DrawBuffer2d` 为空时运行）。
+    pub draw_schedule: Schedule,
+    pub exit: bool,
+    draw_fallback: Option<Box<dyn FnMut(&mut World, &mut DrawList) + Send>>,
+}
+
+impl EcsHost2d {
+    pub fn new(world: World, schedule: Schedule) -> Self {
+        Self {
+            world,
+            schedule,
+            draw_schedule: Schedule::new(),
+            exit: false,
+            draw_fallback: None,
+        }
+    }
+
+    pub fn with_draw_schedule(mut self, schedule: Schedule) -> Self {
+        self.draw_schedule = schedule;
+        self
+    }
+
+    pub fn with_draw_fallback(
+        mut self,
+        f: impl FnMut(&mut World, &mut DrawList) + Send + 'static,
+    ) -> Self {
+        self.draw_fallback = Some(Box::new(f));
+        self
+    }
+
+    pub fn world_mut(&mut self) -> &mut World {
+        &mut self.world
+    }
+
+    pub fn world(&self) -> &World {
+        &self.world
+    }
+}
+
+impl GameHost for EcsHost2d {
+    fn update(&mut self, frame: &FrameCtx<'_>) {
+        insert_frame_snapshot(&mut self.world, frame);
+        self.schedule.run(&mut self.world);
+    }
+
+    fn draw(&mut self, draw: &mut DrawList) {
+        if let Some(buf) = self.world.resources.get_mut::<DrawBuffer2d>() {
+            if let Some(list) = buf.list.take() {
+                *draw = list;
+                return;
+            }
+        }
+        if !self.draw_schedule.is_empty() {
+            self.world.resources.insert(DrawScratch2d {
+                clear: draw.clear,
+            });
+            self.draw_schedule.run(&mut self.world);
+            if let Some(buf) = self.world.resources.get_mut::<DrawBuffer2d>() {
+                if let Some(list) = buf.list.take() {
+                    *draw = list;
+                    return;
+                }
+            }
+        }
+        if let Some(fallback) = self.draw_fallback.as_mut() {
+            fallback(&mut self.world, draw);
+        }
+    }
+
+    fn should_exit(&self) -> bool {
+        exit_requested(&self.world, self.exit)
+    }
+}
+
+/// 绘制相位临时资源：供 `draw_schedule` 系统读取清屏色等。
+#[derive(Debug, Clone, Copy)]
+pub struct DrawScratch2d {
+    pub clear: spark_core::Color,
 }
 
 /// ECS 驱动的 3D 宿主。
@@ -61,13 +188,7 @@ impl EcsHost3d {
 
 impl GameHost3d for EcsHost3d {
     fn update(&mut self, frame: &FrameCtx<'_>) {
-        let snap = FrameSnapshot {
-            dt: frame.dt,
-            screen_w: frame.screen_w,
-            screen_h: frame.screen_h,
-            input: frame.input.clone(),
-        };
-        self.world.resources.insert(snap);
+        insert_frame_snapshot(&mut self.world, frame);
         self.schedule.run(&mut self.world);
     }
 
@@ -84,7 +205,7 @@ impl GameHost3d for EcsHost3d {
     }
 
     fn should_exit(&self) -> bool {
-        self.exit
+        exit_requested(&self.world, self.exit)
     }
 
     fn cursor_grab(&self) -> bool {
@@ -100,8 +221,63 @@ mod tests {
     use spark_input::Input;
     use spark_renderer::{Mat4, WindowConfig};
 
+    fn frame_ctx(input: &Input) -> FrameCtx<'_> {
+        FrameCtx {
+            input,
+            dt: 1.0 / 60.0,
+            screen_w: 1280.0,
+            screen_h: 720.0,
+            timing: Default::default(),
+        }
+    }
+
     #[test]
-    fn schedule_fills_draw_buffer() {
+    fn host_2d_schedule_fills_draw_buffer() {
+        let mut world = World::new();
+        world.resources.insert(DrawBuffer2d::default());
+        let mut schedule = Schedule::new();
+        schedule.add_fn("draw", |w| {
+            let list = DrawList::new(Color::rgb(0.2, 0.3, 0.4));
+            w.resources.get_mut::<DrawBuffer2d>().unwrap().list = Some(list);
+        });
+        // 仿真 schedule 空；绘制走 draw_schedule
+        let mut host =
+            EcsHost2d::new(world, Schedule::new()).with_draw_schedule(schedule);
+        let input = Input::default();
+        host.update(&frame_ctx(&input));
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        host.draw(&mut draw);
+        assert!((draw.clear.r - 0.2).abs() < 1e-5);
+    }
+
+    #[test]
+    fn host_2d_fallback_mutates_world() {
+        #[derive(Default)]
+        struct Marker(u32);
+        let mut world = World::new();
+        world.resources.insert(Marker(0));
+        let mut host = EcsHost2d::new(world, Schedule::new()).with_draw_fallback(|w, draw| {
+            w.resources.get_mut::<Marker>().unwrap().0 += 1;
+            draw.clear = Color::rgb(0.5, 0.0, 0.0);
+        });
+        let input = Input::default();
+        host.update(&frame_ctx(&input));
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        host.draw(&mut draw);
+        assert_eq!(host.world.resources.get::<Marker>().unwrap().0, 1);
+        assert!((draw.clear.r - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn host_2d_honours_app_exit() {
+        let mut world = World::new();
+        world.resources.insert(AppExit { requested: true });
+        let host = EcsHost2d::new(world, Schedule::new());
+        assert!(host.should_exit());
+    }
+
+    #[test]
+    fn schedule_fills_draw_buffer_3d() {
         let mut world = World::new();
         world.resources.insert(DrawBuffer3d::default());
         let mut schedule = Schedule::new();
@@ -111,14 +287,7 @@ mod tests {
         });
         let mut host = EcsHost3d::new(world, schedule);
         let input = Input::default();
-        let frame = FrameCtx {
-            input: &input,
-            dt: 1.0 / 60.0,
-            screen_w: 1280.0,
-            screen_h: 720.0,
-            timing: Default::default(),
-        };
-        host.update(&frame);
+        host.update(&frame_ctx(&input));
         let mut draw = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), Mat4::IDENTITY);
         host.draw(&mut draw);
         assert!((draw.clear.r - 0.1).abs() < 1e-5);

@@ -41,6 +41,23 @@ pub fn run_game_3d_with<H: GameHost3d + 'static>(
     spark_renderer_wgpu::run_window_3d(config, wrapped)
 }
 
+/// 以 [`crate::EcsHost2d`] 运行 2D 游戏（固定/可变帧循环可配）。
+pub fn run_ecs_game_2d(
+    config: WindowConfig,
+    host: crate::EcsHost2d,
+    loop_config: FrameLoopConfig,
+) -> Result<(), SparkError> {
+    run_game_with(config, host, loop_config)
+}
+
+/// 以默认帧循环配置运行 [`crate::EcsHost2d`]。
+pub fn run_ecs_game(
+    config: WindowConfig,
+    host: crate::EcsHost2d,
+) -> Result<(), SparkError> {
+    run_ecs_game_2d(config, host, FrameLoopConfig::default())
+}
+
 /// 以 [`crate::EcsHost3d`] 运行 3D 游戏（固定/可变帧循环可配）。
 pub fn run_ecs_game_3d(
     config: WindowConfig,
