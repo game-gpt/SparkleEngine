@@ -6,6 +6,8 @@ use spark_ecs::{Schedule, World};
 use spark_input::Input;
 use spark_renderer::{DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d};
 
+use crate::render2d::{RenderFrame2d, RenderSchedule2d};
+
 /// 每帧写入 `World` 资源的帧快照（不含生命周期引用）。
 #[derive(Debug, Clone)]
 pub struct FrameSnapshot {
@@ -60,13 +62,13 @@ fn exit_requested(world: &World, host_exit: bool) -> bool {
 /// ECS 驱动的 2D 宿主。
 ///
 /// `update`：写入 [`FrameSnapshot`] 后跑仿真 [`Schedule`]。  
-/// `draw`：优先消费 [`DrawBuffer2d`]；否则跑可选的 `draw_schedule`；再否则 `draw_fallback`。
-///
-/// `draw_fallback` / `draw_schedule` 持有 `&mut World`，以便图集上传等只读仿真外的准备。
+/// `draw`：优先消费 [`DrawBuffer2d`]；否则跑 [`RenderSchedule2d`]；再否则旧 `draw_schedule` 或 `draw_fallback`。
 pub struct EcsHost2d {
     pub world: World,
     pub schedule: Schedule,
-    /// 可选的绘制相位调度（在 `DrawBuffer2d` 为空时运行）。
+    /// 正式 2D 绘制调度。
+    pub renderer: RenderSchedule2d,
+    /// 兼容路径：往 [`DrawBuffer2d`] 写整帧列表。
     pub draw_schedule: Schedule,
     pub exit: bool,
     draw_fallback: Option<Box<dyn FnMut(&mut World, &mut DrawList) + Send>>,
@@ -77,10 +79,16 @@ impl EcsHost2d {
         Self {
             world,
             schedule,
+            renderer: RenderSchedule2d::new(),
             draw_schedule: Schedule::new(),
             exit: false,
             draw_fallback: None,
         }
+    }
+
+    pub fn with_renderer(mut self, renderer: RenderSchedule2d) -> Self {
+        self.renderer = renderer;
+        self
     }
 
     pub fn with_draw_schedule(mut self, schedule: Schedule) -> Self {
@@ -117,6 +125,21 @@ impl GameHost for EcsHost2d {
                 *draw = list;
                 return;
             }
+        }
+        if !self.renderer.is_empty() {
+            let (screen_w, screen_h) = self
+                .world
+                .resources
+                .get::<FrameSnapshot>()
+                .map(|s| (s.screen_w, s.screen_h))
+                .unwrap_or((0.0, 0.0));
+            let frame = RenderFrame2d {
+                screen_w,
+                screen_h,
+                clear: draw.clear,
+            };
+            self.renderer.draw(&mut self.world, &frame, draw);
+            return;
         }
         if !self.draw_schedule.is_empty() {
             self.world.resources.insert(DrawScratch2d {

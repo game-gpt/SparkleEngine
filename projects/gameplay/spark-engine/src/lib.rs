@@ -10,6 +10,7 @@
 
 mod access_policy;
 mod api;
+mod app;
 mod command_apply;
 mod command_buffer;
 mod domain;
@@ -22,6 +23,7 @@ mod localization;
 mod manifest;
 mod query_view;
 mod registry;
+mod render2d;
 mod run;
 mod script_system;
 mod vfs;
@@ -35,6 +37,7 @@ pub use command_apply::{
 };
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
+pub use app::{SparkApp, SparkPlugin};
 pub use ecs_host::{
     AppExit, DrawBuffer2d, DrawBuffer3d, DrawScratch2d, EcsHost2d, EcsHost3d, FrameSnapshot,
 };
@@ -48,9 +51,10 @@ pub use localization::LocalizationService;
 pub use manifest::{ManifestParseError, ModManifest};
 pub use query_view::{ScriptQuerySnapshot, ScriptQueryView};
 pub use registry::{DataRegistry, RegValue};
+pub use render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d};
 pub use run::{
-    run_ecs_game, run_ecs_game_2d, run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with,
-    run_game_with,
+    run_app_2d, run_ecs_game, run_ecs_game_2d, run_ecs_game_3d, run_game, run_game_3d,
+    run_game_3d_with, run_game_with,
 };
 pub use script_system::{
     ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError,
