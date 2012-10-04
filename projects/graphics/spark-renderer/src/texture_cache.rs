@@ -1,0 +1,86 @@
+//! 按调用方键缓存 `TextureId`。
+//!
+//! 解码（PNG、XNB 等）留在游戏。这里只避免同一键重复上传。
+
+use std::collections::HashMap;
+
+use spark_core::SparkError;
+
+use crate::draw::DrawList;
+use crate::texture::TextureId;
+
+/// 纹理句柄缓存。键由游戏决定，例如路径或图集名。
+#[derive(Debug, Default, Clone)]
+pub struct TextureCache {
+    slots: HashMap<String, TextureId>,
+}
+
+impl TextureCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn get(&self, key: &str) -> Option<TextureId> {
+        self.slots.get(key).copied()
+    }
+
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    /// 已有键直接返回。未命中时才调用 `upload` 取像素并创建纹理。
+    pub fn get_or_upload(
+        &mut self,
+        draw: &mut DrawList,
+        key: &str,
+        upload: impl FnOnce() -> Result<(u32, u32, Vec<u8>), SparkError>,
+    ) -> Result<TextureId, SparkError> {
+        if let Some(id) = self.get(key) {
+            return Ok(id);
+        }
+        let (w, h, rgba) = upload()?;
+        let id = draw.create_texture(w, h, rgba)?;
+        self.slots.insert(key.to_string(), id);
+        Ok(id)
+    }
+
+    /// 丢掉键。不会销毁 GPU 纹理，下一帧由调用方决定是否再上传。
+    pub fn invalidate(&mut self, key: &str) -> Option<TextureId> {
+        self.slots.remove(key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spark_core::Color;
+
+    #[test]
+    fn hit_skips_decode() {
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let mut cache = TextureCache::new();
+        let mut calls = 0;
+        let load = |calls: &mut i32| {
+            *calls += 1;
+            Ok((1, 1, vec![255, 0, 0, 255]))
+        };
+        let a = cache
+            .get_or_upload(&mut draw, "icon", || load(&mut calls))
+            .unwrap();
+        let b = cache
+            .get_or_upload(&mut draw, "icon", || load(&mut calls))
+            .unwrap();
+        assert_eq!(a, b);
+        assert_eq!(calls, 1);
+        assert_eq!(draw.texture_uploads.len(), 1);
+        cache.invalidate("icon");
+        let _ = cache
+            .get_or_upload(&mut draw, "icon", || load(&mut calls))
+            .unwrap();
+        assert_eq!(calls, 2);
+    }
+}

@@ -9,6 +9,7 @@ mod draw;
 mod draw3d;
 mod frustum;
 mod texture;
+mod texture_cache;
 
 pub use camera2d::Camera2d;
 pub use camera3d::Camera3d;
@@ -22,6 +23,7 @@ pub use frustum::{CullParams, Frustum};
 pub use spark_geometry::{Aabb3, Mat4, Vec3};
 pub use spark_input::{ButtonState, Input, Key, MouseBtn};
 pub use texture::{alloc_texture_id, RgbaImage, TextureId};
+pub use texture_cache::TextureCache;
 
 /// 启动窗口配置（后端无关字段）。
 #[derive(Debug, Clone)]
