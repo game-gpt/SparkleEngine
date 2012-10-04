@@ -59,8 +59,14 @@ impl PlatformerEngine {
     pub fn tick(&mut self, dt: f32, input: ControllerInput) {
         self.player
             .integrate(dt, input, &self.config, &self.world);
-        self.camera
-            .follow(self.player.center(), dt);
+        self.camera.follow_center(
+            self.player.center(),
+            0.0,
+            0.0,
+            crate::camera::DEADZONE,
+            crate::camera::FOLLOW_LERP,
+            dt,
+        );
     }
 }
 

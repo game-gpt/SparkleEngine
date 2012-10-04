@@ -4,7 +4,7 @@
 
 use spark_ecs::{Schedule, World};
 use spark_input::Input;
-use spark_renderer::{DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d};
+use spark_renderer::{Camera2d, DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d};
 
 use crate::render2d::{RenderFrame2d, RenderSchedule2d};
 
@@ -125,6 +125,9 @@ impl GameHost for EcsHost2d {
                 *draw = list;
                 return;
             }
+        }
+        if let Some(cam) = self.world.resources.get::<Camera2d>().copied() {
+            draw.set_camera(cam);
         }
         if !self.renderer.is_empty() {
             let (screen_w, screen_h) = self

@@ -3,12 +3,14 @@
 //! **不含** GPU / 窗口后端。桌面 wgpu 实现见 `spark-renderer-wgpu`。
 //! 游戏与 `spark-widget` 只依赖本 crate 的 `DrawList` / `GameHost` 等类型。
 
+mod camera2d;
 mod camera3d;
 mod draw;
 mod draw3d;
 mod frustum;
 mod texture;
 
+pub use camera2d::Camera2d;
 pub use camera3d::Camera3d;
 pub use draw::{DrawLayer2d, DrawList, QuadCmd, TexQuadCmd, TextCmd};
 pub use draw3d::{

@@ -1,5 +1,6 @@
 use spark_core::{Color, Rect, SparkError, Vec2};
 
+use crate::camera2d::Camera2d;
 use crate::texture::{alloc_texture_id, RgbaImage, TextureId};
 
 #[derive(Debug, Clone)]
@@ -52,6 +53,8 @@ pub struct DrawList {
     pub texts: Vec<TextCmd>,
     pub texture_uploads: Vec<(TextureId, RgbaImage)>,
     layer: DrawLayer2d,
+    /// 只变换世界层。默认原点与缩放为恒等，旧调用坐标不变。
+    camera: Camera2d,
 }
 
 impl DrawList {
@@ -65,7 +68,33 @@ impl DrawList {
             texts: Vec::new(),
             texture_uploads: Vec::new(),
             layer: DrawLayer2d::World,
+            camera: Camera2d::default(),
         }
+    }
+
+    pub fn set_camera(&mut self, camera: Camera2d) {
+        self.camera = camera;
+    }
+
+    pub fn camera(&self) -> Camera2d {
+        self.camera
+    }
+
+    fn map_world(&self, rect: Rect) -> Rect {
+        if self.layer != DrawLayer2d::World {
+            return rect;
+        }
+        let z = if self.camera.zoom.is_finite() && self.camera.zoom > 1.0e-6 {
+            self.camera.zoom
+        } else {
+            1.0
+        };
+        Rect::new(
+            (rect.x - self.camera.origin.x) * z,
+            (rect.y - self.camera.origin.y) * z,
+            rect.w * z,
+            rect.h * z,
+        )
     }
 
     pub fn begin_world(&mut self) {
@@ -77,7 +106,10 @@ impl DrawList {
     }
 
     pub fn fill_rect(&mut self, rect: Rect, color: Color) {
-        let q = QuadCmd { rect, color };
+        let q = QuadCmd {
+            rect: self.map_world(rect),
+            color,
+        };
         match self.layer {
             DrawLayer2d::World => self.quads.push(q),
             DrawLayer2d::Hud => self.hud_quads.push(q),
@@ -137,18 +169,48 @@ impl DrawList {
         pivot_x: f32,
         pivot_y: f32,
     ) {
+        let dest = self.map_world(dest);
+        let z = if self.layer == DrawLayer2d::World {
+            let zoom = self.camera.zoom;
+            if zoom.is_finite() && zoom > 1.0e-6 {
+                zoom
+            } else {
+                1.0
+            }
+        } else {
+            1.0
+        };
         let q = TexQuadCmd {
             texture,
             dest,
             uv,
             color,
             angle_rad,
-            pivot_x,
-            pivot_y,
+            pivot_x: pivot_x * z,
+            pivot_y: pivot_y * z,
         };
         match self.layer {
             DrawLayer2d::World => self.tex_quads.push(q),
             DrawLayer2d::Hud => self.hud_tex_quads.push(q),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spark_core::Color;
+
+    #[test]
+    fn world_quads_follow_camera_and_hud_does_not() {
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        draw.set_camera(Camera2d::new(Vec2::new(8.0, 0.0), 2.0));
+        draw.fill_rect(Rect::new(10.0, 0.0, 4.0, 2.0), Color::rgb(1.0, 0.0, 0.0));
+        draw.begin_hud();
+        draw.fill_rect(Rect::new(10.0, 0.0, 4.0, 2.0), Color::rgb(0.0, 1.0, 0.0));
+        assert!((draw.quads[0].rect.x - 4.0).abs() < 1e-5);
+        assert!((draw.quads[0].rect.w - 8.0).abs() < 1e-5);
+        assert!((draw.hud_quads[0].rect.x - 10.0).abs() < 1e-5);
+        assert!((draw.hud_quads[0].rect.w - 4.0).abs() < 1e-5);
     }
 }
