@@ -7,6 +7,10 @@ pub use spark_diagnostics::{
     Diagnostic, ErrorArg, ErrorArgs, ErrorCode, ErrorContext, MessageKey, Severity, codes,
 };
 
+mod light2d;
+
+pub use light2d::{LightFalloff, LightGrid2d, LightRgb};
+
 /// 引擎级结构化错误（稳定码 + 参数；`Display` 仅输出错误码）。
 pub type SparkError = spark_diagnostics::Error;
 
