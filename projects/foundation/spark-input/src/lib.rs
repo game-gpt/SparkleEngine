@@ -2,6 +2,10 @@
 //!
 //! 后端适配放在 `spark-renderer-wgpu` / `spark-napi`；本 crate 只认 `Key` / `MouseBtn`。
 
+mod actions;
+
+pub use actions::ActionMap;
+
 use std::collections::HashSet;
 
 /// 物理键（布局无关的常用集合；按需扩展）。
@@ -161,6 +165,10 @@ impl Input {
         self.pressed.contains(&key)
     }
 
+    pub fn key_released(&self, key: Key) -> bool {
+        self.released.contains(&key)
+    }
+
     pub fn mouse_pos(&self) -> (f32, f32) {
         self.mouse_pos
     }
@@ -171,6 +179,10 @@ impl Input {
 
     pub fn mouse_pressed(&self, button: MouseBtn) -> bool {
         self.mouse_pressed.contains(&button)
+    }
+
+    pub fn mouse_released(&self, button: MouseBtn) -> bool {
+        self.mouse_released.contains(&button)
     }
 
     pub fn mouse_delta(&self) -> (f32, f32) {
