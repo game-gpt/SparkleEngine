@@ -8,6 +8,7 @@ mod camera3d;
 mod draw;
 mod draw3d;
 mod frustum;
+mod particles;
 mod texture;
 mod texture_cache;
 
@@ -20,6 +21,7 @@ pub use draw3d::{
     SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, MAX_SKIN_JOINTS,
 };
 pub use frustum::{CullParams, Frustum};
+pub use particles::{Particle2d, ParticlePool2d};
 pub use spark_geometry::{Aabb3, Mat4, Vec3};
 pub use spark_input::{ButtonState, Input, Key, MouseBtn};
 pub use texture::{alloc_texture_id, RgbaImage, TextureId};
