@@ -7,7 +7,7 @@ mod mesh;
 mod skin;
 
 pub use import::{import_path, import_slice, GltfAsset, GltfError, ImportedMesh};
-pub use spark_anim::{AnimationClip, Skeleton};
+pub use spark_animator::{Skeleton, SkinnedAnimationClip};
 pub use spark_renderer::SkinnedVertex;
 
 #[cfg(test)]
@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn imported_skeleton_builds_rest_palette() {
-        use spark_anim::{build_skin_palette, evaluate_pose, socket_world_position, LocalPose};
+        use spark_animator::{build_skin_palette, evaluate_pose, socket_world_position, LocalPose};
 
         let json = include_str!("../tests/fixtures/two_bone.gltf");
         let asset = import_slice(json.as_bytes()).expect("import");

@@ -207,7 +207,7 @@ impl TexMeshCmd {
     }
 }
 
-/// 蒙皮关节 palette 首切上限（与 `spark-anim::MAX_JOINTS` / WGSL uniform 一致）。
+/// 蒙皮关节 palette 首切上限（与 `spark-animator::MAX_JOINTS` / WGSL uniform 一致）。
 pub const MAX_SKIN_JOINTS: usize = 64;
 
 /// 蒙皮顶点：最多 4 影响；权重应归一化到 1。

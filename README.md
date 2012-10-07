@@ -59,14 +59,13 @@ packages/
 | `spark-net`          | 传输抽象、包序号与客户端预测框架                                |
 | `spark-asset`        | 资源句柄、缓存、加载器与热重载钩子                              |
 | `spark-localization` | Locale 协商、消息模型、不可变快照与诊断                         |
-| `spark-debugger`     | 调试绘制、帧统计与检查器钩子                                    |
+| `spark-animator`    | 动画剪辑、播放进度、状态机，以及骨骼姿态采样（不绘制）      |
 
 ### graphics
 
 | Crate                 | 职责                                                               |
 |-----------------------|--------------------------------------------------------------------|
 | `spark-shader`        | WGSL 内建着色器与模块装载                                          |
-| `spark-anim`          | 骨架、命名挂点、剪辑采样、混合与皮肤矩阵（CPU）                    |
 | `spark-gltf`          | glTF 2.0 导入：骨架、剪辑与蒙皮网格（无 GPU）                      |
 | `spark-font`          | 字体装载、字形栅格化与 CPU 图集                                    |
 | `spark-image`         | 像素图装载、精灵裁切与九宫格拉伸                                   |

@@ -2,8 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use spark_anim::{
-    AnimationClip, Joint, JointTrack, QuatKey, Skeleton, Socket, Vec3Key, MAX_JOINTS,
+use spark_animator::{
+    Joint, JointTrack, QuatKey, Skeleton, SkinnedAnimationClip, Socket, Vec3Key, MAX_JOINTS,
 };
 use spark_geometry::{Mat4, Quat, Trs, Vec3};
 
@@ -86,7 +86,7 @@ pub(crate) fn import_animations(
     gltf: &gltf::Gltf,
     buffers: &[Vec<u8>],
     skin: &SkinImport,
-) -> Result<Vec<AnimationClip>, GltfError> {
+) -> Result<Vec<SkinnedAnimationClip>, GltfError> {
     let Some(gltf_skin) = gltf.skins().next() else {
         return Ok(Vec::new());
     };
@@ -156,7 +156,7 @@ pub(crate) fn import_animations(
             }
         }
 
-        clips.push(AnimationClip {
+        clips.push(SkinnedAnimationClip {
             name,
             duration,
             tracks: tracks.into_values().collect(),

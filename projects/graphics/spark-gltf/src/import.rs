@@ -3,7 +3,7 @@
 use std::fmt;
 use std::path::Path;
 
-use spark_anim::{AnimationClip, Skeleton};
+use spark_animator::{Skeleton, SkinnedAnimationClip};
 use spark_core::Color;
 use spark_geometry::{Aabb3, Vec3};
 use spark_renderer::SkinnedVertex;
@@ -102,7 +102,7 @@ pub struct ImportedMesh {
 #[derive(Debug, Clone)]
 pub struct GltfAsset {
     pub skeleton: Option<Skeleton>,
-    pub clips: Vec<AnimationClip>,
+    pub clips: Vec<SkinnedAnimationClip>,
     pub meshes: Vec<ImportedMesh>,
 }
 

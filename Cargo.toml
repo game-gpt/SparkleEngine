@@ -39,7 +39,7 @@ spark-image = { path = "projects/graphics/spark-image" }
 spark-renderer = { path = "projects/graphics/spark-renderer" }
 spark-renderer-wgpu = { path = "projects/graphics/spark-renderer-wgpu" }
 spark-widget = { path = "projects/graphics/spark-widget" }
-spark-anim = { path = "projects/graphics/spark-anim" }
+spark-animator = { path = "projects/foundation/spark-animator" }
 spark-gltf = { path = "projects/graphics/spark-gltf" }
 spark-media = { path = "projects/graphics/spark-media" }
 spark-audio = { path = "projects/graphics/spark-audio" }

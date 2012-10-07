@@ -3012,9 +3012,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "spark-anim"
+name = "spark-animator"
 version = "0.1.0"
 dependencies = [
+ "spark-core",
+ "spark-ecs",
  "spark-geometry",
 ]
 
@@ -3107,6 +3109,7 @@ dependencies = [
  "spark-core",
  "spark-engine",
  "spark-geometry",
+ "spark-renderer",
  "tracing",
 ]
 
@@ -3174,7 +3177,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "gltf",
- "spark-anim",
+ "spark-animator",
  "spark-core",
  "spark-diagnostics",
  "spark-geometry",
