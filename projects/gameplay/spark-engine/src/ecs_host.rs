@@ -7,6 +7,7 @@ use spark_input::Input;
 use spark_renderer::{Camera2d, DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d};
 
 use crate::render2d::{RenderFrame2d, RenderSchedule2d};
+use crate::render3d::{RenderFrame3d, RenderSchedule3d};
 
 /// 每帧写入 `World` 资源的帧快照（不含生命周期引用）。
 #[derive(Debug, Clone)]
@@ -175,10 +176,11 @@ pub struct DrawScratch2d {
 /// ECS 驱动的 3D 宿主。
 ///
 /// `update`：写入 [`FrameSnapshot`] 后跑 [`Schedule`]。  
-/// `draw`：消费 [`DrawBuffer3d`]；若无则调用 `draw_fallback`。
+/// `draw`：消费 [`DrawBuffer3d`]；否则跑 [`RenderSchedule3d`]；再否则 `draw_fallback`。
 pub struct EcsHost3d {
     pub world: World,
     pub schedule: Schedule,
+    pub renderer: RenderSchedule3d,
     pub exit: bool,
     pub grab_cursor: bool,
     draw_fallback: Option<Box<dyn FnMut(&World, &mut DrawList3d) + Send>>,
@@ -189,10 +191,16 @@ impl EcsHost3d {
         Self {
             world,
             schedule,
+            renderer: RenderSchedule3d::new(),
             exit: false,
             grab_cursor: true,
             draw_fallback: None,
         }
+    }
+
+    pub fn with_renderer(mut self, renderer: RenderSchedule3d) -> Self {
+        self.renderer = renderer;
+        self
     }
 
     pub fn with_draw_fallback(
@@ -224,6 +232,21 @@ impl GameHost3d for EcsHost3d {
                 *draw = list;
                 return;
             }
+        }
+        if !self.renderer.is_empty() {
+            let (screen_w, screen_h) = self
+                .world
+                .resources
+                .get::<FrameSnapshot>()
+                .map(|s| (s.screen_w, s.screen_h))
+                .unwrap_or((0.0, 0.0));
+            let frame = RenderFrame3d {
+                screen_w,
+                screen_h,
+                clear: draw.clear,
+            };
+            self.renderer.draw(&mut self.world, &frame, draw);
+            return;
         }
         if let Some(fallback) = self.draw_fallback.as_mut() {
             fallback(&self.world, draw);

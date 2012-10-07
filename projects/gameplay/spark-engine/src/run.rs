@@ -42,11 +42,13 @@ pub fn run_game_3d_with<H: GameHost3d + 'static>(
 }
 
 /// 以 [`crate::SparkApp`] 运行 2D 游戏。
-pub fn run_app_2d(
-    config: WindowConfig,
-    app: crate::SparkApp,
-) -> Result<(), SparkError> {
+pub fn run_app_2d(config: WindowConfig, app: crate::SparkApp) -> Result<(), SparkError> {
     run_ecs_game(config, app.into_host())
+}
+
+/// 以 [`crate::SparkApp3d`] 运行 3D 游戏。
+pub fn run_app_3d(config: WindowConfig, app: crate::SparkApp3d) -> Result<(), SparkError> {
+    run_ecs_game_3d(config, app.into_host(), FrameLoopConfig::default())
 }
 
 /// 以 [`crate::EcsHost2d`] 运行 2D 游戏（固定/可变帧循环可配）。
