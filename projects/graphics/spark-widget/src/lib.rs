@@ -2,9 +2,17 @@
 //!
 //! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
 //! **不**提供游戏 HUD 产品或完整控件库。
+//!
+//! UI 缓动与微动效在 [`motion`]：属性过渡由 [`MotionScheduler`] 推进，
+//! 不属于 `spark-animator`，也不是世界特效。
 
+pub mod motion;
 mod text_source;
 
+pub use motion::{
+    Easing, MotionId, MotionProperty, MotionScheduler, MotionSequence, MotionSpec, MotionTick,
+    MotionValue, SequenceStep, Spring, SpringParams, Transition, Tween,
+};
 pub use text_source::{ResolvedText, TextBinding, TextSource};
 
 use spark_core::{Color, Rect, Vec2};
