@@ -1,26 +1,72 @@
-//! 立即模式 Widget 系统（布局 / 命中 / 基础原语）。
+//! 立即模式 Widget 系统。
+//!
+//! 推荐入口是 [`Ui`]：统一 ID、状态、命中、主题与布局。
+//! 底部的 `panel` / `label` / `button` 等自由函数仍可用，但新页面应走 `Ui`。
 //!
 //! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
-//! **不**提供游戏 HUD 产品或完整控件库。
-//!
-//! UI 缓动与微动效在 [`motion`]：属性过渡由 [`MotionScheduler`] 推进，
-//! 不属于 `spark-animator`，也不是世界特效。
+//! UI 缓动在 [`motion`]，不属于 `spark-animator`。
 
+mod id;
+mod layout;
 pub mod motion;
+mod response;
+mod state;
+mod style;
 mod text_source;
+mod ui;
 
+pub use id::WidgetId;
+pub use layout::{Align, Direction, Insets, Justify, Layout, LayoutCursor, Size};
 pub use motion::{
     Easing, MotionId, MotionProperty, MotionScheduler, MotionSequence, MotionSpec, MotionTick,
     MotionValue, SequenceStep, Spring, SpringParams, Transition, Tween,
 };
+pub use response::Response;
+pub use state::{FocusSource, UiState, WidgetMemory};
+pub use style::{
+    ButtonVariant, InteractState, MotionTheme, Spacing, TextTone, Theme, Typography, UiColors,
+    WidgetMetrics,
+};
 pub use text_source::{ResolvedText, TextBinding, TextSource};
+pub use ui::{Ui, UiBuilder, UiTime};
 
 use spark_core::{Color, Rect, Vec2};
 use spark_input::{Input, Key, MouseBtn};
 use spark_localization::LocaleSnapshot;
 use spark_renderer::DrawList;
 
-/// 纵向流式布局光标。
+/// 兼容旧 API 的焦点 ID。新代码请用 [`WidgetId`]。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct FocusId(pub u32);
+
+#[derive(Debug, Clone, Default)]
+pub struct FocusState {
+    pub active: Option<FocusId>,
+}
+
+impl FocusState {
+    pub fn is_active(&self, id: FocusId) -> bool {
+        self.active == Some(id)
+    }
+
+    pub fn focus(&mut self, id: FocusId) {
+        self.active = Some(id);
+    }
+
+    pub fn clear(&mut self) {
+        self.active = None;
+    }
+
+    pub fn toggle(&mut self, id: FocusId) {
+        if self.active == Some(id) {
+            self.active = None;
+        } else {
+            self.active = Some(id);
+        }
+    }
+}
+
+/// 纵向流式布局光标（手动分配）。新代码优先 [`Ui::column`]。
 #[derive(Debug, Clone)]
 pub struct Column {
     pub origin: Vec2,
@@ -44,7 +90,6 @@ impl Column {
         self
     }
 
-    /// 分配下一块矩形并推进光标。
     pub fn alloc(&mut self, height: f32) -> Rect {
         let h = height.max(1.0);
         let r = Rect::new(self.origin.x, self.y, self.width, h);
@@ -57,7 +102,7 @@ impl Column {
     }
 }
 
-/// 横向流式布局光标。
+/// 横向流式布局光标（手动分配）。新代码优先 [`Ui::row`]。
 #[derive(Debug, Clone)]
 pub struct Row {
     pub origin: Vec2,
@@ -89,43 +134,10 @@ impl Row {
     }
 }
 
-/// 焦点状态（跨帧由调用方持有）。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct FocusId(pub u32);
-
-#[derive(Debug, Clone, Default)]
-pub struct FocusState {
-    pub active: Option<FocusId>,
-}
-
-impl FocusState {
-    pub fn is_active(&self, id: FocusId) -> bool {
-        self.active == Some(id)
-    }
-
-    pub fn focus(&mut self, id: FocusId) {
-        self.active = Some(id);
-    }
-
-    pub fn clear(&mut self) {
-        self.active = None;
-    }
-
-    pub fn toggle(&mut self, id: FocusId) {
-        if self.active == Some(id) {
-            self.active = None;
-        } else {
-            self.active = Some(id);
-        }
-    }
-}
-
-/// 面板背景。
 pub fn panel(draw: &mut DrawList, rect: Rect, fill: Color) {
     draw.fill_rect(rect, fill);
 }
 
-/// 带标题条的面板。返回内容区矩形。
 pub fn titled_panel(
     draw: &mut DrawList,
     rect: Rect,
@@ -152,13 +164,10 @@ pub fn titled_panel(
     )
 }
 
-/// 标签文字。
-/// 静态标签（字面文本，不走本地化）。
 pub fn label(draw: &mut DrawList, x: f32, y: f32, size: f32, color: Color, text: &str) {
     draw.text(x, y, size, color, text);
 }
 
-/// 按 [`TextSource`] 解析后绘制；`Message` 绑定依赖调用方提供的快照。
 pub fn label_source(
     draw: &mut DrawList,
     snapshot: &LocaleSnapshot,
@@ -172,7 +181,6 @@ pub fn label_source(
     draw.text(x, y, size, color, resolved.text.as_ref());
 }
 
-/// 按钮。返回本帧是否点击。
 pub fn button(draw: &mut DrawList, input: &Input, rect: Rect, text: &str) -> bool {
     let (mx, my) = input.mouse_pos();
     let hovered = rect.contains(Vec2::new(mx, my));
@@ -202,7 +210,6 @@ pub fn button(draw: &mut DrawList, input: &Input, rect: Rect, text: &str) -> boo
     clicked
 }
 
-/// 可聚焦列表行。点击或激活时按 Enter/Space 返回 true。
 pub fn list_row(
     draw: &mut DrawList,
     input: &Input,
@@ -233,13 +240,11 @@ pub fn list_row(
         Color::rgb(0.92, 0.95, 1.0),
         text,
     );
-    let activated = active
-        && (input.key_pressed(Key::Enter) || input.key_pressed(Key::Space));
+    let activated = active && (input.key_pressed(Key::Enter) || input.key_pressed(Key::Space));
     let clicked = hovered && input.mouse_pressed(MouseBtn::Left);
     activated || clicked
 }
 
-/// 复选框。返回本帧是否切换；`checked` 由调用方持有。
 pub fn checkbox(
     draw: &mut DrawList,
     input: &Input,
@@ -284,7 +289,6 @@ pub fn checkbox(
     toggled
 }
 
-/// 水平滑条。拖动时写回 `value`（映射到 `min..=max`），返回是否本帧变更。
 pub fn slider(
     draw: &mut DrawList,
     input: &Input,
@@ -324,6 +328,9 @@ pub fn slider(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use spark_core::Color;
+    use spark_input::{ButtonState, Input};
+    use spark_renderer::DrawList;
 
     #[test]
     fn column_allocates_downward() {
@@ -334,4 +341,144 @@ mod tests {
         assert!((b.y - (20.0 + 30.0 + 4.0)).abs() < 1e-5);
         assert!((a.w - 100.0).abs() < 1e-5);
     }
+
+    #[test]
+    fn ui_button_click_on_release() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+            });
+            let response = ui.button("开始");
+            assert!(response.active);
+            assert!(!response.clicked);
+            ui.end();
+            assert!(state.active.is_some());
+        }
+
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+            });
+            let response = ui.button("开始");
+            assert!(response.clicked, "expected click on release");
+            ui.end();
+            assert!(state.active.is_none());
+        }
+    }
+
+    #[test]
+    fn ui_slider_keeps_dragging_outside_rect() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 400.0, 300.0);
+        let mut value = 0.0_f32;
+
+        {
+            let mut input = Input::default();
+            input.on_cursor(20.0, 10.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+            });
+            let response = ui.slider(&mut value, 0.0..=1.0);
+            let slider_id = response.id;
+            let active = response.active;
+            ui.end();
+            assert!(state.captured == Some(slider_id) || active || state.active == Some(slider_id));
+        }
+
+        {
+            let mut input = Input::default();
+            input.on_cursor(390.0, 10.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime {
+                    dt: 0.016,
+                    seconds: 0.0,
+                },
+                locale: None,
+            });
+            let response = ui.slider(&mut value, 0.0..=1.0);
+            assert!(response.changed || value > 0.8, "value={value}");
+            ui.end();
+        }
+    }
+
+    #[test]
+    fn scope_ids_are_stable() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 200.0, 200.0);
+        let mut first = WidgetId::NONE;
+        {
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+            });
+            ui.scope("bag", |ui| {
+                first = ui.id_from(7u32);
+            });
+            ui.end();
+        }
+        let mut second = WidgetId::NONE;
+        {
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+            });
+            ui.scope("bag", |ui| {
+                second = ui.id_from(7u32);
+            });
+            ui.end();
+        }
+        assert_eq!(first, second);
+        assert!(!first.is_none());
+    }
 }
+

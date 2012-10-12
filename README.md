@@ -71,7 +71,7 @@ packages/
 | `spark-image`         | 像素图装载、精灵裁切与九宫格拉伸                                   |
 | `spark-renderer`      | 2D/3D 绘制列表、帧上下文、蒙皮网格契约（后端无关）                 |
 | `spark-renderer-wgpu` | wgpu 窗口事件泵与批绘制（含蒙皮 palette；帧编排在 `spark-engine`） |
-| `spark-widget`        | 立即模式 Widget 系统；`motion` 负责 UI 过渡与微动效（非角色动画） |
+| `spark-widget`        | Widget 运行时：`Ui` / `WidgetId` / `Response` / 主题 / 布局 / `motion` |
 | `spark-media`         | Symphonia 容器探测 / 解复用 / 音频 PCM 解码（audio·video 共用）    |
 | `spark-audio`         | 混音、程序化短音与文件播放（消费 `spark-media`）                   |
 | `spark-video`         | 视频轨解复用与压缩包泵（消费 `spark-media`）                       |
