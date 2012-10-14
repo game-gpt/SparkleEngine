@@ -43,6 +43,7 @@ pub enum DrawLayer2d {
 ///
 /// 与具体 GPU 后端无关；由 `spark-renderer-wgpu` 等实现提交。
 /// 提交顺序：`world` 纯色 → `world` 纹理 → `hud` 纯色 → `hud` 纹理 → 文字。
+/// [`push_clip`] 在推入命令时做 CPU 裁剪，GPU scissor 可后接。
 #[derive(Debug)]
 pub struct DrawList {
     pub clear: Color,
@@ -55,6 +56,7 @@ pub struct DrawList {
     layer: DrawLayer2d,
     /// 只变换世界层。默认原点与缩放为恒等，旧调用坐标不变。
     camera: Camera2d,
+    clip_stack: Vec<Rect>,
 }
 
 impl DrawList {
@@ -69,6 +71,7 @@ impl DrawList {
             texture_uploads: Vec::new(),
             layer: DrawLayer2d::World,
             camera: Camera2d::default(),
+            clip_stack: Vec::new(),
         }
     }
 
@@ -78,6 +81,34 @@ impl DrawList {
 
     pub fn camera(&self) -> Camera2d {
         self.camera
+    }
+
+    pub fn push_clip(&mut self, rect: Rect) {
+        let next = match self.clip_stack.last() {
+            Some(prev) => prev.intersect(rect),
+            None => rect,
+        };
+        self.clip_stack.push(next);
+    }
+
+    pub fn pop_clip(&mut self) {
+        let _ = self.clip_stack.pop();
+    }
+
+    pub fn clip_rect(&self) -> Option<Rect> {
+        self.clip_stack.last().copied()
+    }
+
+    fn clip_against_stack(&self, rect: Rect) -> Option<Rect> {
+        let clipped = match self.clip_stack.last() {
+            Some(clip) => rect.intersect(*clip),
+            None => rect,
+        };
+        if clipped.is_empty() {
+            None
+        } else {
+            Some(clipped)
+        }
     }
 
     fn map_world(&self, rect: Rect) -> Rect {
@@ -106,6 +137,9 @@ impl DrawList {
     }
 
     pub fn fill_rect(&mut self, rect: Rect, color: Color) {
+        let Some(rect) = self.clip_against_stack(rect) else {
+            return;
+        };
         let q = QuadCmd {
             rect: self.map_world(rect),
             color,
@@ -117,6 +151,12 @@ impl DrawList {
     }
 
     pub fn text(&mut self, x: f32, y: f32, size: f32, color: Color, text: impl Into<String>) {
+        if let Some(clip) = self.clip_stack.last() {
+            // 粗裁：基线点不在裁剪区则跳过整行。
+            if !clip.contains(Vec2::new(x, y + size * 0.5)) {
+                return;
+            }
+        }
         self.texts.push(TextCmd {
             pos: Vec2::new(x, y),
             size,
@@ -169,6 +209,9 @@ impl DrawList {
         pivot_x: f32,
         pivot_y: f32,
     ) {
+        let Some(dest) = self.clip_against_stack(dest) else {
+            return;
+        };
         let dest = self.map_world(dest);
         let z = if self.layer == DrawLayer2d::World {
             let zoom = self.camera.zoom;
@@ -212,5 +255,18 @@ mod tests {
         assert!((draw.quads[0].rect.w - 8.0).abs() < 1e-5);
         assert!((draw.hud_quads[0].rect.x - 10.0).abs() < 1e-5);
         assert!((draw.hud_quads[0].rect.w - 4.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn clip_culls_and_intersects_quads() {
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        draw.begin_hud();
+        draw.push_clip(Rect::new(10.0, 10.0, 20.0, 20.0));
+        draw.fill_rect(Rect::new(0.0, 0.0, 5.0, 5.0), Color::rgb(1.0, 0.0, 0.0));
+        assert!(draw.hud_quads.is_empty());
+        draw.fill_rect(Rect::new(15.0, 15.0, 20.0, 20.0), Color::rgb(0.0, 1.0, 0.0));
+        assert_eq!(draw.hud_quads.len(), 1);
+        assert!((draw.hud_quads[0].rect.w - 15.0).abs() < 1e-4);
+        draw.pop_clip();
     }
 }

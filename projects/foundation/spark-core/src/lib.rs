@@ -50,6 +50,28 @@ impl Rect {
     pub fn center(self) -> Vec2 {
         Vec2::new(self.x + self.w * 0.5, self.y + self.h * 0.5)
     }
+
+    /// 与另一矩形求交。无交集时宽或高为 0。
+    pub fn intersect(self, other: Self) -> Self {
+        let x0 = self.x.max(other.x);
+        let y0 = self.y.max(other.y);
+        let x1 = (self.x + self.w).min(other.x + other.w);
+        let y1 = (self.y + self.h).min(other.y + other.h);
+        Self {
+            x: x0,
+            y: y0,
+            w: (x1 - x0).max(0.0),
+            h: (y1 - y0).max(0.0),
+        }
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.w <= 0.0 || self.h <= 0.0
+    }
+
+    pub fn intersects(self, other: Self) -> bool {
+        !self.intersect(other).is_empty()
+    }
 }
 
 /// RGBA，分量 0.0–1.0。
