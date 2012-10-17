@@ -6,10 +6,13 @@
 //! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
 //! UI 缓动在 [`motion`]，不属于 `spark-animator`。
 
+mod focus;
 mod id;
 mod layout;
 pub mod motion;
+mod overlay;
 mod response;
+mod scroll;
 mod state;
 mod style;
 mod text_source;
@@ -21,6 +24,7 @@ pub use motion::{
     Easing, MotionId, MotionProperty, MotionScheduler, MotionSequence, MotionSpec, MotionTick,
     MotionValue, SequenceStep, Spring, SpringParams, Transition, Tween,
 };
+pub use overlay::{OverlayState, ToastEntry};
 pub use response::Response;
 pub use state::{FocusSource, UiState, WidgetMemory};
 pub use style::{
@@ -479,6 +483,100 @@ mod tests {
         }
         assert_eq!(first, second);
         assert!(!first.is_none());
+    }
+
+    #[test]
+    fn scroll_area_moves_with_wheel() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 200.0, 200.0);
+        let mut input = Input::default();
+        input.on_cursor(40.0, 40.0);
+        input.on_wheel(-2.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+        });
+        let (response, _) = ui.scroll_area("list", 120.0, |ui| {
+            for i in 0..20 {
+                ui.label(format!("row {i}"));
+            }
+        });
+        let id = response.id;
+        ui.end();
+        let scroll = state.memory(id).map(|m| m.scroll.y).unwrap_or(0.0);
+        assert!(scroll > 0.0, "scroll={scroll}");
+    }
+
+    #[test]
+    fn tooltip_queues_when_hovered() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut input = Input::default();
+        input.on_cursor(40.0, 20.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+        });
+        let response = ui.button("提示");
+        ui.tooltip(&response, "需要 10 个木材");
+        let queued = !ui.state().overlays.queue.is_empty();
+        ui.end();
+        assert!(queued);
+        assert!(!draw.texts.is_empty());
+    }
+
+    #[test]
+    fn arrow_key_moves_focus_between_buttons() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        {
+            let input = Input::default();
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+            });
+            let a = ui.button("A");
+            let _b = ui.button("B");
+            ui.request_focus(a.id);
+            ui.end();
+        }
+        let focused_before = state.focused;
+        {
+            let mut input = Input::default();
+            input.on_key(Key::Down, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+            });
+            let _a = ui.button("A");
+            let b = ui.button("B");
+            ui.end();
+            assert_eq!(state.focused, Some(b.id));
+            assert_ne!(state.focused, focused_before);
+        }
     }
 }
 

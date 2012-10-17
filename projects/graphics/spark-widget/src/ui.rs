@@ -7,8 +7,10 @@ use spark_input::{Input, Key, MouseBtn};
 use spark_localization::LocaleSnapshot;
 use spark_renderer::DrawList;
 
+use crate::focus::focus_in_direction;
 use crate::id::{IdStack, WidgetId};
 use crate::layout::{Direction, Layout, LayoutCursor, Size};
+use crate::overlay::flush_overlays;
 use crate::response::Response;
 use crate::state::{FocusSource, UiState};
 use crate::style::{ButtonVariant, InteractState, TextTone, Theme};
@@ -31,7 +33,9 @@ pub struct Ui<'a> {
     pub(crate) viewport: Rect,
     pub(crate) time: UiTime,
     ids: IdStack,
-    layouts: Vec<LayoutCursor>,
+    pub(crate) layouts: Vec<LayoutCursor>,
+    /// 命中测试用的裁剪栈（与 DrawList clip 同步）。
+    hit_clips: Vec<Rect>,
     enabled: bool,
 }
 
@@ -58,6 +62,7 @@ impl<'a> Ui<'a> {
             time: builder.time,
             ids: IdStack::new(),
             layouts: Vec::new(),
+            hit_clips: Vec::new(),
             enabled: true,
         };
         ui.state.begin_frame();
@@ -87,13 +92,66 @@ impl<'a> Ui<'a> {
         self.viewport
     }
 
-    /// 结束本帧：Tab 导航；指针抬起时清除 active / capture。
+    /// 结束本帧：焦点导航、浮层绘制；指针抬起时清除 active / capture。
     pub fn end(mut self) {
         self.handle_focus_keys();
+        flush_overlays(
+            self.state,
+            self.draw,
+            &self.theme,
+            self.viewport,
+            self.input,
+            self.time.dt,
+        );
         if !self.input.mouse_down(MouseBtn::Left) {
             self.state.active = None;
             self.state.captured = None;
         }
+    }
+
+    pub fn push_clip(&mut self, rect: Rect) {
+        let next = match self.hit_clips.last() {
+            Some(prev) => prev.intersect(rect),
+            None => rect,
+        };
+        self.hit_clips.push(next);
+        self.draw.push_clip(rect);
+    }
+
+    pub fn pop_clip(&mut self) {
+        let _ = self.hit_clips.pop();
+        self.draw.pop_clip();
+    }
+
+    fn hit_clip(&self) -> Option<Rect> {
+        self.hit_clips.last().copied()
+    }
+
+    pub fn tooltip(&mut self, response: &Response, text: impl Into<String>) {
+        if response.hovered {
+            self.state.overlays.tooltip(response.rect, text);
+        }
+    }
+
+    pub fn open_modal(&mut self, salt: impl std::hash::Hash, title: impl Into<String>) {
+        let id = self.id_from(("modal", salt));
+        self.state.overlays.open_modal(id, title);
+    }
+
+    pub fn close_modal(&mut self) {
+        self.state.overlays.close_modal();
+    }
+
+    pub fn modal_open(&self) -> bool {
+        self.state.overlays.open_modal.is_some()
+    }
+
+    pub fn toast(&mut self, text: impl Into<String>) {
+        self.state.overlays.toast(text);
+    }
+
+    pub fn focus_direction(&mut self, direction: Direction, forward: bool) {
+        focus_in_direction(self.state, direction, forward);
     }
 
     pub fn scope<R>(&mut self, salt: impl std::hash::Hash, f: impl FnOnce(&mut Self) -> R) -> R {
@@ -219,6 +277,18 @@ impl<'a> Ui<'a> {
                 self.focus_next();
             }
         }
+        if self.input.key_pressed(Key::Down) {
+            self.focus_direction(Direction::Vertical, true);
+        }
+        if self.input.key_pressed(Key::Up) {
+            self.focus_direction(Direction::Vertical, false);
+        }
+        if self.input.key_pressed(Key::Right) {
+            self.focus_direction(Direction::Horizontal, true);
+        }
+        if self.input.key_pressed(Key::Left) {
+            self.focus_direction(Direction::Horizontal, false);
+        }
     }
 
     /// 命中测试并更新 hot / active / capture。
@@ -226,9 +296,11 @@ impl<'a> Ui<'a> {
         self.state.note_id(id);
         self.state.memory_mut(id).last_rect = Some(rect);
 
+        let blocked = self.state.overlays.block_input && self.state.overlays.open_modal != Some(id);
         let (mx, my) = self.input.mouse_pos();
         let pointer = Vec2::new(mx, my);
-        let pointer_in = rect.contains(pointer) && self.enabled;
+        let in_clip = self.hit_clip().map(|c| c.contains(pointer)).unwrap_or(true);
+        let pointer_in = !blocked && in_clip && rect.contains(pointer) && self.enabled;
 
         let captured = self.state.captured == Some(id);
         let hovered = if let Some(cap) = self.state.captured {
@@ -244,10 +316,6 @@ impl<'a> Ui<'a> {
         if sense_click && self.enabled && pointer_in && self.input.mouse_pressed(MouseBtn::Left) {
             self.state.active = Some(id);
             self.state.request_focus(id, FocusSource::Pointer);
-        }
-
-        if self.state.active == Some(id) && self.input.mouse_down(MouseBtn::Left) && !pointer_in {
-            // 按下后移出仍保持 active，供捕获使用。
         }
 
         let clicked = self.enabled
@@ -341,7 +409,7 @@ impl<'a> Ui<'a> {
         let height = self.theme.metrics.button_height;
         let rect = self.allocate(height, None);
         let id = self.id_from(("button", text));
-        self.state.register_focusable(id);
+        self.state.register_focusable(id, rect);
         let response = self.interact(id, rect, true);
         let state = self.interact_state(&response);
         let fill = self.theme.button_fill(variant, state);
@@ -369,7 +437,7 @@ impl<'a> Ui<'a> {
         let height = self.theme.metrics.row_height;
         let rect = self.allocate(height, None);
         let id = self.id_from(("checkbox", label));
-        self.state.register_focusable(id);
+        self.state.register_focusable(id, rect);
         let mut response = self.interact(id, rect, true);
         let box_s = self.theme.metrics.checkbox.min(rect.h);
         let box_r = Rect::new(rect.x, rect.y + (rect.h - box_s) * 0.5, box_s, box_s);
@@ -411,7 +479,7 @@ impl<'a> Ui<'a> {
         let height = self.theme.metrics.slider_height;
         let rect = self.allocate(height, None);
         let id = self.id_from("slider");
-        self.state.register_focusable(id);
+        self.state.register_focusable(id, rect);
         let mut response = self.interact(id, rect, true);
         if response.hovered && self.input.mouse_pressed(MouseBtn::Left) {
             self.capture(id);
@@ -492,7 +560,7 @@ impl<'a> Ui<'a> {
         let height = self.theme.metrics.row_height;
         let rect = self.allocate(height, None);
         let id = self.id_from(("row", text));
-        self.state.register_focusable(id);
+        self.state.register_focusable(id, rect);
         let response = self.interact(id, rect, true);
         let fill = if response.active || response.focused {
             self.theme.colors.primary_hover

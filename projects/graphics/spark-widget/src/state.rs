@@ -6,6 +6,7 @@ use spark_core::{Rect, Vec2};
 
 use crate::id::WidgetId;
 use crate::motion::MotionScheduler;
+use crate::overlay::OverlayState;
 
 /// 焦点来源。导航与环绘制可据此区分。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -38,8 +39,10 @@ pub struct UiState {
     pub captured: Option<WidgetId>,
     pub memory: HashMap<WidgetId, WidgetMemory>,
     pub motion: MotionScheduler,
-    /// 本帧登记的可聚焦顺序（Tab）。
+    pub overlays: OverlayState,
+    /// 本帧登记的可聚焦顺序（Tab）及矩形（方向键）。
     pub(crate) focus_order: Vec<WidgetId>,
+    pub(crate) focus_rects: HashMap<WidgetId, Rect>,
     /// 本帧重复 ID 检测。
     pub(crate) seen_ids: HashMap<WidgetId, u32>,
     frame: u64,
@@ -71,15 +74,18 @@ impl UiState {
         self.frame = self.frame.wrapping_add(1);
         self.hot = None;
         self.focus_order.clear();
+        self.focus_rects.clear();
         self.seen_ids.clear();
+        self.overlays.begin_frame();
     }
 
     pub(crate) fn note_id(&mut self, id: WidgetId) {
         *self.seen_ids.entry(id).or_insert(0) += 1;
     }
 
-    pub(crate) fn register_focusable(&mut self, id: WidgetId) {
+    pub(crate) fn register_focusable(&mut self, id: WidgetId, rect: Rect) {
         self.focus_order.push(id);
+        self.focus_rects.insert(id, rect);
     }
 
     pub fn id_conflicts(&self) -> Vec<WidgetId> {
