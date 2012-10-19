@@ -102,6 +102,8 @@ pub struct Input {
     mouse_delta: (f32, f32),
     /// 本帧滚轮。正值朝上（远离用户）。
     wheel: f32,
+    /// 本帧文本输入（IME 提交与按键产生的字符）。
+    text: String,
 }
 
 impl Input {
@@ -112,10 +114,16 @@ impl Input {
         self.mouse_released.clear();
         self.mouse_delta = (0.0, 0.0);
         self.wheel = 0.0;
+        self.text.clear();
     }
 
     pub fn on_wheel(&mut self, dy: f32) {
         self.wheel += dy;
+    }
+
+    /// 追加本帧文本输入。
+    pub fn on_text(&mut self, text: impl AsRef<str>) {
+        self.text.push_str(text.as_ref());
     }
 
     pub fn on_mouse_delta(&mut self, dx: f32, dy: f32) {
@@ -191,5 +199,10 @@ impl Input {
 
     pub fn wheel(&self) -> f32 {
         self.wheel
+    }
+
+    /// 本帧累计的文本输入（不含控制键）。
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
