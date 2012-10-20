@@ -726,6 +726,16 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
                     self.input
                         .on_key(key, winit_map::button_state(event.state));
                 }
+                if event.state == winit::event::ElementState::Pressed {
+                    if let Some(text) = event.text.as_ref() {
+                        if !text.is_empty() && !text.chars().any(|c| c.is_control()) {
+                            self.input.on_text(text.as_str());
+                        }
+                    }
+                }
+            }
+            WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
+                self.input.on_text(text);
             }
             _ => {}
         }

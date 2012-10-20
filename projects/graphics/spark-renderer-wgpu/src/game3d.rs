@@ -1521,6 +1521,16 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
                     self.input
                         .on_key(k, winit_map::button_state(event.state));
                 }
+                if event.state == winit::event::ElementState::Pressed {
+                    if let Some(text) = event.text.as_ref() {
+                        if !text.is_empty() && !text.chars().any(|c| c.is_control()) {
+                            self.input.on_text(text.as_str());
+                        }
+                    }
+                }
+            }
+            WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
+                self.input.on_text(text);
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 if let Some(b) = winit_map::mouse_btn(button) {
