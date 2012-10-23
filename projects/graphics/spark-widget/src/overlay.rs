@@ -14,14 +14,6 @@ pub(crate) enum OverlayCmd {
         anchor: Rect,
         text: String,
     },
-    Modal {
-        id: WidgetId,
-        title: String,
-    },
-    Toast {
-        text: String,
-        age: f32,
-    },
 }
 
 #[derive(Debug, Default)]
@@ -136,11 +128,10 @@ pub(crate) fn flush_overlays(
     }
 
     // Tooltip
-    for cmd in state.overlays.queue.clone() {
-        if let OverlayCmd::Tooltip { anchor, text } = cmd {
+        for cmd in state.overlays.queue.clone() {
+            let OverlayCmd::Tooltip { anchor, text } = cmd;
             paint_tooltip(draw, theme, viewport, anchor, &text);
         }
-    }
 
     // Toast：底部居中堆叠
     let mut y = viewport.y + viewport.h - 48.0;

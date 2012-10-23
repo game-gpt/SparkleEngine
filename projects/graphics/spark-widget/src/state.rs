@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use spark_core::{Rect, Vec2};
 
+use crate::drag_drop::DragState;
 use crate::id::WidgetId;
 use crate::motion::MotionScheduler;
 use crate::overlay::OverlayState;
@@ -26,6 +27,8 @@ pub struct WidgetMemory {
     pub scroll: Vec2,
     pub last_rect: Option<Rect>,
     pub f32_value: f32,
+    /// 文本光标（按字符计）。
+    pub cursor: usize,
 }
 
 /// 所有跨帧状态。由游戏持有，每帧借给 [`crate::Ui`]。
@@ -40,6 +43,7 @@ pub struct UiState {
     pub memory: HashMap<WidgetId, WidgetMemory>,
     pub motion: MotionScheduler,
     pub overlays: OverlayState,
+    pub drag: DragState,
     /// 本帧登记的可聚焦顺序（Tab）及矩形（方向键）。
     pub(crate) focus_order: Vec<WidgetId>,
     pub(crate) focus_rects: HashMap<WidgetId, Rect>,
@@ -77,6 +81,7 @@ impl UiState {
         self.focus_rects.clear();
         self.seen_ids.clear();
         self.overlays.begin_frame();
+        self.drag.begin_frame();
     }
 
     pub(crate) fn note_id(&mut self, id: WidgetId) {

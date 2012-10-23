@@ -7,6 +7,7 @@ use spark_input::{Input, Key, MouseBtn};
 use spark_localization::LocaleSnapshot;
 use spark_renderer::DrawList;
 
+use crate::drag_drop::flush_drag_preview;
 use crate::focus::focus_in_direction;
 use crate::id::{IdStack, WidgetId};
 use crate::layout::{Direction, Layout, LayoutCursor, Size};
@@ -14,6 +15,7 @@ use crate::overlay::flush_overlays;
 use crate::response::Response;
 use crate::state::{FocusSource, UiState};
 use crate::style::{ButtonVariant, InteractState, TextTone, Theme};
+use crate::text::{estimate_text_width, TextMeasurer};
 use crate::text_source::TextSource;
 
 /// 本帧时间。动效与双击判定可用。
@@ -37,6 +39,7 @@ pub struct Ui<'a> {
     /// 命中测试用的裁剪栈（与 DrawList clip 同步）。
     hit_clips: Vec<Rect>,
     enabled: bool,
+    pub(crate) text_measurer: Option<&'a mut dyn TextMeasurer>,
 }
 
 /// 构造参数。
@@ -48,6 +51,7 @@ pub struct UiBuilder<'a> {
     pub viewport: Rect,
     pub time: UiTime,
     pub locale: Option<&'a LocaleSnapshot>,
+    pub text_measurer: Option<&'a mut dyn TextMeasurer>,
 }
 
 impl<'a> Ui<'a> {
@@ -64,6 +68,7 @@ impl<'a> Ui<'a> {
             layouts: Vec::new(),
             hit_clips: Vec::new(),
             enabled: true,
+            text_measurer: builder.text_measurer,
         };
         ui.state.begin_frame();
         let root = LayoutCursor::new(builder.viewport, Layout::vertical().width(Size::Fill));
@@ -103,6 +108,7 @@ impl<'a> Ui<'a> {
             self.input,
             self.time.dt,
         );
+        flush_drag_preview(self.state, self.draw, &self.theme, self.input);
         if !self.input.mouse_down(MouseBtn::Left) {
             self.state.active = None;
             self.state.captured = None;
@@ -579,17 +585,4 @@ impl<'a> Ui<'a> {
         );
         response
     }
-}
-
-fn estimate_text_width(text: &str, size: f32) -> f32 {
-    // 临时估算：中文按全角，ASCII 按 0.55em。正式测量交给字体子系统接入。
-    let mut w = 0.0;
-    for ch in text.chars() {
-        if ch.is_ascii() {
-            w += size * 0.55;
-        } else {
-            w += size;
-        }
-    }
-    w
 }

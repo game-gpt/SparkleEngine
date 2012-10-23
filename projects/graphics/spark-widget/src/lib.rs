@@ -6,6 +6,7 @@
 //! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
 //! UI 缓动在 [`motion`]，不属于 `spark-animator`。
 
+mod drag_drop;
 mod focus;
 mod id;
 mod layout;
@@ -15,9 +16,12 @@ mod response;
 mod scroll;
 mod state;
 mod style;
+mod text;
 mod text_source;
 mod ui;
+mod virtual_list;
 
+pub use drag_drop::{DragPayload, DragState};
 pub use id::WidgetId;
 pub use layout::{Align, Direction, Insets, Justify, Layout, LayoutCursor, Size};
 pub use motion::{
@@ -31,6 +35,7 @@ pub use style::{
     ButtonVariant, InteractState, MotionTheme, Spacing, TextTone, Theme, Typography, UiColors,
     WidgetMetrics,
 };
+pub use text::{wrap_lines, EstimateMeasurer, TextMeasurer};
 pub use text_source::{ResolvedText, TextBinding, TextSource};
 pub use ui::{Ui, UiBuilder, UiTime};
 
@@ -364,6 +369,7 @@ mod tests {
                 viewport,
                 time: UiTime::default(),
                 locale: None,
+                text_measurer: None,
             });
             let response = ui.button("开始");
             assert!(response.active);
@@ -386,6 +392,7 @@ mod tests {
                 viewport,
                 time: UiTime::default(),
                 locale: None,
+                text_measurer: None,
             });
             let response = ui.button("开始");
             assert!(response.clicked, "expected click on release");
@@ -413,6 +420,7 @@ mod tests {
                 viewport,
                 time: UiTime::default(),
                 locale: None,
+                text_measurer: None,
             });
             let response = ui.slider(&mut value, 0.0..=1.0);
             let slider_id = response.id;
@@ -436,6 +444,7 @@ mod tests {
                     seconds: 0.0,
                 },
                 locale: None,
+                text_measurer: None,
             });
             let response = ui.slider(&mut value, 0.0..=1.0);
             assert!(response.changed || value > 0.8, "value={value}");
@@ -459,6 +468,7 @@ mod tests {
                 viewport,
                 time: UiTime::default(),
                 locale: None,
+                text_measurer: None,
             });
             ui.scope("bag", |ui| {
                 first = ui.id_from(7u32);
@@ -475,6 +485,7 @@ mod tests {
                 viewport,
                 time: UiTime::default(),
                 locale: None,
+                text_measurer: None,
             });
             ui.scope("bag", |ui| {
                 second = ui.id_from(7u32);
@@ -501,6 +512,7 @@ mod tests {
             viewport,
             time: UiTime::default(),
             locale: None,
+            text_measurer: None,
         });
         let (response, _) = ui.scroll_area("list", 120.0, |ui| {
             for i in 0..20 {
@@ -528,6 +540,7 @@ mod tests {
             viewport,
             time: UiTime::default(),
             locale: None,
+            text_measurer: None,
         });
         let response = ui.button("提示");
         ui.tooltip(&response, "需要 10 个木材");
@@ -552,6 +565,7 @@ mod tests {
                 viewport,
                 time: UiTime::default(),
                 locale: None,
+                text_measurer: None,
             });
             let a = ui.button("A");
             let _b = ui.button("B");
@@ -570,6 +584,7 @@ mod tests {
                 viewport,
                 time: UiTime::default(),
                 locale: None,
+                text_measurer: None,
             });
             let _a = ui.button("A");
             let b = ui.button("B");
@@ -577,6 +592,114 @@ mod tests {
             assert_eq!(state.focused, Some(b.id));
             assert_ne!(state.focused, focused_before);
         }
+    }
+
+    #[test]
+    fn text_field_inserts_and_backspaces() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut value = String::new();
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.text_field(&mut value);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_text("Hi");
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime {
+                    dt: 0.016,
+                    seconds: 0.0,
+                },
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.text_field(&mut value);
+            assert!(response.focused);
+            assert!(response.changed);
+            assert_eq!(value, "Hi");
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_key(Key::Backspace, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.text_field(&mut value);
+            assert_eq!(value, "H");
+            ui.end();
+        }
+    }
+
+    #[test]
+    fn wrap_lines_breaks_long_ascii() {
+        let mut m = EstimateMeasurer;
+        let lines = wrap_lines("hello world", 40.0, 20.0, &mut m);
+        assert!(lines.len() >= 2, "{lines:?}");
+    }
+
+    #[test]
+    fn virtual_list_only_visits_visible_rows() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 200.0, 200.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let mut seen = 0usize;
+        let (_response, ()) = ui.virtual_list("items", 1000, 20.0, 100.0, |ui, range| {
+            seen = range.len();
+            for i in range {
+                let _ = ui.list_row(format!("item {i}"));
+            }
+        });
+        ui.end();
+        assert!(seen > 0 && seen < 20, "seen={seen}");
+    }
+
+    #[test]
+    fn drag_payload_roundtrip_type() {
+        let payload = DragPayload::new(42u32);
+        assert!(payload.is::<u32>());
+        assert!(!payload.is::<i32>());
+        assert_eq!(payload.downcast_ref::<u32>(), Some(&42));
     }
 }
 
