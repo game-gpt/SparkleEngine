@@ -50,6 +50,8 @@ pub struct UiState {
     pub debug: UiDebug,
     /// 本帧登记的可聚焦顺序（Tab）及矩形（方向键）。
     pub(crate) focus_order: Vec<WidgetId>,
+    /// Modal 打开时，Tab 与方向键只在这些 ID 之间移动。
+    pub(crate) focus_trap: Option<Vec<WidgetId>>,
     pub(crate) focus_rects: HashMap<WidgetId, Rect>,
     /// 本帧重复 ID 检测。
     pub(crate) seen_ids: HashMap<WidgetId, u32>,
@@ -82,6 +84,7 @@ impl UiState {
         self.frame = self.frame.wrapping_add(1);
         self.hot = None;
         self.focus_order.clear();
+        self.focus_trap = None;
         self.focus_rects.clear();
         self.seen_ids.clear();
         self.overlays.begin_frame();

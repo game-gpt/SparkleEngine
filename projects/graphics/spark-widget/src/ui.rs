@@ -100,6 +100,7 @@ impl<'a> Ui<'a> {
 
     /// 结束本帧：焦点导航、浮层绘制、调试叠加；指针抬起时清除 active / capture。
     pub fn end(mut self) {
+        self.apply_focus_trap();
         self.handle_focus_keys();
         flush_overlays(
             self.state,
@@ -280,6 +281,24 @@ impl<'a> Ui<'a> {
         let next = (current as i32 + delta).rem_euclid(len) as usize;
         let id = order[next];
         self.state.request_focus(id, FocusSource::Keyboard);
+    }
+
+    fn apply_focus_trap(&mut self) {
+        let Some(trap) = self.state.focus_trap.clone() else {
+            return;
+        };
+        if trap.is_empty() {
+            return;
+        }
+        self.state.focus_order.retain(|id| trap.contains(id));
+        let inside = self
+            .state
+            .focused
+            .is_some_and(|id| trap.contains(&id));
+        if !inside {
+            self.state
+                .request_focus(trap[0], FocusSource::Programmatic);
+        }
     }
 
     fn handle_focus_keys(&mut self) {

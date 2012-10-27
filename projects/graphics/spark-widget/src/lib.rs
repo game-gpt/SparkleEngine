@@ -854,5 +854,54 @@ mod tests {
             ui.end();
         }
     }
+
+    #[test]
+    fn modal_traps_tab_focus() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 640.0, 480.0);
+        let input = Input::default();
+        let mut confirm = WidgetId::NONE;
+        {
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _outside = ui.button("外面");
+            ui.open_modal("confirm", "确认");
+            let _ = ui.modal("confirm", "确认", |ui| {
+                confirm = ui.button("确认").id;
+            });
+            ui.end();
+        }
+        assert_eq!(state.focused, Some(confirm));
+        {
+            let mut input = Input::default();
+            input.on_key(Key::Tab, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _outside = ui.button("外面");
+            ui.open_modal("confirm", "确认");
+            let _ = ui.modal("confirm", "确认", |ui| {
+                confirm = ui.button("确认").id;
+            });
+            ui.end();
+        }
+        assert_eq!(state.focused, Some(confirm));
+    }
 }
 

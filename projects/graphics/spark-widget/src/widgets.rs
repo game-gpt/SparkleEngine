@@ -238,7 +238,10 @@ impl Ui<'_> {
         );
         self.layouts
             .push(crate::layout::LayoutCursor::new(content, Layout::vertical().gap(8.0)));
+        let order_at = self.state.focus_order.len();
         let out = self.scope(("modal_body", id.raw()), f);
+        let trapped = self.state.focus_order[order_at..].to_vec();
+        self.state.focus_trap = Some(trapped);
         self.layouts.pop();
         self.state.overlays.modal_body_drawn = true;
         self.state.memory_mut(id).last_rect = Some(panel);
