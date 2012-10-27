@@ -17,6 +17,7 @@ use crate::state::{FocusSource, UiState};
 use crate::style::{ButtonVariant, InteractState, TextTone, Theme};
 use crate::text::{estimate_text_width, TextMeasurer};
 use crate::text_source::TextSource;
+use crate::accessibility::AccessNode;
 
 /// 本帧时间。动效与双击判定可用。
 #[derive(Debug, Clone, Copy, Default)]
@@ -97,7 +98,7 @@ impl<'a> Ui<'a> {
         self.viewport
     }
 
-    /// 结束本帧：焦点导航、浮层绘制；指针抬起时清除 active / capture。
+    /// 结束本帧：焦点导航、浮层绘制、调试叠加；指针抬起时清除 active / capture。
     pub fn end(mut self) {
         self.handle_focus_keys();
         flush_overlays(
@@ -109,10 +110,16 @@ impl<'a> Ui<'a> {
             self.time.dt,
         );
         flush_drag_preview(self.state, self.draw, &self.theme, self.input);
+        let debug = self.state.debug;
+        debug.paint(self.state, self.draw);
         if !self.input.mouse_down(MouseBtn::Left) {
             self.state.active = None;
             self.state.captured = None;
         }
+    }
+
+    pub fn access(&mut self, node: AccessNode) {
+        self.state.access.push(node);
     }
 
     pub fn push_clip(&mut self, rect: Rect) {
@@ -435,6 +442,14 @@ impl<'a> Ui<'a> {
         let ty = rect.y + (rect.h - size) * 0.5;
         self.draw
             .text(tx, ty, size, self.theme.colors.text, text);
+        self.access(
+            AccessNode::new(id, crate::accessibility::Role::Button)
+                .label(text.to_string())
+                .rect(rect)
+                .disabled(!self.enabled)
+                .focusable(true)
+                .focused(response.focused),
+        );
         response
     }
 
@@ -476,6 +491,14 @@ impl<'a> Ui<'a> {
             self.theme.colors.text,
             label,
         );
+        self.access(
+            AccessNode::new(id, crate::accessibility::Role::CheckBox)
+                .label(label.to_string())
+                .rect(rect)
+                .checked(*checked)
+                .focusable(true)
+                .focused(response.focused),
+        );
         response
     }
 
@@ -513,6 +536,13 @@ impl<'a> Ui<'a> {
         let knob_x = rect.x + t * rect.w;
         let knob = Rect::new(knob_x - 6.0, rect.y + 2.0, 12.0, rect.h - 4.0);
         self.draw.fill_rect(knob, self.theme.colors.knob);
+        self.access(
+            AccessNode::new(id, crate::accessibility::Role::Slider)
+                .rect(rect)
+                .value(format!("{value:.3}"))
+                .focusable(true)
+                .focused(response.focused),
+        );
         response
     }
 

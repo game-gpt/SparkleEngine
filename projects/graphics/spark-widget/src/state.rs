@@ -4,6 +4,8 @@ use std::collections::HashMap;
 
 use spark_core::{Rect, Vec2};
 
+use crate::accessibility::AccessTree;
+use crate::debug::UiDebug;
 use crate::drag_drop::DragState;
 use crate::id::WidgetId;
 use crate::motion::MotionScheduler;
@@ -44,6 +46,8 @@ pub struct UiState {
     pub motion: MotionScheduler,
     pub overlays: OverlayState,
     pub drag: DragState,
+    pub access: AccessTree,
+    pub debug: UiDebug,
     /// 本帧登记的可聚焦顺序（Tab）及矩形（方向键）。
     pub(crate) focus_order: Vec<WidgetId>,
     pub(crate) focus_rects: HashMap<WidgetId, Rect>,
@@ -82,6 +86,7 @@ impl UiState {
         self.seen_ids.clear();
         self.overlays.begin_frame();
         self.drag.begin_frame();
+        self.access.clear();
     }
 
     pub(crate) fn note_id(&mut self, id: WidgetId) {

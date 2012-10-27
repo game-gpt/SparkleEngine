@@ -6,6 +6,8 @@
 //! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
 //! UI 缓动在 [`motion`]，不属于 `spark-animator`。
 
+mod accessibility;
+mod debug;
 mod drag_drop;
 mod focus;
 mod id;
@@ -20,7 +22,10 @@ mod text;
 mod text_source;
 mod ui;
 mod virtual_list;
+mod widgets;
 
+pub use accessibility::{AccessNode, AccessTree, Role};
+pub use debug::UiDebug;
 pub use drag_drop::{DragPayload, DragState};
 pub use id::WidgetId;
 pub use layout::{Align, Direction, Insets, Justify, Layout, LayoutCursor, Size};
@@ -700,6 +705,154 @@ mod tests {
         assert!(payload.is::<u32>());
         assert!(!payload.is::<i32>());
         assert_eq!(payload.downcast_ref::<u32>(), Some(&42));
+    }
+
+    #[test]
+    fn button_registers_access_node() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let response = ui.button("开始");
+        assert!(ui
+            .state()
+            .access
+            .by_id(response.id)
+            .is_some_and(|n| n.role == Role::Button && n.label == "开始"));
+        ui.end();
+    }
+
+    #[test]
+    fn tabs_and_collapsible_change_state() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 400.0, 300.0);
+        let mut selected = 0usize;
+        let mut open = false;
+        {
+            let mut input = Input::default();
+            // second tab roughly at x > half of width
+            input.on_cursor(220.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let tabs = ui.tabs(&["一", "二"], &mut selected);
+            assert!(tabs.hovered || tabs.changed || selected <= 1);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(220.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.tabs(&["一", "二"], &mut selected);
+            ui.end();
+        }
+        assert_eq!(selected, 1);
+
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let (response, body) = ui.collapsible("高级", &mut open, |ui| {
+                ui.label("内容");
+            });
+            assert!(body.is_none());
+            ui.end();
+            let _ = response;
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let (_response, body) = ui.collapsible("高级", &mut open, |ui| {
+                ui.label("内容");
+            });
+            assert!(open);
+            assert!(body.is_some());
+            ui.end();
+        }
+    }
+
+    #[test]
+    fn modal_body_runs_when_open() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 640.0, 480.0);
+        {
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            ui.open_modal("confirm", "确认删除");
+            let ran = ui
+                .modal("confirm", "确认删除", |ui| {
+                    ui.label("不可撤销");
+                    7u32
+                })
+                .map(|(_, v)| v);
+            assert_eq!(ran, Some(7));
+            assert!(ui.state().overlays.modal_body_drawn);
+            ui.end();
+        }
     }
 }
 

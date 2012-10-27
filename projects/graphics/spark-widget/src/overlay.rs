@@ -26,6 +26,8 @@ pub struct OverlayState {
     pub toasts: Vec<ToastEntry>,
     /// 本帧是否阻断下层输入。
     pub(crate) block_input: bool,
+    /// 本帧是否已用 [`crate::Ui::modal`] 画过内容。是则 flush 只处理关闭逻辑。
+    pub(crate) modal_body_drawn: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +41,7 @@ impl OverlayState {
     pub fn begin_frame(&mut self) {
         self.queue.clear();
         self.block_input = self.open_modal.is_some();
+        self.modal_body_drawn = false;
     }
 
     pub fn tooltip(&mut self, anchor: Rect, text: impl Into<String>) {
@@ -93,38 +96,42 @@ pub(crate) fn flush_overlays(
         }
     }
 
-    // Modal 遮罩
+    // Modal 遮罩（仅当本帧没有通过 Ui::modal 画内容时）
     if let Some(modal_id) = state.overlays.open_modal {
-        let dim = Color::rgba(0.0, 0.0, 0.0, 0.55);
-        draw.fill_rect(viewport, dim);
-        let w = (viewport.w * 0.5).clamp(280.0, 520.0);
-        let h = 200.0;
-        let panel = Rect::new(
-            viewport.x + (viewport.w - w) * 0.5,
-            viewport.y + (viewport.h - h) * 0.5,
-            w,
-            h,
-        );
-        draw.fill_rect(panel, theme.colors.panel);
-        draw.fill_rect(
-            Rect::new(panel.x, panel.y, panel.w, 32.0),
-            theme.colors.panel_title,
-        );
-        draw.text(
-            panel.x + 12.0,
-            panel.y + 6.0,
-            theme.typography.label,
-            theme.colors.text,
-            &state.overlays.modal_title,
-        );
-        // 点击遮罩外部关闭
+        if !state.overlays.modal_body_drawn {
+            let dim = Color::rgba(0.0, 0.0, 0.0, 0.55);
+            draw.fill_rect(viewport, dim);
+            let w = (viewport.w * 0.5).clamp(280.0, 520.0);
+            let h = 200.0;
+            let panel = Rect::new(
+                viewport.x + (viewport.w - w) * 0.5,
+                viewport.y + (viewport.h - h) * 0.5,
+                w,
+                h,
+            );
+            draw.fill_rect(panel, theme.colors.panel);
+            draw.fill_rect(
+                Rect::new(panel.x, panel.y, panel.w, 32.0),
+                theme.colors.panel_title,
+            );
+            draw.text(
+                panel.x + 12.0,
+                panel.y + 6.0,
+                theme.typography.label,
+                theme.colors.text,
+                &state.overlays.modal_title,
+            );
+            state.memory_mut(modal_id).last_rect = Some(panel);
+        }
+        let panel = state
+            .memory(modal_id)
+            .and_then(|m| m.last_rect)
+            .unwrap_or(viewport);
         let (mx, my) = input.mouse_pos();
         let p = Vec2::new(mx, my);
         if input.mouse_pressed(MouseBtn::Left) && viewport.contains(p) && !panel.contains(p) {
-            let _ = modal_id;
             state.overlays.close_modal();
         }
-        state.memory_mut(modal_id).last_rect = Some(panel);
     }
 
     // Tooltip
