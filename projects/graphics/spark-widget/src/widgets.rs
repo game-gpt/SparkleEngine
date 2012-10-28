@@ -52,6 +52,9 @@ impl Ui<'_> {
         let id = self.id_from(("collapsible", title));
         self.state.register_focusable(id, rect);
         let mut response = self.interact(id, rect, true);
+        if self.keyboard_activate(id) {
+            response.clicked = true;
+        }
         if response.clicked {
             *open = !*open;
             response.changed = true;
@@ -95,6 +98,9 @@ impl Ui<'_> {
         let id = self.id_from(("radio", group, label));
         self.state.register_focusable(id, rect);
         let mut response = self.interact(id, rect, true);
+        if self.keyboard_activate(id) {
+            response.clicked = true;
+        }
         if response.clicked {
             *selected = true;
             response.changed = true;
@@ -150,7 +156,10 @@ impl Ui<'_> {
             let rect = Rect::new(total.x + i as f32 * tab_w, total.y, tab_w - 2.0, total.h);
             let id = self.id_from(("tab", *title, i));
             self.state.register_focusable(id, rect);
-            let response = self.interact(id, rect, true);
+            let mut response = self.interact(id, rect, true);
+            if self.keyboard_activate(id) {
+                response.clicked = true;
+            }
             hovered |= response.hovered;
             focused |= response.focused;
             if response.clicked && *selected != i {

@@ -903,5 +903,47 @@ mod tests {
         }
         assert_eq!(state.focused, Some(confirm));
     }
+
+    #[test]
+    fn focused_button_clicks_on_enter() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut id = WidgetId::NONE;
+        {
+            let input = Input::default();
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            id = ui.button("开始").id;
+            ui.request_focus(id);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_key(Key::Enter, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.button("开始");
+            assert!(response.clicked);
+            assert_eq!(response.id, id);
+            ui.end();
+        }
+    }
 }
 

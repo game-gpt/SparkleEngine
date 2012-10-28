@@ -379,6 +379,13 @@ impl<'a> Ui<'a> {
         self.state.active = Some(id);
     }
 
+    /// 焦点在该控件上且按下 Enter 或 Space。
+    pub fn keyboard_activate(&self, id: WidgetId) -> bool {
+        self.enabled
+            && self.state.focused == Some(id)
+            && (self.input.key_pressed(Key::Enter) || self.input.key_pressed(Key::Space))
+    }
+
     pub fn interact_state(&self, response: &Response) -> InteractState {
         if !self.enabled {
             return InteractState::Disabled;
@@ -442,7 +449,10 @@ impl<'a> Ui<'a> {
         let rect = self.allocate(height, None);
         let id = self.id_from(("button", text));
         self.state.register_focusable(id, rect);
-        let response = self.interact(id, rect, true);
+        let mut response = self.interact(id, rect, true);
+        if self.keyboard_activate(id) {
+            response.clicked = true;
+        }
         let state = self.interact_state(&response);
         let fill = self.theme.button_fill(variant, state);
         let border = if response.focused {
@@ -479,6 +489,9 @@ impl<'a> Ui<'a> {
         let id = self.id_from(("checkbox", label));
         self.state.register_focusable(id, rect);
         let mut response = self.interact(id, rect, true);
+        if self.keyboard_activate(id) {
+            response.clicked = true;
+        }
         let box_s = self.theme.metrics.checkbox.min(rect.h);
         let box_r = Rect::new(rect.x, rect.y + (rect.h - box_s) * 0.5, box_s, box_s);
         if response.clicked {
@@ -616,7 +629,10 @@ impl<'a> Ui<'a> {
         let rect = self.allocate(height, None);
         let id = self.id_from(("row", text));
         self.state.register_focusable(id, rect);
-        let response = self.interact(id, rect, true);
+        let mut response = self.interact(id, rect, true);
+        if self.keyboard_activate(id) {
+            response.clicked = true;
+        }
         let fill = if response.active || response.focused {
             self.theme.colors.primary_hover
         } else if response.hovered {
