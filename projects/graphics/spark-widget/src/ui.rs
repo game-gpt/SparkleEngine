@@ -72,9 +72,16 @@ impl<'a> Ui<'a> {
             text_measurer: builder.text_measurer,
         };
         ui.state.begin_frame();
+        let prefs = ui.state.prefs;
+        ui.theme = prefs.apply_theme(builder.theme);
         let root = LayoutCursor::new(builder.viewport, Layout::vertical().width(Size::Fill));
         ui.layouts.push(root);
-        let _ = ui.state.motion.tick(ui.time.dt);
+        let dt = if ui.theme.motion.reduced_motion {
+            1.0e6
+        } else {
+            ui.time.dt
+        };
+        let _ = ui.state.motion.tick(dt);
         ui
     }
 
@@ -203,6 +210,28 @@ impl<'a> Ui<'a> {
         let mut layout = layout;
         layout.direction = Direction::Horizontal;
         self.with_layout(layout, f)
+    }
+
+    /// 等宽网格。`columns × rows` 个单元格，子控件每次 `allocate` 占一格。
+    pub fn grid<R>(
+        &mut self,
+        columns: usize,
+        rows: usize,
+        row_height: f32,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let columns = columns.max(1);
+        let rows = rows.max(1);
+        let gap = self.theme.spacing.sm;
+        let row_height = row_height.max(1.0);
+        let total_h =
+            rows as f32 * row_height + gap * (rows.saturating_sub(1) as f32);
+        let bounds = self.allocate(total_h, None);
+        self.layouts
+            .push(LayoutCursor::grid(bounds, columns, row_height, gap));
+        let out = self.scope(("grid", columns, rows), f);
+        self.layouts.pop();
+        out
     }
 
     pub fn with_layout<R>(&mut self, layout: Layout, f: impl FnOnce(&mut Self) -> R) -> R {

@@ -14,6 +14,7 @@ mod id;
 mod layout;
 pub mod motion;
 mod overlay;
+mod prefs;
 mod response;
 mod scroll;
 mod state;
@@ -28,12 +29,13 @@ pub use accessibility::{AccessNode, AccessTree, Role};
 pub use debug::UiDebug;
 pub use drag_drop::{DragPayload, DragState};
 pub use id::WidgetId;
-pub use layout::{Align, Direction, Insets, Justify, Layout, LayoutCursor, Size};
+pub use layout::{Align, Direction, GridState, Insets, Justify, Layout, LayoutCursor, Size};
 pub use motion::{
     Easing, MotionId, MotionProperty, MotionScheduler, MotionSequence, MotionSpec, MotionTick,
     MotionValue, SequenceStep, Spring, SpringParams, Transition, Tween,
 };
 pub use overlay::{OverlayState, ToastEntry};
+pub use prefs::UiPrefs;
 pub use response::Response;
 pub use state::{FocusSource, UiState, WidgetMemory};
 pub use style::{
@@ -944,6 +946,58 @@ mod tests {
             assert_eq!(response.id, id);
             ui.end();
         }
+    }
+
+    #[test]
+    fn grid_places_cells_left_to_right() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 300.0, 200.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let mut rects = Vec::new();
+        ui.grid(3, 2, 40.0, |ui| {
+            for i in 0..6 {
+                let r = ui.button(format!("{i}")).rect;
+                rects.push(r);
+            }
+        });
+        ui.end();
+        assert_eq!(rects.len(), 6);
+        assert!(rects[1].x > rects[0].x);
+        assert!((rects[3].y - rects[0].y).abs() > 30.0);
+        assert!((rects[0].y - rects[1].y).abs() < 1.0);
+    }
+
+    #[test]
+    fn prefs_scale_applied_on_ui_new() {
+        let mut state = UiState::new();
+        state.prefs = UiPrefs::default().scale(2.0);
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let base = Theme::default().metrics.button_height;
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        assert!((ui.theme().metrics.button_height - base * 2.0).abs() < 1e-3);
+        ui.end();
     }
 }
 

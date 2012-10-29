@@ -182,6 +182,18 @@ pub struct LayoutCursor {
     pub content: Rect,
     pub cursor: Vec2,
     pub line_cross: f32,
+    /// 网格模式：按列填满后换行。
+    pub grid: Option<GridState>,
+}
+
+/// 等宽列网格状态。
+#[derive(Debug, Clone, Copy)]
+pub struct GridState {
+    pub columns: usize,
+    pub gap: f32,
+    pub row_height: f32,
+    pub index: usize,
+    pub cell_w: f32,
 }
 
 impl LayoutCursor {
@@ -198,11 +210,46 @@ impl LayoutCursor {
             content,
             cursor: Vec2::new(content.x, content.y),
             line_cross: 0.0,
+            grid: None,
         }
     }
 
-    /// 分配下一块。主轴尺寸由 `main` 决定，交叉轴默认拉伸到内容区。
+    pub fn grid(bounds: Rect, columns: usize, row_height: f32, gap: f32) -> Self {
+        let columns = columns.max(1);
+        let gap = gap.max(0.0);
+        let content = bounds;
+        let cell_w = if columns == 0 {
+            content.w
+        } else {
+            ((content.w - gap * (columns.saturating_sub(1) as f32)) / columns as f32).max(1.0)
+        };
+        Self {
+            layout: Layout::vertical().gap(gap),
+            bounds,
+            content,
+            cursor: Vec2::new(content.x, content.y),
+            line_cross: 0.0,
+            grid: Some(GridState {
+                columns,
+                gap,
+                row_height: row_height.max(1.0),
+                index: 0,
+                cell_w,
+            }),
+        }
+    }
+
+    /// 分配下一块。网格模式下忽略 `main`/`cross`，按单元格推进。
     pub fn allocate(&mut self, main: f32, cross: Option<f32>) -> Rect {
+        if let Some(grid) = self.grid.as_mut() {
+            let col = grid.index % grid.columns;
+            let row = grid.index / grid.columns;
+            let x = self.content.x + col as f32 * (grid.cell_w + grid.gap);
+            let y = self.content.y + row as f32 * (grid.row_height + grid.gap);
+            grid.index += 1;
+            self.cursor.y = y + grid.row_height;
+            return Rect::new(x, y, grid.cell_w, grid.row_height);
+        }
         let gap = if self.has_placed() {
             self.layout.gap
         } else {

@@ -10,6 +10,7 @@ use crate::drag_drop::DragState;
 use crate::id::WidgetId;
 use crate::motion::MotionScheduler;
 use crate::overlay::OverlayState;
+use crate::prefs::UiPrefs;
 
 /// 焦点来源。导航与环绘制可据此区分。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -48,6 +49,7 @@ pub struct UiState {
     pub drag: DragState,
     pub access: AccessTree,
     pub debug: UiDebug,
+    pub prefs: UiPrefs,
     /// 本帧登记的可聚焦顺序（Tab）及矩形（方向键）。
     pub(crate) focus_order: Vec<WidgetId>,
     /// Modal 打开时，Tab 与方向键只在这些 ID 之间移动。
