@@ -18,6 +18,7 @@ mod overlay;
 mod prefs;
 mod response;
 mod scroll;
+mod select;
 mod state;
 mod style;
 mod text;
@@ -1000,6 +1001,90 @@ mod tests {
         });
         assert!((ui.theme().metrics.button_height - base * 2.0).abs() < 1e-3);
         ui.end();
+    }
+
+    #[test]
+    fn combo_box_selects_option() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 400.0);
+        let mut selected = 0usize;
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.combo_box("res", &["低", "中", "高"], &mut selected);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.combo_box("res", &["低", "中", "高"], &mut selected);
+            ui.end();
+        }
+        assert!(state.memory.values().any(|m| m.opened));
+        {
+            let mut input = Input::default();
+            // second option under header (~ button_height + row_height*1.5)
+            input.on_cursor(40.0, 36.0 + 28.0 + 14.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.combo_box("res", &["低", "中", "高"], &mut selected);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 36.0 + 28.0 + 14.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.combo_box("res", &["低", "中", "高"], &mut selected);
+            ui.end();
+            assert!(response.changed || selected == 1, "selected={selected}");
+        }
+        assert_eq!(selected, 1);
     }
 }
 
