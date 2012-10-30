@@ -15,3 +15,4 @@ spark-core = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 spark-localization = { workspace = true }
+spark-debugger = { workspace = true }

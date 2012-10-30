@@ -11,6 +11,7 @@ mod debug;
 mod drag_drop;
 mod focus;
 mod id;
+mod inspector;
 mod layout;
 pub mod motion;
 mod overlay;
@@ -29,6 +30,7 @@ pub use accessibility::{AccessNode, AccessTree, Role};
 pub use debug::UiDebug;
 pub use drag_drop::{DragPayload, DragState};
 pub use id::WidgetId;
+pub use inspector::UiInspector;
 pub use layout::{Align, Direction, GridState, Insets, Justify, Layout, LayoutCursor, Size};
 pub use motion::{
     Easing, MotionId, MotionProperty, MotionScheduler, MotionSequence, MotionSpec, MotionTick,
@@ -911,7 +913,7 @@ mod tests {
         let mut state = UiState::new();
         let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
         let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
-        let mut id = WidgetId::NONE;
+        let id;
         {
             let input = Input::default();
             let mut ui = Ui::new(UiBuilder {
@@ -986,7 +988,7 @@ mod tests {
         let input = Input::default();
         let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
         let base = Theme::default().metrics.button_height;
-        let mut ui = Ui::new(UiBuilder {
+        let ui = Ui::new(UiBuilder {
             input: &input,
             draw: &mut draw,
             state: &mut state,
