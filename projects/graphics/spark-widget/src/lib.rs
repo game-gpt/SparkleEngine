@@ -9,6 +9,7 @@
 mod accessibility;
 mod debug;
 mod drag_drop;
+mod fields;
 mod focus;
 mod id;
 mod inspector;
@@ -1121,6 +1122,91 @@ mod tests {
         }
         let scroll = state.memory(scroll_id).map(|m| m.scroll.y).unwrap_or(0.0);
         assert!(scroll > 0.0, "scroll={scroll}");
+    }
+
+    #[test]
+    fn number_field_steps_with_arrow_keys() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut value = 1.0f32;
+        let id;
+        {
+            let input = Input::default();
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            id = ui.number_field(&mut value, 0.0..=10.0, 0.5).id;
+            ui.request_focus(id);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_key(Key::Up, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.number_field(&mut value, 0.0..=10.0, 0.5);
+            ui.end();
+        }
+        assert!((value - 1.5).abs() < 1e-4, "value={value}");
+    }
+
+    #[test]
+    fn key_binding_field_captures_pressed_key() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut binding = None;
+        let id;
+        {
+            let input = Input::default();
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            id = ui.key_binding_field(&mut binding).id;
+            ui.request_focus(id);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_key(Key::F, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.key_binding_field(&mut binding);
+            assert!(response.changed);
+            ui.end();
+        }
+        assert_eq!(binding, Some(Key::F));
     }
 }
 

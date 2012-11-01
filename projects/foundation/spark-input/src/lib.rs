@@ -177,6 +177,11 @@ impl Input {
         self.released.contains(&key)
     }
 
+    /// 本帧新按下的键（无序）。
+    pub fn keys_pressed(&self) -> impl Iterator<Item = Key> + '_ {
+        self.pressed.iter().copied()
+    }
+
     pub fn mouse_pos(&self) -> (f32, f32) {
         self.mouse_pos
     }
