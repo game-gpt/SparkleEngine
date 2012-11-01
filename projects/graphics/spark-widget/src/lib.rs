@@ -16,6 +16,7 @@ mod inspector;
 mod layout;
 pub mod motion;
 mod overlay;
+mod popup;
 mod prefs;
 mod response;
 mod scroll;
@@ -1207,6 +1208,56 @@ mod tests {
             ui.end();
         }
         assert_eq!(binding, Some(Key::F));
+    }
+
+    #[test]
+    fn popup_menu_selects_item() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut open = true;
+        let anchor = Rect::new(10.0, 10.0, 80.0, 24.0);
+        let row_h = Theme::default().metrics.row_height;
+        let y = anchor.y + anchor.h + 2.0 + row_h * 1.5;
+        let x = anchor.x + 10.0;
+        {
+            let mut input = Input::default();
+            input.on_cursor(x, y);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.popup_menu("ctx", anchor, &mut open, &["复制", "粘贴", "删除"]);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(x, y);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let chosen = ui.popup_menu("ctx", anchor, &mut open, &["复制", "粘贴", "删除"]);
+            ui.end();
+            assert_eq!(chosen, Some(1));
+        }
+        assert!(!open);
     }
 }
 
