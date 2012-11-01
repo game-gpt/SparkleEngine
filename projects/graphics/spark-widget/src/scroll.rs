@@ -1,16 +1,24 @@
-//! 滚动区域：持久偏移、滚轮、裁剪与简易滚动条。
+//! 滚动区域：持久偏移、滚轮、裁剪、滚动条与滚入可视。
 
 use std::hash::Hash;
 
 use spark_core::{Rect, Vec2};
 use spark_input::MouseBtn;
 
+use crate::id::WidgetId;
 use crate::layout::{Layout, LayoutCursor};
 use crate::response::Response;
+use crate::state::{FocusSource, ScrollAreaFrame, UiState};
 use crate::ui::Ui;
 
 impl Ui<'_> {
+    /// 请求让控件在所属 [`Self::scroll_area`] 内可见（本帧末或下帧生效）。
+    pub fn scroll_into_view(&mut self, id: WidgetId) {
+        self.state.request_scroll_into_view(id);
+    }
+
     /// 垂直滚动区。内容在裁剪视口内绘制，滚轮在悬停时生效。
+    /// 焦点落在区内外且被键盘导航时，会自动滚入可视。
     pub fn scroll_area<R>(
         &mut self,
         salt: impl Hash,
@@ -59,6 +67,15 @@ impl Ui<'_> {
             mem.last_rect = Some(viewport);
             mem.f32_value = used;
         }
+
+        self.state.scroll_areas.push(ScrollAreaFrame {
+            id,
+            view,
+            content_top: content_origin.y,
+            used,
+            max_scroll,
+        });
+
         let scroll_y = self.state.memory(id).map(|m| m.scroll.y).unwrap_or(0.0);
 
         // 滚动条
@@ -66,7 +83,11 @@ impl Ui<'_> {
         self.draw.fill_rect(bar, self.theme.colors.track);
         if max_scroll > 1.0 {
             let thumb_h = (view.h * (view.h / used)).clamp(16.0, view.h);
-            let t = scroll_y / max_scroll;
+            let t = if max_scroll > 0.0 {
+                scroll_y / max_scroll
+            } else {
+                0.0
+            };
             let thumb_y = view.y + t * (view.h - thumb_h);
             let thumb = Rect::new(bar.x + 1.0, thumb_y, bar.w - 2.0, thumb_h);
             let thumb_hover = thumb.contains(pointer) || bar.contains(pointer);
@@ -83,5 +104,56 @@ impl Ui<'_> {
         let mut response = self.interact(id, viewport, false);
         response.hovered = hovering || response.hovered;
         (response, out)
+    }
+}
+
+impl UiState {
+    /// 帧末：按焦点 / 显式请求修正各滚动区偏移。
+    pub(crate) fn apply_scroll_into_view_all(&mut self) {
+        let mut targets: Vec<WidgetId> = self.scroll_into_view.clone();
+        if self.focus_source == FocusSource::Keyboard {
+            if let Some(fid) = self.focused {
+                if !targets.contains(&fid) {
+                    targets.push(fid);
+                }
+            }
+        }
+        if targets.is_empty() || self.scroll_areas.is_empty() {
+            return;
+        }
+
+        let areas = self.scroll_areas.clone();
+        let mut consumed = Vec::new();
+        for area in areas {
+            let content_bottom = area.content_top + area.used;
+            let mut scroll_y = self.memory(area.id).map(|m| m.scroll.y).unwrap_or(0.0);
+            let mut changed = false;
+            for tid in &targets {
+                let Some(frect) = self.focus_rects.get(tid).copied() else {
+                    continue;
+                };
+                let overlaps_x =
+                    frect.x + frect.w > area.view.x && frect.x < area.view.x + area.view.w;
+                let in_content = frect.y + frect.h > area.content_top
+                    && frect.y < content_bottom
+                    && overlaps_x;
+                if !in_content {
+                    continue;
+                }
+                if frect.y < area.view.y {
+                    scroll_y -= area.view.y - frect.y;
+                    changed = true;
+                } else if frect.y + frect.h > area.view.y + area.view.h {
+                    scroll_y += (frect.y + frect.h) - (area.view.y + area.view.h);
+                    changed = true;
+                }
+                consumed.push(*tid);
+            }
+            if changed {
+                self.memory_mut(area.id).scroll.y = scroll_y.clamp(0.0, area.max_scroll);
+            }
+        }
+        self.scroll_into_view
+            .retain(|id| !consumed.contains(id));
     }
 }

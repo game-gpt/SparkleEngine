@@ -109,6 +109,7 @@ impl<'a> Ui<'a> {
     pub fn end(mut self) {
         self.apply_focus_trap();
         self.handle_focus_keys();
+        self.state.apply_scroll_into_view_all();
         flush_overlays(
             self.state,
             self.draw,

@@ -32,6 +32,8 @@ pub struct WidgetMemory {
     pub f32_value: f32,
     /// 文本光标（按字符计）。
     pub cursor: usize,
+    /// 就地编辑缓冲（数值框等）。
+    pub edit_buf: String,
 }
 
 /// 所有跨帧状态。由游戏持有，每帧借给 [`crate::Ui`]。
@@ -57,7 +59,21 @@ pub struct UiState {
     pub(crate) focus_rects: HashMap<WidgetId, Rect>,
     /// 本帧重复 ID 检测。
     pub(crate) seen_ids: HashMap<WidgetId, u32>,
+    /// 本帧登记的滚动区，供帧末滚入可视。
+    pub(crate) scroll_areas: Vec<ScrollAreaFrame>,
+    /// 请求滚入可视区的控件（由滚动区在帧末消化）。
+    pub(crate) scroll_into_view: Vec<WidgetId>,
     frame: u64,
+}
+
+/// 本帧一个滚动区的几何快照。
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ScrollAreaFrame {
+    pub id: WidgetId,
+    pub view: Rect,
+    pub content_top: f32,
+    pub used: f32,
+    pub max_scroll: f32,
 }
 
 impl UiState {
@@ -89,9 +105,18 @@ impl UiState {
         self.focus_trap = None;
         self.focus_rects.clear();
         self.seen_ids.clear();
+        self.scroll_into_view.clear();
+        self.scroll_areas.clear();
         self.overlays.begin_frame();
         self.drag.begin_frame();
         self.access.clear();
+    }
+
+    /// 请求让 `id` 在所属滚动区内可见（下帧生效）。
+    pub fn request_scroll_into_view(&mut self, id: WidgetId) {
+        if !self.scroll_into_view.contains(&id) {
+            self.scroll_into_view.push(id);
+        }
     }
 
     pub(crate) fn note_id(&mut self, id: WidgetId) {

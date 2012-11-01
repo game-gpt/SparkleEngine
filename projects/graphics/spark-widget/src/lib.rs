@@ -1086,5 +1086,41 @@ mod tests {
         }
         assert_eq!(selected, 1);
     }
+
+    #[test]
+    fn scroll_area_scrolls_focused_widget_into_view() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 200.0, 200.0);
+        let target;
+        let scroll_id;
+        {
+            let input = Input::default();
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let (response, last) = ui.scroll_area("bag", 100.0, |ui| {
+                let mut last = WidgetId::NONE;
+                for i in 0..20 {
+                    last = ui.button(format!("item{i}")).id;
+                }
+                last
+            });
+            scroll_id = response.id;
+            target = last;
+            ui.request_focus(target);
+            ui.scroll_into_view(target);
+            ui.end();
+        }
+        let scroll = state.memory(scroll_id).map(|m| m.scroll.y).unwrap_or(0.0);
+        assert!(scroll > 0.0, "scroll={scroll}");
+    }
 }
 
