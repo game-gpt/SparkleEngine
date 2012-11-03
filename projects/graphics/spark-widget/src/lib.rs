@@ -1259,5 +1259,48 @@ mod tests {
         }
         assert!(!open);
     }
+
+    #[test]
+    fn text_area_inserts_newline_on_enter() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut value = String::from("ab");
+        let id;
+        {
+            let input = Input::default();
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            id = ui.text_area(&mut value, 3).id;
+            ui.request_focus(id);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_key(Key::Enter, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.text_area(&mut value, 3);
+            assert!(response.changed);
+            ui.end();
+        }
+        assert_eq!(value, "ab\n");
+    }
 }
 

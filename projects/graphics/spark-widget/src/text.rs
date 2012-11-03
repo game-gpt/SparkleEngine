@@ -1,4 +1,4 @@
-//! 文本测量、换行与单行输入框。
+//! 文本测量、换行、单行与多行输入。
 //!
 //! 正式测量由调用方注入 [`TextMeasurer`]（通常包一层 `spark-font::GlyphCache`）。
 //! 未注入时用估算宽度，仅作布局占位。
@@ -6,6 +6,7 @@
 use spark_core::{Color, Rect};
 use spark_input::Key;
 
+use crate::accessibility::{AccessNode, Role};
 use crate::response::Response;
 use crate::ui::Ui;
 
@@ -221,6 +222,128 @@ impl Ui<'_> {
                 );
             }
         }
+        response
+    }
+
+    /// 多行文本区。`Enter` 插入换行；高度由 `lines` 估算。
+    pub fn text_area(&mut self, value: &mut String, lines: usize) -> Response {
+        let line_h = self.theme.typography.label + 4.0;
+        let height = (line_h * lines.max(2) as f32).max(self.theme.metrics.button_height * 2.0);
+        let rect = self.allocate(height, None);
+        let id = self.id_from("text_area");
+        self.state.register_focusable(id, rect);
+        let mut response = self.interact(id, rect, true);
+        let focused = response.focused;
+        let was_focused = self.state.memory(id).map(|m| m.opened).unwrap_or(false);
+        if focused && !was_focused {
+            let mem = self.state.memory_mut(id);
+            mem.opened = true;
+            mem.cursor = value.chars().count();
+        }
+        if !focused && was_focused {
+            self.state.memory_mut(id).opened = false;
+        }
+
+        if focused {
+            let mut cursor = self
+                .state
+                .memory(id)
+                .map(|m| m.cursor)
+                .unwrap_or(value.chars().count());
+            cursor = cursor.min(value.chars().count());
+            if !self.input.text().is_empty() {
+                for ch in self.input.text().chars() {
+                    if ch.is_control() && ch != '\n' {
+                        continue;
+                    }
+                    let insert_at = value
+                        .char_indices()
+                        .nth(cursor)
+                        .map(|(i, _)| i)
+                        .unwrap_or(value.len());
+                    value.insert(insert_at, ch);
+                    cursor += 1;
+                    response.changed = true;
+                }
+            }
+            if self.input.key_pressed(Key::Enter) {
+                let insert_at = value
+                    .char_indices()
+                    .nth(cursor)
+                    .map(|(i, _)| i)
+                    .unwrap_or(value.len());
+                value.insert(insert_at, '\n');
+                cursor += 1;
+                response.changed = true;
+            }
+            if self.input.key_pressed(Key::Backspace) && cursor > 0 {
+                let remove_at = value
+                    .char_indices()
+                    .nth(cursor - 1)
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+                value.remove(remove_at);
+                cursor -= 1;
+                response.changed = true;
+            }
+            if self.input.key_pressed(Key::Left) {
+                cursor = cursor.saturating_sub(1);
+            }
+            if self.input.key_pressed(Key::Right) {
+                cursor = (cursor + 1).min(value.chars().count());
+            }
+            self.state.memory_mut(id).cursor = cursor;
+        }
+
+        let fill = if focused {
+            Color::rgb(0.10, 0.14, 0.22)
+        } else {
+            Color::rgb(0.08, 0.10, 0.16)
+        };
+        let border = if focused {
+            self.theme.colors.focus_ring
+        } else {
+            self.theme.colors.border
+        };
+        self.draw.fill_rect(
+            Rect::new(rect.x - 1.0, rect.y - 1.0, rect.w + 2.0, rect.h + 2.0),
+            border,
+        );
+        self.draw.fill_rect(rect, fill);
+        let size = self.theme.typography.label;
+        let pad = 8.0;
+        let mut y = rect.y + pad;
+        for line in value.split('\n') {
+            if y + size > rect.y + rect.h - 2.0 {
+                break;
+            }
+            self.draw
+                .text(rect.x + pad, y, size, self.theme.colors.text, line);
+            y += line_h;
+        }
+        if focused {
+            let cursor = self.state.memory(id).map(|m| m.cursor).unwrap_or(0);
+            let prefix: String = value.chars().take(cursor).collect();
+            let line_idx = prefix.matches('\n').count();
+            let col_prefix = prefix.rsplit('\n').next().unwrap_or("");
+            let cx = rect.x + pad + self.measure_width(col_prefix, size);
+            let cy = rect.y + pad + line_idx as f32 * line_h;
+            let blink = ((self.time.seconds * 2.0) as i64) % 2 == 0;
+            if blink && cy + size <= rect.y + rect.h {
+                self.draw.fill_rect(
+                    Rect::new(cx, cy, 2.0, size),
+                    self.theme.colors.text,
+                );
+            }
+        }
+        self.access(
+            AccessNode::new(id, Role::TextField)
+                .label("text area")
+                .value(value.clone())
+                .rect(rect)
+                .focusable(true)
+                .focused(focused),
+        );
         response
     }
 }
