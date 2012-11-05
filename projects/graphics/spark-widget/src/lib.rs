@@ -7,6 +7,7 @@
 //! UI 缓动在 [`motion`]，不属于 `spark-animator`。
 
 mod accessibility;
+mod containers;
 mod debug;
 mod drag_drop;
 mod fields;
@@ -1301,6 +1302,114 @@ mod tests {
             ui.end();
         }
         assert_eq!(value, "ab\n");
+    }
+
+    #[test]
+    fn split_pane_updates_ratio_when_dragged() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 400.0, 240.0);
+        let mut ratio = 0.5f32;
+        {
+            let mut input = Input::default();
+            input.on_cursor(200.0, 40.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.split_pane(
+                "main",
+                &mut ratio,
+                180.0,
+                |ui| {
+                    ui.label("left");
+                },
+                |ui| {
+                    ui.label("right");
+                },
+            );
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(120.0, 40.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.split_pane(
+                "main",
+                &mut ratio,
+                180.0,
+                |ui| {
+                    ui.label("left");
+                },
+                |ui| {
+                    ui.label("right");
+                },
+            );
+            assert!(response.changed || (ratio - 0.5).abs() > 0.05);
+            ui.end();
+        }
+        assert!(ratio < 0.45, "ratio={ratio}");
+    }
+
+    #[test]
+    fn slot_click_reports_response() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        {
+            let mut input = Input::default();
+            input.on_cursor(20.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.slot(0u32, 32.0, None, Some(5), false);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(20.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.slot(0u32, 32.0, None, Some(5), true);
+            assert!(response.clicked);
+            ui.end();
+        }
     }
 }
 
