@@ -12,6 +12,7 @@ mod debug;
 mod drag_drop;
 mod fields;
 mod focus;
+mod game_widgets;
 mod id;
 mod inspector;
 mod layout;
@@ -33,6 +34,7 @@ mod widgets;
 pub use accessibility::{AccessNode, AccessTree, Role};
 pub use debug::UiDebug;
 pub use drag_drop::{DragPayload, DragState};
+pub use game_widgets::TreeNode;
 pub use id::WidgetId;
 pub use inspector::UiInspector;
 pub use layout::{Align, Direction, GridState, Insets, Justify, Layout, LayoutCursor, Size};
@@ -1410,6 +1412,85 @@ mod tests {
             assert!(response.clicked);
             ui.end();
         }
+    }
+
+    #[test]
+    fn tree_expands_and_reports_click() {
+        use std::collections::HashSet;
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 400.0);
+        let nodes = vec![TreeNode {
+            id: 1,
+            label: "root".into(),
+            children: vec![TreeNode {
+                id: 2,
+                label: "child".into(),
+                children: vec![],
+            }],
+        }];
+        let mut expanded = HashSet::new();
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.tree("inv", &nodes, &mut expanded);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let clicked = ui.tree("inv", &nodes, &mut expanded);
+            assert_eq!(clicked, Some(1));
+            ui.end();
+        }
+        assert!(expanded.contains(&1));
+    }
+
+    #[test]
+    fn health_bar_and_key_prompt_allocate() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let bar = ui.health_bar(50.0, 100.0, Color::rgb(0.8, 0.2, 0.2));
+        let prompt = ui.key_prompt(Key::E, "交互");
+        assert!(bar.rect.h > 0.0);
+        assert!(prompt.rect.w > 0.0);
+        ui.end();
     }
 }
 
