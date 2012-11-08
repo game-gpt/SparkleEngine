@@ -25,6 +25,7 @@ mod scroll;
 mod select;
 mod state;
 mod style;
+mod table;
 mod text;
 mod text_source;
 mod ui;
@@ -1518,6 +1519,32 @@ mod tests {
         ui.end();
         assert!((a.x - b.x).abs() < 1e-3);
         assert!((a.y - b.y).abs() < 1e-3);
+    }
+
+    #[test]
+    fn table_lays_out_header_and_rows() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 400.0, 300.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let mut cells = 0usize;
+        let response = ui.table("inv", &["名", "数"], 3, 28.0, |ui, row, col| {
+            cells += 1;
+            ui.label(format!("{row}:{col}"));
+        });
+        ui.end();
+        assert_eq!(cells, 6);
+        assert!(response.rect.h > 28.0 * 3.0);
     }
 }
 
