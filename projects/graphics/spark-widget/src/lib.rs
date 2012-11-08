@@ -1492,5 +1492,32 @@ mod tests {
         assert!(prompt.rect.w > 0.0);
         ui.end();
     }
+
+    #[test]
+    fn stack_overlays_children_at_same_origin() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let mut a = Rect::default();
+        let mut b = Rect::default();
+        ui.stack(80.0, |ui| {
+            a = ui.button("A").rect;
+            b = ui.button("B").rect;
+        });
+        ui.end();
+        assert!((a.x - b.x).abs() < 1e-3);
+        assert!((a.y - b.y).abs() < 1e-3);
+    }
 }
 

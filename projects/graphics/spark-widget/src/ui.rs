@@ -235,6 +235,15 @@ impl<'a> Ui<'a> {
         out
     }
 
+    /// 叠放容器：子控件共享同一矩形原点（后画在上）。
+    pub fn stack<R>(&mut self, height: f32, f: impl FnOnce(&mut Self) -> R) -> R {
+        let bounds = self.allocate(height.max(1.0), None);
+        self.layouts.push(LayoutCursor::overlay(bounds));
+        let out = self.scope("stack", f);
+        self.layouts.pop();
+        out
+    }
+
     pub fn with_layout<R>(&mut self, layout: Layout, f: impl FnOnce(&mut Self) -> R) -> R {
         let parent = self.layouts.last().expect("layout stack");
         let bounds = match layout.direction {

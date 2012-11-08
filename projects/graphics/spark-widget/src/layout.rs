@@ -184,6 +184,8 @@ pub struct LayoutCursor {
     pub line_cross: f32,
     /// 网格模式：按列填满后换行。
     pub grid: Option<GridState>,
+    /// 叠放模式：每次分配贴着内容区原点，不推进游标。
+    pub overlay: bool,
 }
 
 /// 等宽列网格状态。
@@ -211,6 +213,7 @@ impl LayoutCursor {
             cursor: Vec2::new(content.x, content.y),
             line_cross: 0.0,
             grid: None,
+            overlay: false,
         }
     }
 
@@ -236,11 +239,24 @@ impl LayoutCursor {
                 index: 0,
                 cell_w,
             }),
+            overlay: false,
         }
+    }
+
+    /// 叠放：子控件共享同一内容原点。
+    pub fn overlay(bounds: Rect) -> Self {
+        let mut cursor = Self::new(bounds, Layout::vertical());
+        cursor.overlay = true;
+        cursor
     }
 
     /// 分配下一块。网格模式下忽略 `main`/`cross`，按单元格推进。
     pub fn allocate(&mut self, main: f32, cross: Option<f32>) -> Rect {
+        if self.overlay {
+            let w = cross.unwrap_or(self.content.w).min(self.content.w).max(0.0);
+            let h = main.max(0.0).min(self.content.h);
+            return Rect::new(self.content.x, self.content.y, w, h);
+        }
         if let Some(grid) = self.grid.as_mut() {
             let col = grid.index % grid.columns;
             let row = grid.index / grid.columns;
