@@ -387,12 +387,49 @@ impl<'a> Ui<'a> {
         if sense_click && self.enabled && pointer_in && self.input.mouse_pressed(MouseBtn::Left) {
             self.state.active = Some(id);
             self.state.request_focus(id, FocusSource::Pointer);
+            // 仅在新一轮按下时记录起点，避免按住期间每帧重置。
+            let already = self
+                .state
+                .press_start
+                .map(|(pid, _)| pid == id)
+                .unwrap_or(false);
+            if !already {
+                self.state.press_start = Some((id, self.time.seconds));
+            }
         }
 
         let clicked = self.enabled
             && self.state.active == Some(id)
             && hovered
             && self.input.mouse_released(MouseBtn::Left);
+
+        let mut double_clicked = false;
+        if clicked {
+            const DOUBLE_CLICK_SECS: f64 = 0.35;
+            if let Some((prev_id, prev_t)) = self.state.last_click {
+                if prev_id == id && (self.time.seconds - prev_t) <= DOUBLE_CLICK_SECS {
+                    double_clicked = true;
+                }
+            }
+            self.state.last_click = Some((id, self.time.seconds));
+            self.state.press_start = None;
+        }
+
+        let mut long_pressed = false;
+        if self.enabled && self.state.active == Some(id) && hovered {
+            if let Some((press_id, start)) = self.state.press_start {
+                if press_id == id
+                    && self.input.mouse_down(MouseBtn::Left)
+                    && (self.time.seconds - start) >= 0.45
+                {
+                    long_pressed = true;
+                }
+            }
+        }
+
+        if self.input.mouse_released(MouseBtn::Left) {
+            self.state.press_start = None;
+        }
 
         if captured && self.input.mouse_released(MouseBtn::Left) {
             self.state.captured = None;
@@ -409,7 +446,8 @@ impl<'a> Ui<'a> {
             focused,
             clicked,
             changed: false,
-            double_clicked: false,
+            double_clicked,
+            long_pressed,
         }
     }
 

@@ -1575,5 +1575,175 @@ mod tests {
         let scroll = state.memory(id).map(|m| m.scroll.x).unwrap_or(0.0);
         assert!(scroll > 0.0, "scroll_x={scroll}");
     }
+
+    #[test]
+    fn interact_reports_double_click() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        // first click
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime {
+                    dt: 1.0 / 60.0,
+                    seconds: 1.0,
+                },
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.button("点");
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime {
+                    dt: 1.0 / 60.0,
+                    seconds: 1.05,
+                },
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.button("点");
+            ui.end();
+        }
+        // second click soon after
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime {
+                    dt: 1.0 / 60.0,
+                    seconds: 1.2,
+                },
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.button("点");
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime {
+                    dt: 1.0 / 60.0,
+                    seconds: 1.25,
+                },
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.button("点");
+            assert!(response.double_clicked, "expected double click");
+            ui.end();
+        }
+    }
+
+    #[test]
+    fn interact_reports_long_press() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime {
+                    dt: 1.0 / 60.0,
+                    seconds: 2.0,
+                },
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.button("按住");
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            // 模拟按住：边沿已过，仅保留 down。
+            input.begin_frame();
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime {
+                    dt: 1.0 / 60.0,
+                    seconds: 2.6,
+                },
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.button("按住");
+            assert!(response.long_pressed);
+            ui.end();
+        }
+    }
+
+    #[test]
+    fn minimap_viewport_allocates() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let response = ui.minimap_viewport(
+            "map",
+            spark_core::Vec2::new(96.0, 96.0),
+            Rect::new(0.0, 0.0, 1000.0, 1000.0),
+            Rect::new(100.0, 200.0, 200.0, 120.0),
+        );
+        assert!((response.rect.w - 96.0).abs() < 1.0);
+        ui.end();
+    }
 }
 

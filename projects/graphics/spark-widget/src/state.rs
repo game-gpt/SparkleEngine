@@ -45,6 +45,10 @@ pub struct UiState {
     pub focus_source: FocusSource,
     /// 指针捕获（拖动滑条等）。被捕获时命中测试优先给它。
     pub captured: Option<WidgetId>,
+    /// 上一次成功点击（用于双击判定）。
+    pub(crate) last_click: Option<(WidgetId, f64)>,
+    /// 当前按下起点（用于长按判定）。
+    pub(crate) press_start: Option<(WidgetId, f64)>,
     pub memory: HashMap<WidgetId, WidgetMemory>,
     pub motion: MotionScheduler,
     pub overlays: OverlayState,

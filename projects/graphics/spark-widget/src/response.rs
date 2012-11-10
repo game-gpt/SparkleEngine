@@ -15,6 +15,7 @@ pub struct Response {
     pub clicked: bool,
     pub changed: bool,
     pub double_clicked: bool,
+    pub long_pressed: bool,
 }
 
 impl Response {
@@ -28,6 +29,7 @@ impl Response {
             clicked: false,
             changed: false,
             double_clicked: false,
+            long_pressed: false,
         }
     }
 
@@ -49,6 +51,14 @@ impl Response {
 
     pub fn changed(self) -> bool {
         self.changed
+    }
+
+    pub fn double_clicked(self) -> bool {
+        self.double_clicked
+    }
+
+    pub fn long_pressed(self) -> bool {
+        self.long_pressed
     }
 
     pub fn with_changed(mut self, changed: bool) -> Self {
