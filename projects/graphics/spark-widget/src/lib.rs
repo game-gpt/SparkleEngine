@@ -21,6 +21,7 @@ mod overlay;
 mod popup;
 mod prefs;
 mod response;
+mod rich_text;
 mod scroll;
 mod select;
 mod state;
@@ -46,6 +47,7 @@ pub use motion::{
 pub use overlay::{OverlayState, ToastEntry};
 pub use prefs::UiPrefs;
 pub use response::Response;
+pub use rich_text::{RichSpan, RichText};
 pub use state::{FocusSource, UiState, WidgetMemory};
 pub use style::{
     ButtonVariant, InteractState, MotionTheme, Spacing, TextTone, Theme, Typography, UiColors,
@@ -1574,6 +1576,30 @@ mod tests {
         ui.end();
         let scroll = state.memory(id).map(|m| m.scroll.x).unwrap_or(0.0);
         assert!(scroll > 0.0, "scroll_x={scroll}");
+    }
+
+    #[test]
+    fn rich_text_draws_spans() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let response = ui.rich_text(|t| {
+            t.span("HP ");
+            t.span("100").color(Color::rgb(1.0, 0.3, 0.3)).strong();
+        });
+        assert!(response.rect.w > 0.0);
+        ui.end();
     }
 
     #[test]
