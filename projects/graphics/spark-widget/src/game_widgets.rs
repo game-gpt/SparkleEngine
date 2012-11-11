@@ -1,6 +1,6 @@
 //! 树形列表与游戏通用 HUD 控件。
 
-use spark_core::{Color, Rect};
+use spark_core::{Color, Rect, Vec2};
 use spark_input::Key;
 
 use crate::accessibility::{AccessNode, Role};
@@ -180,5 +180,75 @@ impl Ui<'_> {
                 .rect(rect),
         );
         Response::empty(id, rect)
+    }
+
+    /// 小地图视口：在固定尺寸框内绘制世界范围与相机框。
+    /// `world` / `camera` 使用同一世界坐标系；点击返回相对世界坐标（可选导航）。
+    pub fn minimap_viewport(
+        &mut self,
+        salt: impl std::hash::Hash,
+        size: Vec2,
+        world: Rect,
+        camera: Rect,
+    ) -> Response {
+        let size = Vec2::new(size.x.max(32.0), size.y.max(32.0));
+        let rect = self.allocate(size.y, Some(size.x));
+        let id = self.id_from(("minimap", salt));
+        self.state.register_focusable(id, rect);
+        let mut response = self.interact(id, rect, true);
+        if self.keyboard_activate(id) {
+            response.clicked = true;
+        }
+
+        self.draw.fill_rect(rect, Color::rgb(0.06, 0.09, 0.14));
+        self.draw.fill_rect(
+            Rect::new(rect.x - 1.0, rect.y - 1.0, rect.w + 2.0, rect.h + 2.0),
+            self.theme.colors.border,
+        );
+
+        let ww = world.w.max(1.0);
+        let wh = world.h.max(1.0);
+        let sx = rect.w / ww;
+        let sy = rect.h / wh;
+        let map_cam = Rect::new(
+            rect.x + (camera.x - world.x) * sx,
+            rect.y + (camera.y - world.y) * sy,
+            (camera.w * sx).max(2.0),
+            (camera.h * sy).max(2.0),
+        );
+        self.draw.fill_rect(
+            map_cam,
+            Color::rgba(
+                self.theme.colors.focus_ring.r,
+                self.theme.colors.focus_ring.g,
+                self.theme.colors.focus_ring.b,
+                0.35,
+            ),
+        );
+        self.draw.fill_rect(
+            Rect::new(map_cam.x, map_cam.y, map_cam.w, 1.0),
+            self.theme.colors.focus_ring,
+        );
+        self.draw.fill_rect(
+            Rect::new(map_cam.x, map_cam.y + map_cam.h - 1.0, map_cam.w, 1.0),
+            self.theme.colors.focus_ring,
+        );
+        self.draw.fill_rect(
+            Rect::new(map_cam.x, map_cam.y, 1.0, map_cam.h),
+            self.theme.colors.focus_ring,
+        );
+        self.draw.fill_rect(
+            Rect::new(map_cam.x + map_cam.w - 1.0, map_cam.y, 1.0, map_cam.h),
+            self.theme.colors.focus_ring,
+        );
+
+        self.access(
+            AccessNode::new(id, Role::Image)
+                .label("minimap")
+                .rect(rect)
+                .focusable(true)
+                .focused(response.focused),
+        );
+        response
     }
 }
