@@ -1771,5 +1771,127 @@ mod tests {
         assert!((response.rect.w - 96.0).abs() < 1.0);
         ui.end();
     }
+
+    #[test]
+    fn list_selects_item_on_click() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut selected = 0usize;
+        let row_h = Theme::default().metrics.row_height;
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, row_h * 1.5);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.list(&["甲", "乙", "丙"], &mut selected);
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, row_h * 1.5);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let response = ui.list(&["甲", "乙", "丙"], &mut selected);
+            assert!(response.changed);
+            ui.end();
+        }
+        assert_eq!(selected, 1);
+    }
+
+    #[test]
+    fn absolute_does_not_advance_parent_cursor() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let input = Input::default();
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime::default(),
+            locale: None,
+            text_measurer: None,
+        });
+        let first = ui.button("一").rect;
+        ui.absolute(Rect::new(200.0, 10.0, 100.0, 80.0), |ui| {
+            let _ = ui.button("浮层");
+        });
+        let second = ui.button("二").rect;
+        ui.end();
+        assert!(second.y > first.y);
+        assert!((second.y - (first.y + first.h)).abs() < Theme::default().spacing.sm + 1.0);
+    }
+
+    #[test]
+    fn disabled_scope_ignores_clicks() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            ui.disabled(|ui| {
+                let _ = ui.button("灰");
+            });
+            ui.end();
+        }
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 20.0);
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+            input.begin_frame();
+            input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let mut clicked = false;
+            ui.disabled(|ui| {
+                clicked = ui.button("灰").clicked;
+            });
+            assert!(!clicked);
+            ui.end();
+        }
+    }
 }
 

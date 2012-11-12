@@ -490,6 +490,20 @@ impl<'a> Ui<'a> {
         out
     }
 
+    /// 禁用作用域：内部控件不响应指针与键盘激活。
+    pub fn disabled<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.with_enabled(false, f)
+    }
+
+    /// 绝对定位区域：在给定矩形内开启新布局，不消耗父级游标。
+    pub fn absolute<R>(&mut self, rect: Rect, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.layouts
+            .push(LayoutCursor::new(rect, Layout::vertical().gap(self.theme.spacing.sm)));
+        let out = self.scope(("absolute", rect.x.to_bits(), rect.y.to_bits()), f);
+        self.layouts.pop();
+        out
+    }
+
     pub fn label(&mut self, text: impl AsRef<str>) -> Response {
         self.label_tone(text, TextTone::Primary)
     }
@@ -726,5 +740,78 @@ impl<'a> Ui<'a> {
             text,
         );
         response
+    }
+
+    /// 可选中列表。返回选中下标是否变化。
+    pub fn list(&mut self, items: &[&str], selected: &mut usize) -> Response {
+        if items.is_empty() {
+            return Response::empty(self.id_from("list_empty"), self.available_rect());
+        }
+        *selected = (*selected).min(items.len() - 1);
+        let list_id = self.id_from("list");
+        let mut changed = false;
+        let mut hovered = false;
+        let mut focused = false;
+        let mut top = None;
+        let mut bottom = None;
+        for (i, item) in items.iter().enumerate() {
+            let height = self.theme.metrics.row_height;
+            let rect = self.allocate(height, None);
+            if top.is_none() {
+                top = Some(rect);
+            }
+            bottom = Some(rect);
+            let id = self.id_from(("list_item", *item, i));
+            self.state.register_focusable(id, rect);
+            let mut response = self.interact(id, rect, true);
+            if self.keyboard_activate(id) {
+                response.clicked = true;
+            }
+            hovered |= response.hovered;
+            focused |= response.focused;
+            if response.clicked && *selected != i {
+                *selected = i;
+                changed = true;
+            }
+            let on = *selected == i;
+            let fill = if on {
+                self.theme.colors.primary_hover
+            } else if response.hovered || response.focused {
+                self.theme.colors.primary
+            } else {
+                Color::rgb(0.08, 0.12, 0.20)
+            };
+            self.draw.fill_rect(rect, fill);
+            self.draw.text(
+                rect.x + 8.0,
+                rect.y + (rect.h - self.theme.typography.label) * 0.5,
+                self.theme.typography.label,
+                self.theme.colors.text,
+                *item,
+            );
+            self.access(
+                AccessNode::new(id, crate::accessibility::Role::ListItem)
+                    .label((*item).to_string())
+                    .rect(rect)
+                    .selected(on)
+                    .focusable(true)
+                    .focused(response.focused),
+            );
+        }
+        let rect = match (top, bottom) {
+            (Some(t), Some(b)) => Rect::new(t.x, t.y, t.w, b.y + b.h - t.y),
+            _ => self.available_rect(),
+        };
+        Response {
+            id: list_id,
+            rect,
+            hovered,
+            active: false,
+            focused,
+            clicked: false,
+            changed,
+            double_clicked: false,
+            long_pressed: false,
+        }
     }
 }
