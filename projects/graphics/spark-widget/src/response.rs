@@ -16,6 +16,8 @@ pub struct Response {
     pub changed: bool,
     pub double_clicked: bool,
     pub long_pressed: bool,
+    pub hover_entered: bool,
+    pub hover_left: bool,
 }
 
 impl Response {
@@ -30,6 +32,8 @@ impl Response {
             changed: false,
             double_clicked: false,
             long_pressed: false,
+            hover_entered: false,
+            hover_left: false,
         }
     }
 
@@ -59,6 +63,14 @@ impl Response {
 
     pub fn long_pressed(self) -> bool {
         self.long_pressed
+    }
+
+    pub fn hover_entered(self) -> bool {
+        self.hover_entered
+    }
+
+    pub fn hover_left(self) -> bool {
+        self.hover_left
     }
 
     pub fn with_changed(mut self, changed: bool) -> Self {

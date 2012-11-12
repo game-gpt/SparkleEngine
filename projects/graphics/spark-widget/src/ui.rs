@@ -437,6 +437,12 @@ impl<'a> Ui<'a> {
 
         let focused = self.state.focused == Some(id);
         let active = self.state.active == Some(id);
+        let was_inside = self
+            .state
+            .memory(id)
+            .map(|m| m.pointer_inside)
+            .unwrap_or(false);
+        self.state.memory_mut(id).pointer_inside = hovered;
 
         Response {
             id,
@@ -448,6 +454,8 @@ impl<'a> Ui<'a> {
             changed: false,
             double_clicked,
             long_pressed,
+            hover_entered: hovered && !was_inside,
+            hover_left: !hovered && was_inside,
         }
     }
 
@@ -812,6 +820,8 @@ impl<'a> Ui<'a> {
             changed,
             double_clicked: false,
             long_pressed: false,
+            hover_entered: false,
+            hover_left: false,
         }
     }
 }

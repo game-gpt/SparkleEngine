@@ -34,6 +34,10 @@ pub struct WidgetMemory {
     pub cursor: usize,
     /// 就地编辑缓冲（数值框等）。
     pub edit_buf: String,
+    /// 上一帧指针是否在控件内。
+    pub pointer_inside: bool,
+    /// 滚动惯性（像素/帧）。
+    pub scroll_vel: Vec2,
 }
 
 /// 所有跨帧状态。由游戏持有，每帧借给 [`crate::Ui`]。

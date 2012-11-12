@@ -202,6 +202,8 @@ impl Ui<'_> {
             changed,
             double_clicked: false,
             long_pressed: false,
+            hover_entered: false,
+            hover_left: false,
         }
     }
 
