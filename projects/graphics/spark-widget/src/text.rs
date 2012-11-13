@@ -142,9 +142,18 @@ impl Ui<'_> {
 
     /// 单行文本输入。值由调用方持有；光标写在 [`crate::WidgetMemory`]。
     pub fn text_field(&mut self, value: &mut String) -> Response {
+        self.text_line("text_field", value, false)
+    }
+
+    /// 密码框：编辑真实字符串，绘制时以圆点遮盖。
+    pub fn password_field(&mut self, value: &mut String) -> Response {
+        self.text_line("password_field", value, true)
+    }
+
+    fn text_line(&mut self, salt: &'static str, value: &mut String, mask: bool) -> Response {
         let height = self.theme.metrics.button_height;
         let rect = self.allocate(height, None);
-        let id = self.id_from("text_field");
+        let id = self.id_from(salt);
         self.state.register_focusable(id, rect);
         let mut response = self.interact(id, rect, true);
         let focused = response.focused;
@@ -203,16 +212,21 @@ impl Ui<'_> {
         self.draw.fill_rect(rect, fill);
         let size = self.theme.typography.label;
         let pad = 8.0;
+        let shown = if mask {
+            "•".repeat(value.chars().count())
+        } else {
+            value.clone()
+        };
         self.draw.text(
             rect.x + pad,
             rect.y + (rect.h - size) * 0.5,
             size,
             self.theme.colors.text,
-            value.as_str(),
+            shown.as_str(),
         );
         if focused {
             let cursor = self.state.memory(id).map(|m| m.cursor).unwrap_or(0);
-            let prefix: String = value.chars().take(cursor).collect();
+            let prefix: String = shown.chars().take(cursor).collect();
             let cx = rect.x + pad + self.measure_width(&prefix, size);
             let blink = ((self.time.seconds * 2.0) as i64) % 2 == 0;
             if blink {
