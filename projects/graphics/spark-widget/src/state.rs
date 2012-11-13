@@ -38,6 +38,8 @@ pub struct WidgetMemory {
     pub pointer_inside: bool,
     /// 滚动惯性（像素/帧）。
     pub scroll_vel: Vec2,
+    /// 连续悬停时长（秒），供 tooltip 延迟。
+    pub hover_secs: f32,
 }
 
 /// 所有跨帧状态。由游戏持有，每帧借给 [`crate::Ui`]。

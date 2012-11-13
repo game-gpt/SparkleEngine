@@ -556,7 +556,10 @@ mod tests {
             state: &mut state,
             theme: Theme::default(),
             viewport,
-            time: UiTime::default(),
+            time: UiTime {
+                dt: 0.5,
+                seconds: 0.5,
+            },
             locale: None,
             text_measurer: None,
         });
@@ -566,6 +569,33 @@ mod tests {
         ui.end();
         assert!(queued);
         assert!(!draw.texts.is_empty());
+    }
+
+    #[test]
+    fn tooltip_waits_before_showing() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 320.0, 240.0);
+        let mut input = Input::default();
+        input.on_cursor(40.0, 20.0);
+        let mut ui = Ui::new(UiBuilder {
+            input: &input,
+            draw: &mut draw,
+            state: &mut state,
+            theme: Theme::default(),
+            viewport,
+            time: UiTime {
+                dt: 0.1,
+                seconds: 0.1,
+            },
+            locale: None,
+            text_measurer: None,
+        });
+        let response = ui.button("提示");
+        ui.tooltip(&response, "稍后");
+        let queued = !ui.state().overlays.queue.is_empty();
+        ui.end();
+        assert!(!queued);
     }
 
     #[test]

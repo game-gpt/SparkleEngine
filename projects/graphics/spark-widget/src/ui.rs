@@ -150,7 +150,20 @@ impl<'a> Ui<'a> {
     }
 
     pub fn tooltip(&mut self, response: &Response, text: impl Into<String>) {
-        if response.hovered {
+        const DELAY: f32 = 0.4;
+        let id = response.id;
+        let hovered = response.hovered;
+        {
+            let mem = self.state.memory_mut(id);
+            if hovered {
+                mem.hover_secs += self.time.dt.max(0.0);
+            } else {
+                mem.hover_secs = 0.0;
+            }
+        }
+        let age = self.state.memory(id).map(|m| m.hover_secs).unwrap_or(0.0);
+        let ready = self.theme.motion.reduced_motion || age >= DELAY;
+        if hovered && ready {
             self.state.overlays.tooltip(response.rect, text);
         }
     }
