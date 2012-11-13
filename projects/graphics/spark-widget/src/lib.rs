@@ -1975,5 +1975,58 @@ mod tests {
         assert!(draw.texts.iter().any(|t| t.text.contains('•')));
         assert!(!draw.texts.iter().any(|t| t.text.contains("secret")));
     }
+
+    #[test]
+    fn scroll_area_keeps_inertia_after_wheel() {
+        let mut state = UiState::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        let viewport = Rect::new(0.0, 0.0, 200.0, 200.0);
+        let scroll_id;
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 40.0);
+            input.on_wheel(-2.0);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let (response, _) = ui.scroll_area("list", 120.0, |ui| {
+                for i in 0..20 {
+                    ui.label(format!("row {i}"));
+                }
+            });
+            scroll_id = response.id;
+            ui.end();
+        }
+        let first = state.memory(scroll_id).map(|m| m.scroll.y).unwrap_or(0.0);
+        {
+            let mut input = Input::default();
+            input.on_cursor(40.0, 40.0);
+            let mut ui = Ui::new(UiBuilder {
+                input: &input,
+                draw: &mut draw,
+                state: &mut state,
+                theme: Theme::default(),
+                viewport,
+                time: UiTime::default(),
+                locale: None,
+                text_measurer: None,
+            });
+            let _ = ui.scroll_area("list", 120.0, |ui| {
+                for i in 0..20 {
+                    ui.label(format!("row {i}"));
+                }
+            });
+            ui.end();
+        }
+        let second = state.memory(scroll_id).map(|m| m.scroll.y).unwrap_or(0.0);
+        assert!(second > first, "first={first} second={second}");
+    }
 }
 

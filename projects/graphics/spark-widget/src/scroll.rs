@@ -38,8 +38,14 @@ impl Ui<'_> {
         {
             let mem = self.state.memory_mut(id);
             if hovering {
-                mem.scroll.y -= self.input.wheel() * 40.0;
+                mem.scroll_vel.y = mem.scroll_vel.y * 0.85 - self.input.wheel() * 40.0;
+            } else {
+                mem.scroll_vel.y *= 0.85;
             }
+            if mem.scroll_vel.y.abs() < 0.5 {
+                mem.scroll_vel.y = 0.0;
+            }
+            mem.scroll.y += mem.scroll_vel.y;
         }
 
         self.draw.fill_rect(viewport, self.theme.colors.panel);
@@ -64,6 +70,12 @@ impl Ui<'_> {
         {
             let mem = self.state.memory_mut(id);
             mem.scroll.y = mem.scroll.y.clamp(0.0, max_scroll);
+            if mem.scroll.y <= 0.0 && mem.scroll_vel.y < 0.0 {
+                mem.scroll_vel.y = 0.0;
+            }
+            if mem.scroll.y >= max_scroll && mem.scroll_vel.y > 0.0 {
+                mem.scroll_vel.y = 0.0;
+            }
             mem.last_rect = Some(viewport);
             mem.f32_value = used;
         }
@@ -96,7 +108,9 @@ impl Ui<'_> {
             }
             if self.state.captured == Some(id) && self.input.mouse_down(MouseBtn::Left) {
                 let rel = ((my - view.y) / view.h).clamp(0.0, 1.0);
-                self.state.memory_mut(id).scroll.y = rel * max_scroll;
+                let mem = self.state.memory_mut(id);
+                mem.scroll.y = rel * max_scroll;
+                mem.scroll_vel.y = 0.0;
             }
             self.draw.fill_rect(thumb, self.theme.colors.knob);
         }
@@ -126,8 +140,14 @@ impl Ui<'_> {
         {
             let mem = self.state.memory_mut(id);
             if hovering {
-                mem.scroll.x -= self.input.wheel() * 40.0;
+                mem.scroll_vel.x = mem.scroll_vel.x * 0.85 - self.input.wheel() * 40.0;
+            } else {
+                mem.scroll_vel.x *= 0.85;
             }
+            if mem.scroll_vel.x.abs() < 0.5 {
+                mem.scroll_vel.x = 0.0;
+            }
+            mem.scroll.x += mem.scroll_vel.x;
         }
 
         self.draw.fill_rect(viewport, self.theme.colors.panel);
@@ -154,6 +174,12 @@ impl Ui<'_> {
         {
             let mem = self.state.memory_mut(id);
             mem.scroll.x = mem.scroll.x.clamp(0.0, max_scroll);
+            if mem.scroll.x <= 0.0 && mem.scroll_vel.x < 0.0 {
+                mem.scroll_vel.x = 0.0;
+            }
+            if mem.scroll.x >= max_scroll && mem.scroll_vel.x > 0.0 {
+                mem.scroll_vel.x = 0.0;
+            }
             mem.last_rect = Some(viewport);
             mem.f32_value = used;
         }
@@ -176,7 +202,9 @@ impl Ui<'_> {
             }
             if self.state.captured == Some(id) && self.input.mouse_down(MouseBtn::Left) {
                 let rel = ((mx - view.x) / view.w).clamp(0.0, 1.0);
-                self.state.memory_mut(id).scroll.x = rel * max_scroll;
+                let mem = self.state.memory_mut(id);
+                mem.scroll.x = rel * max_scroll;
+                mem.scroll_vel.x = 0.0;
             }
             self.draw.fill_rect(thumb, self.theme.colors.knob);
         }
