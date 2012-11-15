@@ -5,8 +5,8 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark Widget 系统：Ui 上下文、布局、主题、动效与基础控件"
-keywords = ["spark", "widget"]
+description = "Spark Retained Widget 系统：WidgetTree、布局、事件、主题与 DrawList paint"
+keywords = ["spark", "widget", "gui"]
 categories = ["game-development", "gui"]
 publish = false
 
@@ -14,5 +14,3 @@ publish = false
 spark-core = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
-spark-localization = { workspace = true }
-spark-debugger = { workspace = true }
