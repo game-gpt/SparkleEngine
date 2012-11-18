@@ -36,9 +36,11 @@ pub use event::{EventContext, UiEvent};
 pub use focus::{FocusManager, FocusPolicy};
 pub use id::WidgetId;
 pub use inspector::UiInspector;
-pub use layout::{Align, Constraints, Insets, Layout, LayoutSpec, Size};
+pub use layout::{
+    Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size,
+};
 pub use motion::{Easing, MotionManager, SpringConfig, Transition};
-pub use node::{WidgetKind, WidgetNode, WidgetStateFlags};
+pub use node::{WidgetContent, WidgetKind, WidgetNode, WidgetStateFlags};
 pub use overlay::{OverlayLayer, OverlayManager};
 pub use paint::PaintContext;
 pub use response::EventResponse;

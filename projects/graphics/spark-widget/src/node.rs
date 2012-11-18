@@ -34,6 +34,12 @@ pub enum WidgetKind {
     Custom,
 }
 
+/// 节点携带的内容数据（文本等）。复杂绑定后续再拆。
+#[derive(Debug, Clone, Default)]
+pub struct WidgetContent {
+    pub text: Option<String>,
+}
+
 /// 交互与选择伪态位。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WidgetStateFlags {
@@ -69,10 +75,24 @@ pub struct WidgetNode {
     pub computed: ComputedLayout,
     pub style: Style,
     pub state: WidgetStateFlags,
+    pub content: WidgetContent,
+    pub focusable: bool,
 }
 
 impl WidgetNode {
     pub fn new(id: WidgetId, kind: WidgetKind) -> Self {
+        let focusable = matches!(
+            kind,
+            WidgetKind::Button
+                | WidgetKind::Toggle
+                | WidgetKind::Checkbox
+                | WidgetKind::Radio
+                | WidgetKind::Slider
+                | WidgetKind::TextField
+                | WidgetKind::TextArea
+                | WidgetKind::ListView
+                | WidgetKind::TabView
+        );
         Self {
             id,
             parent: None,
@@ -83,6 +103,8 @@ impl WidgetNode {
             computed: ComputedLayout::default(),
             style: Style::default(),
             state: WidgetStateFlags::enabled_visible(),
+            content: WidgetContent::default(),
+            focusable,
         }
     }
 }
