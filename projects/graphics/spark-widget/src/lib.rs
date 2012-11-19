@@ -32,8 +32,8 @@ pub mod widgets;
 pub use accessibility::{AccessibilityNode, AccessibilityTree, Role};
 pub use command::{UiCommand, UiCommandQueue};
 pub use drag_drop::{DragPayload, DragState};
-pub use event::{EventContext, UiEvent};
-pub use focus::{FocusManager, FocusPolicy};
+pub use event::{hit_test, EventContext, UiEvent};
+pub use focus::{Direction, FocusManager, FocusPolicy, Neighbors};
 pub use id::WidgetId;
 pub use inspector::UiInspector;
 pub use layout::{

@@ -95,6 +95,11 @@ impl WidgetTree {
             self.unmount(child);
         }
     }
+
+    /// 所有节点 ID（无序）。
+    pub fn ids(&self) -> Vec<WidgetId> {
+        self.nodes.keys().copied().collect()
+    }
 }
 
 #[cfg(test)]

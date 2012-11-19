@@ -51,6 +51,11 @@ impl WidgetBuilder {
         self
     }
 
+    pub fn on_click(mut self, command: crate::command::UiCommand) -> Self {
+        self.content.click_command = Some(command);
+        self
+    }
+
     pub fn focusable(mut self, focusable: bool) -> Self {
         self.focusable = Some(focusable);
         self

@@ -3426,9 +3426,7 @@ name = "spark-widget"
 version = "0.1.0"
 dependencies = [
  "spark-core",
- "spark-debugger",
  "spark-input",
- "spark-localization",
  "spark-renderer",
 ]
 

@@ -2,6 +2,8 @@
 
 pub mod router;
 
+pub use router::hit_test;
+
 use crate::id::WidgetId;
 
 #[derive(Debug, Clone)]
@@ -46,7 +48,7 @@ pub struct TextInputEvent {
     pub text: String,
 }
 
-/// 事件处理上下文（占位）。
+/// 事件处理上下文。
 pub struct EventContext<'a> {
     pub tree: &'a mut crate::tree::WidgetTree,
     pub focus: &'a mut crate::focus::FocusManager,

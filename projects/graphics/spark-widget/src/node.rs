@@ -38,6 +38,7 @@ pub enum WidgetKind {
 #[derive(Debug, Clone, Default)]
 pub struct WidgetContent {
     pub text: Option<String>,
+    pub click_command: Option<crate::command::UiCommand>,
 }
 
 /// 交互与选择伪态位。
@@ -77,6 +78,7 @@ pub struct WidgetNode {
     pub state: WidgetStateFlags,
     pub content: WidgetContent,
     pub focusable: bool,
+    pub neighbors: crate::focus::Neighbors,
 }
 
 impl WidgetNode {
@@ -105,6 +107,7 @@ impl WidgetNode {
             state: WidgetStateFlags::enabled_visible(),
             content: WidgetContent::default(),
             focusable,
+            neighbors: crate::focus::Neighbors::default(),
         }
     }
 }

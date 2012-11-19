@@ -201,12 +201,19 @@ fn resolve_axis_sizes(content: Size2, spec: &LayoutSpec, constraints: Constraint
 
 fn resolve_size(spec: Size, content: f32, max: f32, min: f32) -> f32 {
     let value = match spec {
-        Size::Auto | Size::MinContent | Size::MaxContent => content,
+        // Fill 在 measure 阶段不抢无限空间，arrange 时再伸展。
+        Size::Auto | Size::MinContent | Size::MaxContent | Size::Fill => content,
         Size::Px(v) => v,
-        Size::Percent(p) => max * (p / 100.0),
-        Size::Fill => max,
+        Size::Percent(p) => {
+            if max.is_finite() {
+                max * (p / 100.0)
+            } else {
+                content
+            }
+        }
     };
-    value.clamp(min, max)
+    let upper = if max.is_finite() { max } else { value.max(min) };
+    value.clamp(min, upper)
 }
 
 fn apply_spec_limits(mut constraints: Constraints, spec: &LayoutSpec) -> Constraints {
@@ -279,15 +286,29 @@ fn arrange_flex(tree: &mut WidgetTree, node: &WidgetNode, content: Rect) {
             .node(*child)
             .map(|n| n.computed.desired)
             .unwrap_or_default();
-        let grow = tree
+        let (grow, shrink, main_fill) = tree
             .node(*child)
-            .map(|n| n.layout.flex_grow.max(0.0))
-            .unwrap_or(0.0);
-        let shrink = tree
-            .node(*child)
-            .map(|n| n.layout.flex_shrink.max(0.0))
-            .unwrap_or(0.0);
-        let base_main = if vertical { desired.height } else { desired.width };
+            .map(|n| {
+                let main_fill = if vertical {
+                    matches!(n.layout.height, Size::Fill)
+                } else {
+                    matches!(n.layout.width, Size::Fill)
+                };
+                let grow = if main_fill {
+                    n.layout.flex_grow.max(1.0)
+                } else {
+                    n.layout.flex_grow.max(0.0)
+                };
+                (grow, n.layout.flex_shrink.max(0.0), main_fill)
+            })
+            .unwrap_or((0.0, 0.0, false));
+        let base_main = if main_fill {
+            0.0
+        } else if vertical {
+            desired.height
+        } else {
+            desired.width
+        };
         bases.push((desired, grow, shrink, base_main));
         total_main += base_main;
         total_grow += grow;
@@ -330,16 +351,23 @@ fn arrange_flex(tree: &mut WidgetTree, node: &WidgetNode, content: Rect) {
     for (index, child) in children.iter().enumerate() {
         let desired = bases[index].0;
         let main = mains[index];
+        let child_layout = tree.node(*child).map(|n| n.layout.clone());
         let (child_w, child_h, x, y) = if vertical {
-            let width = match node.layout.align {
-                Align::Stretch => content.w,
+            let width = match (
+                child_layout.as_ref().map(|l| l.width),
+                node.layout.align,
+            ) {
+                (Some(Size::Fill), _) | (_, Align::Stretch) => content.w,
                 _ => desired.width.min(content.w),
             };
             let x = align_cross(content.x, content.w, width, node.layout.align);
             (width, main, x, cursor)
         } else {
-            let height = match node.layout.align {
-                Align::Stretch => content.h,
+            let height = match (
+                child_layout.as_ref().map(|l| l.height),
+                node.layout.align,
+            ) {
+                (Some(Size::Fill), _) | (_, Align::Stretch) => content.h,
                 _ => desired.height.min(content.h),
             };
             let y = align_cross(content.y, content.h, height, node.layout.align);
