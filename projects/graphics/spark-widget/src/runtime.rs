@@ -114,4 +114,30 @@ impl UiRuntime {
     pub fn drain_commands(&mut self) -> impl Iterator<Item = crate::command::UiCommand> + '_ {
         self.commands.drain()
     }
+
+    /// 在根下挂载 overlay，并登记到 [`OverlayManager`]。
+    pub fn open_overlay(
+        &mut self,
+        layer: crate::overlay::OverlayLayer,
+        builder: crate::widgets::WidgetBuilder,
+    ) -> Option<WidgetId> {
+        let root = self.tree.root();
+        let id = builder.mount(&mut self.tree, root)?;
+        self.overlays.push(id, layer);
+        Some(id)
+    }
+
+    pub fn close_overlay(&mut self, id: WidgetId) {
+        self.overlays.remove(id);
+        self.tree.unmount(id);
+    }
+
+    pub fn close_top_overlay(&mut self) -> bool {
+        if let Some(entry) = self.overlays.pop_top() {
+            self.tree.unmount(entry.id);
+            true
+        } else {
+            false
+        }
+    }
 }

@@ -99,6 +99,7 @@ pub struct WidgetNode {
     pub content: WidgetContent,
     pub focusable: bool,
     pub neighbors: crate::focus::Neighbors,
+    pub scroll: crate::scroll::ScrollState,
 }
 
 impl WidgetNode {
@@ -128,6 +129,7 @@ impl WidgetNode {
             content: WidgetContent::default(),
             focusable,
             neighbors: crate::focus::Neighbors::default(),
+            scroll: crate::scroll::ScrollState::default(),
         }
     }
 }

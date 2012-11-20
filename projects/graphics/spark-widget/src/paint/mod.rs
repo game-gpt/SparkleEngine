@@ -23,11 +23,42 @@ fn paint_node(tree: &WidgetTree, theme: &Theme, draw: &mut DrawList, id: crate::
     }
 
     let style = ComputedStyle::resolve_for(theme, node);
+    let is_scroll = node.kind == WidgetKind::ScrollView;
     paint_widget(draw, theme, node, &style);
+
+    if is_scroll {
+        if let Some(clip) = node.computed.clip_rect.or(Some(node.computed.content_rect)) {
+            draw.push_clip(clip);
+        }
+    }
 
     for child in &node.children {
         paint_node(tree, theme, draw, *child);
     }
+
+    if is_scroll {
+        draw.pop_clip();
+        paint_scrollbar(draw, theme, node);
+    }
+}
+
+fn paint_scrollbar(draw: &mut DrawList, theme: &Theme, node: &WidgetNode) {
+    let scroll = &node.scroll;
+    if scroll.content_size.y <= scroll.viewport_size.y + 0.5 {
+        return;
+    }
+    let track = node.computed.content_rect;
+    let bar_w = 6.0;
+    let track_h = track.h.max(1.0);
+    let ratio = (scroll.viewport_size.y / scroll.content_size.y).clamp(0.05, 1.0);
+    let thumb_h = (track_h * ratio).max(12.0);
+    let max_offset = (scroll.content_size.y - scroll.viewport_size.y).max(1.0);
+    let t = (scroll.offset.y / max_offset).clamp(0.0, 1.0);
+    let thumb_y = track.y + (track_h - thumb_h) * t;
+    draw.fill_rect(
+        Rect::new(track.x + track.w - bar_w, thumb_y, bar_w, thumb_h),
+        with_alpha(theme.colors.border, 0.9),
+    );
 }
 
 fn paint_widget(draw: &mut DrawList, theme: &Theme, node: &WidgetNode, style: &ComputedStyle) {

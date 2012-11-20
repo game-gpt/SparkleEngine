@@ -190,6 +190,24 @@ pub fn spacer_widget() -> WidgetBuilder {
     })
 }
 
+pub fn scroll_view() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::ScrollView).layout(LayoutSpec {
+        width: Size::Fill,
+        height: Size::Fill,
+        ..LayoutSpec::vertical()
+    })
+}
+
+pub fn modal_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Modal).layout(LayoutSpec {
+        width: Size::Fill,
+        height: Size::Fill,
+        kind: crate::layout::Layout::Overlay,
+        align: crate::layout::Align::Center,
+        ..LayoutSpec::default()
+    })
+}
+
 pub fn overlay_root() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec::overlay())
 }

@@ -10,7 +10,7 @@ use crate::node::WidgetKind;
 use crate::runtime::{UiFrame, UiRuntime};
 use crate::tree::WidgetTree;
 
-use super::{ClickEvent, PointerEvent, ScrollEvent};
+use super::{ClickEvent, PointerEvent};
 
 /// 将原始输入转为 UI 事件并路由。
 pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
@@ -20,8 +20,14 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
 
     clear_transient_hover(&mut runtime.tree);
 
-    let hit = hit_test(&runtime.tree, runtime.tree.root(), pos);
+    let modal = runtime.overlays.top_modal();
+    let hit_root = modal.unwrap_or_else(|| runtime.tree.root());
+    let hit = hit_test(&runtime.tree, hit_root, pos);
     runtime.state.hovered = hit;
+
+    if modal.is_some() {
+        runtime.state.input_blocked = true;
+    }
 
     if let Some(id) = hit {
         if let Some(node) = runtime.tree.node_mut(id) {
@@ -82,12 +88,13 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
 
     let wheel = input.wheel();
     if wheel.abs() > f32::EPSILON {
-        if let Some(id) = hit {
-            let _ = ScrollEvent {
-                delta: Vec2::new(0.0, wheel),
-                target: Some(id),
-            };
-            // 滚动消费后续由 ScrollView 处理。命中 UI 时先阻断世界。
+        let scroll_id = hit.and_then(|id| crate::scroll::find_scroll_ancestor(&runtime.tree, id));
+        if let Some(id) = scroll_id {
+            if let Some(node) = runtime.tree.node_mut(id) {
+                node.scroll.apply_wheel(wheel * 40.0);
+            }
+            runtime.state.input_blocked = true;
+        } else if hit.is_some() || modal.is_some() {
             runtime.state.input_blocked = true;
         }
     }
@@ -142,7 +149,11 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
     }
 
     if input.key_pressed(Key::Escape) {
-        runtime.commands.push(UiCommand::CloseOverlay);
+        if let Some(entry) = runtime.overlays.pop_top() {
+            runtime.tree.unmount(entry.id);
+        } else {
+            runtime.commands.push(UiCommand::CloseOverlay);
+        }
         runtime.state.input_blocked = true;
     }
 }
@@ -207,8 +218,19 @@ pub fn hit_test(tree: &WidgetTree, id: WidgetId, point: Vec2) -> Option<WidgetId
     if !node.computed.rect.contains(point) {
         return None;
     }
+    // ScrollView 等裁剪区域外的子节点不可命中。
+    if let Some(clip) = node.computed.clip_rect {
+        if node.kind == WidgetKind::ScrollView && !clip.contains(point) {
+            return None;
+        }
+    }
 
     for child in node.children.iter().rev() {
+        if let Some(clip) = node.computed.clip_rect {
+            if node.kind == WidgetKind::ScrollView && !clip.contains(point) {
+                continue;
+            }
+        }
         if let Some(hit) = hit_test(tree, *child, point) {
             return Some(hit);
         }
@@ -399,6 +421,67 @@ mod tests {
         runtime.dispatch_input(&f);
 
         assert!(runtime.tree.node(id).unwrap().content.checked);
+    }
+
+    #[test]
+    fn modal_blocks_hits_outside_and_escape_closes() {
+        use crate::overlay::OverlayLayer;
+        use crate::widgets::modal_widget;
+
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        button_widget()
+            .text("Behind")
+            .on_click(UiCommand::Custom(1))
+            .layout(LayoutSpec {
+                width: Size::Px(80.0),
+                height: Size::Px(40.0),
+                ..LayoutSpec::default()
+            })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        runtime
+            .open_overlay(
+                OverlayLayer::Modal,
+                modal_widget().child(
+                    button_widget()
+                        .text("Modal")
+                        .on_click(UiCommand::Custom(2))
+                        .layout(LayoutSpec {
+                            width: Size::Px(100.0),
+                            height: Size::Px(40.0),
+                            ..LayoutSpec::default()
+                        }),
+                ),
+            )
+            .unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0);
+
+        let behind = runtime.tree.node(root).unwrap().children[0];
+        let behind_center = runtime.tree.node(behind).unwrap().computed.rect.center();
+
+        let mut input = Input::default();
+        input.on_cursor(behind_center.x, behind_center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 400.0, 300.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        input.begin_frame();
+        input.on_cursor(behind_center.x, behind_center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+        let f = frame(&input, 400.0, 300.0);
+        runtime.dispatch_input(&f);
+        assert!(
+            runtime.drain_commands().next().is_none(),
+            "clicks under modal must not reach behind button"
+        );
+        assert!(runtime.state.input_blocked);
+
+        input.begin_frame();
+        input.on_key(Key::Escape, ButtonState::Pressed);
+        let f = frame(&input, 400.0, 300.0);
+        runtime.dispatch_input(&f);
+        assert!(runtime.overlays.is_empty());
     }
 
     #[test]

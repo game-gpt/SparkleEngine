@@ -61,11 +61,57 @@ fn measure(tree: &mut WidgetTree, id: WidgetId, constraints: Constraints) -> Siz
 }
 
 fn measure_content(tree: &mut WidgetTree, node: &WidgetNode, constraints: Constraints) -> Size2 {
+    if node.kind == WidgetKind::ScrollView {
+        return measure_scroll(tree, node, constraints);
+    }
     match node.layout.kind {
         Layout::Flex | Layout::Grid => measure_flex(tree, node, constraints),
         Layout::Overlay | Layout::Stack | Layout::Anchor => measure_overlay(tree, node, constraints),
         Layout::Absolute => measure_absolute(tree, node, constraints),
     }
+}
+
+fn measure_scroll(tree: &mut WidgetTree, node: &WidgetNode, constraints: Constraints) -> Size2 {
+    let children = visible_children(tree, node);
+    let child_constraints = Constraints::loose(Size2::new(f32::INFINITY, f32::INFINITY));
+    let mut content = Size2::default();
+    for child in &children {
+        let size = measure(tree, *child, child_constraints);
+        content.width = content.width.max(size.width);
+        content.height = content.height.max(size.height);
+    }
+    if let Some(n) = tree.node_mut(node.id) {
+        n.scroll.content_size = Vec2::new(content.width, content.height);
+        // viewport / offset clamp 在 arrange 时用真实内容区更新，避免 measure 阶段用父级宽松约束把 offset 清零。
+    }
+    // 视口期望尺寸：优先固定/百分比，否则在约束内取内容大小。
+    let width = match node.layout.width {
+        Size::Px(v) => v,
+        Size::Percent(p) if constraints.max.width.is_finite() => constraints.max.width * (p / 100.0),
+        Size::Fill if constraints.max.width.is_finite() => constraints.max.width,
+        _ => {
+            if constraints.max.width.is_finite() {
+                content.width.min(constraints.max.width)
+            } else {
+                content.width
+            }
+        }
+    };
+    let height = match node.layout.height {
+        Size::Px(v) => v,
+        Size::Percent(p) if constraints.max.height.is_finite() => {
+            constraints.max.height * (p / 100.0)
+        }
+        Size::Fill if constraints.max.height.is_finite() => constraints.max.height,
+        _ => {
+            if constraints.max.height.is_finite() {
+                content.height.min(constraints.max.height)
+            } else {
+                content.height
+            }
+        }
+    };
+    Size2::new(width, height).clamp(constraints)
 }
 
 fn measure_flex(tree: &mut WidgetTree, node: &WidgetNode, constraints: Constraints) -> Size2 {
@@ -263,10 +309,47 @@ fn arrange(tree: &mut WidgetTree, id: WidgetId, rect: Rect) {
         n.computed.clip_rect = Some(border);
     }
 
+    if node.kind == WidgetKind::ScrollView {
+        arrange_scroll(tree, &node, content);
+        return;
+    }
+
     match node.layout.kind {
         Layout::Flex | Layout::Grid => arrange_flex(tree, &node, content),
         Layout::Overlay | Layout::Stack | Layout::Anchor => arrange_overlay(tree, &node, content),
         Layout::Absolute => arrange_absolute(tree, &node, content),
+    }
+}
+
+fn arrange_scroll(tree: &mut WidgetTree, node: &WidgetNode, content: Rect) {
+    let offset = tree
+        .node(node.id)
+        .map(|n| n.scroll.offset)
+        .unwrap_or(Vec2::ZERO);
+    if let Some(n) = tree.node_mut(node.id) {
+        n.scroll.viewport_size = Vec2::new(content.w, content.h);
+        n.computed.clip_rect = Some(content);
+        n.scroll.clamp_offset();
+    }
+    let offset = tree
+        .node(node.id)
+        .map(|n| n.scroll.offset)
+        .unwrap_or(offset);
+    for child in visible_children(tree, node) {
+        let desired = tree
+            .node(child)
+            .map(|n| n.computed.desired)
+            .unwrap_or_default();
+        arrange(
+            tree,
+            child,
+            Rect::new(
+                content.x - offset.x,
+                content.y - offset.y,
+                desired.width.max(content.w),
+                desired.height.max(content.h),
+            ),
+        );
     }
 }
 
@@ -540,5 +623,63 @@ mod tests {
         let rect = tree.node(tree.root()).unwrap().computed.rect;
         assert_eq!(rect.w, 640.0);
         assert_eq!(rect.h, 360.0);
+    }
+
+    #[test]
+    fn scroll_view_offsets_children_and_clips() {
+        use crate::widgets::scroll_view;
+
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let scroll = scroll_view()
+            .layout(LayoutSpec {
+                width: Size::Px(100.0),
+                height: Size::Px(80.0),
+                ..LayoutSpec::vertical()
+            })
+            .child(
+                column()
+                    .layout(LayoutSpec::vertical().with_gap(0.0))
+                    .child(
+                        label_widget()
+                            .text("top")
+                            .layout(LayoutSpec::default().with_height(Size::Px(60.0))),
+                    )
+                    .child(
+                        label_widget()
+                            .text("bottom")
+                            .layout(LayoutSpec::default().with_height(Size::Px(60.0))),
+                    ),
+            )
+            .mount(&mut tree, root)
+            .unwrap();
+
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0);
+        if let Some(node) = tree.node_mut(scroll) {
+            node.scroll.offset.y = 40.0;
+        }
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0);
+
+        let content = tree.node(scroll).unwrap().children[0];
+        let top = tree.node(content).unwrap().children[0];
+        let top_rect = tree.node(top).unwrap().computed.rect;
+        let clip = tree.node(scroll).unwrap().computed.clip_rect.unwrap();
+        let offset_y = tree.node(scroll).unwrap().scroll.offset.y;
+        assert!(
+            (offset_y - 40.0).abs() < 0.01,
+            "scroll offset should remain 40, got {offset_y}"
+        );
+        assert!(
+            (top_rect.y - (clip.y - offset_y)).abs() < 1.0,
+            "top_rect.y={} clip.y={} offset={}",
+            top_rect.y,
+            clip.y,
+            offset_y
+        );
+        assert!(
+            tree.node(scroll).unwrap().scroll.content_size.y >= 120.0,
+            "content should exceed viewport, got {}",
+            tree.node(scroll).unwrap().scroll.content_size.y
+        );
     }
 }

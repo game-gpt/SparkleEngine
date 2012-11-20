@@ -49,8 +49,9 @@ pub use state::UiState;
 pub use style::{ComputedStyle, Style, Theme};
 pub use text::{measure_plain, TextLayout, TextStyle};
 pub use tree::WidgetTree;
+pub use scroll::{find_scroll_ancestor, ScrollDirection, ScrollState};
 pub use widgets::{
-    button_widget, checkbox_widget, column, label_widget, overlay_root, panel, progress_widget,
-    radio_widget, row, separator_widget, slider_widget, spacer_widget, text_field_widget,
-    toggle_widget, WidgetBuilder,
+    button_widget, checkbox_widget, column, label_widget, modal_widget, overlay_root, panel,
+    progress_widget, radio_widget, row, scroll_view, separator_widget, slider_widget,
+    spacer_widget, text_field_widget, toggle_widget, WidgetBuilder,
 };
