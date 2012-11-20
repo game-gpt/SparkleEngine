@@ -170,6 +170,14 @@ fn intrinsic_leaf(node: &WidgetNode, constraints: Constraints) -> Size2 {
             (measured.width + 24.0).max(48.0),
             (measured.height + 12.0).max(32.0),
         ),
+        WidgetKind::Checkbox | WidgetKind::Toggle | WidgetKind::Radio => {
+            Size2::new((measured.width + 18.0 + 8.0).max(24.0), measured.height.max(24.0))
+        }
+        WidgetKind::Slider => Size2::new(constraints.max.width.min(160.0).max(80.0), 24.0),
+        WidgetKind::ProgressBar => Size2::new(constraints.max.width.min(160.0).max(80.0), 12.0),
+        WidgetKind::TextField | WidgetKind::TextArea => {
+            Size2::new(constraints.max.width.min(200.0).max(80.0), 32.0)
+        }
         WidgetKind::Label => measured,
         _ => measured,
     }

@@ -27,6 +27,9 @@ pub struct UiColors {
     pub accent: Color,
     pub danger: Color,
     pub disabled: Color,
+    pub border: Color,
+    pub focus: Color,
+    pub track: Color,
 }
 
 impl Default for UiColors {
@@ -38,6 +41,9 @@ impl Default for UiColors {
             accent: Color::rgb(0.35, 0.65, 0.95),
             danger: Color::rgb(0.90, 0.30, 0.28),
             disabled: Color::rgb(0.45, 0.47, 0.50),
+            border: Color::rgb(0.28, 0.32, 0.38),
+            focus: Color::rgb(0.95, 0.85, 0.35),
+            track: Color::rgb(0.22, 0.24, 0.28),
         }
     }
 }

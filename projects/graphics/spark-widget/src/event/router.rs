@@ -65,7 +65,17 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
     }
 
     if input.mouse_down(MouseBtn::Left) {
-        if runtime.state.captured.is_some() || hit.is_some() {
+        if let Some(id) = runtime.state.captured {
+            if runtime
+                .tree
+                .node(id)
+                .map(|n| n.kind == WidgetKind::Slider)
+                .unwrap_or(false)
+            {
+                set_slider_value_at(&mut runtime.tree, id, pos.x);
+            }
+            runtime.state.input_blocked = true;
+        } else if hit.is_some() {
             runtime.state.input_blocked = true;
         }
     }
@@ -138,6 +148,21 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
 }
 
 fn handle_click(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
+    let kind = runtime.tree.node(id).map(|n| n.kind);
+    match kind {
+        Some(WidgetKind::Checkbox) | Some(WidgetKind::Toggle) => {
+            if let Some(node) = runtime.tree.node_mut(id) {
+                let next = !node.content.checked;
+                node.content.checked = next;
+                node.state.checked = next;
+            }
+        }
+        Some(WidgetKind::Slider) => {
+            set_slider_value_at(&mut runtime.tree, id, pos.x);
+        }
+        _ => {}
+    }
+
     let command = runtime
         .tree
         .node(id)
@@ -149,6 +174,26 @@ fn handle_click(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
         position: pos,
         target: Some(id),
     };
+}
+
+fn set_slider_value_at(tree: &mut WidgetTree, id: WidgetId, x: f32) {
+    let Some(node) = tree.node(id) else {
+        return;
+    };
+    if node.kind != WidgetKind::Slider {
+        return;
+    }
+    let rect = node.computed.content_rect;
+    let t = if rect.w <= f32::EPSILON {
+        0.0
+    } else {
+        ((x - rect.x) / rect.w).clamp(0.0, 1.0)
+    };
+    let min = node.content.value_min;
+    let max = node.content.value_max;
+    if let Some(node) = tree.node_mut(id) {
+        node.content.value = min + (max - min) * t;
+    }
 }
 
 /// 自上而下命中：后挂载的兄弟优先（更靠上）。
@@ -234,7 +279,7 @@ fn sync_focus_flags(tree: &mut WidgetTree, focused: Option<WidgetId>) {
 mod tests {
     use super::*;
     use crate::layout::{run_layout, LayoutSpec, Size};
-    use crate::widgets::{button_widget, column};
+    use crate::widgets::{button_widget, checkbox_widget, column};
     use spark_input::ButtonState;
 
     fn frame<'a>(input: &'a Input, w: f32, h: f32) -> UiFrame<'a> {
@@ -322,6 +367,38 @@ mod tests {
         let commands: Vec<_> = runtime.drain_commands().collect();
         assert!(matches!(commands.as_slice(), [UiCommand::Custom(7)]));
         assert!(runtime.state.input_blocked);
+    }
+
+    #[test]
+    fn checkbox_click_toggles_checked() {
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        checkbox_widget()
+            .text("X")
+            .layout(LayoutSpec {
+                width: Size::Px(120.0),
+                height: Size::Px(28.0),
+                ..LayoutSpec::default()
+            })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        let id = runtime.tree.node(root).unwrap().children[0];
+        let center = runtime.tree.node(id).unwrap().computed.rect.center();
+
+        let mut input = Input::default();
+        input.on_cursor(center.x, center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        input.begin_frame();
+        input.on_cursor(center.x, center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+
+        assert!(runtime.tree.node(id).unwrap().content.checked);
     }
 
     #[test]

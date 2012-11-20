@@ -1,7 +1,7 @@
 //! 声明式控件构建。
 
 use crate::id::WidgetId;
-use crate::layout::{FlexDirection, LayoutSpec};
+use crate::layout::{FlexDirection, LayoutSpec, Size};
 use crate::node::{WidgetContent, WidgetKind};
 use crate::style::Style;
 use crate::tree::WidgetTree;
@@ -56,6 +56,22 @@ impl WidgetBuilder {
         self
     }
 
+    pub fn checked(mut self, checked: bool) -> Self {
+        self.content.checked = checked;
+        self
+    }
+
+    pub fn value(mut self, value: f32) -> Self {
+        self.content.value = value;
+        self
+    }
+
+    pub fn value_range(mut self, min: f32, max: f32) -> Self {
+        self.content.value_min = min;
+        self.content.value_max = max;
+        self
+    }
+
     pub fn focusable(mut self, focusable: bool) -> Self {
         self.focusable = Some(focusable);
         self
@@ -79,6 +95,7 @@ impl WidgetBuilder {
             node.style = self.style;
             node.layout = self.layout;
             node.content = self.content;
+            node.state.checked = node.content.checked;
             if let Some(focusable) = self.focusable {
                 node.focusable = focusable;
             }
@@ -101,12 +118,76 @@ pub fn row() -> WidgetBuilder {
     })
 }
 
+pub fn panel() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Panel).layout(LayoutSpec::vertical())
+}
+
 pub fn label_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Label)
 }
 
 pub fn button_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Button)
+}
+
+pub fn checkbox_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Checkbox).layout(LayoutSpec {
+        height: Size::Px(24.0),
+        ..LayoutSpec::horizontal()
+    })
+}
+
+pub fn toggle_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Toggle).layout(LayoutSpec {
+        height: Size::Px(24.0),
+        ..LayoutSpec::horizontal()
+    })
+}
+
+pub fn radio_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Radio).layout(LayoutSpec {
+        height: Size::Px(24.0),
+        ..LayoutSpec::horizontal()
+    })
+}
+
+pub fn slider_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Slider).layout(LayoutSpec {
+        width: Size::Fill,
+        height: Size::Px(24.0),
+        ..LayoutSpec::horizontal()
+    })
+}
+
+pub fn progress_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::ProgressBar).layout(LayoutSpec {
+        width: Size::Fill,
+        height: Size::Px(12.0),
+        ..LayoutSpec::horizontal()
+    })
+}
+
+pub fn text_field_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::TextField).layout(LayoutSpec {
+        width: Size::Fill,
+        height: Size::Px(32.0),
+        ..LayoutSpec::horizontal()
+    })
+}
+
+pub fn separator_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Separator).layout(LayoutSpec {
+        width: Size::Fill,
+        height: Size::Px(1.0),
+        ..LayoutSpec::default()
+    })
+}
+
+pub fn spacer_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Spacer).layout(LayoutSpec {
+        flex_grow: 1.0,
+        ..LayoutSpec::default()
+    })
 }
 
 pub fn overlay_root() -> WidgetBuilder {

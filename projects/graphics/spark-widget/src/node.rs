@@ -27,6 +27,7 @@ pub enum WidgetKind {
     SplitView,
     Separator,
     Spacer,
+    Panel,
     Tooltip,
     Popup,
     Modal,
@@ -35,10 +36,29 @@ pub enum WidgetKind {
 }
 
 /// 节点携带的内容数据（文本等）。复杂绑定后续再拆。
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct WidgetContent {
     pub text: Option<String>,
     pub click_command: Option<crate::command::UiCommand>,
+    /// Checkbox / Toggle / Radio。
+    pub checked: bool,
+    /// Slider / ProgressBar 当前值。
+    pub value: f32,
+    pub value_min: f32,
+    pub value_max: f32,
+}
+
+impl Default for WidgetContent {
+    fn default() -> Self {
+        Self {
+            text: None,
+            click_command: None,
+            checked: false,
+            value: 0.0,
+            value_min: 0.0,
+            value_max: 1.0,
+        }
+    }
 }
 
 /// 交互与选择伪态位。
