@@ -1,6 +1,10 @@
-//! 文本测量、排版与编辑（占位）。
+//! 文本测量、排版与基础编辑。
 
 use spark_core::{Color, Vec2};
+
+use crate::id::WidgetId;
+use crate::node::WidgetKind;
+use crate::tree::WidgetTree;
 
 /// 文本样式占位。
 #[derive(Debug, Clone)]
@@ -36,5 +40,56 @@ pub fn measure_plain(text: &str, style: &TextStyle, max_width: Option<f32>) -> T
         size: Vec2::new(w, style.size * style.line_height),
         baseline: style.size,
         line_count: 1,
+    }
+}
+
+/// 向聚焦的文本控件追加本帧字符，并处理退格。
+pub fn apply_text_input(tree: &mut WidgetTree, focused: Option<WidgetId>, typed: &str, backspace: bool) -> bool {
+    let Some(id) = focused else {
+        return false;
+    };
+    let is_field = tree
+        .node(id)
+        .map(|n| matches!(n.kind, WidgetKind::TextField | WidgetKind::TextArea))
+        .unwrap_or(false);
+    if !is_field {
+        return false;
+    }
+
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    let mut changed = false;
+    if backspace {
+        let text = node.content.text.get_or_insert_with(String::new);
+        if text.pop().is_some() {
+            changed = true;
+        }
+    }
+    if !typed.is_empty() {
+        let text = node.content.text.get_or_insert_with(String::new);
+        text.push_str(typed);
+        changed = true;
+    }
+    changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::widgets::text_field_widget;
+
+    #[test]
+    fn apply_text_and_backspace() {
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let id = text_field_widget()
+            .text("ab")
+            .mount(&mut tree, root)
+            .unwrap();
+        assert!(apply_text_input(&mut tree, Some(id), "c", false));
+        assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("abc"));
+        assert!(apply_text_input(&mut tree, Some(id), "", true));
+        assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("ab"));
     }
 }

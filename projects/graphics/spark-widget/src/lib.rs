@@ -47,9 +47,9 @@ pub use response::EventResponse;
 pub use runtime::{UiFrame, UiLayer, UiRuntime};
 pub use state::UiState;
 pub use style::{ComputedStyle, Style, Theme};
-pub use text::{measure_plain, TextLayout, TextStyle};
+pub use scroll::{ensure_visible, find_scroll_ancestor, ScrollDirection, ScrollState};
+pub use text::{apply_text_input, measure_plain, TextLayout, TextStyle};
 pub use tree::WidgetTree;
-pub use scroll::{find_scroll_ancestor, ScrollDirection, ScrollState};
 pub use widgets::{
     button_widget, checkbox_widget, column, label_widget, modal_widget, overlay_root, panel,
     progress_widget, radio_widget, row, scroll_view, separator_widget, slider_widget,

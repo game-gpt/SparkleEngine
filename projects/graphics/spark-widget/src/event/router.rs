@@ -46,6 +46,7 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
             }
             if runtime.tree.node(id).map(|n| n.focusable).unwrap_or(false) {
                 focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
+                crate::scroll::ensure_visible(&mut runtime.tree, id);
             }
             runtime.state.input_blocked = true;
         } else {
@@ -109,6 +110,21 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
 
 fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
     let shift = input.key_down(Key::LShift) || input.key_down(Key::RShift);
+    let focused_is_field = runtime
+        .focus
+        .focused
+        .and_then(|id| runtime.tree.node(id))
+        .map(|n| matches!(n.kind, WidgetKind::TextField | WidgetKind::TextArea))
+        .unwrap_or(false);
+
+    if crate::text::apply_text_input(
+        &mut runtime.tree,
+        runtime.focus.focused,
+        input.text(),
+        input.key_pressed(Key::Backspace),
+    ) {
+        runtime.state.input_blocked = true;
+    }
 
     if input.key_pressed(Key::Tab) {
         if shift {
@@ -117,34 +133,52 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
             focus::focus_next(&runtime.tree, &mut runtime.focus);
         }
         sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
-        runtime.state.input_blocked = true;
-    }
-
-    if input.key_pressed(Key::Up) {
-        focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Up);
-        sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
-        runtime.state.input_blocked = true;
-    }
-    if input.key_pressed(Key::Down) {
-        focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Down);
-        sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
-        runtime.state.input_blocked = true;
-    }
-    if input.key_pressed(Key::Left) {
-        focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Left);
-        sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
-        runtime.state.input_blocked = true;
-    }
-    if input.key_pressed(Key::Right) {
-        focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Right);
-        sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
-        runtime.state.input_blocked = true;
-    }
-
-    if input.key_pressed(Key::Enter) || input.key_pressed(Key::Space) {
         if let Some(id) = runtime.focus.focused {
-            handle_click(runtime, id, Vec2::ZERO);
+            crate::scroll::ensure_visible(&mut runtime.tree, id);
+        }
+        runtime.state.input_blocked = true;
+    }
+
+    // 文本框持有焦点时，方向键留给插入符（后续），先不抢导航。
+    if !focused_is_field {
+        if input.key_pressed(Key::Up) {
+            focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Up);
+            sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
+            if let Some(id) = runtime.focus.focused {
+                crate::scroll::ensure_visible(&mut runtime.tree, id);
+            }
             runtime.state.input_blocked = true;
+        }
+        if input.key_pressed(Key::Down) {
+            focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Down);
+            sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
+            if let Some(id) = runtime.focus.focused {
+                crate::scroll::ensure_visible(&mut runtime.tree, id);
+            }
+            runtime.state.input_blocked = true;
+        }
+        if input.key_pressed(Key::Left) {
+            focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Left);
+            sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
+            if let Some(id) = runtime.focus.focused {
+                crate::scroll::ensure_visible(&mut runtime.tree, id);
+            }
+            runtime.state.input_blocked = true;
+        }
+        if input.key_pressed(Key::Right) {
+            focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Right);
+            sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
+            if let Some(id) = runtime.focus.focused {
+                crate::scroll::ensure_visible(&mut runtime.tree, id);
+            }
+            runtime.state.input_blocked = true;
+        }
+
+        if input.key_pressed(Key::Enter) || input.key_pressed(Key::Space) {
+            if let Some(id) = runtime.focus.focused {
+                handle_click(runtime, id, Vec2::ZERO);
+                runtime.state.input_blocked = true;
+            }
         }
     }
 
@@ -166,6 +200,28 @@ fn handle_click(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
                 let next = !node.content.checked;
                 node.content.checked = next;
                 node.state.checked = next;
+            }
+        }
+        Some(WidgetKind::Radio) => {
+            let parent = runtime.tree.node(id).and_then(|n| n.parent);
+            if let Some(parent) = parent {
+                let siblings = runtime
+                    .tree
+                    .node(parent)
+                    .map(|n| n.children.clone())
+                    .unwrap_or_default();
+                for sibling in siblings {
+                    if let Some(node) = runtime.tree.node_mut(sibling) {
+                        if node.kind == WidgetKind::Radio {
+                            let on = sibling == id;
+                            node.content.checked = on;
+                            node.state.checked = on;
+                        }
+                    }
+                }
+            } else if let Some(node) = runtime.tree.node_mut(id) {
+                node.content.checked = true;
+                node.state.checked = true;
             }
         }
         Some(WidgetKind::Slider) => {
@@ -482,6 +538,68 @@ mod tests {
         let f = frame(&input, 400.0, 300.0);
         runtime.dispatch_input(&f);
         assert!(runtime.overlays.is_empty());
+    }
+
+    #[test]
+    fn radio_group_is_exclusive() {
+        use crate::widgets::radio_widget;
+
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        column()
+            .child(radio_widget().text("A").checked(true))
+            .child(radio_widget().text("B"))
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        let group = runtime.tree.node(root).unwrap().children[0];
+        let a = runtime.tree.node(group).unwrap().children[0];
+        let b = runtime.tree.node(group).unwrap().children[1];
+        let center = runtime.tree.node(b).unwrap().computed.rect.center();
+
+        let mut input = Input::default();
+        input.on_cursor(center.x, center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        input.begin_frame();
+        input.on_cursor(center.x, center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+
+        assert!(!runtime.tree.node(a).unwrap().content.checked);
+        assert!(runtime.tree.node(b).unwrap().content.checked);
+    }
+
+    #[test]
+    fn text_field_accepts_typed_chars() {
+        use crate::widgets::text_field_widget;
+
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        let id = text_field_widget()
+            .text("")
+            .layout(LayoutSpec {
+                width: Size::Px(120.0),
+                height: Size::Px(32.0),
+                ..LayoutSpec::default()
+            })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
+
+        let mut input = Input::default();
+        input.on_text("hi");
+        let f = frame(&input, 200.0, 200.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        assert_eq!(
+            runtime.tree.node(id).unwrap().content.text.as_deref(),
+            Some("hi")
+        );
     }
 
     #[test]

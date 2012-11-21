@@ -108,7 +108,7 @@ impl UiRuntime {
     }
 
     pub fn end_frame(&mut self) {
-        // 占位：后续做失效清理、命令提交边界等。
+        self.accessibility.rebuild_from(&self.tree);
     }
 
     pub fn drain_commands(&mut self) -> impl Iterator<Item = crate::command::UiCommand> + '_ {
