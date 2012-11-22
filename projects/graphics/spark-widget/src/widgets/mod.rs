@@ -15,6 +15,7 @@ pub struct WidgetBuilder {
     layout: LayoutSpec,
     content: WidgetContent,
     focusable: Option<bool>,
+    layer: Option<crate::runtime::UiLayer>,
     children: Vec<WidgetBuilder>,
 }
 
@@ -27,6 +28,7 @@ impl WidgetBuilder {
             layout: LayoutSpec::default(),
             content: WidgetContent::default(),
             focusable: None,
+            layer: None,
             children: Vec::new(),
         }
     }
@@ -77,6 +79,11 @@ impl WidgetBuilder {
         self
     }
 
+    pub fn layer(mut self, layer: crate::runtime::UiLayer) -> Self {
+        self.layer = Some(layer);
+        self
+    }
+
     pub fn child(mut self, child: WidgetBuilder) -> Self {
         self.children.push(child);
         self
@@ -89,6 +96,7 @@ impl WidgetBuilder {
 
     /// 挂到 parent 下，返回本节点 ID。
     pub fn mount(self, tree: &mut WidgetTree, parent: WidgetId) -> Option<WidgetId> {
+        let inherited = tree.node(parent).map(|n| n.layer);
         let id = tree.mount(parent, self.kind)?;
         if let Some(node) = tree.node_mut(id) {
             node.key = self.key;
@@ -99,6 +107,7 @@ impl WidgetBuilder {
             if let Some(focusable) = self.focusable {
                 node.focusable = focusable;
             }
+            node.layer = self.layer.or(inherited).unwrap_or(crate::runtime::UiLayer::Gui);
         }
         for child in self.children {
             child.mount(tree, id);
@@ -210,4 +219,16 @@ pub fn modal_widget() -> WidgetBuilder {
 
 pub fn overlay_root() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec::overlay())
+}
+
+/// HUD 场景根：默认 `UiLayer::Hud`，全屏 overlay 布局。
+pub fn hud_root() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Container)
+        .layer(crate::runtime::UiLayer::Hud)
+        .layout(LayoutSpec {
+            width: Size::Fill,
+            height: Size::Fill,
+            kind: crate::layout::Layout::Overlay,
+            ..LayoutSpec::default()
+        })
 }

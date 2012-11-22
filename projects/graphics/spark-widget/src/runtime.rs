@@ -73,14 +73,38 @@ impl UiRuntime {
         self.state.input_blocked = false;
     }
 
-    /// 设置 GUI scene 根（占位：仅记录 ID）。
+    /// 设置 GUI scene 根，并将子树标记为 [`UiLayer::Gui`]。
     pub fn set_scene_root(&mut self, id: WidgetId) {
         self.scene_root = Some(id);
+        mark_layer(&mut self.tree, id, UiLayer::Gui);
     }
 
-    /// 设置 HUD 根（占位：仅记录 ID）。
+    /// 设置 HUD 根，并将子树标记为 [`UiLayer::Hud`]。
     pub fn set_hud_root(&mut self, id: WidgetId) {
         self.hud_root = Some(id);
+        mark_layer(&mut self.tree, id, UiLayer::Hud);
+    }
+
+    /// 挂载 HUD 场景（替换旧 HUD 根）。
+    pub fn mount_hud(&mut self, builder: crate::widgets::WidgetBuilder) -> Option<WidgetId> {
+        if let Some(old) = self.hud_root.take() {
+            self.tree.unmount(old);
+        }
+        let root = self.tree.root();
+        let id = builder.layer(UiLayer::Hud).mount(&mut self.tree, root)?;
+        self.set_hud_root(id);
+        Some(id)
+    }
+
+    /// 挂载 GUI scene（替换旧 scene 根）。
+    pub fn mount_scene(&mut self, builder: crate::widgets::WidgetBuilder) -> Option<WidgetId> {
+        if let Some(old) = self.scene_root.take() {
+            self.tree.unmount(old);
+        }
+        let root = self.tree.root();
+        let id = builder.layer(UiLayer::Gui).mount(&mut self.tree, root)?;
+        self.set_scene_root(id);
+        Some(id)
     }
 
     pub fn scene_root(&self) -> Option<WidgetId> {
@@ -122,7 +146,7 @@ impl UiRuntime {
         builder: crate::widgets::WidgetBuilder,
     ) -> Option<WidgetId> {
         let root = self.tree.root();
-        let id = builder.mount(&mut self.tree, root)?;
+        let id = builder.layer(UiLayer::Overlay).mount(&mut self.tree, root)?;
         self.overlays.push(id, layer);
         Some(id)
     }
@@ -139,5 +163,18 @@ impl UiRuntime {
         } else {
             false
         }
+    }
+}
+
+fn mark_layer(tree: &mut WidgetTree, id: WidgetId, layer: UiLayer) {
+    let children = tree
+        .node(id)
+        .map(|n| n.children.clone())
+        .unwrap_or_default();
+    if let Some(node) = tree.node_mut(id) {
+        node.layer = layer;
+    }
+    for child in children {
+        mark_layer(tree, child, layer);
     }
 }

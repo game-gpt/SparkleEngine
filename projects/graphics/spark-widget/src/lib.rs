@@ -51,7 +51,7 @@ pub use scroll::{ensure_visible, find_scroll_ancestor, ScrollDirection, ScrollSt
 pub use text::{apply_text_input, measure_plain, TextLayout, TextStyle};
 pub use tree::WidgetTree;
 pub use widgets::{
-    button_widget, checkbox_widget, column, label_widget, modal_widget, overlay_root, panel,
-    progress_widget, radio_widget, row, scroll_view, separator_widget, slider_widget,
+    button_widget, checkbox_widget, column, hud_root, label_widget, modal_widget, overlay_root,
+    panel, progress_widget, radio_widget, row, scroll_view, separator_widget, slider_widget,
     spacer_widget, text_field_widget, toggle_widget, WidgetBuilder,
 };

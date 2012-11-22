@@ -100,6 +100,7 @@ pub struct WidgetNode {
     pub focusable: bool,
     pub neighbors: crate::focus::Neighbors,
     pub scroll: crate::scroll::ScrollState,
+    pub layer: crate::runtime::UiLayer,
 }
 
 impl WidgetNode {
@@ -130,6 +131,7 @@ impl WidgetNode {
             focusable,
             neighbors: crate::focus::Neighbors::default(),
             scroll: crate::scroll::ScrollState::default(),
+            layer: crate::runtime::UiLayer::Gui,
         }
     }
 }

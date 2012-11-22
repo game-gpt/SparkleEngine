@@ -39,8 +39,9 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
     }
 
     if input.mouse_pressed(MouseBtn::Left) {
-        runtime.state.captured = hit;
-        if let Some(id) = hit {
+        let capture = hit.filter(|id| consumes_pointer(&runtime.tree, *id));
+        runtime.state.captured = capture;
+        if let Some(id) = capture {
             if let Some(node) = runtime.tree.node_mut(id) {
                 node.state.pressed = true;
             }
@@ -49,7 +50,7 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                 crate::scroll::ensure_visible(&mut runtime.tree, id);
             }
             runtime.state.input_blocked = true;
-        } else {
+        } else if hit.is_none() {
             focus::set_focus(&mut runtime.tree, &mut runtime.focus, None);
         }
     }
@@ -59,7 +60,8 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
         let click_target = match (captured, hit) {
             (Some(c), Some(h)) if c == h => Some(c),
             (Some(c), _) => Some(c),
-            _ => hit,
+            (None, Some(h)) if consumes_pointer(&runtime.tree, h) => Some(h),
+            _ => None,
         };
         if let Some(id) = click_target {
             if let Some(node) = runtime.tree.node_mut(id) {
@@ -82,8 +84,10 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                 set_slider_value_at(&mut runtime.tree, id, pos.x);
             }
             runtime.state.input_blocked = true;
-        } else if hit.is_some() {
-            runtime.state.input_blocked = true;
+        } else if let Some(id) = hit {
+            if consumes_pointer(&runtime.tree, id) {
+                runtime.state.input_blocked = true;
+            }
         }
     }
 
@@ -95,8 +99,12 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                 node.scroll.apply_wheel(wheel * 40.0);
             }
             runtime.state.input_blocked = true;
-        } else if hit.is_some() || modal.is_some() {
+        } else if modal.is_some() {
             runtime.state.input_blocked = true;
+        } else if let Some(id) = hit {
+            if consumes_pointer(&runtime.tree, id) {
+                runtime.state.input_blocked = true;
+            }
         }
     }
 
@@ -297,10 +305,13 @@ pub fn hit_test(tree: &WidgetTree, id: WidgetId, point: Vec2) -> Option<WidgetId
         Some(id)
     } else if node.kind == WidgetKind::Root {
         None
+    } else if node.layer == crate::runtime::UiLayer::Hud {
+        // HUD 非交互区域（标签、面板空白）不吞命中，让世界输入通过。
+        None
     } else if node.children.is_empty() {
         Some(id)
     } else {
-        // 点在容器空白区：仍算命中容器（可阻断 HUD 穿透策略由 layer 决定）。
+        // GUI 容器空白区仍算命中（阻断世界，便于面板遮挡）。
         Some(id)
     }
 }
@@ -323,10 +334,26 @@ fn is_hittable_leaf(kind: WidgetKind) -> bool {
     )
 }
 
+/// 指针事件是否应由该节点消费（从而阻断世界）。
+fn consumes_pointer(tree: &WidgetTree, id: WidgetId) -> bool {
+    let Some(node) = tree.node(id) else {
+        return false;
+    };
+    match node.layer {
+        crate::runtime::UiLayer::Hud => is_hittable_leaf(node.kind) || node.focusable,
+        crate::runtime::UiLayer::Gui | crate::runtime::UiLayer::Overlay => {
+            is_hittable_leaf(node.kind)
+                || node.focusable
+                || matches!(
+                    node.kind,
+                    WidgetKind::Modal | WidgetKind::Popup | WidgetKind::Panel | WidgetKind::Container
+                )
+        }
+    }
+}
+
 fn blocks_world_input(tree: &WidgetTree, id: WidgetId) -> bool {
-    tree.node(id)
-        .map(|n| is_hittable_leaf(n.kind) || n.focusable || n.kind == WidgetKind::Modal)
-        .unwrap_or(false)
+    consumes_pointer(tree, id)
 }
 
 fn clear_transient_hover(tree: &mut WidgetTree) {
@@ -538,6 +565,67 @@ mod tests {
         let f = frame(&input, 400.0, 300.0);
         runtime.dispatch_input(&f);
         assert!(runtime.overlays.is_empty());
+    }
+
+    #[test]
+    fn hud_chrome_does_not_block_world_input() {
+        use crate::runtime::UiLayer;
+        use crate::widgets::{button_widget, column, label_widget};
+
+        let mut runtime = UiRuntime::new();
+        runtime
+            .mount_hud(
+                column()
+                    .layer(UiLayer::Hud)
+                    .layout(LayoutSpec {
+                        width: Size::Px(120.0),
+                        height: Size::Px(100.0),
+                        ..LayoutSpec::vertical().with_gap(8.0)
+                    })
+                    .child(
+                        label_widget()
+                            .text("HP")
+                            .layout(LayoutSpec::default().with_height(Size::Px(24.0))),
+                    )
+                    .child(
+                        button_widget()
+                            .text("Bag")
+                            .on_click(UiCommand::Custom(9))
+                            .layout(LayoutSpec::default().with_height(Size::Px(32.0))),
+                    ),
+            )
+            .unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0);
+
+        let hud = runtime.hud_root().unwrap();
+        assert_eq!(runtime.tree.node(hud).unwrap().layer, UiLayer::Hud);
+        let label = runtime.tree.node(hud).unwrap().children[0];
+        assert_eq!(runtime.tree.node(label).unwrap().layer, UiLayer::Hud);
+        let label_center = runtime.tree.node(label).unwrap().computed.rect.center();
+
+        let mut input = Input::default();
+        input.on_cursor(label_center.x, label_center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 400.0, 300.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        assert!(
+            !runtime.state.input_blocked,
+            "HUD label must not block world input"
+        );
+
+        let bag = runtime.tree.node(hud).unwrap().children[1];
+        let bag_center = runtime.tree.node(bag).unwrap().computed.rect.center();
+        input.begin_frame();
+        input.on_cursor(bag_center.x, bag_center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 400.0, 300.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        assert!(
+            runtime.state.input_blocked,
+            "HUD button should block world input"
+        );
     }
 
     #[test]
