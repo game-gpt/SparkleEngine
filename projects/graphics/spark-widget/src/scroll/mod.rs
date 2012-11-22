@@ -65,7 +65,7 @@ impl ScrollState {
 pub fn find_scroll_ancestor(tree: &WidgetTree, mut id: WidgetId) -> Option<WidgetId> {
     loop {
         let node = tree.node(id)?;
-        if node.kind == WidgetKind::ScrollView {
+        if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView) {
             return Some(id);
         }
         id = node.parent?;

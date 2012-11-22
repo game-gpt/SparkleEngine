@@ -1,5 +1,9 @@
 //! 声明式控件构建。
 
+mod list;
+
+pub use list::{content_height, visible_row_range};
+
 use crate::id::WidgetId;
 use crate::layout::{FlexDirection, LayoutSpec, Size};
 use crate::node::{WidgetContent, WidgetKind};
@@ -207,6 +211,15 @@ pub fn scroll_view() -> WidgetBuilder {
     })
 }
 
+/// 虚拟列表容器：底层是 `ScrollView`，行实例化由调用方按 [`visible_row_range`] 同步。
+pub fn list_view() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::ListView).layout(LayoutSpec {
+        width: Size::Fill,
+        height: Size::Fill,
+        ..LayoutSpec::vertical()
+    })
+}
+
 pub fn modal_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Modal).layout(LayoutSpec {
         width: Size::Fill,
@@ -214,6 +227,24 @@ pub fn modal_widget() -> WidgetBuilder {
         kind: crate::layout::Layout::Overlay,
         align: crate::layout::Align::Center,
         ..LayoutSpec::default()
+    })
+}
+
+pub fn tooltip_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Tooltip).layout(LayoutSpec {
+        width: Size::Auto,
+        height: Size::Auto,
+        padding: crate::layout::Insets::all(8.0),
+        ..LayoutSpec::vertical()
+    })
+}
+
+pub fn popup_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Popup).layout(LayoutSpec {
+        width: Size::Auto,
+        height: Size::Auto,
+        padding: crate::layout::Insets::all(8.0),
+        ..LayoutSpec::vertical()
     })
 }
 

@@ -124,6 +124,12 @@ impl UiRuntime {
     }
 
     pub fn layout(&mut self, frame: &UiFrame<'_>) {
+        self.overlays
+            .position_anchored(&mut self.tree, frame.screen_size);
+        crate::layout::run_layout(&mut self.tree, frame.screen_size, frame.dpi_scale);
+        // 二次定位：measure 后 desired 更准。
+        self.overlays
+            .position_anchored(&mut self.tree, frame.screen_size);
         crate::layout::run_layout(&mut self.tree, frame.screen_size, frame.dpi_scale);
     }
 
@@ -145,10 +151,69 @@ impl UiRuntime {
         layer: crate::overlay::OverlayLayer,
         builder: crate::widgets::WidgetBuilder,
     ) -> Option<WidgetId> {
+        let dismiss_on_outside = matches!(
+            layer,
+            crate::overlay::OverlayLayer::Popup | crate::overlay::OverlayLayer::Tooltip
+        );
+        self.open_overlay_anchored(layer, None, dismiss_on_outside, builder)
+    }
+
+    pub fn open_overlay_anchored(
+        &mut self,
+        layer: crate::overlay::OverlayLayer,
+        anchor: Option<WidgetId>,
+        dismiss_on_outside: bool,
+        builder: crate::widgets::WidgetBuilder,
+    ) -> Option<WidgetId> {
         let root = self.tree.root();
         let id = builder.layer(UiLayer::Overlay).mount(&mut self.tree, root)?;
-        self.overlays.push(id, layer);
+        self.overlays.push_entry(crate::overlay::OverlayEntry {
+            id,
+            layer,
+            anchor,
+            dismiss_on_outside,
+        });
         Some(id)
+    }
+
+    /// 打开贴靠 `anchor` 的 tooltip（替换已有 Tooltip 层）。
+    pub fn show_tooltip(
+        &mut self,
+        anchor: WidgetId,
+        builder: crate::widgets::WidgetBuilder,
+    ) -> Option<WidgetId> {
+        for id in self.overlays.remove_layer(crate::overlay::OverlayLayer::Tooltip) {
+            self.tree.unmount(id);
+        }
+        self.open_overlay_anchored(
+            crate::overlay::OverlayLayer::Tooltip,
+            Some(anchor),
+            false,
+            builder,
+        )
+    }
+
+    /// 打开贴靠 `anchor` 的 popup（点击外部关闭）。
+    pub fn show_popup(
+        &mut self,
+        anchor: WidgetId,
+        builder: crate::widgets::WidgetBuilder,
+    ) -> Option<WidgetId> {
+        for id in self.overlays.remove_layer(crate::overlay::OverlayLayer::Popup) {
+            self.tree.unmount(id);
+        }
+        self.open_overlay_anchored(
+            crate::overlay::OverlayLayer::Popup,
+            Some(anchor),
+            true,
+            builder,
+        )
+    }
+
+    pub fn dismiss_tooltips(&mut self) {
+        for id in self.overlays.remove_layer(crate::overlay::OverlayLayer::Tooltip) {
+            self.tree.unmount(id);
+        }
     }
 
     pub fn close_overlay(&mut self, id: WidgetId) {

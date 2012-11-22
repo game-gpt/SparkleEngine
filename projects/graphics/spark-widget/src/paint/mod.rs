@@ -23,7 +23,7 @@ fn paint_node(tree: &WidgetTree, theme: &Theme, draw: &mut DrawList, id: crate::
     }
 
     let style = ComputedStyle::resolve_for(theme, node);
-    let is_scroll = node.kind == WidgetKind::ScrollView;
+    let is_scroll = matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView);
     paint_widget(draw, theme, node, &style);
 
     if is_scroll {

@@ -39,6 +39,8 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
     }
 
     if input.mouse_pressed(MouseBtn::Left) {
+        dismiss_outside_overlays(runtime, hit);
+
         let capture = hit.filter(|id| consumes_pointer(&runtime.tree, *id));
         runtime.state.captured = capture;
         if let Some(id) = capture {
@@ -284,14 +286,18 @@ pub fn hit_test(tree: &WidgetTree, id: WidgetId, point: Vec2) -> Option<WidgetId
     }
     // ScrollView 等裁剪区域外的子节点不可命中。
     if let Some(clip) = node.computed.clip_rect {
-        if node.kind == WidgetKind::ScrollView && !clip.contains(point) {
+        if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView)
+            && !clip.contains(point)
+        {
             return None;
         }
     }
 
     for child in node.children.iter().rev() {
         if let Some(clip) = node.computed.clip_rect {
-            if node.kind == WidgetKind::ScrollView && !clip.contains(point) {
+            if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView)
+                && !clip.contains(point)
+            {
                 continue;
             }
         }
@@ -354,6 +360,35 @@ fn consumes_pointer(tree: &WidgetTree, id: WidgetId) -> bool {
 
 fn blocks_world_input(tree: &WidgetTree, id: WidgetId) -> bool {
     consumes_pointer(tree, id)
+}
+
+fn dismiss_outside_overlays(runtime: &mut UiRuntime, hit: Option<WidgetId>) {
+    let to_close: Vec<WidgetId> = runtime
+        .overlays
+        .iter()
+        .filter(|e| e.dismiss_on_outside)
+        .filter(|e| match hit {
+            None => true,
+            Some(h) => !is_descendant_or_self(&runtime.tree, e.id, h),
+        })
+        .map(|e| e.id)
+        .collect();
+    for id in to_close {
+        runtime.overlays.remove(id);
+        runtime.tree.unmount(id);
+    }
+}
+
+fn is_descendant_or_self(tree: &WidgetTree, ancestor: WidgetId, mut id: WidgetId) -> bool {
+    loop {
+        if id == ancestor {
+            return true;
+        }
+        let Some(parent) = tree.node(id).and_then(|n| n.parent) else {
+            return false;
+        };
+        id = parent;
+    }
 }
 
 fn clear_transient_hover(tree: &mut WidgetTree) {
@@ -565,6 +600,40 @@ mod tests {
         let f = frame(&input, 400.0, 300.0);
         runtime.dispatch_input(&f);
         assert!(runtime.overlays.is_empty());
+    }
+
+    #[test]
+    fn popup_closes_on_outside_click() {
+        use crate::widgets::{button_widget, label_widget, popup_widget};
+
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        let anchor = button_widget()
+            .text("Menu")
+            .layout(LayoutSpec {
+                width: Size::Px(80.0),
+                height: Size::Px(32.0),
+                ..LayoutSpec::default()
+            })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        runtime
+            .show_popup(
+                anchor,
+                popup_widget().child(label_widget().text("Item")),
+            )
+            .unwrap();
+        assert!(!runtime.overlays.is_empty());
+
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0);
+
+        let mut input = Input::default();
+        input.on_cursor(390.0, 290.0);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 400.0, 300.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        assert!(runtime.overlays.is_empty(), "outside click should dismiss popup");
     }
 
     #[test]

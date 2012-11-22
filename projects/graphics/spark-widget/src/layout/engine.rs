@@ -61,7 +61,7 @@ fn measure(tree: &mut WidgetTree, id: WidgetId, constraints: Constraints) -> Siz
 }
 
 fn measure_content(tree: &mut WidgetTree, node: &WidgetNode, constraints: Constraints) -> Size2 {
-    if node.kind == WidgetKind::ScrollView {
+    if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView) {
         return measure_scroll(tree, node, constraints);
     }
     match node.layout.kind {
@@ -309,7 +309,7 @@ fn arrange(tree: &mut WidgetTree, id: WidgetId, rect: Rect) {
         n.computed.clip_rect = Some(border);
     }
 
-    if node.kind == WidgetKind::ScrollView {
+    if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView) {
         arrange_scroll(tree, &node, content);
         return;
     }
