@@ -1,8 +1,10 @@
 //! 声明式控件构建。
 
 mod list;
+mod tabs;
 
 pub use list::{content_height, sync_visible_rows, visible_row_range};
+pub use tabs::{handle_tab_click, sync_tabs, tab_view};
 
 use crate::id::WidgetId;
 use crate::layout::{FlexDirection, LayoutSpec, Size};
@@ -211,6 +213,10 @@ pub fn spacer_widget() -> WidgetBuilder {
         flex_grow: 1.0,
         ..LayoutSpec::default()
     })
+}
+
+pub fn grid(columns: u32) -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec::grid(columns).with_gap(8.0))
 }
 
 pub fn scroll_view() -> WidgetBuilder {

@@ -65,7 +65,8 @@ fn measure_content(tree: &mut WidgetTree, node: &WidgetNode, constraints: Constr
         return measure_scroll(tree, node, constraints);
     }
     match node.layout.kind {
-        Layout::Flex | Layout::Grid => measure_flex(tree, node, constraints),
+        Layout::Flex => measure_flex(tree, node, constraints),
+        Layout::Grid => measure_grid(tree, node, constraints),
         Layout::Overlay | Layout::Stack | Layout::Anchor => measure_overlay(tree, node, constraints),
         Layout::Absolute => measure_absolute(tree, node, constraints),
     }
@@ -111,6 +112,38 @@ fn measure_scroll(tree: &mut WidgetTree, node: &WidgetNode, constraints: Constra
             }
         }
     };
+    Size2::new(width, height).clamp(constraints)
+}
+
+fn measure_grid(tree: &mut WidgetTree, node: &WidgetNode, constraints: Constraints) -> Size2 {
+    let children = visible_children(tree, node);
+    if children.is_empty() {
+        return intrinsic_leaf(node, constraints);
+    }
+    let columns = node.layout.columns.max(1) as usize;
+    let gap = node.layout.gap;
+    let rows = children.len().div_ceil(columns);
+
+    let cell_max_w = if constraints.max.width.is_finite() {
+        let gaps = gap * (columns.saturating_sub(1) as f32);
+        ((constraints.max.width - gaps) / columns as f32).max(0.0)
+    } else {
+        f32::INFINITY
+    };
+    let child_constraints = Constraints::loose(Size2::new(cell_max_w, f32::INFINITY));
+
+    let mut col_widths = vec![0.0_f32; columns];
+    let mut row_heights = vec![0.0_f32; rows];
+    for (index, child) in children.iter().enumerate() {
+        let size = measure(tree, *child, child_constraints);
+        let col = index % columns;
+        let row = index / columns;
+        col_widths[col] = col_widths[col].max(size.width);
+        row_heights[row] = row_heights[row].max(size.height);
+    }
+
+    let width = col_widths.iter().sum::<f32>() + gap * (columns.saturating_sub(1) as f32);
+    let height = row_heights.iter().sum::<f32>() + gap * (rows.saturating_sub(1) as f32);
     Size2::new(width, height).clamp(constraints)
 }
 
@@ -315,9 +348,77 @@ fn arrange(tree: &mut WidgetTree, id: WidgetId, rect: Rect) {
     }
 
     match node.layout.kind {
-        Layout::Flex | Layout::Grid => arrange_flex(tree, &node, content),
+        Layout::Flex => arrange_flex(tree, &node, content),
+        Layout::Grid => arrange_grid(tree, &node, content),
         Layout::Overlay | Layout::Stack | Layout::Anchor => arrange_overlay(tree, &node, content),
         Layout::Absolute => arrange_absolute(tree, &node, content),
+    }
+}
+
+fn arrange_grid(tree: &mut WidgetTree, node: &WidgetNode, content: Rect) {
+    let children = visible_children(tree, node);
+    if children.is_empty() {
+        return;
+    }
+    let columns = node.layout.columns.max(1) as usize;
+    let gap = node.layout.gap;
+    let rows = children.len().div_ceil(columns);
+
+    let mut col_widths = vec![0.0_f32; columns];
+    let mut row_heights = vec![0.0_f32; rows];
+    for (index, child) in children.iter().enumerate() {
+        let desired = tree
+            .node(*child)
+            .map(|n| n.computed.desired)
+            .unwrap_or_default();
+        let col = index % columns;
+        let row = index / columns;
+        col_widths[col] = col_widths[col].max(desired.width);
+        row_heights[row] = row_heights[row].max(desired.height);
+    }
+
+    let used_w = col_widths.iter().sum::<f32>() + gap * (columns.saturating_sub(1) as f32);
+    let free_w = (content.w - used_w).max(0.0);
+    if free_w > 0.0 && columns > 0 {
+        let add = free_w / columns as f32;
+        for w in &mut col_widths {
+            *w += add;
+        }
+    }
+
+    let mut y = content.y;
+    for row in 0..rows {
+        let mut x = content.x;
+        for col in 0..columns {
+            let index = row * columns + col;
+            if index >= children.len() {
+                break;
+            }
+            let child = children[index];
+            let cell_w = col_widths[col];
+            let cell_h = row_heights[row];
+            let desired = tree
+                .node(child)
+                .map(|n| n.computed.desired)
+                .unwrap_or_default();
+            let width = match tree.node(child).map(|n| n.layout.width) {
+                Some(Size::Fill) => cell_w,
+                _ => desired.width.min(cell_w),
+            };
+            let height = match tree.node(child).map(|n| n.layout.height) {
+                Some(Size::Fill) => cell_h,
+                _ => desired.height.min(cell_h),
+            };
+            let align = tree
+                .node(child)
+                .map(|n| n.layout.align)
+                .unwrap_or(node.layout.align);
+            let child_x = align_cross(x, cell_w, width, align);
+            let child_y = align_cross(y, cell_h, height, align);
+            arrange(tree, child, Rect::new(child_x, child_y, width, height));
+            x += cell_w + gap;
+        }
+        y += row_heights[row] + gap;
     }
 }
 
@@ -623,6 +724,42 @@ mod tests {
         let rect = tree.node(tree.root()).unwrap().computed.rect;
         assert_eq!(rect.w, 640.0);
         assert_eq!(rect.h, 360.0);
+    }
+
+    #[test]
+    fn grid_places_children_in_columns() {
+        use crate::widgets::grid;
+
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let g = grid(2)
+            .layout(LayoutSpec::grid(2).with_gap(10.0).with_width(Size::Px(210.0)))
+            .child(
+                label_widget()
+                    .text("A")
+                    .layout(LayoutSpec::default().with_height(Size::Px(20.0))),
+            )
+            .child(
+                label_widget()
+                    .text("B")
+                    .layout(LayoutSpec::default().with_height(Size::Px(20.0))),
+            )
+            .child(
+                label_widget()
+                    .text("C")
+                    .layout(LayoutSpec::default().with_height(Size::Px(30.0))),
+            )
+            .mount(&mut tree, root)
+            .unwrap();
+        run_layout(&mut tree, Vec2::new(400.0, 400.0), 1.0);
+        let kids = &tree.node(g).unwrap().children;
+        let a = tree.node(kids[0]).unwrap().computed.rect;
+        let b = tree.node(kids[1]).unwrap().computed.rect;
+        let c = tree.node(kids[2]).unwrap().computed.rect;
+        assert!(b.x > a.x + a.w, "B should be in the next column, a={a:?} b={b:?}");
+        assert!((b.y - a.y).abs() < 1.0, "A and B should share a row");
+        assert!(c.y > a.y + a.h - 0.1, "C should be on the next row, a={a:?} c={c:?}");
+        assert!((c.x - a.x).abs() < 1.0, "C should align to first column");
     }
 
     #[test]

@@ -251,6 +251,12 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
 }
 
 fn handle_click(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
+    if let Some(index) = crate::widgets::handle_tab_click(&mut runtime.tree, id) {
+        runtime
+            .inspector
+            .push_trace("tab", Some(id), format!("selected={index}"));
+    }
+
     let kind = runtime.tree.node(id).map(|n| n.kind);
     match kind {
         Some(WidgetKind::Checkbox) | Some(WidgetKind::Toggle) => {

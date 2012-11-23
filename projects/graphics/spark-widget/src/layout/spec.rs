@@ -40,6 +40,8 @@ pub struct LayoutSpec {
     /// Absolute / Anchor 用的局部偏移。
     pub offset_x: f32,
     pub offset_y: f32,
+    /// Grid 列数（`Layout::Grid`）。
+    pub columns: u32,
 }
 
 impl Default for LayoutSpec {
@@ -62,6 +64,7 @@ impl Default for LayoutSpec {
             flex_shrink: 1.0,
             offset_x: 0.0,
             offset_y: 0.0,
+            columns: 1,
         }
     }
 }
@@ -86,6 +89,14 @@ impl LayoutSpec {
     pub fn overlay() -> Self {
         Self {
             kind: Layout::Overlay,
+            ..Self::default()
+        }
+    }
+
+    pub fn grid(columns: u32) -> Self {
+        Self {
+            kind: Layout::Grid,
+            columns: columns.max(1),
             ..Self::default()
         }
     }
