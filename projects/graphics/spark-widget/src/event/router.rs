@@ -103,6 +103,11 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
         if let Some((source, _payload, target)) = runtime.drag.end() {
             if let Some(target) = target {
                 runtime.commands.push(UiCommand::Drop { source, target });
+                runtime.inspector.push_trace(
+                    "drop",
+                    Some(target),
+                    format!("source={}", source.raw()),
+                );
             }
             runtime.state.input_blocked = true;
             runtime.state.captured = None;
@@ -119,8 +124,11 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                 if let Some(node) = runtime.tree.node_mut(id) {
                     node.state.pressed = false;
                 }
-                handle_click(runtime, id, pos);
-                runtime.state.input_blocked = true;
+            handle_click(runtime, id, pos);
+            runtime
+                .inspector
+                .push_trace("click", Some(id), format!("pos=({:.1},{:.1})", pos.x, pos.y));
+            runtime.state.input_blocked = true;
             }
             clear_pressed(&mut runtime.tree);
         } else {

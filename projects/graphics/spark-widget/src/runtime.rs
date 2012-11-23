@@ -10,6 +10,7 @@ use crate::drag_drop::DragState;
 use crate::event::router;
 use crate::focus::FocusManager;
 use crate::id::WidgetId;
+use crate::inspector::UiInspector;
 use crate::motion::MotionManager;
 use crate::overlay::OverlayManager;
 use crate::paint;
@@ -44,6 +45,7 @@ pub struct UiRuntime {
     pub motion: MotionManager,
     pub drag: DragState,
     pub accessibility: AccessibilityTree,
+    pub inspector: UiInspector,
     pub commands: UiCommandQueue,
     /// 单调时间（秒），供 toast TTL 等使用。
     pub time: f32,
@@ -68,6 +70,7 @@ impl UiRuntime {
             motion: MotionManager::default(),
             drag: DragState::default(),
             accessibility: AccessibilityTree::default(),
+            inspector: UiInspector::new(),
             commands: UiCommandQueue::default(),
             time: 0.0,
             scene_root: None,
@@ -127,7 +130,7 @@ impl UiRuntime {
 
     pub fn update(&mut self, dt: f32) {
         self.time += dt;
-        self.motion.tick(dt);
+        self.motion.sync_and_tick(&self.tree, dt);
         for id in self.overlays.tick(dt) {
             self.tree.unmount(id);
         }
@@ -144,7 +147,7 @@ impl UiRuntime {
     }
 
     pub fn paint(&mut self, draw: &mut DrawList) {
-        paint::paint_tree(&self.tree, &self.theme, draw);
+        paint::paint_tree(&self.tree, &self.theme, &self.motion, draw);
     }
 
     pub fn end_frame(&mut self) {

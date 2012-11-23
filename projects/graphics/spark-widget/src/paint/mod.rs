@@ -3,18 +3,30 @@
 use spark_core::{Color, Rect, Vec2};
 use spark_renderer::DrawList;
 
+use crate::motion::{MotionManager, MotionSample};
 use crate::node::{WidgetKind, WidgetNode};
 use crate::style::{ComputedStyle, Theme};
 use crate::text::{self, TextStyle};
 use crate::tree::WidgetTree;
 
 /// 遍历树并写入绘制命令。
-pub fn paint_tree(tree: &WidgetTree, theme: &Theme, draw: &mut DrawList) {
+pub fn paint_tree(
+    tree: &WidgetTree,
+    theme: &Theme,
+    motion: &MotionManager,
+    draw: &mut DrawList,
+) {
     draw.begin_hud();
-    paint_node(tree, theme, draw, tree.root());
+    paint_node(tree, theme, motion, draw, tree.root());
 }
 
-fn paint_node(tree: &WidgetTree, theme: &Theme, draw: &mut DrawList, id: crate::id::WidgetId) {
+fn paint_node(
+    tree: &WidgetTree,
+    theme: &Theme,
+    motion: &MotionManager,
+    draw: &mut DrawList,
+    id: crate::id::WidgetId,
+) {
     let Some(node) = tree.node(id) else {
         return;
     };
@@ -22,9 +34,11 @@ fn paint_node(tree: &WidgetTree, theme: &Theme, draw: &mut DrawList, id: crate::
         return;
     }
 
-    let style = ComputedStyle::resolve_for(theme, node);
+    let mut style = ComputedStyle::resolve_for(theme, node);
+    let sample = motion.sample(id);
+    style.opacity *= sample.opacity;
     let is_scroll = matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView);
-    paint_widget(draw, theme, node, &style);
+    paint_widget(draw, theme, node, &style, sample);
 
     if is_scroll {
         if let Some(clip) = node.computed.clip_rect.or(Some(node.computed.content_rect)) {
@@ -33,7 +47,7 @@ fn paint_node(tree: &WidgetTree, theme: &Theme, draw: &mut DrawList, id: crate::
     }
 
     for child in &node.children {
-        paint_node(tree, theme, draw, *child);
+        paint_node(tree, theme, motion, draw, *child);
     }
 
     if is_scroll {
@@ -61,11 +75,18 @@ fn paint_scrollbar(draw: &mut DrawList, theme: &Theme, node: &WidgetNode) {
     );
 }
 
-fn paint_widget(draw: &mut DrawList, theme: &Theme, node: &WidgetNode, style: &ComputedStyle) {
+fn paint_widget(
+    draw: &mut DrawList,
+    theme: &Theme,
+    node: &WidgetNode,
+    style: &ComputedStyle,
+    sample: MotionSample,
+) {
+    let rect = scaled_rect(node.computed.rect, sample.scale);
     match node.kind {
         WidgetKind::Root | WidgetKind::Spacer => {}
         WidgetKind::Label => paint_label(draw, node, style, theme),
-        WidgetKind::Button => paint_button(draw, node, style, theme),
+        WidgetKind::Button => paint_button(draw, node, style, theme, rect),
         WidgetKind::Checkbox | WidgetKind::Toggle => paint_checkbox(draw, node, style, theme),
         WidgetKind::Radio => paint_radio(draw, node, style, theme),
         WidgetKind::Slider => paint_slider(draw, node, style, theme),
@@ -86,12 +107,23 @@ fn paint_widget(draw: &mut DrawList, theme: &Theme, node: &WidgetNode, style: &C
         | WidgetKind::TreeView
         | WidgetKind::TabView
         | WidgetKind::SplitView => {
-            fill_if_opaque(draw, node.computed.rect, style);
+            fill_if_opaque(draw, rect, style);
             if node.state.focused {
-                stroke_rect(draw, node.computed.rect, with_alpha(style.border, style.opacity), 2.0);
+                stroke_rect(draw, rect, with_alpha(style.border, style.opacity), 2.0);
             }
         }
     }
+}
+
+fn scaled_rect(rect: Rect, scale: f32) -> Rect {
+    if (scale - 1.0).abs() < 0.0001 {
+        return rect;
+    }
+    let cx = rect.x + rect.w * 0.5;
+    let cy = rect.y + rect.h * 0.5;
+    let w = rect.w * scale;
+    let h = rect.h * scale;
+    Rect::new(cx - w * 0.5, cy - h * 0.5, w, h)
 }
 
 fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
@@ -104,10 +136,16 @@ fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, th
     draw.text(rect.x, rect.y + 2.0, size, color, text);
 }
 
-fn paint_button(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
-    fill_if_opaque(draw, node.computed.rect, style);
+fn paint_button(
+    draw: &mut DrawList,
+    node: &WidgetNode,
+    style: &ComputedStyle,
+    theme: &Theme,
+    rect: Rect,
+) {
+    fill_if_opaque(draw, rect, style);
     if node.state.focused {
-        stroke_rect(draw, node.computed.rect, with_alpha(style.border, style.opacity), 2.0);
+        stroke_rect(draw, rect, with_alpha(style.border, style.opacity), 2.0);
     }
     if let Some(text) = node.content.text.as_deref() {
         let size = theme.typography.body_size;
@@ -118,10 +156,10 @@ fn paint_button(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, t
                 color: style.foreground,
                 ..TextStyle::default()
             },
-            Some(node.computed.content_rect.w),
+            Some(rect.w),
         );
-        let x = node.computed.rect.x + ((node.computed.rect.w - measured.size.x) * 0.5).max(0.0);
-        let y = node.computed.rect.y + ((node.computed.rect.h - measured.size.y) * 0.5).max(0.0);
+        let x = rect.x + ((rect.w - measured.size.x) * 0.5).max(0.0);
+        let y = rect.y + ((rect.h - measured.size.y) * 0.5).max(0.0);
         draw.text(x, y, size, with_alpha(style.foreground, style.opacity), text);
     }
 }
@@ -294,8 +332,9 @@ mod tests {
         run_layout(&mut tree, Vec2::new(320.0, 240.0), 1.0);
 
         let theme = Theme::default();
+        let motion = crate::motion::MotionManager::new();
         let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
-        paint_tree(&tree, &theme, &mut draw);
+        paint_tree(&tree, &theme, &motion, &mut draw);
         let total = draw.hud_quads.len() + draw.texts.len() + draw.quads.len();
         assert!(
             total >= 4,

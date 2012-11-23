@@ -35,11 +35,11 @@ pub use drag_drop::{DragPayload, DragState};
 pub use event::{hit_test, EventContext, UiEvent};
 pub use focus::{Direction, FocusManager, FocusPolicy, Neighbors};
 pub use id::WidgetId;
-pub use inspector::UiInspector;
+pub use inspector::{LayoutDump, UiEventTrace, UiInspector};
 pub use layout::{
     Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size,
 };
-pub use motion::{Easing, MotionManager, SpringConfig, Transition};
+pub use motion::{Easing, MotionManager, MotionSample, SpringConfig, StyleProperty, Transition};
 pub use node::{WidgetContent, WidgetKind, WidgetNode, WidgetStateFlags};
 pub use overlay::{OverlayEntry, OverlayLayer, OverlayManager};
 pub use paint::PaintContext;
