@@ -2,7 +2,7 @@
 
 mod list;
 
-pub use list::{content_height, visible_row_range};
+pub use list::{content_height, sync_visible_rows, visible_row_range};
 
 use crate::id::WidgetId;
 use crate::layout::{FlexDirection, LayoutSpec, Size};
@@ -80,6 +80,16 @@ impl WidgetBuilder {
 
     pub fn focusable(mut self, focusable: bool) -> Self {
         self.focusable = Some(focusable);
+        self
+    }
+
+    pub fn drag_source(mut self, enabled: bool) -> Self {
+        self.content.drag_source = enabled;
+        self
+    }
+
+    pub fn drop_target(mut self, enabled: bool) -> Self {
+        self.content.drop_target = enabled;
         self
     }
 
@@ -244,6 +254,15 @@ pub fn popup_widget() -> WidgetBuilder {
         width: Size::Auto,
         height: Size::Auto,
         padding: crate::layout::Insets::all(8.0),
+        ..LayoutSpec::vertical()
+    })
+}
+
+pub fn toast_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Toast).layout(LayoutSpec {
+        width: Size::Auto,
+        height: Size::Auto,
+        padding: crate::layout::Insets::symmetric(16.0, 10.0),
         ..LayoutSpec::vertical()
     })
 }

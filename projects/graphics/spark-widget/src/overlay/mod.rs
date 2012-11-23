@@ -24,6 +24,8 @@ pub struct OverlayEntry {
     /// 锚点控件：定位时贴在其下方（溢出则翻到上方）。
     pub anchor: Option<WidgetId>,
     pub dismiss_on_outside: bool,
+    /// 剩余存活时间（秒）。`None` 表示不自动关闭。
+    pub ttl: Option<f32>,
 }
 
 #[derive(Debug, Default)]
@@ -38,6 +40,7 @@ impl OverlayManager {
             layer,
             anchor: None,
             dismiss_on_outside: matches!(layer, OverlayLayer::Popup),
+            ttl: None,
         });
     }
 
@@ -92,6 +95,23 @@ impl OverlayManager {
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// 推进 TTL，返回到期应关闭的 overlay id。
+    pub fn tick(&mut self, dt: f32) -> Vec<WidgetId> {
+        let mut expired = Vec::new();
+        for entry in &mut self.entries {
+            if let Some(ttl) = entry.ttl.as_mut() {
+                *ttl -= dt;
+                if *ttl <= 0.0 {
+                    expired.push(entry.id);
+                }
+            }
+        }
+        for id in &expired {
+            self.remove(*id);
+        }
+        expired
     }
 
     /// 根据锚点把 Absolute overlay 放到屏幕内。

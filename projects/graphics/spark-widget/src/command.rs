@@ -1,5 +1,7 @@
 //! UI → 游戏命令队列。
 
+use crate::id::WidgetId;
+
 /// 引擎级占位命令。游戏层应定义自己的命令枚举并适配进队列。
 #[derive(Debug, Clone)]
 pub enum UiCommand {
@@ -7,6 +9,11 @@ pub enum UiCommand {
     CloseOverlay,
     /// 自定义载荷（游戏侧解释）。
     Custom(u64),
+    /// 拖放完成：从 `source` 放到 `target`。
+    Drop {
+        source: WidgetId,
+        target: WidgetId,
+    },
 }
 
 #[derive(Debug, Default)]

@@ -53,6 +53,7 @@ pub use tree::WidgetTree;
 pub use widgets::{
     button_widget, checkbox_widget, column, content_height, hud_root, label_widget, list_view,
     modal_widget, overlay_root, panel, popup_widget, progress_widget, radio_widget, row,
-    scroll_view, separator_widget, slider_widget, spacer_widget, text_field_widget,
-    toggle_widget, tooltip_widget, visible_row_range, WidgetBuilder,
+    scroll_view, separator_widget, slider_widget, spacer_widget, sync_visible_rows,
+    text_field_widget, toast_widget, toggle_widget, tooltip_widget, visible_row_range,
+    WidgetBuilder,
 };

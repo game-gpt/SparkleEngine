@@ -42,10 +42,14 @@ pub struct WidgetContent {
     pub click_command: Option<crate::command::UiCommand>,
     /// Checkbox / Toggle / Radio。
     pub checked: bool,
-    /// Slider / ProgressBar 当前值。
+    /// Slider / ProgressBar 当前值。List 行可用作 index。
     pub value: f32,
     pub value_min: f32,
     pub value_max: f32,
+    /// 可作为拖放源。
+    pub drag_source: bool,
+    /// 可作为拖放目标。
+    pub drop_target: bool,
 }
 
 impl Default for WidgetContent {
@@ -57,6 +61,8 @@ impl Default for WidgetContent {
             value: 0.0,
             value_min: 0.0,
             value_max: 1.0,
+            drag_source: false,
+            drop_target: false,
         }
     }
 }

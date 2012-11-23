@@ -51,28 +51,19 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                 focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
                 crate::scroll::ensure_visible(&mut runtime.tree, id);
             }
+            if runtime
+                .tree
+                .node(id)
+                .map(|n| n.content.drag_source)
+                .unwrap_or(false)
+            {
+                runtime.drag.begin_press(id, pos);
+            }
             runtime.state.input_blocked = true;
         } else if hit.is_none() {
             focus::set_focus(&mut runtime.tree, &mut runtime.focus, None);
+            runtime.drag.cancel();
         }
-    }
-
-    if input.mouse_released(MouseBtn::Left) {
-        let captured = runtime.state.captured.take();
-        let click_target = match (captured, hit) {
-            (Some(c), Some(h)) if c == h => Some(c),
-            (Some(c), _) => Some(c),
-            (None, Some(h)) if consumes_pointer(&runtime.tree, h) => Some(h),
-            _ => None,
-        };
-        if let Some(id) = click_target {
-            if let Some(node) = runtime.tree.node_mut(id) {
-                node.state.pressed = false;
-            }
-            handle_click(runtime, id, pos);
-            runtime.state.input_blocked = true;
-        }
-        clear_pressed(&mut runtime.tree);
     }
 
     if input.mouse_down(MouseBtn::Left) {
@@ -85,11 +76,56 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
             {
                 set_slider_value_at(&mut runtime.tree, id, pos.x);
             }
+            let payload = runtime
+                .tree
+                .node(id)
+                .filter(|n| n.content.drag_source)
+                .map(|n| crate::drag_drop::DragPayload::new(n.id.raw()));
+            if runtime.drag.update_move(pos, payload) {
+                runtime.drag.hover_target = hit.filter(|t| {
+                    runtime
+                        .tree
+                        .node(*t)
+                        .map(|n| n.content.drop_target)
+                        .unwrap_or(false)
+                });
+            }
             runtime.state.input_blocked = true;
         } else if let Some(id) = hit {
             if consumes_pointer(&runtime.tree, id) {
                 runtime.state.input_blocked = true;
             }
+        }
+    }
+
+    if input.mouse_released(MouseBtn::Left) {
+        let was_dragging = runtime.drag.is_dragging();
+        if let Some((source, _payload, target)) = runtime.drag.end() {
+            if let Some(target) = target {
+                runtime.commands.push(UiCommand::Drop { source, target });
+            }
+            runtime.state.input_blocked = true;
+            runtime.state.captured = None;
+            clear_pressed(&mut runtime.tree);
+        } else if !was_dragging {
+            let captured = runtime.state.captured.take();
+            let click_target = match (captured, hit) {
+                (Some(c), Some(h)) if c == h => Some(c),
+                (Some(c), _) => Some(c),
+                (None, Some(h)) if consumes_pointer(&runtime.tree, h) => Some(h),
+                _ => None,
+            };
+            if let Some(id) = click_target {
+                if let Some(node) = runtime.tree.node_mut(id) {
+                    node.state.pressed = false;
+                }
+                handle_click(runtime, id, pos);
+                runtime.state.input_blocked = true;
+            }
+            clear_pressed(&mut runtime.tree);
+        } else {
+            runtime.state.captured = None;
+            clear_pressed(&mut runtime.tree);
         }
     }
 
@@ -193,12 +229,16 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
     }
 
     if input.key_pressed(Key::Escape) {
-        if let Some(entry) = runtime.overlays.pop_top() {
+        if runtime.drag.is_dragging() {
+            runtime.drag.cancel();
+            runtime.state.input_blocked = true;
+        } else if let Some(entry) = runtime.overlays.pop_top() {
             runtime.tree.unmount(entry.id);
+            runtime.state.input_blocked = true;
         } else {
             runtime.commands.push(UiCommand::CloseOverlay);
+            runtime.state.input_blocked = true;
         }
-        runtime.state.input_blocked = true;
     }
 }
 
@@ -600,6 +640,104 @@ mod tests {
         let f = frame(&input, 400.0, 300.0);
         runtime.dispatch_input(&f);
         assert!(runtime.overlays.is_empty());
+    }
+
+    #[test]
+    fn toast_expires_after_ttl() {
+        use crate::widgets::toast_widget;
+
+        let mut runtime = UiRuntime::new();
+        runtime
+            .show_toast(toast_widget().text("Saved"), 0.5)
+            .unwrap();
+        assert!(!runtime.overlays.is_empty());
+        runtime.update(0.6);
+        assert!(runtime.overlays.is_empty());
+    }
+
+    #[test]
+    fn drag_drop_emits_command() {
+        use crate::widgets::panel;
+
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        let src = panel()
+            .drag_source(true)
+            .layout(LayoutSpec {
+                width: Size::Px(40.0),
+                height: Size::Px(40.0),
+                ..LayoutSpec::default()
+            })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        let dst = panel()
+            .drop_target(true)
+            .layout(LayoutSpec {
+                width: Size::Px(40.0),
+                height: Size::Px(40.0),
+                offset_x: 80.0,
+                ..LayoutSpec {
+                    kind: crate::layout::Layout::Absolute,
+                    ..LayoutSpec::default()
+                }
+            })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        // Put both under absolute parent for predictable positions.
+        if let Some(node) = runtime.tree.node_mut(root) {
+            node.layout.kind = crate::layout::Layout::Absolute;
+        }
+        if let Some(node) = runtime.tree.node_mut(src) {
+            node.layout.kind = crate::layout::Layout::Absolute;
+            node.layout.offset_x = 0.0;
+            node.layout.offset_y = 0.0;
+        }
+        if let Some(node) = runtime.tree.node_mut(dst) {
+            node.layout.offset_x = 80.0;
+            node.layout.offset_y = 0.0;
+        }
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+
+        let src_c = runtime.tree.node(src).unwrap().computed.rect.center();
+        let dst_c = runtime.tree.node(dst).unwrap().computed.rect.center();
+
+        let mut input = Input::default();
+        input.on_cursor(src_c.x, src_c.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+
+        input.begin_frame();
+        input.on_cursor(src_c.x + 20.0, src_c.y);
+        // keep button down via mouse_down set
+        // Input doesn't expose setting mouse_down directly - use press without begin clearing down
+        // After begin_frame, mouse_down is preserved from previous press until release.
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+
+        input.begin_frame();
+        input.on_cursor(dst_c.x, dst_c.y);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+
+        input.begin_frame();
+        input.on_cursor(dst_c.x, dst_c.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+
+        let commands: Vec<_> = runtime.drain_commands().collect();
+        assert!(
+            matches!(
+                commands.as_slice(),
+                [UiCommand::Drop {
+                    source,
+                    target
+                }] if *source == src && *target == dst
+            ),
+            "expected Drop command, got {commands:?}"
+        );
     }
 
     #[test]

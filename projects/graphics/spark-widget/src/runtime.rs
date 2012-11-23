@@ -6,6 +6,7 @@ use spark_renderer::DrawList;
 
 use crate::accessibility::AccessibilityTree;
 use crate::command::UiCommandQueue;
+use crate::drag_drop::DragState;
 use crate::event::router;
 use crate::focus::FocusManager;
 use crate::id::WidgetId;
@@ -41,8 +42,11 @@ pub struct UiRuntime {
     pub focus: FocusManager,
     pub overlays: OverlayManager,
     pub motion: MotionManager,
+    pub drag: DragState,
     pub accessibility: AccessibilityTree,
     pub commands: UiCommandQueue,
+    /// 单调时间（秒），供 toast TTL 等使用。
+    pub time: f32,
     scene_root: Option<WidgetId>,
     hud_root: Option<WidgetId>,
 }
@@ -62,8 +66,10 @@ impl UiRuntime {
             focus: FocusManager::default(),
             overlays: OverlayManager::default(),
             motion: MotionManager::default(),
+            drag: DragState::default(),
             accessibility: AccessibilityTree::default(),
             commands: UiCommandQueue::default(),
+            time: 0.0,
             scene_root: None,
             hud_root: None,
         }
@@ -120,7 +126,11 @@ impl UiRuntime {
     }
 
     pub fn update(&mut self, dt: f32) {
+        self.time += dt;
         self.motion.tick(dt);
+        for id in self.overlays.tick(dt) {
+            self.tree.unmount(id);
+        }
     }
 
     pub fn layout(&mut self, frame: &UiFrame<'_>) {
@@ -172,6 +182,25 @@ impl UiRuntime {
             layer,
             anchor,
             dismiss_on_outside,
+            ttl: None,
+        });
+        Some(id)
+    }
+
+    /// 打开 toast（默认 2.5s 后自动关闭）。
+    pub fn show_toast(
+        &mut self,
+        builder: crate::widgets::WidgetBuilder,
+        duration_secs: f32,
+    ) -> Option<WidgetId> {
+        let root = self.tree.root();
+        let id = builder.layer(UiLayer::Overlay).mount(&mut self.tree, root)?;
+        self.overlays.push_entry(crate::overlay::OverlayEntry {
+            id,
+            layer: crate::overlay::OverlayLayer::Toast,
+            anchor: None,
+            dismiss_on_outside: false,
+            ttl: Some(duration_secs.max(0.1)),
         });
         Some(id)
     }
