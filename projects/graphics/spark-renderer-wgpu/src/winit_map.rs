@@ -38,6 +38,9 @@ pub fn key(physical: PhysicalKey) -> Option<Key> {
         KeyCode::Space => Key::Space,
         KeyCode::Tab => Key::Tab,
         KeyCode::Backspace => Key::Backspace,
+        KeyCode::Delete => Key::Delete,
+        KeyCode::Home => Key::Home,
+        KeyCode::End => Key::End,
         KeyCode::ArrowLeft => Key::Left,
         KeyCode::ArrowRight => Key::Right,
         KeyCode::ArrowUp => Key::Up,
@@ -92,6 +95,8 @@ pub fn key(physical: PhysicalKey) -> Option<Key> {
         KeyCode::F12 => Key::F12,
         KeyCode::ShiftLeft => Key::LShift,
         KeyCode::ShiftRight => Key::RShift,
+        KeyCode::ControlLeft => Key::LCtrl,
+        KeyCode::ControlRight => Key::RCtrl,
         _ => return None,
     })
 }

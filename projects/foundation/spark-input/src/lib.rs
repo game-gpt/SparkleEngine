@@ -17,6 +17,9 @@ pub enum Key {
     Space,
     Tab,
     Backspace,
+    Delete,
+    Home,
+    End,
     Left,
     Right,
     Up,
@@ -71,6 +74,8 @@ pub enum Key {
     F12,
     LShift,
     RShift,
+    LCtrl,
+    RCtrl,
 }
 
 /// 鼠标按键。
