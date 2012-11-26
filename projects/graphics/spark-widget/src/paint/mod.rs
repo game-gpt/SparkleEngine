@@ -251,15 +251,40 @@ fn paint_text_field(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyl
     let text = node.content.text.as_deref().unwrap_or("");
     let size = theme.typography.body_size;
     let rect = node.computed.content_rect;
+    let text_x = rect.x + 6.0;
+    let text_y = rect.y + ((rect.h - size) * 0.5).max(0.0);
+    let char_w = size * 0.55;
+
+    if let Some(anchor) = node.content.sel_anchor {
+        let cursor = node.content.cursor.min(text.chars().count());
+        let a = anchor.min(text.chars().count());
+        if a != cursor {
+            let (lo, hi) = if a < cursor { (a, cursor) } else { (cursor, a) };
+            let x0 = text_x + lo as f32 * char_w;
+            let x1 = text_x + hi as f32 * char_w;
+            draw.fill_rect(
+                Rect::new(x0, text_y, (x1 - x0).max(1.0), size),
+                with_alpha(theme.colors.accent, style.opacity * 0.35),
+            );
+        }
+    }
+
     draw.text(
-        rect.x + 6.0,
-        rect.y + ((rect.h - size) * 0.5).max(0.0),
+        text_x,
+        text_y,
         size,
         with_alpha(style.foreground, style.opacity),
         text,
     );
+
     if node.state.focused {
         stroke_rect(draw, node.computed.rect, with_alpha(theme.colors.accent, style.opacity), 2.0);
+        let cursor = node.content.cursor.min(text.chars().count());
+        let caret_x = text_x + cursor as f32 * char_w;
+        draw.fill_rect(
+            Rect::new(caret_x, text_y, 1.5, size),
+            with_alpha(theme.colors.accent, style.opacity),
+        );
     }
 }
 
@@ -306,6 +331,7 @@ impl<'a> PaintContext<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::text::EstimateMeasurer;
     use super::*;
     use crate::layout::{run_layout, LayoutSpec, Size};
     use crate::widgets::{button_widget, checkbox_widget, column, label_widget, slider_widget};
@@ -329,7 +355,7 @@ mod tests {
             )
             .mount(&mut tree, root)
             .unwrap();
-        run_layout(&mut tree, Vec2::new(320.0, 240.0), 1.0);
+        run_layout(&mut tree, Vec2::new(320.0, 240.0), 1.0, &mut EstimateMeasurer);
 
         let theme = Theme::default();
         let motion = crate::motion::MotionManager::new();

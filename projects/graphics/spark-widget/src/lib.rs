@@ -33,7 +33,11 @@ pub use accessibility::{AccessibilityNode, AccessibilityTree, Role};
 pub use command::{UiCommand, UiCommandQueue};
 pub use drag_drop::{DragPayload, DragState};
 pub use event::{hit_test, EventContext, UiEvent};
-pub use focus::{Direction, FocusManager, FocusPolicy, Neighbors};
+pub use focus::{
+    collect_focusable, collect_focusable_in, ensure_focus_in_trap, focus_direction,
+    focus_direction_in, focus_next, focus_next_in, focus_previous, focus_previous_in, set_focus,
+    Direction, FocusManager, FocusPolicy, Neighbors,
+};
 pub use id::WidgetId;
 pub use inspector::{LayoutDump, UiEventTrace, UiInspector};
 pub use layout::{
@@ -48,7 +52,10 @@ pub use runtime::{UiFrame, UiLayer, UiRuntime};
 pub use state::UiState;
 pub use style::{ComputedStyle, Style, Theme};
 pub use scroll::{ensure_visible, find_scroll_ancestor, ScrollDirection, ScrollState};
-pub use text::{apply_text_input, measure_plain, TextLayout, TextStyle};
+pub use text::{
+    apply_text_input, measure_plain, EstimateMeasurer, FontMeasurer, TextEditAction, TextLayout,
+    TextMeasurer, TextStyle,
+};
 pub use tree::WidgetTree;
 pub use widgets::{
     button_widget, checkbox_widget, column, content_height, grid, handle_tab_click, hud_root,

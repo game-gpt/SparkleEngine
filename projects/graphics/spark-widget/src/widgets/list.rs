@@ -92,6 +92,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::text::EstimateMeasurer;
     use super::*;
     use crate::layout::{run_layout, LayoutSpec, Size};
     use crate::widgets::{label_widget, list_view};
@@ -122,7 +123,7 @@ mod tests {
             .mount(&mut tree, root)
             .unwrap();
 
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
         let range = sync_visible_rows(&mut tree, list, 100, 20.0, 1, |i| {
             label_widget().text(format!("row-{i}"))
         })
@@ -135,7 +136,7 @@ mod tests {
         if let Some(node) = tree.node_mut(list) {
             node.scroll.offset.y = 200.0;
         }
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
         let range = sync_visible_rows(&mut tree, list, 100, 20.0, 0, |i| {
             label_widget().text(format!("row-{i}"))
         })

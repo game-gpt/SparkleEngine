@@ -16,6 +16,7 @@ use crate::overlay::OverlayManager;
 use crate::paint;
 use crate::state::UiState;
 use crate::style::Theme;
+use crate::text::{EstimateMeasurer, FontMeasurer, TextMeasurer};
 use crate::tree::WidgetTree;
 
 /// GUI / HUD / Overlay 层标记。
@@ -35,7 +36,6 @@ pub struct UiFrame<'a> {
 }
 
 /// 每个窗口或渲染表面一个 UI runtime。
-#[derive(Debug)]
 pub struct UiRuntime {
     pub tree: WidgetTree,
     pub state: UiState,
@@ -49,8 +49,31 @@ pub struct UiRuntime {
     pub commands: UiCommandQueue,
     /// 单调时间（秒），供 toast TTL 等使用。
     pub time: f32,
+    /// 文本测量器（默认尝试系统字体，失败则估算）。
+    pub text_measurer: Box<dyn TextMeasurer>,
     scene_root: Option<WidgetId>,
     hud_root: Option<WidgetId>,
+}
+
+impl std::fmt::Debug for UiRuntime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UiRuntime")
+            .field("tree", &self.tree)
+            .field("state", &self.state)
+            .field("theme", &self.theme)
+            .field("focus", &self.focus)
+            .field("overlays", &self.overlays)
+            .field("motion", &self.motion)
+            .field("drag", &self.drag)
+            .field("accessibility", &self.accessibility)
+            .field("inspector", &self.inspector)
+            .field("commands", &self.commands)
+            .field("time", &self.time)
+            .field("text_measurer", &"<dyn TextMeasurer>")
+            .field("scene_root", &self.scene_root)
+            .field("hud_root", &self.hud_root)
+            .finish()
+    }
 }
 
 impl Default for UiRuntime {
@@ -73,9 +96,15 @@ impl UiRuntime {
             inspector: UiInspector::new(),
             commands: UiCommandQueue::default(),
             time: 0.0,
+            text_measurer: default_text_measurer(),
             scene_root: None,
             hud_root: None,
         }
+    }
+
+    /// 替换文本测量器（测试或自定义字体）。
+    pub fn set_text_measurer(&mut self, measurer: Box<dyn TextMeasurer>) {
+        self.text_measurer = measurer;
     }
 
     pub fn begin_frame(&mut self, _frame: &UiFrame<'_>) {
@@ -139,11 +168,21 @@ impl UiRuntime {
     pub fn layout(&mut self, frame: &UiFrame<'_>) {
         self.overlays
             .position_anchored(&mut self.tree, frame.screen_size);
-        crate::layout::run_layout(&mut self.tree, frame.screen_size, frame.dpi_scale);
+        crate::layout::run_layout(
+            &mut self.tree,
+            frame.screen_size,
+            frame.dpi_scale,
+            self.text_measurer.as_mut(),
+        );
         // 二次定位：measure 后 desired 更准。
         self.overlays
             .position_anchored(&mut self.tree, frame.screen_size);
-        crate::layout::run_layout(&mut self.tree, frame.screen_size, frame.dpi_scale);
+        crate::layout::run_layout(
+            &mut self.tree,
+            frame.screen_size,
+            frame.dpi_scale,
+            self.text_measurer.as_mut(),
+        );
     }
 
     pub fn paint(&mut self, draw: &mut DrawList) {
@@ -187,6 +226,14 @@ impl UiRuntime {
             dismiss_on_outside,
             ttl: None,
         });
+        if layer == crate::overlay::OverlayLayer::Modal {
+            crate::focus::ensure_focus_in_trap(&self.tree, &mut self.focus, id);
+            for node_id in self.tree.ids() {
+                if let Some(node) = self.tree.node_mut(node_id) {
+                    node.state.focused = Some(node_id) == self.focus.focused;
+                }
+            }
+        }
         Some(id)
     }
 
@@ -273,5 +320,13 @@ fn mark_layer(tree: &mut WidgetTree, id: WidgetId, layer: UiLayer) {
     }
     for child in children {
         mark_layer(tree, child, layer);
+    }
+}
+
+fn default_text_measurer() -> Box<dyn TextMeasurer> {
+    if let Some(font) = FontMeasurer::try_system() {
+        Box::new(font)
+    } else {
+        Box::new(EstimateMeasurer)
     }
 }

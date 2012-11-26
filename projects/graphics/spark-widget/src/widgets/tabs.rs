@@ -139,6 +139,7 @@ pub fn handle_tab_click(tree: &mut WidgetTree, clicked: WidgetId) -> Option<usiz
 
 #[cfg(test)]
 mod tests {
+    use crate::text::EstimateMeasurer;
     use super::*;
     use crate::layout::run_layout;
     use crate::widgets::label_widget;
@@ -160,7 +161,7 @@ mod tests {
             ],
         )
         .unwrap();
-        run_layout(&mut tree, Vec2::new(300.0, 200.0), 1.0);
+        run_layout(&mut tree, Vec2::new(300.0, 200.0), 1.0, &mut EstimateMeasurer);
         let pages = tree.node(id).unwrap().children[1];
         let kids = &tree.node(pages).unwrap().children;
         assert!(!tree.node(kids[0]).unwrap().state.visible);
