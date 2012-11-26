@@ -164,6 +164,13 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
 
 fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
     let shift = input.key_down(Key::LShift) || input.key_down(Key::RShift);
+    let ctrl = input.key_down(Key::LCtrl) || input.key_down(Key::RCtrl);
+    let trap = runtime.overlays.top_modal();
+    if let Some(modal) = trap {
+        focus::ensure_focus_in_trap(&runtime.tree, &mut runtime.focus, modal);
+        sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
+    }
+
     let focused_is_field = runtime
         .focus
         .focused
@@ -171,20 +178,45 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         .map(|n| matches!(n.kind, WidgetKind::TextField | WidgetKind::TextArea))
         .unwrap_or(false);
 
+    let mut actions = Vec::new();
+    if focused_is_field {
+        if input.key_pressed(Key::Backspace) {
+            actions.push(crate::text::TextEditAction::Backspace);
+        }
+        if input.key_pressed(Key::Delete) {
+            actions.push(crate::text::TextEditAction::Delete);
+        }
+        if input.key_pressed(Key::Left) {
+            actions.push(crate::text::TextEditAction::MoveLeft { select: shift });
+        }
+        if input.key_pressed(Key::Right) {
+            actions.push(crate::text::TextEditAction::MoveRight { select: shift });
+        }
+        if input.key_pressed(Key::Home) {
+            actions.push(crate::text::TextEditAction::Home { select: shift });
+        }
+        if input.key_pressed(Key::End) {
+            actions.push(crate::text::TextEditAction::End { select: shift });
+        }
+        if ctrl && input.key_pressed(Key::A) {
+            actions.push(crate::text::TextEditAction::SelectAll);
+        }
+    }
+
     if crate::text::apply_text_input(
         &mut runtime.tree,
         runtime.focus.focused,
         input.text(),
-        input.key_pressed(Key::Backspace),
+        &actions,
     ) {
         runtime.state.input_blocked = true;
     }
 
     if input.key_pressed(Key::Tab) {
         if shift {
-            focus::focus_previous(&runtime.tree, &mut runtime.focus);
+            focus::focus_previous_in(&runtime.tree, &mut runtime.focus, trap);
         } else {
-            focus::focus_next(&runtime.tree, &mut runtime.focus);
+            focus::focus_next_in(&runtime.tree, &mut runtime.focus, trap);
         }
         sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
         if let Some(id) = runtime.focus.focused {
@@ -193,10 +225,10 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         runtime.state.input_blocked = true;
     }
 
-    // 文本框持有焦点时，方向键留给插入符（后续），先不抢导航。
+    // 文本框持有焦点时，方向键留给插入符，不抢导航。
     if !focused_is_field {
         if input.key_pressed(Key::Up) {
-            focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Up);
+            focus::focus_direction_in(&runtime.tree, &mut runtime.focus, Direction::Up, trap);
             sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
             if let Some(id) = runtime.focus.focused {
                 crate::scroll::ensure_visible(&mut runtime.tree, id);
@@ -204,7 +236,7 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
             runtime.state.input_blocked = true;
         }
         if input.key_pressed(Key::Down) {
-            focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Down);
+            focus::focus_direction_in(&runtime.tree, &mut runtime.focus, Direction::Down, trap);
             sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
             if let Some(id) = runtime.focus.focused {
                 crate::scroll::ensure_visible(&mut runtime.tree, id);
@@ -212,7 +244,7 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
             runtime.state.input_blocked = true;
         }
         if input.key_pressed(Key::Left) {
-            focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Left);
+            focus::focus_direction_in(&runtime.tree, &mut runtime.focus, Direction::Left, trap);
             sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
             if let Some(id) = runtime.focus.focused {
                 crate::scroll::ensure_visible(&mut runtime.tree, id);
@@ -220,7 +252,7 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
             runtime.state.input_blocked = true;
         }
         if input.key_pressed(Key::Right) {
-            focus::focus_direction(&runtime.tree, &mut runtime.focus, Direction::Right);
+            focus::focus_direction_in(&runtime.tree, &mut runtime.focus, Direction::Right, trap);
             sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
             if let Some(id) = runtime.focus.focused {
                 crate::scroll::ensure_visible(&mut runtime.tree, id);
@@ -471,6 +503,7 @@ fn sync_focus_flags(tree: &mut WidgetTree, focused: Option<WidgetId>) {
 
 #[cfg(test)]
 mod tests {
+    use crate::text::EstimateMeasurer;
     use super::*;
     use crate::layout::{run_layout, LayoutSpec, Size};
     use crate::widgets::{button_widget, checkbox_widget, column};
@@ -519,7 +552,7 @@ mod tests {
             })
             .mount(&mut tree, panel)
             .unwrap();
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
         let point = tree.node(b).unwrap().computed.rect.center();
         let hit = hit_test(&tree, root, point).unwrap();
         assert_eq!(hit, b);
@@ -540,7 +573,7 @@ mod tests {
             })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
 
         let btn = runtime.tree.node(root).unwrap().children[0];
         let center = runtime.tree.node(btn).unwrap().computed.rect.center();
@@ -576,7 +609,7 @@ mod tests {
             })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
         let id = runtime.tree.node(root).unwrap().children[0];
         let center = runtime.tree.node(id).unwrap().computed.rect.center();
 
@@ -627,7 +660,7 @@ mod tests {
                 ),
             )
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0, &mut EstimateMeasurer);
 
         let behind = runtime.tree.node(root).unwrap().children[0];
         let behind_center = runtime.tree.node(behind).unwrap().computed.rect.center();
@@ -710,7 +743,7 @@ mod tests {
             node.layout.offset_x = 80.0;
             node.layout.offset_y = 0.0;
         }
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
 
         let src_c = runtime.tree.node(src).unwrap().computed.rect.center();
         let dst_c = runtime.tree.node(dst).unwrap().computed.rect.center();
@@ -777,7 +810,7 @@ mod tests {
             .unwrap();
         assert!(!runtime.overlays.is_empty());
 
-        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0, &mut EstimateMeasurer);
 
         let mut input = Input::default();
         input.on_cursor(390.0, 290.0);
@@ -816,7 +849,7 @@ mod tests {
                     ),
             )
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0, &mut EstimateMeasurer);
 
         let hud = runtime.hud_root().unwrap();
         assert_eq!(runtime.tree.node(hud).unwrap().layer, UiLayer::Hud);
@@ -860,7 +893,7 @@ mod tests {
             .child(radio_widget().text("B"))
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
         let group = runtime.tree.node(root).unwrap().children[0];
         let a = runtime.tree.node(group).unwrap().children[0];
         let b = runtime.tree.node(group).unwrap().children[1];
@@ -897,7 +930,7 @@ mod tests {
             })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
         focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
 
         let mut input = Input::default();
@@ -909,6 +942,91 @@ mod tests {
             runtime.tree.node(id).unwrap().content.text.as_deref(),
             Some("hi")
         );
+        assert_eq!(runtime.tree.node(id).unwrap().content.cursor, 2);
+
+        input.begin_frame();
+        input.on_key(Key::Left, ButtonState::Pressed);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+        assert_eq!(runtime.tree.node(id).unwrap().content.cursor, 1);
+
+        input.begin_frame();
+        input.on_key(Key::Left, ButtonState::Released);
+        input.begin_frame();
+        input.on_key(Key::Backspace, ButtonState::Pressed);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+        assert_eq!(
+            runtime.tree.node(id).unwrap().content.text.as_deref(),
+            Some("i")
+        );
+    }
+
+    #[test]
+    fn modal_tab_traps_focus_inside() {
+        use crate::overlay::OverlayLayer;
+        use crate::widgets::modal_widget;
+
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        let outside = button_widget()
+            .text("out")
+            .layout(LayoutSpec {
+                width: Size::Px(80.0),
+                height: Size::Px(30.0),
+                ..LayoutSpec::default()
+            })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        runtime
+            .open_overlay(
+                OverlayLayer::Modal,
+                modal_widget().child(
+                    column()
+                        .layout(LayoutSpec {
+                            width: Size::Px(200.0),
+                            height: Size::Px(120.0),
+                            ..LayoutSpec::default()
+                        })
+                        .child(
+                            button_widget().text("a").layout(LayoutSpec {
+                                width: Size::Px(80.0),
+                                height: Size::Px(30.0),
+                                ..LayoutSpec::default()
+                            }),
+                        )
+                        .child(
+                            button_widget().text("b").layout(LayoutSpec {
+                                width: Size::Px(80.0),
+                                height: Size::Px(30.0),
+                                ..LayoutSpec::default()
+                            }),
+                        ),
+                ),
+            )
+            .unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0, &mut EstimateMeasurer);
+
+        let modal = runtime.overlays.top_modal().unwrap();
+        let first = focus::collect_focusable_in(&runtime.tree, modal)[0];
+        assert_eq!(runtime.focus.focused, Some(first));
+        assert_ne!(runtime.focus.focused, Some(outside));
+
+        let mut input = Input::default();
+        input.on_key(Key::Tab, ButtonState::Pressed);
+        let f = frame(&input, 400.0, 300.0);
+        runtime.dispatch_input(&f);
+        let second = runtime.focus.focused.unwrap();
+        assert_ne!(second, first);
+        assert_ne!(second, outside);
+
+        input.begin_frame();
+        input.on_key(Key::Tab, ButtonState::Released);
+        input.begin_frame();
+        input.on_key(Key::Tab, ButtonState::Pressed);
+        let f = frame(&input, 400.0, 300.0);
+        runtime.dispatch_input(&f);
+        assert_eq!(runtime.focus.focused, Some(first));
     }
 
     #[test]
@@ -920,7 +1038,7 @@ mod tests {
             .child(button_widget().text("2").layout(LayoutSpec::default().with_height(Size::Px(30.0))))
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0);
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
 
         let mut input = Input::default();
         input.on_key(Key::Tab, ButtonState::Pressed);

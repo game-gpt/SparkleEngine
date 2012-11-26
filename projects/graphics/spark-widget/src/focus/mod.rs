@@ -53,8 +53,13 @@ impl FocusManager {
 
 /// 收集深度优先、可聚焦且未禁用的节点。
 pub fn collect_focusable(tree: &WidgetTree) -> Vec<WidgetId> {
+    collect_focusable_in(tree, tree.root())
+}
+
+/// 在子树内收集可聚焦节点（用于 modal focus trap）。
+pub fn collect_focusable_in(tree: &WidgetTree, root: WidgetId) -> Vec<WidgetId> {
     let mut out = Vec::new();
-    collect_focusable_rec(tree, tree.root(), &mut out);
+    collect_focusable_rec(tree, root, &mut out);
     out
 }
 
@@ -73,6 +78,33 @@ fn collect_focusable_rec(tree: &WidgetTree, id: WidgetId, out: &mut Vec<WidgetId
     }
 }
 
+/// 若当前焦点不在 `trap_root` 子树内，则落到该子树第一个可聚焦节点。
+pub fn ensure_focus_in_trap(tree: &WidgetTree, focus: &mut FocusManager, trap_root: WidgetId) {
+    let list = collect_focusable_in(tree, trap_root);
+    if list.is_empty() {
+        focus.focused = None;
+        return;
+    }
+    let inside = focus
+        .focused
+        .map(|id| is_descendant_or_self(tree, trap_root, id))
+        .unwrap_or(false);
+    if !inside {
+        focus.focused = Some(list[0]);
+    }
+}
+
+fn is_descendant_or_self(tree: &WidgetTree, root: WidgetId, id: WidgetId) -> bool {
+    let mut cur = Some(id);
+    while let Some(c) = cur {
+        if c == root {
+            return true;
+        }
+        cur = tree.node(c).and_then(|n| n.parent);
+    }
+    false
+}
+
 pub fn set_focus(tree: &mut WidgetTree, focus: &mut FocusManager, id: Option<WidgetId>) {
     focus.focused = id;
     for node_id in tree.ids() {
@@ -82,8 +114,23 @@ pub fn set_focus(tree: &mut WidgetTree, focus: &mut FocusManager, id: Option<Wid
     }
 }
 
+fn focusable_list(tree: &WidgetTree, trap: Option<WidgetId>) -> Vec<WidgetId> {
+    match trap {
+        Some(root) => collect_focusable_in(tree, root),
+        None => collect_focusable(tree),
+    }
+}
+
 pub fn focus_next(tree: &WidgetTree, focus: &mut FocusManager) {
-    let list = collect_focusable(tree);
+    focus_next_in(tree, focus, None);
+}
+
+pub fn focus_previous(tree: &WidgetTree, focus: &mut FocusManager) {
+    focus_previous_in(tree, focus, None);
+}
+
+pub fn focus_next_in(tree: &WidgetTree, focus: &mut FocusManager, trap: Option<WidgetId>) {
+    let list = focusable_list(tree, trap);
     if list.is_empty() {
         focus.focused = None;
         return;
@@ -95,8 +142,8 @@ pub fn focus_next(tree: &WidgetTree, focus: &mut FocusManager) {
     focus.focused = Some(next);
 }
 
-pub fn focus_previous(tree: &WidgetTree, focus: &mut FocusManager) {
-    let list = collect_focusable(tree);
+pub fn focus_previous_in(tree: &WidgetTree, focus: &mut FocusManager, trap: Option<WidgetId>) {
+    let list = focusable_list(tree, trap);
     if list.is_empty() {
         focus.focused = None;
         return;
@@ -109,12 +156,21 @@ pub fn focus_previous(tree: &WidgetTree, focus: &mut FocusManager) {
 }
 
 pub fn focus_direction(tree: &WidgetTree, focus: &mut FocusManager, dir: Direction) {
-    let list = collect_focusable(tree);
+    focus_direction_in(tree, focus, dir, None);
+}
+
+pub fn focus_direction_in(
+    tree: &WidgetTree,
+    focus: &mut FocusManager,
+    dir: Direction,
+    trap: Option<WidgetId>,
+) {
+    let list = focusable_list(tree, trap);
     if list.is_empty() {
         return;
     }
 
-    // 显式邻居优先。
+    // 显式邻居优先（仍须落在 trap 内）。
     if let Some(current) = focus.focused {
         if let Some(node) = tree.node(current) {
             let neighbor = match dir {
@@ -124,7 +180,16 @@ pub fn focus_direction(tree: &WidgetTree, focus: &mut FocusManager, dir: Directi
                 Direction::Right => node.neighbors.right,
             };
             if let Some(id) = neighbor {
-                if tree.node(id).map(|n| n.focusable && !n.state.disabled).unwrap_or(false) {
+                let allowed = match trap {
+                    Some(root) => is_descendant_or_self(tree, root, id),
+                    None => true,
+                };
+                if allowed
+                    && tree
+                        .node(id)
+                        .map(|n| n.focusable && !n.state.disabled)
+                        .unwrap_or(false)
+                {
                     focus.focused = Some(id);
                     return;
                 }
@@ -141,11 +206,11 @@ pub fn focus_direction(tree: &WidgetTree, focus: &mut FocusManager, dir: Directi
     let cur_c = cur_rect.center();
 
     let mut best: Option<(WidgetId, f32)> = None;
-    for id in list {
-        if id == current {
+    for id in &list {
+        if *id == current {
             continue;
         }
-        let Some(rect) = tree.node(id).map(|n| n.computed.rect) else {
+        let Some(rect) = tree.node(*id).map(|n| n.computed.rect) else {
             continue;
         };
         let c = rect.center();
@@ -162,15 +227,60 @@ pub fn focus_direction(tree: &WidgetTree, focus: &mut FocusManager, dir: Directi
         }
         let dist = dx * dx + dy * dy;
         if best.map(|(_, d)| dist < d).unwrap_or(true) {
-            best = Some((id, dist));
+            best = Some((*id, dist));
         }
     }
     if let Some((id, _)) = best {
         focus.focused = Some(id);
     } else {
         match dir {
-            Direction::Down | Direction::Right => focus_next(tree, focus),
-            Direction::Up | Direction::Left => focus_previous(tree, focus),
+            Direction::Down | Direction::Right => focus_next_in(tree, focus, trap),
+            Direction::Up | Direction::Left => focus_previous_in(tree, focus, trap),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout::{LayoutSpec, Size};
+    use crate::widgets::{button_widget, column, modal_widget};
+
+    #[test]
+    fn trap_cycles_only_inside_modal() {
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let outside = button_widget()
+            .text("out")
+            .mount(&mut tree, root)
+            .unwrap();
+        let modal = modal_widget()
+            .child(
+                column()
+                    .layout(LayoutSpec {
+                        width: Size::Px(200.0),
+                        height: Size::Px(120.0),
+                        ..LayoutSpec::default()
+                    })
+                    .child(button_widget().text("a"))
+                    .child(button_widget().text("b")),
+            )
+            .mount(&mut tree, root)
+            .unwrap();
+
+        let list = collect_focusable_in(&tree, modal);
+        assert_eq!(list.len(), 2);
+        assert!(!list.contains(&outside));
+
+        let mut focus = FocusManager {
+            focused: Some(outside),
+        };
+        ensure_focus_in_trap(&tree, &mut focus, modal);
+        assert_eq!(focus.focused, Some(list[0]));
+
+        focus_next_in(&tree, &mut focus, Some(modal));
+        assert_eq!(focus.focused, Some(list[1]));
+        focus_next_in(&tree, &mut focus, Some(modal));
+        assert_eq!(focus.focused, Some(list[0]));
     }
 }

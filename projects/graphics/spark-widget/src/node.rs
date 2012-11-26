@@ -50,6 +50,10 @@ pub struct WidgetContent {
     pub drag_source: bool,
     /// 可作为拖放目标。
     pub drop_target: bool,
+    /// TextField 光标（字符索引）。
+    pub cursor: usize,
+    /// 选区锚点；`None` 表示无选区。
+    pub sel_anchor: Option<usize>,
 }
 
 impl Default for WidgetContent {
@@ -63,6 +67,8 @@ impl Default for WidgetContent {
             value_max: 1.0,
             drag_source: false,
             drop_target: false,
+            cursor: 0,
+            sel_anchor: None,
         }
     }
 }
