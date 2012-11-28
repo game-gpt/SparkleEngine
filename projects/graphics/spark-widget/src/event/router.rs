@@ -139,13 +139,27 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
 
     let wheel = input.wheel();
     if wheel.abs() > f32::EPSILON {
-        let scroll_id = hit.and_then(|id| crate::scroll::find_scroll_ancestor(&runtime.tree, id));
-        if let Some(id) = scroll_id {
-            if let Some(node) = runtime.tree.node_mut(id) {
-                node.scroll.apply_wheel(wheel * 40.0);
+        let mut consumed = false;
+        if let Some(target) = hit {
+            for id in crate::event::bubble_path(&runtime.tree, target) {
+                let is_scroll = runtime
+                    .tree
+                    .node(id)
+                    .map(|n| matches!(n.kind, WidgetKind::ScrollView | WidgetKind::ListView))
+                    .unwrap_or(false);
+                if is_scroll {
+                    if let Some(node) = runtime.tree.node_mut(id) {
+                        node.scroll.apply_wheel(wheel * 40.0);
+                    }
+                    runtime
+                        .inspector
+                        .push_trace("scroll", Some(id), format!("wheel={wheel:.2}"));
+                    consumed = true;
+                    break;
+                }
             }
-            runtime.state.input_blocked = true;
-        } else if modal.is_some() {
+        }
+        if consumed || modal.is_some() {
             runtime.state.input_blocked = true;
         } else if let Some(id) = hit {
             if consumes_pointer(&runtime.tree, id) {
@@ -201,6 +215,15 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         if ctrl && input.key_pressed(Key::A) {
             actions.push(crate::text::TextEditAction::SelectAll);
         }
+        if ctrl && input.key_pressed(Key::C) {
+            actions.push(crate::text::TextEditAction::Copy);
+        }
+        if ctrl && input.key_pressed(Key::X) {
+            actions.push(crate::text::TextEditAction::Cut);
+        }
+        if ctrl && input.key_pressed(Key::V) {
+            actions.push(crate::text::TextEditAction::Paste);
+        }
     }
 
     if crate::text::apply_text_input(
@@ -208,7 +231,16 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         runtime.focus.focused,
         input.text(),
         &actions,
+        Some(runtime.clipboard.as_mut()),
     ) {
+        runtime.state.input_blocked = true;
+    } else if focused_is_field
+        && (ctrl
+            && (input.key_pressed(Key::C)
+                || input.key_pressed(Key::X)
+                || input.key_pressed(Key::V)
+                || input.key_pressed(Key::A)))
+    {
         runtime.state.input_blocked = true;
     }
 
@@ -283,6 +315,29 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
 }
 
 fn handle_click(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
+    // 冒泡路径：默认行为只在目标节点执行，之后沿祖先记录轨迹（后续接监听器时可 stop/prevent）。
+    let path = crate::event::bubble_path(&runtime.tree, id);
+    let Some(&target) = path.first() else {
+        return;
+    };
+
+    apply_click_default(runtime, target, pos);
+
+    for &ancestor in path.iter().skip(1) {
+        runtime.inspector.push_trace(
+            "bubble",
+            Some(ancestor),
+            format!("click-from={}", target.raw()),
+        );
+    }
+
+    let _ = ClickEvent {
+        position: pos,
+        target: Some(target),
+    };
+}
+
+fn apply_click_default(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
     if let Some(index) = crate::widgets::handle_tab_click(&mut runtime.tree, id) {
         runtime
             .inspector
@@ -333,10 +388,6 @@ fn handle_click(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
     if let Some(command) = command {
         runtime.commands.push(command);
     }
-    let _ = ClickEvent {
-        position: pos,
-        target: Some(id),
-    };
 }
 
 fn set_slider_value_at(tree: &mut WidgetTree, id: WidgetId, x: f32) {

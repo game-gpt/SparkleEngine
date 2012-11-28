@@ -32,7 +32,9 @@ pub mod widgets;
 pub use accessibility::{AccessibilityNode, AccessibilityTree, Role};
 pub use command::{UiCommand, UiCommandQueue};
 pub use drag_drop::{DragPayload, DragState};
-pub use event::{hit_test, EventContext, UiEvent};
+pub use event::{
+    bubble_from, bubble_path, capture_path, hit_test, propagate, EventContext, Phase, UiEvent,
+};
 pub use focus::{
     collect_focusable, collect_focusable_in, ensure_focus_in_trap, focus_direction,
     focus_direction_in, focus_next, focus_next_in, focus_previous, focus_previous_in, set_focus,
@@ -53,8 +55,8 @@ pub use state::UiState;
 pub use style::{ComputedStyle, Style, Theme};
 pub use scroll::{ensure_visible, find_scroll_ancestor, ScrollDirection, ScrollState};
 pub use text::{
-    apply_text_input, measure_plain, EstimateMeasurer, FontMeasurer, TextEditAction, TextLayout,
-    TextMeasurer, TextStyle,
+    apply_text_input, measure_plain, Clipboard, EstimateMeasurer, FontMeasurer, MemoryClipboard,
+    TextEditAction, TextLayout, TextMeasurer, TextStyle,
 };
 pub use tree::WidgetTree;
 pub use widgets::{
