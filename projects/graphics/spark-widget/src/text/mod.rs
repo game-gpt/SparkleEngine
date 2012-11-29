@@ -1,7 +1,9 @@
 //! 文本测量、排版与基础编辑。
 
+mod clipboard;
 mod edit;
 
+pub use clipboard::{Clipboard, MemoryClipboard};
 pub use edit::{apply_text_input, TextEditAction};
 
 use spark_core::{Color, Vec2};

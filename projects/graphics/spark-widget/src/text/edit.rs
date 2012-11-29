@@ -15,14 +15,20 @@ pub enum TextEditAction {
     SelectAll,
     Home { select: bool },
     End { select: bool },
+    Copy,
+    Cut,
+    Paste,
 }
 
 /// 向聚焦文本框应用输入与编辑动作。
+///
+/// `clipboard` 仅在 Copy / Cut / Paste 时使用。
 pub fn apply_text_input(
     tree: &mut WidgetTree,
     focused: Option<WidgetId>,
     typed: &str,
     actions: &[TextEditAction],
+    mut clipboard: Option<&mut dyn crate::text::Clipboard>,
 ) -> bool {
     let Some(id) = focused else {
         return false;
@@ -130,6 +136,39 @@ pub fn apply_text_input(
                 anchor = Some(0);
                 cursor = text.chars().count();
             }
+            TextEditAction::Copy => {
+                if let Some(clip) = clipboard.as_deref_mut() {
+                    if let Some(selected) = selected_slice(text, cursor, anchor) {
+                        clip.set_text(selected);
+                    }
+                }
+            }
+            TextEditAction::Cut => {
+                if let Some(clip) = clipboard.as_deref_mut() {
+                    if let Some(selected) = selected_slice(text, cursor, anchor) {
+                        clip.set_text(selected);
+                        delete_range(text, &mut cursor, &mut anchor);
+                        changed = true;
+                    }
+                }
+            }
+            TextEditAction::Paste => {
+                if let Some(clip) = clipboard.as_deref_mut() {
+                    if let Some(paste) = clip.get_text() {
+                        if !paste.is_empty() {
+                            if let Some(a) = anchor {
+                                if a != cursor {
+                                    delete_range(text, &mut cursor, &mut anchor);
+                                }
+                            }
+                            insert_at(text, cursor, &paste);
+                            cursor += paste.chars().count();
+                            anchor = None;
+                            changed = true;
+                        }
+                    }
+                }
+            }
             TextEditAction::Insert => {}
         }
     }
@@ -149,6 +188,17 @@ pub fn apply_text_input(
     node.content.cursor = cursor;
     node.content.sel_anchor = anchor;
     changed
+}
+
+fn selected_slice<'a>(text: &'a str, cursor: usize, anchor: Option<usize>) -> Option<&'a str> {
+    let a = anchor?;
+    if a == cursor {
+        return None;
+    }
+    let (lo, hi) = if a < cursor { (a, cursor) } else { (cursor, a) };
+    let start = byte_index(text, lo);
+    let end = byte_index(text, hi);
+    Some(&text[start..end])
 }
 
 fn byte_index(text: &str, char_index: usize) -> usize {
@@ -213,14 +263,16 @@ mod tests {
             &mut tree,
             Some(id),
             "c",
-            &[]
+            &[],
+            None,
         ));
         assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("abc"));
         assert!(apply_text_input(
             &mut tree,
             Some(id),
             "",
-            &[TextEditAction::Backspace]
+            &[TextEditAction::Backspace],
+            None,
         ));
         assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("ab"));
     }
@@ -237,7 +289,52 @@ mod tests {
             n.content.sel_anchor = Some(1);
             n.content.cursor = 4;
         }
-        assert!(apply_text_input(&mut tree, Some(id), "i", &[]));
+        assert!(apply_text_input(&mut tree, Some(id), "i", &[], None));
         assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("hio"));
+    }
+
+    #[test]
+    fn copy_cut_paste_via_clipboard() {
+        use crate::text::{Clipboard, MemoryClipboard};
+
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let id = text_field_widget()
+            .text("abcd")
+            .mount(&mut tree, root)
+            .unwrap();
+        if let Some(n) = tree.node_mut(id) {
+            n.content.sel_anchor = Some(1);
+            n.content.cursor = 3;
+        }
+        let mut clip = MemoryClipboard::new();
+        assert!(!apply_text_input(
+            &mut tree,
+            Some(id),
+            "",
+            &[TextEditAction::Copy],
+            Some(&mut clip),
+        ));
+        assert_eq!(clip.get_text().as_deref(), Some("bc"));
+        assert!(apply_text_input(
+            &mut tree,
+            Some(id),
+            "",
+            &[TextEditAction::Cut],
+            Some(&mut clip),
+        ));
+        assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("ad"));
+        if let Some(n) = tree.node_mut(id) {
+            n.content.cursor = 1;
+            n.content.sel_anchor = None;
+        }
+        assert!(apply_text_input(
+            &mut tree,
+            Some(id),
+            "",
+            &[TextEditAction::Paste],
+            Some(&mut clip),
+        ));
+        assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("abcd"));
     }
 }

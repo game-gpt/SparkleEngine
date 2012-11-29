@@ -16,7 +16,7 @@ use crate::overlay::OverlayManager;
 use crate::paint;
 use crate::state::UiState;
 use crate::style::Theme;
-use crate::text::{EstimateMeasurer, FontMeasurer, TextMeasurer};
+use crate::text::{EstimateMeasurer, FontMeasurer, MemoryClipboard, TextMeasurer};
 use crate::tree::WidgetTree;
 
 /// GUI / HUD / Overlay 层标记。
@@ -51,6 +51,8 @@ pub struct UiRuntime {
     pub time: f32,
     /// 文本测量器（默认尝试系统字体，失败则估算）。
     pub text_measurer: Box<dyn TextMeasurer>,
+    /// 剪贴板（默认进程内，宿主可替换为系统剪贴板）。
+    pub clipboard: Box<dyn crate::text::Clipboard>,
     scene_root: Option<WidgetId>,
     hud_root: Option<WidgetId>,
 }
@@ -70,6 +72,7 @@ impl std::fmt::Debug for UiRuntime {
             .field("commands", &self.commands)
             .field("time", &self.time)
             .field("text_measurer", &"<dyn TextMeasurer>")
+            .field("clipboard", &"<dyn Clipboard>")
             .field("scene_root", &self.scene_root)
             .field("hud_root", &self.hud_root)
             .finish()
@@ -97,6 +100,7 @@ impl UiRuntime {
             commands: UiCommandQueue::default(),
             time: 0.0,
             text_measurer: default_text_measurer(),
+            clipboard: Box::new(MemoryClipboard::new()),
             scene_root: None,
             hud_root: None,
         }
@@ -105,6 +109,11 @@ impl UiRuntime {
     /// 替换文本测量器（测试或自定义字体）。
     pub fn set_text_measurer(&mut self, measurer: Box<dyn TextMeasurer>) {
         self.text_measurer = measurer;
+    }
+
+    /// 替换剪贴板实现。
+    pub fn set_clipboard(&mut self, clipboard: Box<dyn crate::text::Clipboard>) {
+        self.clipboard = clipboard;
     }
 
     pub fn begin_frame(&mut self, _frame: &UiFrame<'_>) {
