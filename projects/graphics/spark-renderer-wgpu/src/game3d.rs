@@ -1529,9 +1529,15 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
                     }
                 }
             }
-            WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
-                self.input.on_text(text);
-            }
+            WindowEvent::Ime(ime) => match ime {
+                winit::event::Ime::Enabled | winit::event::Ime::Disabled => {}
+                winit::event::Ime::Preedit(text, cursor) => {
+                    self.input.on_ime_preedit(text, cursor);
+                }
+                winit::event::Ime::Commit(text) => {
+                    self.input.on_ime_commit(text);
+                }
+            },
             WindowEvent::MouseInput { state, button, .. } => {
                 if let Some(b) = winit_map::mouse_btn(button) {
                     self.input

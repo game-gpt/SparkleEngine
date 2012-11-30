@@ -734,9 +734,15 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
                     }
                 }
             }
-            WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
-                self.input.on_text(text);
-            }
+            WindowEvent::Ime(ime) => match ime {
+                winit::event::Ime::Enabled | winit::event::Ime::Disabled => {}
+                winit::event::Ime::Preedit(text, cursor) => {
+                    self.input.on_ime_preedit(text, *cursor);
+                }
+                winit::event::Ime::Commit(text) => {
+                    self.input.on_ime_commit(text);
+                }
+            },
             _ => {}
         }
 

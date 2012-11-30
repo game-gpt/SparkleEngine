@@ -109,6 +109,10 @@ pub struct Input {
     wheel: f32,
     /// 本帧文本输入（IME 提交与按键产生的字符）。
     text: String,
+    /// IME 预编辑串（跨帧保持，直至 Preedit 清空或 Commit）。
+    composition: String,
+    /// 预编辑内光标字节范围（与 winit 一致）；`None` 表示未知。
+    composition_cursor: Option<(usize, usize)>,
 }
 
 impl Input {
@@ -120,6 +124,7 @@ impl Input {
         self.mouse_delta = (0.0, 0.0);
         self.wheel = 0.0;
         self.text.clear();
+        // composition 跨帧保留，由 on_ime_preedit / on_ime_commit 更新。
     }
 
     pub fn on_wheel(&mut self, dy: f32) {
@@ -129,6 +134,32 @@ impl Input {
     /// 追加本帧文本输入。
     pub fn on_text(&mut self, text: impl AsRef<str>) {
         self.text.push_str(text.as_ref());
+    }
+
+    /// IME 预编辑更新。空串表示取消预编辑。
+    pub fn on_ime_preedit(&mut self, text: impl AsRef<str>, cursor: Option<(usize, usize)>) {
+        self.composition.clear();
+        self.composition.push_str(text.as_ref());
+        self.composition_cursor = if self.composition.is_empty() {
+            None
+        } else {
+            cursor
+        };
+    }
+
+    /// IME 提交：清空预编辑并写入本帧文本。
+    pub fn on_ime_commit(&mut self, text: impl AsRef<str>) {
+        self.composition.clear();
+        self.composition_cursor = None;
+        self.on_text(text);
+    }
+
+    pub fn composition(&self) -> &str {
+        &self.composition
+    }
+
+    pub fn composition_cursor(&self) -> Option<(usize, usize)> {
+        self.composition_cursor
     }
 
     pub fn on_mouse_delta(&mut self, dx: f32, dy: f32) {
@@ -214,5 +245,22 @@ impl Input {
     /// 本帧累计的文本输入（不含控制键）。
     pub fn text(&self) -> &str {
         &self.text
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ime_preedit_survives_begin_frame_until_commit() {
+        let mut input = Input::default();
+        input.on_ime_preedit("ni", Some((0, 2)));
+        assert_eq!(input.composition(), "ni");
+        input.begin_frame();
+        assert_eq!(input.composition(), "ni");
+        input.on_ime_commit("你");
+        assert!(input.composition().is_empty());
+        assert_eq!(input.text(), "你");
     }
 }
