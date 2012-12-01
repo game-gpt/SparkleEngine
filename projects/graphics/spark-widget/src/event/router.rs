@@ -124,11 +124,13 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                 if let Some(node) = runtime.tree.node_mut(id) {
                     node.state.pressed = false;
                 }
-            handle_click(runtime, id, pos);
-            runtime
-                .inspector
-                .push_trace("click", Some(id), format!("pos=({:.1},{:.1})", pos.x, pos.y));
-            runtime.state.input_blocked = true;
+                handle_click(runtime, id, pos);
+                runtime.inspector.push_trace(
+                    "click",
+                    Some(id),
+                    format!("pos=({:.1},{:.1})", pos.x, pos.y),
+                );
+                runtime.state.input_blocked = true;
             }
             clear_pressed(&mut runtime.tree);
         } else {
@@ -193,7 +195,8 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         .unwrap_or(false);
 
     let mut actions = Vec::new();
-    if focused_is_field {
+    let composing = focused_is_field && !input.composition().is_empty();
+    if focused_is_field && !composing {
         if input.key_pressed(Key::Backspace) {
             actions.push(crate::text::TextEditAction::Backspace);
         }
@@ -234,6 +237,7 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         Some(runtime.clipboard.as_mut()),
     ) {
         runtime.state.input_blocked = true;
+        runtime.state.dirty.mark_layout();
     } else if focused_is_field
         && (ctrl
             && (input.key_pressed(Key::C)
@@ -242,6 +246,12 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
                 || input.key_pressed(Key::A)))
     {
         runtime.state.input_blocked = true;
+    }
+
+    sync_composition(runtime, input);
+    if composing || !input.composition().is_empty() {
+        runtime.state.input_blocked = true;
+        runtime.state.dirty.mark_paint();
     }
 
     if input.key_pressed(Key::Tab) {
@@ -310,6 +320,24 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         } else {
             runtime.commands.push(UiCommand::CloseOverlay);
             runtime.state.input_blocked = true;
+        }
+    }
+}
+
+fn sync_composition(runtime: &mut UiRuntime, input: &Input) {
+    let focused = runtime.focus.focused;
+    let composition = input.composition().to_string();
+    for id in runtime.tree.ids() {
+        let Some(node) = runtime.tree.node_mut(id) else {
+            continue;
+        };
+        if !matches!(node.kind, WidgetKind::TextField | WidgetKind::TextArea) {
+            continue;
+        }
+        if Some(id) == focused {
+            node.content.composition = composition.clone();
+        } else if !node.content.composition.is_empty() {
+            node.content.composition.clear();
         }
     }
 }
@@ -489,7 +517,10 @@ fn consumes_pointer(tree: &WidgetTree, id: WidgetId) -> bool {
                 || node.focusable
                 || matches!(
                     node.kind,
-                    WidgetKind::Modal | WidgetKind::Popup | WidgetKind::Panel | WidgetKind::Container
+                    WidgetKind::Modal
+                        | WidgetKind::Popup
+                        | WidgetKind::Panel
+                        | WidgetKind::Container
                 )
         }
     }
@@ -554,9 +585,10 @@ fn sync_focus_flags(tree: &mut WidgetTree, focused: Option<WidgetId>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::text::EstimateMeasurer;
     use super::*;
-    use crate::layout::{run_layout, LayoutSpec, Size};
+    use crate::layout::UiMetrics;
+    use crate::layout::{LayoutSpec, Size, run_layout};
+    use crate::text::EstimateMeasurer;
     use crate::widgets::{button_widget, checkbox_widget, column};
     use spark_input::ButtonState;
 
@@ -565,6 +597,8 @@ mod tests {
             dt: 1.0 / 60.0,
             screen_size: Vec2::new(w, h),
             dpi_scale: 1.0,
+            ui_scale: 1.0,
+            safe_area: crate::layout::Insets::default(),
             input,
         }
     }
@@ -574,7 +608,9 @@ mod tests {
         let mut tree = WidgetTree::new();
         let root = tree.root();
         // 根下绝对叠放两个按钮，后挂载者命中优先。
-        let panel = tree.mount(root, crate::node::WidgetKind::Container).unwrap();
+        let panel = tree
+            .mount(root, crate::node::WidgetKind::Container)
+            .unwrap();
         if let Some(node) = tree.node_mut(panel) {
             node.layout = LayoutSpec {
                 kind: crate::layout::Layout::Absolute,
@@ -603,7 +639,12 @@ mod tests {
             })
             .mount(&mut tree, panel)
             .unwrap();
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let point = tree.node(b).unwrap().computed.rect.center();
         let hit = hit_test(&tree, root, point).unwrap();
         assert_eq!(hit, b);
@@ -624,7 +665,12 @@ mod tests {
             })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let btn = runtime.tree.node(root).unwrap().children[0];
         let center = runtime.tree.node(btn).unwrap().computed.rect.center();
@@ -660,7 +706,12 @@ mod tests {
             })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let id = runtime.tree.node(root).unwrap().children[0];
         let center = runtime.tree.node(id).unwrap().computed.rect.center();
 
@@ -711,7 +762,12 @@ mod tests {
                 ),
             )
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(400.0, 300.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let behind = runtime.tree.node(root).unwrap().children[0];
         let behind_center = runtime.tree.node(behind).unwrap().computed.rect.center();
@@ -794,7 +850,12 @@ mod tests {
             node.layout.offset_x = 80.0;
             node.layout.offset_y = 0.0;
         }
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let src_c = runtime.tree.node(src).unwrap().computed.rect.center();
         let dst_c = runtime.tree.node(dst).unwrap().computed.rect.center();
@@ -854,14 +915,16 @@ mod tests {
             .mount(&mut runtime.tree, root)
             .unwrap();
         runtime
-            .show_popup(
-                anchor,
-                popup_widget().child(label_widget().text("Item")),
-            )
+            .show_popup(anchor, popup_widget().child(label_widget().text("Item")))
             .unwrap();
         assert!(!runtime.overlays.is_empty());
 
-        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(400.0, 300.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let mut input = Input::default();
         input.on_cursor(390.0, 290.0);
@@ -869,7 +932,10 @@ mod tests {
         let f = frame(&input, 400.0, 300.0);
         runtime.begin_frame(&f);
         runtime.dispatch_input(&f);
-        assert!(runtime.overlays.is_empty(), "outside click should dismiss popup");
+        assert!(
+            runtime.overlays.is_empty(),
+            "outside click should dismiss popup"
+        );
     }
 
     #[test]
@@ -900,7 +966,12 @@ mod tests {
                     ),
             )
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(400.0, 300.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let hud = runtime.hud_root().unwrap();
         assert_eq!(runtime.tree.node(hud).unwrap().layer, UiLayer::Hud);
@@ -944,7 +1015,12 @@ mod tests {
             .child(radio_widget().text("B"))
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let group = runtime.tree.node(root).unwrap().children[0];
         let a = runtime.tree.node(group).unwrap().children[0];
         let b = runtime.tree.node(group).unwrap().children[1];
@@ -981,7 +1057,12 @@ mod tests {
             })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
 
         let mut input = Input::default();
@@ -1039,24 +1120,25 @@ mod tests {
                             height: Size::Px(120.0),
                             ..LayoutSpec::default()
                         })
-                        .child(
-                            button_widget().text("a").layout(LayoutSpec {
-                                width: Size::Px(80.0),
-                                height: Size::Px(30.0),
-                                ..LayoutSpec::default()
-                            }),
-                        )
-                        .child(
-                            button_widget().text("b").layout(LayoutSpec {
-                                width: Size::Px(80.0),
-                                height: Size::Px(30.0),
-                                ..LayoutSpec::default()
-                            }),
-                        ),
+                        .child(button_widget().text("a").layout(LayoutSpec {
+                            width: Size::Px(80.0),
+                            height: Size::Px(30.0),
+                            ..LayoutSpec::default()
+                        }))
+                        .child(button_widget().text("b").layout(LayoutSpec {
+                            width: Size::Px(80.0),
+                            height: Size::Px(30.0),
+                            ..LayoutSpec::default()
+                        })),
                 ),
             )
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(400.0, 300.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let modal = runtime.overlays.top_modal().unwrap();
         let first = focus::collect_focusable_in(&runtime.tree, modal)[0];
@@ -1081,15 +1163,84 @@ mod tests {
     }
 
     #[test]
+    fn text_field_syncs_ime_composition() {
+        use crate::widgets::text_field_widget;
+
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        let id = text_field_widget()
+            .text("ab")
+            .layout(LayoutSpec {
+                width: Size::Px(120.0),
+                height: Size::Px(32.0),
+                ..LayoutSpec::default()
+            })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
+        focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
+        if let Some(n) = runtime.tree.node_mut(id) {
+            n.content.cursor = 2;
+        }
+
+        let mut input = Input::default();
+        input.on_ime_preedit("你", Some((0, 3)));
+        let f = frame(&input, 200.0, 200.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        assert_eq!(
+            runtime.tree.node(id).unwrap().content.composition.as_str(),
+            "你"
+        );
+        assert!(runtime.state.input_blocked);
+
+        input.begin_frame();
+        input.on_ime_commit("你好");
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+        assert!(
+            runtime
+                .tree
+                .node(id)
+                .unwrap()
+                .content
+                .composition
+                .is_empty()
+        );
+        assert_eq!(
+            runtime.tree.node(id).unwrap().content.text.as_deref(),
+            Some("ab你好")
+        );
+    }
+
+    #[test]
     fn tab_moves_focus_between_buttons() {
         let mut runtime = UiRuntime::new();
         let root = runtime.tree.root();
         column()
-            .child(button_widget().text("1").layout(LayoutSpec::default().with_height(Size::Px(30.0))))
-            .child(button_widget().text("2").layout(LayoutSpec::default().with_height(Size::Px(30.0))))
+            .child(
+                button_widget()
+                    .text("1")
+                    .layout(LayoutSpec::default().with_height(Size::Px(30.0))),
+            )
+            .child(
+                button_widget()
+                    .text("2")
+                    .layout(LayoutSpec::default().with_height(Size::Px(30.0))),
+            )
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut runtime.tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let mut input = Input::default();
         input.on_key(Key::Tab, ButtonState::Pressed);

@@ -8,24 +8,27 @@ use crate::text::{TextMeasurer, TextStyle};
 use crate::tree::WidgetTree;
 
 use super::{
-    Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size, Size2,
+    Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size, Size2, UiMetrics,
 };
 
-/// 对整棵树跑 measure + arrange。根节点填满屏幕。
+/// 对整棵树跑 measure + arrange。根节点填满安全区后的屏幕。
 pub fn run_layout(
     tree: &mut WidgetTree,
     screen: Vec2,
-    _dpi_scale: f32,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) {
     let root = tree.root();
-    let screen_size = Size2::new(screen.x.max(0.0), screen.y.max(0.0));
+    let safe = metrics.safe_area;
+    let content_w = (screen.x - safe.horizontal()).max(0.0);
+    let content_h = (screen.y - safe.vertical()).max(0.0);
+    let screen_size = Size2::new(content_w, content_h);
     let constraints = Constraints::tight(screen_size);
-    let _ = measure(tree, root, constraints, measurer);
+    let _ = measure(tree, root, constraints, metrics, measurer);
     arrange(
         tree,
         root,
-        Rect::new(0.0, 0.0, screen_size.width, screen_size.height),
+        Rect::new(safe.left, safe.top, content_w, content_h),
     );
 }
 
@@ -33,6 +36,7 @@ fn measure(
     tree: &mut WidgetTree,
     id: WidgetId,
     constraints: Constraints,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) -> Size2 {
     let Some(node) = tree.node(id).cloned() else {
@@ -53,6 +57,7 @@ fn measure(
         tree,
         &node,
         inner_constraints.deflate(node.layout.padding),
+        metrics,
         measurer,
     );
     let padded = Size2::new(
@@ -76,18 +81,19 @@ fn measure_content(
     tree: &mut WidgetTree,
     node: &WidgetNode,
     constraints: Constraints,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) -> Size2 {
     if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView) {
-        return measure_scroll(tree, node, constraints, measurer);
+        return measure_scroll(tree, node, constraints, metrics, measurer);
     }
     match node.layout.kind {
-        Layout::Flex => measure_flex(tree, node, constraints, measurer),
-        Layout::Grid => measure_grid(tree, node, constraints, measurer),
+        Layout::Flex => measure_flex(tree, node, constraints, metrics, measurer),
+        Layout::Grid => measure_grid(tree, node, constraints, metrics, measurer),
         Layout::Overlay | Layout::Stack | Layout::Anchor => {
-            measure_overlay(tree, node, constraints, measurer)
+            measure_overlay(tree, node, constraints, metrics, measurer)
         }
-        Layout::Absolute => measure_absolute(tree, node, constraints, measurer),
+        Layout::Absolute => measure_absolute(tree, node, constraints, metrics, measurer),
     }
 }
 
@@ -95,13 +101,14 @@ fn measure_scroll(
     tree: &mut WidgetTree,
     node: &WidgetNode,
     constraints: Constraints,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) -> Size2 {
     let children = visible_children(tree, node);
     let child_constraints = Constraints::loose(Size2::new(f32::INFINITY, f32::INFINITY));
     let mut content = Size2::default();
     for child in &children {
-        let size = measure(tree, *child, child_constraints, measurer);
+        let size = measure(tree, *child, child_constraints, metrics, measurer);
         content.width = content.width.max(size.width);
         content.height = content.height.max(size.height);
     }
@@ -112,7 +119,9 @@ fn measure_scroll(
     // 视口期望尺寸：优先固定/百分比，否则在约束内取内容大小。
     let width = match node.layout.width {
         Size::Px(v) => v,
-        Size::Percent(p) if constraints.max.width.is_finite() => constraints.max.width * (p / 100.0),
+        Size::Percent(p) if constraints.max.width.is_finite() => {
+            constraints.max.width * (p / 100.0)
+        }
         Size::Fill if constraints.max.width.is_finite() => constraints.max.width,
         _ => {
             if constraints.max.width.is_finite() {
@@ -143,11 +152,12 @@ fn measure_grid(
     tree: &mut WidgetTree,
     node: &WidgetNode,
     constraints: Constraints,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) -> Size2 {
     let children = visible_children(tree, node);
     if children.is_empty() {
-        return intrinsic_leaf(node, constraints, measurer);
+        return intrinsic_leaf(node, constraints, metrics, measurer);
     }
     let columns = node.layout.columns.max(1) as usize;
     let gap = node.layout.gap;
@@ -164,7 +174,7 @@ fn measure_grid(
     let mut col_widths = vec![0.0_f32; columns];
     let mut row_heights = vec![0.0_f32; rows];
     for (index, child) in children.iter().enumerate() {
-        let size = measure(tree, *child, child_constraints, measurer);
+        let size = measure(tree, *child, child_constraints, metrics, measurer);
         let col = index % columns;
         let row = index / columns;
         col_widths[col] = col_widths[col].max(size.width);
@@ -180,11 +190,12 @@ fn measure_flex(
     tree: &mut WidgetTree,
     node: &WidgetNode,
     constraints: Constraints,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) -> Size2 {
     let children: Vec<WidgetId> = visible_children(tree, node);
     if children.is_empty() {
-        return intrinsic_leaf(node, constraints, measurer);
+        return intrinsic_leaf(node, constraints, metrics, measurer);
     }
 
     let gap = node.layout.gap;
@@ -206,7 +217,7 @@ fn measure_flex(
             Constraints::loose(Size2::new(f32::INFINITY, constraints.max.height))
                 .with_max_height(constraints.max.height)
         };
-        let size = measure(tree, *child, child_constraints, measurer);
+        let size = measure(tree, *child, child_constraints, metrics, measurer);
         if vertical {
             main += size.height;
             cross = cross.max(size.width);
@@ -218,9 +229,15 @@ fn measure_flex(
     main += gap_total;
 
     if vertical {
-        Size2::new(cross.min(constraints.max.width), main.min(constraints.max.height))
+        Size2::new(
+            cross.min(constraints.max.width),
+            main.min(constraints.max.height),
+        )
     } else {
-        Size2::new(main.min(constraints.max.width), cross.min(constraints.max.height))
+        Size2::new(
+            main.min(constraints.max.width),
+            cross.min(constraints.max.height),
+        )
     }
 }
 
@@ -228,15 +245,16 @@ fn measure_overlay(
     tree: &mut WidgetTree,
     node: &WidgetNode,
     constraints: Constraints,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) -> Size2 {
     let children = visible_children(tree, node);
     if children.is_empty() {
-        return intrinsic_leaf(node, constraints, measurer);
+        return intrinsic_leaf(node, constraints, metrics, measurer);
     }
     let mut size = Size2::default();
     for child in children {
-        let child_size = measure(tree, child, constraints, measurer);
+        let child_size = measure(tree, child, constraints, metrics, measurer);
         size.width = size.width.max(child_size.width);
         size.height = size.height.max(child_size.height);
     }
@@ -247,12 +265,19 @@ fn measure_absolute(
     tree: &mut WidgetTree,
     node: &WidgetNode,
     constraints: Constraints,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) -> Size2 {
     let children = visible_children(tree, node);
-    let mut size = intrinsic_leaf(node, constraints, measurer);
+    let mut size = intrinsic_leaf(node, constraints, metrics, measurer);
     for child in children {
-        let child_size = measure(tree, child, Constraints::loose(constraints.max), measurer);
+        let child_size = measure(
+            tree,
+            child,
+            Constraints::loose(constraints.max),
+            metrics,
+            measurer,
+        );
         if let Some(child_node) = tree.node(child) {
             let right = child_node.layout.offset_x + child_size.width;
             let bottom = child_node.layout.offset_y + child_size.height;
@@ -266,14 +291,16 @@ fn measure_absolute(
 fn intrinsic_leaf(
     node: &WidgetNode,
     constraints: Constraints,
+    metrics: UiMetrics,
     measurer: &mut dyn TextMeasurer,
 ) -> Size2 {
     let text = node.content.text.as_deref().unwrap_or("");
+    let scale = metrics.content_scale();
     let style = TextStyle {
         size: match node.kind {
-            WidgetKind::Label => 16.0,
-            WidgetKind::Button => 16.0,
-            _ => 14.0,
+            WidgetKind::Label => 16.0 * scale,
+            WidgetKind::Button => 16.0 * scale,
+            _ => 14.0 * scale,
         },
         ..TextStyle::default()
     };
@@ -294,24 +321,37 @@ fn intrinsic_leaf(
         }
         WidgetKind::Spacer => Size2::default(),
         WidgetKind::Button => Size2::new(
-            (measured.width + 24.0).max(48.0),
-            (measured.height + 12.0).max(32.0),
+            (measured.width + 24.0 * scale).max(48.0 * scale),
+            (measured.height + 12.0 * scale).max(32.0 * scale),
         ),
-        WidgetKind::Checkbox | WidgetKind::Toggle | WidgetKind::Radio => {
-            Size2::new((measured.width + 18.0 + 8.0).max(24.0), measured.height.max(24.0))
-        }
-        WidgetKind::Slider => Size2::new(constraints.max.width.min(160.0).max(80.0), 24.0),
-        WidgetKind::ProgressBar => Size2::new(constraints.max.width.min(160.0).max(80.0), 12.0),
-        WidgetKind::TextField | WidgetKind::TextArea => {
-            Size2::new(constraints.max.width.min(200.0).max(80.0), 32.0)
-        }
+        WidgetKind::Checkbox | WidgetKind::Toggle | WidgetKind::Radio => Size2::new(
+            (measured.width + (18.0 + 8.0) * scale).max(24.0 * scale),
+            measured.height.max(24.0 * scale),
+        ),
+        WidgetKind::Slider => Size2::new(
+            constraints.max.width.min(160.0 * scale).max(80.0 * scale),
+            24.0 * scale,
+        ),
+        WidgetKind::ProgressBar => Size2::new(
+            constraints.max.width.min(160.0 * scale).max(80.0 * scale),
+            12.0 * scale,
+        ),
+        WidgetKind::TextField | WidgetKind::TextArea => Size2::new(
+            constraints.max.width.min(200.0 * scale).max(80.0 * scale),
+            32.0 * scale,
+        ),
         WidgetKind::Label => measured,
         _ => measured,
     }
 }
 
 fn resolve_axis_sizes(content: Size2, spec: &LayoutSpec, constraints: Constraints) -> Size2 {
-    let width = resolve_size(spec.width, content.width, constraints.max.width, constraints.min.width);
+    let width = resolve_size(
+        spec.width,
+        content.width,
+        constraints.max.width,
+        constraints.min.width,
+    );
     let height = resolve_size(
         spec.height,
         content.height,
@@ -362,7 +402,11 @@ fn apply_spec_limits(mut constraints: Constraints, spec: &LayoutSpec) -> Constra
         constraints.min.width = constraints.min.width.max(min_w).min(constraints.max.width);
     }
     if let Some(min_h) = spec.min_height {
-        constraints.min.height = constraints.min.height.max(min_h).min(constraints.max.height);
+        constraints.min.height = constraints
+            .min
+            .height
+            .max(min_h)
+            .min(constraints.max.height);
     }
     constraints
 }
@@ -593,20 +637,14 @@ fn arrange_flex(tree: &mut WidgetTree, node: &WidgetNode, content: Rect) {
         let main = mains[index];
         let child_layout = tree.node(*child).map(|n| n.layout.clone());
         let (child_w, child_h, x, y) = if vertical {
-            let width = match (
-                child_layout.as_ref().map(|l| l.width),
-                node.layout.align,
-            ) {
+            let width = match (child_layout.as_ref().map(|l| l.width), node.layout.align) {
                 (Some(Size::Fill), _) | (_, Align::Stretch) => content.w,
                 _ => desired.width.min(content.w),
             };
             let x = align_cross(content.x, content.w, width, node.layout.align);
             (width, main, x, cursor)
         } else {
-            let height = match (
-                child_layout.as_ref().map(|l| l.height),
-                node.layout.align,
-            ) {
+            let height = match (child_layout.as_ref().map(|l| l.height), node.layout.align) {
                 (Some(Size::Fill), _) | (_, Align::Stretch) => content.h,
                 _ => desired.height.min(content.h),
             };
@@ -624,10 +662,7 @@ fn arrange_overlay(tree: &mut WidgetTree, node: &WidgetNode, content: Rect) {
             .node(child)
             .map(|n| n.computed.desired)
             .unwrap_or_default();
-        let align = tree
-            .node(child)
-            .map(|n| n.layout.align)
-            .unwrap_or_default();
+        let align = tree.node(child).map(|n| n.layout.align).unwrap_or_default();
         let width = match align {
             Align::Stretch => content.w,
             _ => desired.width.min(content.w),
@@ -699,9 +734,10 @@ fn visible_children(tree: &WidgetTree, node: &WidgetNode) -> Vec<WidgetId> {
 
 #[cfg(test)]
 mod tests {
-    use crate::text::EstimateMeasurer;
+    use super::UiMetrics;
     use super::*;
     use crate::layout::{LayoutSpec, Size};
+    use crate::text::EstimateMeasurer;
     use crate::widgets::{button_widget, column, label_widget, row};
 
     #[test]
@@ -710,12 +746,25 @@ mod tests {
         let root = tree.root();
         let menu = column()
             .layout(LayoutSpec::vertical().with_gap(10.0))
-            .child(label_widget().text("A").layout(LayoutSpec::default().with_height(Size::Px(20.0))))
-            .child(label_widget().text("B").layout(LayoutSpec::default().with_height(Size::Px(30.0))))
+            .child(
+                label_widget()
+                    .text("A")
+                    .layout(LayoutSpec::default().with_height(Size::Px(20.0))),
+            )
+            .child(
+                label_widget()
+                    .text("B")
+                    .layout(LayoutSpec::default().with_height(Size::Px(30.0))),
+            )
             .mount(&mut tree, root)
             .unwrap();
 
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let a = tree.node(menu).unwrap().children[0];
         let b = tree.node(menu).unwrap().children[1];
@@ -736,31 +785,28 @@ mod tests {
                     .with_width(Size::Fill)
                     .with_height(Size::Px(40.0)),
             )
-            .child(
-                button_widget()
-                    .text("L")
-                    .layout(LayoutSpec {
-                        width: Size::Px(40.0),
-                        height: Size::Px(40.0),
-                        flex_grow: 0.0,
-                        ..LayoutSpec::horizontal()
-                    }),
-            )
-            .child(
-                button_widget()
-                    .text("Grow")
-                    .layout(LayoutSpec {
-                        width: Size::Px(10.0),
-                        height: Size::Px(40.0),
-                        flex_grow: 1.0,
-                        flex_shrink: 0.0,
-                        ..LayoutSpec::horizontal()
-                    }),
-            )
+            .child(button_widget().text("L").layout(LayoutSpec {
+                width: Size::Px(40.0),
+                height: Size::Px(40.0),
+                flex_grow: 0.0,
+                ..LayoutSpec::horizontal()
+            }))
+            .child(button_widget().text("Grow").layout(LayoutSpec {
+                width: Size::Px(10.0),
+                height: Size::Px(40.0),
+                flex_grow: 1.0,
+                flex_shrink: 0.0,
+                ..LayoutSpec::horizontal()
+            }))
             .mount(&mut tree, root)
             .unwrap();
 
-        run_layout(&mut tree, Vec2::new(200.0, 80.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 80.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let grow = tree.node(bar).unwrap().children[1];
         let rect = tree.node(grow).unwrap().computed.rect;
         assert!(rect.w > 100.0, "grow child should expand, got {}", rect.w);
@@ -769,7 +815,12 @@ mod tests {
     #[test]
     fn root_fills_screen() {
         let mut tree = WidgetTree::new();
-        run_layout(&mut tree, Vec2::new(640.0, 360.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(640.0, 360.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let rect = tree.node(tree.root()).unwrap().computed.rect;
         assert_eq!(rect.w, 640.0);
         assert_eq!(rect.h, 360.0);
@@ -782,7 +833,11 @@ mod tests {
         let mut tree = WidgetTree::new();
         let root = tree.root();
         let g = grid(2)
-            .layout(LayoutSpec::grid(2).with_gap(10.0).with_width(Size::Px(210.0)))
+            .layout(
+                LayoutSpec::grid(2)
+                    .with_gap(10.0)
+                    .with_width(Size::Px(210.0)),
+            )
             .child(
                 label_widget()
                     .text("A")
@@ -800,14 +855,25 @@ mod tests {
             )
             .mount(&mut tree, root)
             .unwrap();
-        run_layout(&mut tree, Vec2::new(400.0, 400.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(400.0, 400.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let kids = &tree.node(g).unwrap().children;
         let a = tree.node(kids[0]).unwrap().computed.rect;
         let b = tree.node(kids[1]).unwrap().computed.rect;
         let c = tree.node(kids[2]).unwrap().computed.rect;
-        assert!(b.x > a.x + a.w, "B should be in the next column, a={a:?} b={b:?}");
+        assert!(
+            b.x > a.x + a.w,
+            "B should be in the next column, a={a:?} b={b:?}"
+        );
         assert!((b.y - a.y).abs() < 1.0, "A and B should share a row");
-        assert!(c.y > a.y + a.h - 0.1, "C should be on the next row, a={a:?} c={c:?}");
+        assert!(
+            c.y > a.y + a.h - 0.1,
+            "C should be on the next row, a={a:?} c={c:?}"
+        );
         assert!((c.x - a.x).abs() < 1.0, "C should align to first column");
     }
 
@@ -840,11 +906,21 @@ mod tests {
             .mount(&mut tree, root)
             .unwrap();
 
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         if let Some(node) = tree.node_mut(scroll) {
             node.scroll.offset.y = 40.0;
         }
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
 
         let content = tree.node(scroll).unwrap().children[0];
         let top = tree.node(content).unwrap().children[0];
@@ -867,5 +943,59 @@ mod tests {
             "content should exceed viewport, got {}",
             tree.node(scroll).unwrap().scroll.content_size.y
         );
+    }
+
+    #[test]
+    fn safe_area_insets_root_rect() {
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        label_widget().text("hi").mount(&mut tree, root).unwrap();
+        let metrics = UiMetrics {
+            dpi_scale: 1.0,
+            ui_scale: 1.0,
+            safe_area: Insets {
+                left: 10.0,
+                top: 20.0,
+                right: 10.0,
+                bottom: 30.0,
+            },
+        };
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 200.0),
+            metrics,
+            &mut EstimateMeasurer,
+        );
+        let rect = tree.node(root).unwrap().computed.rect;
+        assert!((rect.x - 10.0).abs() < 0.01);
+        assert!((rect.y - 20.0).abs() < 0.01);
+        assert!((rect.w - 180.0).abs() < 0.01);
+        assert!((rect.h - 150.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn content_scale_grows_button_intrinsic() {
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let id = button_widget().text("Go").mount(&mut tree, root).unwrap();
+        run_layout(
+            &mut tree,
+            Vec2::new(400.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
+        let h1 = tree.node(id).unwrap().computed.desired.height;
+        run_layout(
+            &mut tree,
+            Vec2::new(400.0, 200.0),
+            UiMetrics {
+                dpi_scale: 2.0,
+                ui_scale: 1.0,
+                safe_area: Insets::default(),
+            },
+            &mut EstimateMeasurer,
+        );
+        let h2 = tree.node(id).unwrap().computed.desired.height;
+        assert!(h2 > h1 * 1.5, "scaled={h2} base={h1}");
     }
 }

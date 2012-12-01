@@ -92,9 +92,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::text::EstimateMeasurer;
     use super::*;
-    use crate::layout::{run_layout, LayoutSpec, Size};
+    use crate::layout::UiMetrics;
+    use crate::layout::{LayoutSpec, Size, run_layout};
+    use crate::text::EstimateMeasurer;
     use crate::widgets::{label_widget, list_view};
     use spark_core::Vec2;
 
@@ -123,7 +124,12 @@ mod tests {
             .mount(&mut tree, root)
             .unwrap();
 
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let range = sync_visible_rows(&mut tree, list, 100, 20.0, 1, |i| {
             label_widget().text(format!("row-{i}"))
         })
@@ -136,7 +142,12 @@ mod tests {
         if let Some(node) = tree.node_mut(list) {
             node.scroll.offset.y = 200.0;
         }
-        run_layout(&mut tree, Vec2::new(200.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let range = sync_visible_rows(&mut tree, list, 100, 20.0, 0, |i| {
             label_widget().text(format!("row-{i}"))
         })
@@ -145,9 +156,6 @@ mod tests {
         assert!(range.1 > range.0);
         assert!(tree.node(panel).is_none() || tree.node(list).unwrap().children.len() == 1);
         let panel = tree.node(list).unwrap().children[0];
-        assert_eq!(
-            tree.node(panel).unwrap().children.len(),
-            range.1 - range.0
-        );
+        assert_eq!(tree.node(panel).unwrap().children.len(), range.1 - range.0);
     }
 }

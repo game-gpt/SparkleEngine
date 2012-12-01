@@ -2,8 +2,10 @@
 
 mod constraints;
 mod engine;
+mod metrics;
 mod spec;
 
 pub use constraints::{Align, Constraints, FlexDirection, Justify, Size, Size2};
 pub use engine::run_layout;
+pub use metrics::UiMetrics;
 pub use spec::{ComputedLayout, Insets, Layout, LayoutSpec};

@@ -32,6 +32,8 @@ pub struct UiFrame<'a> {
     pub dt: f32,
     pub screen_size: Vec2,
     pub dpi_scale: f32,
+    pub ui_scale: f32,
+    pub safe_area: crate::layout::Insets,
     pub input: &'a Input,
 }
 
@@ -140,6 +142,7 @@ impl UiRuntime {
         let root = self.tree.root();
         let id = builder.layer(UiLayer::Hud).mount(&mut self.tree, root)?;
         self.set_hud_root(id);
+        self.invalidate_layout();
         Some(id)
     }
 
@@ -151,6 +154,7 @@ impl UiRuntime {
         let root = self.tree.root();
         let id = builder.layer(UiLayer::Gui).mount(&mut self.tree, root)?;
         self.set_scene_root(id);
+        self.invalidate_layout();
         Some(id)
     }
 
@@ -169,18 +173,30 @@ impl UiRuntime {
     pub fn update(&mut self, dt: f32) {
         self.time += dt;
         self.motion.sync_and_tick(&self.tree, dt);
-        for id in self.overlays.tick(dt) {
-            self.tree.unmount(id);
+        let expired = self.overlays.tick(dt);
+        if !expired.is_empty() {
+            for id in expired {
+                self.tree.unmount(id);
+            }
+            self.invalidate_layout();
         }
     }
 
     pub fn layout(&mut self, frame: &UiFrame<'_>) {
+        if !self.state.dirty.layout {
+            return;
+        }
+        let metrics = crate::layout::UiMetrics {
+            dpi_scale: frame.dpi_scale.max(0.01),
+            ui_scale: frame.ui_scale.max(0.01),
+            safe_area: frame.safe_area,
+        };
         self.overlays
             .position_anchored(&mut self.tree, frame.screen_size);
         crate::layout::run_layout(
             &mut self.tree,
             frame.screen_size,
-            frame.dpi_scale,
+            metrics,
             self.text_measurer.as_mut(),
         );
         // 二次定位：measure 后 desired 更准。
@@ -189,13 +205,27 @@ impl UiRuntime {
         crate::layout::run_layout(
             &mut self.tree,
             frame.screen_size,
-            frame.dpi_scale,
+            metrics,
             self.text_measurer.as_mut(),
         );
+        self.state.dirty.clear_layout();
+        self.state.dirty.mark_paint();
     }
 
     pub fn paint(&mut self, draw: &mut DrawList) {
+        // DrawList 每帧重建：始终遍历绘制。`dirty.paint` 留给增量优化。
         paint::paint_tree(&self.tree, &self.theme, &self.motion, draw);
+        self.state.dirty.clear_paint();
+    }
+
+    /// 标记需要重新 layout（mount / 内容变化后调用）。
+    pub fn invalidate_layout(&mut self) {
+        self.state.dirty.mark_layout();
+    }
+
+    /// 仅标记需要重绘。
+    pub fn invalidate_paint(&mut self) {
+        self.state.dirty.mark_paint();
     }
 
     pub fn end_frame(&mut self) {
@@ -227,7 +257,9 @@ impl UiRuntime {
         builder: crate::widgets::WidgetBuilder,
     ) -> Option<WidgetId> {
         let root = self.tree.root();
-        let id = builder.layer(UiLayer::Overlay).mount(&mut self.tree, root)?;
+        let id = builder
+            .layer(UiLayer::Overlay)
+            .mount(&mut self.tree, root)?;
         self.overlays.push_entry(crate::overlay::OverlayEntry {
             id,
             layer,
@@ -243,6 +275,7 @@ impl UiRuntime {
                 }
             }
         }
+        self.invalidate_layout();
         Some(id)
     }
 
@@ -253,7 +286,9 @@ impl UiRuntime {
         duration_secs: f32,
     ) -> Option<WidgetId> {
         let root = self.tree.root();
-        let id = builder.layer(UiLayer::Overlay).mount(&mut self.tree, root)?;
+        let id = builder
+            .layer(UiLayer::Overlay)
+            .mount(&mut self.tree, root)?;
         self.overlays.push_entry(crate::overlay::OverlayEntry {
             id,
             layer: crate::overlay::OverlayLayer::Toast,
@@ -270,7 +305,10 @@ impl UiRuntime {
         anchor: WidgetId,
         builder: crate::widgets::WidgetBuilder,
     ) -> Option<WidgetId> {
-        for id in self.overlays.remove_layer(crate::overlay::OverlayLayer::Tooltip) {
+        for id in self
+            .overlays
+            .remove_layer(crate::overlay::OverlayLayer::Tooltip)
+        {
             self.tree.unmount(id);
         }
         self.open_overlay_anchored(
@@ -287,7 +325,10 @@ impl UiRuntime {
         anchor: WidgetId,
         builder: crate::widgets::WidgetBuilder,
     ) -> Option<WidgetId> {
-        for id in self.overlays.remove_layer(crate::overlay::OverlayLayer::Popup) {
+        for id in self
+            .overlays
+            .remove_layer(crate::overlay::OverlayLayer::Popup)
+        {
             self.tree.unmount(id);
         }
         self.open_overlay_anchored(
@@ -299,19 +340,28 @@ impl UiRuntime {
     }
 
     pub fn dismiss_tooltips(&mut self) {
-        for id in self.overlays.remove_layer(crate::overlay::OverlayLayer::Tooltip) {
+        let removed = self
+            .overlays
+            .remove_layer(crate::overlay::OverlayLayer::Tooltip);
+        if removed.is_empty() {
+            return;
+        }
+        for id in removed {
             self.tree.unmount(id);
         }
+        self.invalidate_layout();
     }
 
     pub fn close_overlay(&mut self, id: WidgetId) {
         self.overlays.remove(id);
         self.tree.unmount(id);
+        self.invalidate_layout();
     }
 
     pub fn close_top_overlay(&mut self) -> bool {
         if let Some(entry) = self.overlays.pop_top() {
             self.tree.unmount(entry.id);
+            self.invalidate_layout();
             true
         } else {
             false

@@ -1,13 +1,7 @@
-//! Retained Widget 系统。
-//!
-//! 公共 API 为长期持有的 [`WidgetTree`] 与 [`UiRuntime`]。
-//! 每帧经 layout / event / update 后，由 paint traversal 写入 [`spark_renderer::DrawList`]。
-//!
-//! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
-//! UI 动效在 [`motion`]，不属于 `spark-animator`。
-//!
-//! 不提供立即模式控件公共 API。
-
+//! Retained Widget ?????//!
+//! ??? API ????????? [`WidgetTree`] ??[`UiRuntime`]??//! ?????layout / event / update ?????paint traversal ??? [`spark_renderer::DrawList`]??//!
+//! ????????**Widget**?????? ECS `Component` ?????//! UI ?????[`motion`]?????? `spark-animator`??//!
+//! ?????????????????API??
 pub mod accessibility;
 pub mod command;
 pub mod drag_drop;
@@ -43,7 +37,7 @@ pub use focus::{
 pub use id::WidgetId;
 pub use inspector::{LayoutDump, UiEventTrace, UiInspector};
 pub use layout::{
-    Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size,
+    Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size, UiMetrics,
 };
 pub use motion::{Easing, MotionManager, MotionSample, SpringConfig, StyleProperty, Transition};
 pub use node::{WidgetContent, WidgetKind, WidgetNode, WidgetStateFlags};
@@ -51,7 +45,7 @@ pub use overlay::{OverlayEntry, OverlayLayer, OverlayManager};
 pub use paint::PaintContext;
 pub use response::EventResponse;
 pub use runtime::{UiFrame, UiLayer, UiRuntime};
-pub use state::UiState;
+pub use state::{UiDirty, UiState};
 pub use style::{ComputedStyle, Style, Theme};
 pub use scroll::{ensure_visible, find_scroll_ancestor, ScrollDirection, ScrollState};
 pub use text::{

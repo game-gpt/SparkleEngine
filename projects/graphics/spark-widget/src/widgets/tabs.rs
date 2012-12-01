@@ -4,7 +4,7 @@ use crate::id::WidgetId;
 use crate::layout::{LayoutSpec, Size};
 use crate::node::WidgetKind;
 use crate::tree::WidgetTree;
-use crate::widgets::{button_widget, column, row, WidgetBuilder};
+use crate::widgets::{WidgetBuilder, button_widget, column, row};
 
 /// TabView 根：纵向 = 页签栏 + 内容区。
 pub fn tab_view() -> WidgetBuilder {
@@ -139,9 +139,10 @@ pub fn handle_tab_click(tree: &mut WidgetTree, clicked: WidgetId) -> Option<usiz
 
 #[cfg(test)]
 mod tests {
-    use crate::text::EstimateMeasurer;
     use super::*;
+    use crate::layout::UiMetrics;
     use crate::layout::run_layout;
+    use crate::text::EstimateMeasurer;
     use crate::widgets::label_widget;
     use spark_core::Vec2;
 
@@ -161,7 +162,12 @@ mod tests {
             ],
         )
         .unwrap();
-        run_layout(&mut tree, Vec2::new(300.0, 200.0), 1.0, &mut EstimateMeasurer);
+        run_layout(
+            &mut tree,
+            Vec2::new(300.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
         let pages = tree.node(id).unwrap().children[1];
         let kids = &tree.node(pages).unwrap().children;
         assert!(!tree.node(kids[0]).unwrap().state.visible);

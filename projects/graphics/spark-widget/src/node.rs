@@ -54,6 +54,8 @@ pub struct WidgetContent {
     pub cursor: usize,
     /// 选区锚点；`None` 表示无选区。
     pub sel_anchor: Option<usize>,
+    /// IME 预编辑串（仅聚焦文本框时由 router 同步）。
+    pub composition: String,
 }
 
 impl Default for WidgetContent {
@@ -69,6 +71,7 @@ impl Default for WidgetContent {
             drop_target: false,
             cursor: 0,
             sel_anchor: None,
+            composition: String::new(),
         }
     }
 }
