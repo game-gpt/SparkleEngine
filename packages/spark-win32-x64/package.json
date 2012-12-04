@@ -1,0 +1,19 @@
+{
+    "name": "spark-win32-x64",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Spark Engine native N-API addon (win32-x64)",
+    "license": "Apache-2.0",
+    "os": [
+        "win32"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "spark.win32-x64-msvc.node",
+    "files": [
+        "spark.win32-x64-msvc.node",
+        "README.md"
+    ],
+    "preferUnplugged": true
+}
