@@ -95,6 +95,11 @@ impl WidgetBuilder {
         self
     }
 
+    pub fn image(mut self, image: crate::asset::UiImage) -> Self {
+        self.content.image = Some(image);
+        self
+    }
+
     pub fn layer(mut self, layer: crate::runtime::UiLayer) -> Self {
         self.layer = Some(layer);
         self
@@ -149,6 +154,14 @@ pub fn panel() -> WidgetBuilder {
 
 pub fn label_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Label)
+}
+
+pub fn image_widget() -> WidgetBuilder {
+    WidgetBuilder::new(WidgetKind::Image).layout(LayoutSpec {
+        width: Size::Px(32.0),
+        height: Size::Px(32.0),
+        ..LayoutSpec::default()
+    })
 }
 
 pub fn button_widget() -> WidgetBuilder {

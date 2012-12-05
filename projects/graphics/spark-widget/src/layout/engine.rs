@@ -340,6 +340,16 @@ fn intrinsic_leaf(
             constraints.max.width.min(200.0 * scale).max(80.0 * scale),
             32.0 * scale,
         ),
+        WidgetKind::Image => {
+            let (w, h) = node
+                .content
+                .image
+                .as_ref()
+                .and_then(|img| img.preferred_size)
+                .map(|s| (s.x * scale, s.y * scale))
+                .unwrap_or((32.0 * scale, 32.0 * scale));
+            Size2::new(w, h)
+        }
         WidgetKind::Label => measured,
         _ => measured,
     }

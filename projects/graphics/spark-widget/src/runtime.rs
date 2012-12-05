@@ -5,6 +5,8 @@ use spark_input::Input;
 use spark_renderer::DrawList;
 
 use crate::accessibility::AccessibilityTree;
+use crate::asset::{NullTextureResolver, UiTextureResolver};
+use crate::binding::{NullViewModel, UiViewModel};
 use crate::command::UiCommandQueue;
 use crate::drag_drop::DragState;
 use crate::event::router;
@@ -55,6 +57,10 @@ pub struct UiRuntime {
     pub text_measurer: Box<dyn TextMeasurer>,
     /// 剪贴板（默认进程内，宿主可替换为系统剪贴板）。
     pub clipboard: Box<dyn crate::text::Clipboard>,
+    /// 纹理解析（`AssetId` → GPU `TextureId`）。
+    pub textures: Box<dyn UiTextureResolver>,
+    /// 可选 ViewModel：layout 前同步树。
+    pub view_model: Box<dyn UiViewModel>,
     scene_root: Option<WidgetId>,
     hud_root: Option<WidgetId>,
 }
@@ -75,6 +81,8 @@ impl std::fmt::Debug for UiRuntime {
             .field("time", &self.time)
             .field("text_measurer", &"<dyn TextMeasurer>")
             .field("clipboard", &"<dyn Clipboard>")
+            .field("textures", &"<dyn UiTextureResolver>")
+            .field("view_model", &"<dyn UiViewModel>")
             .field("scene_root", &self.scene_root)
             .field("hud_root", &self.hud_root)
             .finish()
@@ -103,6 +111,8 @@ impl UiRuntime {
             time: 0.0,
             text_measurer: default_text_measurer(),
             clipboard: Box::new(MemoryClipboard::new()),
+            textures: Box::new(NullTextureResolver),
+            view_model: Box::new(NullViewModel),
             scene_root: None,
             hud_root: None,
         }
@@ -116,6 +126,16 @@ impl UiRuntime {
     /// 替换剪贴板实现。
     pub fn set_clipboard(&mut self, clipboard: Box<dyn crate::text::Clipboard>) {
         self.clipboard = clipboard;
+    }
+
+    /// 替换纹理解析器。
+    pub fn set_texture_resolver(&mut self, textures: Box<dyn UiTextureResolver>) {
+        self.textures = textures;
+    }
+
+    /// 替换 ViewModel。
+    pub fn set_view_model(&mut self, view_model: Box<dyn UiViewModel>) {
+        self.view_model = view_model;
     }
 
     pub fn begin_frame(&mut self, _frame: &UiFrame<'_>) {
@@ -183,6 +203,7 @@ impl UiRuntime {
     }
 
     pub fn layout(&mut self, frame: &UiFrame<'_>) {
+        self.view_model.sync(&mut self.tree);
         if !self.state.dirty.layout {
             return;
         }
@@ -214,7 +235,13 @@ impl UiRuntime {
 
     pub fn paint(&mut self, draw: &mut DrawList) {
         // DrawList 每帧重建：始终遍历绘制。`dirty.paint` 留给增量优化。
-        paint::paint_tree(&self.tree, &self.theme, &self.motion, draw);
+        paint::paint_tree(
+            &self.tree,
+            &self.theme,
+            &self.motion,
+            self.textures.as_mut(),
+            draw,
+        );
         self.state.dirty.clear_paint();
     }
 
@@ -229,6 +256,7 @@ impl UiRuntime {
     }
 
     pub fn end_frame(&mut self) {
+        self.view_model.apply_commands(&mut self.commands);
         self.accessibility.rebuild_from(&self.tree);
     }
 

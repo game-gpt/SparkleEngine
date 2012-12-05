@@ -3,6 +3,7 @@
 use spark_core::{Color, Rect, Vec2};
 use spark_renderer::DrawList;
 
+use crate::asset::UiTextureResolver;
 use crate::motion::{MotionManager, MotionSample};
 use crate::node::{WidgetKind, WidgetNode};
 use crate::style::{ComputedStyle, Theme};
@@ -10,15 +11,22 @@ use crate::text::{self, TextStyle};
 use crate::tree::WidgetTree;
 
 /// 遍历树并写入绘制命令。
-pub fn paint_tree(tree: &WidgetTree, theme: &Theme, motion: &MotionManager, draw: &mut DrawList) {
+pub fn paint_tree(
+    tree: &WidgetTree,
+    theme: &Theme,
+    motion: &MotionManager,
+    textures: &mut dyn UiTextureResolver,
+    draw: &mut DrawList,
+) {
     draw.begin_hud();
-    paint_node(tree, theme, motion, draw, tree.root());
+    paint_node(tree, theme, motion, textures, draw, tree.root());
 }
 
 fn paint_node(
     tree: &WidgetTree,
     theme: &Theme,
     motion: &MotionManager,
+    textures: &mut dyn UiTextureResolver,
     draw: &mut DrawList,
     id: crate::id::WidgetId,
 ) {
@@ -33,7 +41,7 @@ fn paint_node(
     let sample = motion.sample(id);
     style.opacity *= sample.opacity;
     let is_scroll = matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView);
-    paint_widget(draw, theme, node, &style, sample);
+    paint_widget(draw, theme, textures, node, &style, sample);
 
     if is_scroll {
         if let Some(clip) = node.computed.clip_rect.or(Some(node.computed.content_rect)) {
@@ -42,7 +50,7 @@ fn paint_node(
     }
 
     for child in &node.children {
-        paint_node(tree, theme, motion, draw, *child);
+        paint_node(tree, theme, motion, textures, draw, *child);
     }
 
     if is_scroll {
@@ -73,6 +81,7 @@ fn paint_scrollbar(draw: &mut DrawList, theme: &Theme, node: &WidgetNode) {
 fn paint_widget(
     draw: &mut DrawList,
     theme: &Theme,
+    textures: &mut dyn UiTextureResolver,
     node: &WidgetNode,
     style: &ComputedStyle,
     sample: MotionSample,
@@ -88,6 +97,7 @@ fn paint_widget(
         WidgetKind::ProgressBar => paint_progress(draw, node, style, theme),
         WidgetKind::TextField | WidgetKind::TextArea => paint_text_field(draw, node, style, theme),
         WidgetKind::Separator => paint_separator(draw, node, style),
+        WidgetKind::Image => paint_image(draw, textures, node, style, rect),
         WidgetKind::Container
         | WidgetKind::Panel
         | WidgetKind::ScrollView
@@ -96,7 +106,6 @@ fn paint_widget(
         | WidgetKind::Toast
         | WidgetKind::Tooltip
         | WidgetKind::Custom
-        | WidgetKind::Image
         | WidgetKind::ListView
         | WidgetKind::GridView
         | WidgetKind::TreeView
@@ -119,6 +128,24 @@ fn scaled_rect(rect: Rect, scale: f32) -> Rect {
     let w = rect.w * scale;
     let h = rect.h * scale;
     Rect::new(cx - w * 0.5, cy - h * 0.5, w, h)
+}
+
+fn paint_image(
+    draw: &mut DrawList,
+    textures: &mut dyn UiTextureResolver,
+    node: &WidgetNode,
+    style: &ComputedStyle,
+    rect: Rect,
+) {
+    fill_if_opaque(draw, rect, style);
+    let Some(image) = node.content.image.as_ref() else {
+        return;
+    };
+    let Some(resolved) = textures.resolve(image.asset) else {
+        return;
+    };
+    let tint = with_alpha(image.tint, style.opacity);
+    draw.tex_rect(resolved.texture, rect, image.uv, tint);
 }
 
 fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
@@ -430,7 +457,7 @@ mod tests {
         let theme = Theme::default();
         let motion = crate::motion::MotionManager::new();
         let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
-        paint_tree(&tree, &theme, &motion, &mut draw);
+        paint_tree(&tree, &theme, &motion, &mut crate::asset::NullTextureResolver, &mut draw);
         let total = draw.hud_quads.len() + draw.texts.len() + draw.quads.len();
         assert!(
             total >= 4,
@@ -439,5 +466,50 @@ mod tests {
             draw.texts.len(),
             draw.quads.len()
         );
+    }
+
+    #[test]
+    fn paint_image_emits_tex_quad() {
+        use crate::asset::{MapTextureResolver, UiImage};
+        use crate::widgets::image_widget;
+        use spark_asset::AssetId;
+        use spark_renderer::TextureId;
+
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let asset = AssetId(7);
+        image_widget()
+            .image(
+                UiImage::new(asset)
+                    .with_preferred_size(Vec2::new(48.0, 48.0)),
+            )
+            .layout(LayoutSpec {
+                width: Size::Px(48.0),
+                height: Size::Px(48.0),
+                ..LayoutSpec::default()
+            })
+            .mount(&mut tree, root)
+            .unwrap();
+        run_layout(
+            &mut tree,
+            Vec2::new(200.0, 200.0),
+            UiMetrics::new(1.0),
+            &mut EstimateMeasurer,
+        );
+
+        let mut textures = MapTextureResolver {
+            asset,
+            texture: TextureId(99),
+            size: Vec2::new(48.0, 48.0),
+        };
+        let theme = Theme::default();
+        let motion = crate::motion::MotionManager::new();
+        let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+        paint_tree(&tree, &theme, &motion, &mut textures, &mut draw);
+        assert!(
+            !draw.hud_tex_quads.is_empty(),
+            "image should emit hud tex quads"
+        );
+        assert_eq!(draw.hud_tex_quads[0].texture, TextureId(99));
     }
 }

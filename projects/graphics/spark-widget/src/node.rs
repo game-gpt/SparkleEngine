@@ -56,6 +56,8 @@ pub struct WidgetContent {
     pub sel_anchor: Option<usize>,
     /// IME 预编辑串（仅聚焦文本框时由 router 同步）。
     pub composition: String,
+    /// Image 控件的资源句柄。
+    pub image: Option<crate::asset::UiImage>,
 }
 
 impl Default for WidgetContent {
@@ -72,6 +74,7 @@ impl Default for WidgetContent {
             cursor: 0,
             sel_anchor: None,
             composition: String::new(),
+            image: None,
         }
     }
 }
