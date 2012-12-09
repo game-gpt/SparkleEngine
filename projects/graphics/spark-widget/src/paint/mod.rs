@@ -148,11 +148,11 @@ fn paint_image(
     draw.tex_rect(resolved.texture, rect, image.uv, tint);
 }
 
-fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
+fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, _theme: &Theme) {
     let Some(text) = node.content.text.as_deref() else {
         return;
     };
-    let size = theme.typography.body_size;
+    let size = style.font_size;
     let color = with_alpha(style.foreground, style.opacity);
     let rect = node.computed.content_rect;
     draw.text(rect.x, rect.y + 2.0, size, color, text);
@@ -162,7 +162,7 @@ fn paint_button(
     draw: &mut DrawList,
     node: &WidgetNode,
     style: &ComputedStyle,
-    theme: &Theme,
+    _theme: &Theme,
     rect: Rect,
 ) {
     fill_if_opaque(draw, rect, style);
@@ -170,7 +170,7 @@ fn paint_button(
         stroke_rect(draw, rect, with_alpha(style.border, style.opacity), 2.0);
     }
     if let Some(text) = node.content.text.as_deref() {
-        let size = theme.typography.body_size;
+        let size = style.font_size;
         let measured = text::measure_plain(
             text,
             &TextStyle {

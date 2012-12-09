@@ -296,12 +296,13 @@ fn intrinsic_leaf(
 ) -> Size2 {
     let text = node.content.text.as_deref().unwrap_or("");
     let scale = metrics.content_scale();
+    let base = node.style.font_size.unwrap_or(match node.kind {
+        WidgetKind::Label => 16.0,
+        WidgetKind::Button => 16.0,
+        _ => 14.0,
+    });
     let style = TextStyle {
-        size: match node.kind {
-            WidgetKind::Label => 16.0 * scale,
-            WidgetKind::Button => 16.0 * scale,
-            _ => 14.0 * scale,
-        },
+        size: base * scale,
         ..TextStyle::default()
     };
     let measured = if text.is_empty() {

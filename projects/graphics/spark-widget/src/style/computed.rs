@@ -12,6 +12,8 @@ pub struct Style {
     pub foreground: Option<Color>,
     pub opacity: Option<f32>,
     pub corner_radius: Option<f32>,
+    /// 覆盖主题字号（Label / Button 文本）。
+    pub font_size: Option<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -22,6 +24,7 @@ pub struct ComputedStyle {
     pub accent: Color,
     pub opacity: f32,
     pub corner_radius: f32,
+    pub font_size: f32,
 }
 
 impl ComputedStyle {
@@ -34,6 +37,7 @@ impl ComputedStyle {
             accent: theme.colors.accent,
             opacity: local.opacity.unwrap_or(1.0),
             corner_radius: local.corner_radius.unwrap_or(4.0),
+            font_size: local.font_size.unwrap_or(theme.typography.body_size),
         }
     }
 
@@ -53,6 +57,9 @@ impl ComputedStyle {
         }
         if let Some(r) = node.style.corner_radius {
             style.corner_radius = r;
+        }
+        if let Some(fs) = node.style.font_size {
+            style.font_size = fs;
         }
         style
     }
