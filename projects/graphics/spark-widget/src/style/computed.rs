@@ -14,6 +14,8 @@ pub struct Style {
     pub corner_radius: Option<f32>,
     /// 覆盖主题字号（Label / Button 文本）。
     pub font_size: Option<f32>,
+    /// 覆盖强调色（ProgressBar 填充等）。
+    pub accent: Option<Color>,
 }
 
 #[derive(Debug, Clone)]
@@ -60,6 +62,9 @@ impl ComputedStyle {
         }
         if let Some(fs) = node.style.font_size {
             style.font_size = fs;
+        }
+        if let Some(accent) = node.style.accent {
+            style.accent = accent;
         }
         style
     }
