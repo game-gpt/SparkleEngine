@@ -1,0 +1,24 @@
+[package]
+name = "spark-studio"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark Studio：基于 Widget 的可选桌面编辑器"
+keywords = ["spark", "studio", "editor", "widget"]
+categories = ["game-development", "gui"]
+publish = false
+
+[[bin]]
+name = "spark-studio"
+path = "src/main.rs"
+
+[dependencies]
+spark-core = { workspace = true }
+spark-engine = { workspace = true }
+spark-input = { workspace = true }
+spark-renderer = { workspace = true }
+spark-widget = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
