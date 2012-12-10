@@ -1,0 +1,22 @@
+{
+    "preferUnplugged": true,
+    "description": "Prebuilt Node-API addon for @game-gpt/sparkle-engine (win32-x64). Platform artifact only.",
+    "version": "0.1.0",
+    "files": [
+        "sparkle-engine.win32-x64-msvc.node",
+        "README.md"
+    ],
+    "os": [
+        "win32"
+    ],
+    "engines": {
+        "node": ">=18"
+    },
+    "name": "@game-gpt/sparkle-engine-win32-x64",
+    "private": true,
+    "main": "sparkle-engine.win32-x64-msvc.node",
+    "license": "Apache-2.0",
+    "cpu": [
+        "x64"
+    ]
+}

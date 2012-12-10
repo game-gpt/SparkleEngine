@@ -12,3 +12,11 @@ tmp/
 
 # IDE
 .idea/
+
+# pnpm / node
+node_modules/
+**/dist/
+**/*.node
+
+# pnpm / node
+node_modules/

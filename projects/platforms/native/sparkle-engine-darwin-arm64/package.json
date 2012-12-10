@@ -1,0 +1,22 @@
+{
+    "preferUnplugged":  true,
+    "description":  "Prebuilt Node-API addon for @game-gpt/sparkle-engine (darwin-arm64). Platform artifact only.",
+    "version":  "0.1.0",
+    "files":  [
+                  "sparkle-engine.darwin-arm64.node",
+                  "README.md"
+              ],
+    "os":  [
+               "darwin"
+           ],
+    "engines":  {
+                    "node":  "\u003e=18"
+                },
+    "name":  "@game-gpt/sparkle-engine-darwin-arm64",
+    "private":  true,
+    "main":  "sparkle-engine.darwin-arm64.node",
+    "license":  "Apache-2.0",
+    "cpu":  [
+                "arm64"
+            ]
+}

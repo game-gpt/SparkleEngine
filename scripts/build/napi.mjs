@@ -1,9 +1,6 @@
 /**
- * Build `spark-napi` and install the `.node` into the current-platform package
- * (`packages/spark-<short>/` → npm name `spark-<short>`).
- *
- * Mirrors vmz-framework `scripts/build/napi.mjs`:
- * platform packages are binary bags only — no TypeScript.
+ * 构建 `spark-napi` → 当前平台 `@game-gpt/sparkle-engine-<short>`：
+ *   编译后把 `.node` 装进 `projects/platforms/native/sparkle-engine-<short>/`。
  *
  * Usage: node scripts/build/napi.mjs [--release]
  */
@@ -14,6 +11,8 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -122,41 +121,86 @@ if (!artifact) {
 }
 
 const plat = platformInfo();
-const outDir = path.join(root, "packages", `spark-${plat.short}`);
+const outDir = path.join(
+  root,
+  "projects",
+  "platforms",
+  "native",
+  `sparkle-engine-${plat.short}`,
+);
 mkdirSync(outDir, { recursive: true });
 
-const binaryName = `spark.${plat.triple}.node`;
+const binaryName = `sparkle-engine.${plat.triple}.node`;
+const pkgName = `@game-gpt/sparkle-engine-${plat.short}`;
+const repoDir = `projects/platforms/native/sparkle-engine-${plat.short}`;
 const pkgJsonPath = path.join(outDir, "package.json");
-writeFileSync(
-  pkgJsonPath,
-  `${JSON.stringify(
-    {
-      name: `spark-${plat.short}`,
-      version: "0.1.0",
-      private: true,
-      description: `Spark Engine native N-API addon (${plat.short})`,
-      license: "Apache-2.0",
-      os: plat.os,
-      cpu: plat.cpu,
-      main: binaryName,
-      files: [binaryName, "README.md"],
-      preferUnplugged: true,
-    },
-    null,
-    4,
-  )}\n`,
-);
+
+if (!existsSync(pkgJsonPath)) {
+  writeFileSync(
+    pkgJsonPath,
+    `${JSON.stringify(
+      {
+        name: pkgName,
+        version: "0.1.0",
+        private: true,
+        description: `Prebuilt Node-API addon for \`@game-gpt/sparkle-engine\` (${plat.short}). Platform artifact only.`,
+        license: "Apache-2.0",
+        os: plat.os,
+        cpu: plat.cpu,
+        main: binaryName,
+        files: [binaryName, "README.md"],
+        engines: { node: ">=18" },
+        preferUnplugged: true,
+      },
+      null,
+      4,
+    )}\n`,
+  );
+} else {
+  try {
+    const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
+    pkg.name = pkgName;
+    pkg.private = true;
+    pkg.os = plat.os;
+    pkg.cpu = plat.cpu;
+    pkg.main = binaryName;
+    pkg.files = [binaryName, "README.md"];
+    if (!pkg.license) pkg.license = "Apache-2.0";
+    if (!pkg.engines) pkg.engines = { node: ">=18" };
+    writeFileSync(pkgJsonPath, `${JSON.stringify(pkg, null, 4)}\n`);
+  } catch {
+    /* ignore */
+  }
+}
 
 const readmePath = path.join(outDir, "README.md");
 if (!existsSync(readmePath)) {
   writeFileSync(
     readmePath,
-    `# \`spark-${plat.short}\`\n\n` +
-      `原生 N-API 平台包。\`main\` 为 \`${binaryName}\`（由 \`node scripts/build/napi.mjs\` 写入）。\n` +
-      `元包 \`spark-engine\` 经 optionalDependencies + \`require.resolve\` 加载，**不是** TypeScript 包。\n`,
+    `# \`${pkgName}\`\n\n` +
+      `原生 N-API 平台袋。\`main\` 为 \`${binaryName}\`（由 \`node scripts/build/napi.mjs\` 写入）。\n` +
+      `请安装元包 \`@game-gpt/sparkle-engine\`，由包管理器选择本 optionalDependency。\n`,
   );
 }
 
-const dest = path.join(outDir, binaryName);
-copyFileSync(artifact, dest);
-console.log(`napi: ${artifact} → ${dest}`);
+const destNamed = path.join(outDir, binaryName);
+copyFileSync(artifact, destNamed);
+
+// 清理旧名产物
+for (const stale of [
+  "spark.node",
+  "sparkle-engine.node",
+  `spark.${plat.triple}.node`,
+]) {
+  const p = path.join(outDir, stale);
+  if (existsSync(p) && p !== destNamed) {
+    try {
+      unlinkSync(p);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+console.log(`napi: ${artifact} → ${destNamed}`);
+console.log(`Platform package: ${pkgName} (${outDir})`);

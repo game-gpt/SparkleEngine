@@ -42,20 +42,14 @@ impl SparkJsHost {
     }
 
     /// 从目录加载字节资源，返回缓存 id。
-    pub fn load_bytes(
-        &mut self,
-        root: &str,
-        key: &str,
-    ) -> Result<u32, spark_asset::AssetError> {
+    pub fn load_bytes(&mut self, root: &str, key: &str) -> Result<u32, spark_asset::AssetError> {
         let loader = BytesLoader::new(root);
         let id = self.assets.load(AssetKey::new(key), &loader)?;
         Ok(id.0)
     }
 
     pub fn asset_len(&self, id: u32) -> Option<usize> {
-        self.assets
-            .bytes(spark_asset::AssetId(id))
-            .map(|b| b.len())
+        self.assets.bytes(spark_asset::AssetId(id)).map(|b| b.len())
     }
 }
 
@@ -67,7 +61,7 @@ mod tests {
     fn info_and_geometry() {
         let host = SparkJsHost::new();
         let info = host.info();
-        assert_eq!(info.npm_package, "spark-engine");
+        assert_eq!(info.npm_package, "@game-gpt/sparkle-engine");
         assert!((host.vec2_length(3.0, 4.0) - 5.0).abs() < 1e-5);
     }
 }

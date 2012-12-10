@@ -14,5 +14,5 @@ mod node;
 
 pub use host::{EngineInfo, SparkJsHost};
 
-/// npm 侧约定的包名（与 `package.json` / `package.metadata.napi` 对齐）。
-pub const NPM_PACKAGE_NAME: &str = "spark-engine";
+/// npm 侧约定的包名（与 `projects/hosts/sparkle-engine/package.json` 对齐）。
+pub const NPM_PACKAGE_NAME: &str = "@game-gpt/sparkle-engine";
