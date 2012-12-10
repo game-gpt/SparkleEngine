@@ -1,0 +1,2 @@
+# 混合：流程 / HUD 由 Valkyrie；棋盘权威在 Rust
+micro on_ready() {}

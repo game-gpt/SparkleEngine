@@ -1,0 +1,6 @@
+component InputMap {
+    move_left: string = "Left"
+    move_right: string = "Right"
+    soft_drop: string = "Down"
+    rotate: string = "Up"
+}

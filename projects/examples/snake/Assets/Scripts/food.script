@@ -1,0 +1,3 @@
+component Food {
+    points: f32 = 1.0
+}

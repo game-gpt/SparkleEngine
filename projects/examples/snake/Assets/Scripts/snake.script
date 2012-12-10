@@ -1,0 +1,5 @@
+component SnakeController {
+    cell_size: f32 = 16.0
+    step_interval: f32 = 0.12
+    grow_on_eat: bool = true
+}

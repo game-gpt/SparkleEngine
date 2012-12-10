@@ -1,0 +1,11 @@
+{
+  "format": "spark.scene/0",
+  "name": "MainScene",
+  "entities": [
+    { "id": "camera", "name": "Camera", "components": ["Transform", "Camera"] },
+    { "id": "table", "name": "Table", "components": ["Transform", "SpriteRenderer"] },
+    { "id": "ball", "name": "Ball", "components": ["Transform", "SpriteRenderer", "Collider", "Ball"] },
+    { "id": "left-paddle", "name": "LeftPaddle", "components": ["Transform", "SpriteRenderer", "Collider", "Paddle"] },
+    { "id": "right-paddle", "name": "RightPaddle", "components": ["Transform", "SpriteRenderer", "Collider", "Paddle"] }
+  ]
+}

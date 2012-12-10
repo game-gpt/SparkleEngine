@@ -1,0 +1,3 @@
+component Effects {
+    line_clear_fx: bool = true
+}

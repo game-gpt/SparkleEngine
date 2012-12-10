@@ -18,6 +18,24 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  projects/examples/ping-pong:
+    dependencies:
+      '@game-gpt/sparkle-engine':
+        specifier: workspace:*
+        version: link:../../hosts/sparkle-engine
+
+  projects/examples/snake:
+    dependencies:
+      '@game-gpt/sparkle-engine':
+        specifier: workspace:*
+        version: link:../../hosts/sparkle-engine
+
+  projects/examples/tetris:
+    dependencies:
+      '@game-gpt/sparkle-engine':
+        specifier: workspace:*
+        version: link:../../hosts/sparkle-engine
+
   projects/hosts/sparkle-engine:
     optionalDependencies:
       '@game-gpt/sparkle-engine-darwin-arm64':

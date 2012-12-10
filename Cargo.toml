@@ -6,6 +6,8 @@ members = [
     "projects/scripting/*",
     "projects/gameplay/*",
     "projects/bindings/*",
+    "projects/examples/ping-pong",
+    "projects/examples/tetris",
 ]
 default-members = [
     "projects/bindings/spark-wasm",

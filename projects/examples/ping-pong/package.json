@@ -1,0 +1,19 @@
+{
+  "name": "ping-pong",
+  "private": true,
+  "description": "Spark Studio 验收：纯 Rust 乒乓",
+  "scripts": {
+    "studio": "spark studio",
+    "run": "spark run",
+    "build": "cargo build -p ping-pong"
+  },
+  "dependencies": {
+    "@game-gpt/sparkle-engine": "workspace:*"
+  },
+  "spark": {
+    "kind": "rust",
+    "startupScene": "Assets/Scenes/main.scene",
+    "cargoManifest": "Cargo.toml",
+    "runTarget": "ping-pong"
+  }
+}

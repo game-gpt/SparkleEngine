@@ -1,0 +1,10 @@
+{
+  "scheme": "keyboard",
+  "actions": {
+    "left_up": ["W"],
+    "left_down": ["S"],
+    "right_up": ["Up"],
+    "right_down": ["Down"],
+    "pause": ["Escape"]
+  }
+}

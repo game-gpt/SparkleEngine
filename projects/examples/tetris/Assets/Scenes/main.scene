@@ -1,0 +1,10 @@
+{
+  "format": "spark.scene/0",
+  "name": "MainScene",
+  "entities": [
+    { "id": "camera", "name": "Camera", "components": ["Transform", "Camera"] },
+    { "id": "board", "name": "Board", "components": ["Transform", "Board"] },
+    { "id": "active-piece", "name": "ActivePiece", "components": ["Transform", "Piece"] },
+    { "id": "hud", "name": "HUD", "components": ["Transform", "WidgetRoot", "Hud"] }
+  ]
+}

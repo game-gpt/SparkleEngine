@@ -1,0 +1,11 @@
+{
+  "format": "spark.scene/0",
+  "name": "MainScene",
+  "entities": [
+    { "id": "camera", "name": "Camera", "components": ["Transform", "Camera"] },
+    { "id": "board", "name": "Board", "components": ["Transform"] },
+    { "id": "snake", "name": "Snake", "components": ["Transform", "SnakeController"] },
+    { "id": "food", "name": "Food", "components": ["Transform", "Food"] },
+    { "id": "hud", "name": "HUD", "components": ["Transform", "WidgetRoot", "Hud"] }
+  ]
+}

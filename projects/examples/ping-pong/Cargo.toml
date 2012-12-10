@@ -1,0 +1,19 @@
+[package]
+name = "ping-pong"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "Spark Studio 示例：纯 Rust 乒乓"
+
+[[bin]]
+name = "ping-pong"
+path = "src/main.rs"
+
+[dependencies]
+spark-core = { workspace = true }
+spark-engine = { workspace = true }
+spark-renderer = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

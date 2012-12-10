@@ -1,0 +1,4 @@
+component Hud {
+    show_score: bool = true
+    show_next: bool = true
+}

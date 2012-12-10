@@ -1,0 +1,2 @@
+# 纯 Valkyrie 入口
+micro on_ready() {}

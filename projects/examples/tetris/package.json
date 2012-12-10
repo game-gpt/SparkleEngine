@@ -1,0 +1,20 @@
+{
+  "name": "tetris",
+  "private": true,
+  "description": "Spark Studio 验收：Rust + Valkyrie 混合俄罗斯方块",
+  "scripts": {
+    "studio": "spark studio",
+    "run": "spark run",
+    "build": "cargo build -p tetris"
+  },
+  "dependencies": {
+    "@game-gpt/sparkle-engine": "workspace:*"
+  },
+  "spark": {
+    "kind": "hybrid",
+    "startupScene": "Assets/Scenes/main.scene",
+    "scriptEntry": "Assets/Scripts/game.script",
+    "cargoManifest": "Cargo.toml",
+    "runTarget": "tetris"
+  }
+}
