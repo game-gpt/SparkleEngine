@@ -15,11 +15,14 @@ pnpm add @game-gpt/sparkle-engine
 ## CLI
 
 ```bash
+# 在游戏项目目录（含 package.json）
+spark studio
+spark studio --cwd path/to/game
+
 spark info
-spark studio [project-path]
 ```
 
-`spark studio` 启动已构建的 `spark-studio` 二进制（默认查找仓库 `target/{release,debug}/`；可用 `SPARK_STUDIO_BIN` 覆盖）。
+`spark studio` 读取当前（或 `--cwd`）目录的 `package.json`，打开该 npm 游戏项目的编辑器。**不是** Launcher / 项目选择器。
 
 ## 开发
 

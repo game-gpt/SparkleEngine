@@ -13,9 +13,12 @@ const path = require("node:path");
 function usage() {
   console.log(`Usage:
   spark info
-  spark studio [project-path] [--safe-mode]
+  spark studio [--cwd <project-dir>] [--safe-mode]
 
 Sparkle Engine CLI（@game-gpt/sparkle-engine）
+
+studio 读取当前（或 --cwd）目录的 package.json，打开该 npm 游戏项目的编辑器。
+不是 Launcher，不提供项目选择列表。
 `);
 }
 
@@ -46,6 +49,40 @@ function findStudioBinary() {
   return null;
 }
 
+/** 预检：cwd 必须有 package.json（与 Studio 二进制一致）。 */
+function resolveStudioCwd(args) {
+  let cwd = process.cwd();
+  const out = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a === "--cwd" && args[i + 1]) {
+      cwd = path.resolve(args[i + 1]);
+      out.push("--cwd", cwd);
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("--cwd=")) {
+      cwd = path.resolve(a.slice("--cwd=".length));
+      out.push(`--cwd=${cwd}`);
+      continue;
+    }
+    if (!a.startsWith("-")) {
+      cwd = path.resolve(a);
+      out.push("--cwd", cwd);
+      continue;
+    }
+    out.push(a);
+  }
+  const pkg = path.join(cwd, "package.json");
+  if (!fs.existsSync(pkg)) {
+    console.error(
+      `当前目录不是 Spark 游戏项目。\n未找到 package.json（${cwd}）。\n请在已安装 @game-gpt/sparkle-engine 的项目目录中运行 spark studio。`,
+    );
+    process.exit(2);
+  }
+  return out.length ? out : ["--cwd", cwd];
+}
+
 function runStudio(args) {
   const bin = findStudioBinary();
   if (!bin) {
@@ -54,10 +91,12 @@ function runStudio(args) {
     );
     process.exit(1);
   }
-  const result = spawnSync(bin, args, {
+  const forwarded = resolveStudioCwd(args);
+  const result = spawnSync(bin, forwarded, {
     stdio: "inherit",
     windowsHide: true,
     env: process.env,
+    cwd: process.cwd(),
   });
   if (result.error) {
     console.error(result.error);
@@ -67,7 +106,6 @@ function runStudio(args) {
 }
 
 function runInfo() {
-  // 延迟加载，避免无 info 时也强依赖已构建的 dist / 原生插件。
   const { loadSpark } = require("../dist/index.js");
   const info = loadSpark().info();
   console.log(JSON.stringify(info, null, 2));
