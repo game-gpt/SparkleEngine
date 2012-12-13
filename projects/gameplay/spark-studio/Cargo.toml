@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark Studio：基于 Widget 的可选桌面编辑器"
+description = "Spark Studio：Unity-like 游戏编辑器（Widget dogfood）"
 keywords = ["spark", "studio", "editor", "widget"]
 categories = ["game-development", "gui"]
 publish = false
@@ -20,5 +20,7 @@ spark-engine = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 spark-widget = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
