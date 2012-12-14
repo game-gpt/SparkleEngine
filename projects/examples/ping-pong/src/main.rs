@@ -1,13 +1,8 @@
-//! 纯 Rust 乒乓入口（Play 接通前仅保证可编译）。
+//! 纯 Rust 乒乓入口。
 
-mod ball;
-mod game;
-mod paddle;
-
+use ping_pong::PingPongGame;
 use spark_engine::run_game;
 use spark_renderer::WindowConfig;
-
-use crate::game::PingPongApp;
 
 fn main() {
     tracing_subscriber::fmt()
@@ -17,7 +12,6 @@ fn main() {
         )
         .init();
 
-    println!("ping-pong: 纯 Rust 示例。完整玩法由 Studio Play / cargo run 接通。");
     if let Err(err) = run_game(
         WindowConfig {
             title: "ping-pong".into(),
@@ -25,7 +19,7 @@ fn main() {
             height: 540,
             clear_color: [0.05, 0.07, 0.10, 1.0],
         },
-        PingPongApp::default(),
+        PingPongGame::new(),
     ) {
         eprintln!("ping-pong: {err}");
         std::process::exit(1);

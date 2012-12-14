@@ -5,6 +5,7 @@
   "scripts": {
     "studio": "spark studio",
     "run": "spark run",
+    "play": "cargo run -p ping-pong",
     "build": "cargo build -p ping-pong"
   },
   "dependencies": {
@@ -12,7 +13,7 @@
   },
   "spark": {
     "kind": "rust",
-    "startupScene": "Assets/Scenes/main.scene",
+    "startupScene": "assets/scenes/main.scene",
     "cargoManifest": "Cargo.toml",
     "runTarget": "ping-pong"
   }

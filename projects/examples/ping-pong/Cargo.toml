@@ -7,6 +7,10 @@ license.workspace = true
 publish = false
 description = "Spark Studio 示例：纯 Rust 乒乓"
 
+[lib]
+name = "ping_pong"
+path = "src/lib.rs"
+
 [[bin]]
 name = "ping-pong"
 path = "src/main.rs"
@@ -14,6 +18,7 @@ path = "src/main.rs"
 [dependencies]
 spark-core = { workspace = true }
 spark-engine = { workspace = true }
+spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
