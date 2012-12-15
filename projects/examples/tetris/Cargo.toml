@@ -7,6 +7,10 @@ license.workspace = true
 publish = false
 description = "Spark Studio 示例：Rust + Valkyrie 混合俄罗斯方块"
 
+[lib]
+name = "tetris"
+path = "src/lib.rs"
+
 [[bin]]
 name = "tetris"
 path = "src/main.rs"
@@ -14,6 +18,7 @@ path = "src/main.rs"
 [dependencies]
 spark-core = { workspace = true }
 spark-engine = { workspace = true }
+spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

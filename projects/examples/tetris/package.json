@@ -5,6 +5,7 @@
   "scripts": {
     "studio": "spark studio",
     "run": "spark run",
+    "play": "cargo run -p tetris",
     "build": "cargo build -p tetris"
   },
   "dependencies": {
@@ -12,8 +13,8 @@
   },
   "spark": {
     "kind": "hybrid",
-    "startupScene": "Assets/Scenes/main.scene",
-    "scriptEntry": "Assets/Scripts/game.script",
+    "startupScene": "assets/scenes/main.scene",
+    "scriptEntry": "assets/scripts/game.script",
     "cargoManifest": "Cargo.toml",
     "runTarget": "tetris"
   }
