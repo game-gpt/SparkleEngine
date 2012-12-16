@@ -798,7 +798,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2351,6 +2351,7 @@ version = "0.1.0"
 dependencies = [
  "spark-core",
  "spark-engine",
+ "spark-input",
  "spark-renderer",
  "tracing",
  "tracing-subscriber",
@@ -2820,7 +2821,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3037,6 +3038,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "snake"
+version = "0.1.0"
+dependencies = [
+ "spark-core",
+ "spark-engine",
+ "spark-input",
+ "spark-renderer",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3429,13 +3442,16 @@ dependencies = [
 name = "spark-studio"
 version = "0.1.0"
 dependencies = [
+ "ping-pong",
  "serde",
  "serde_json",
+ "snake",
  "spark-core",
  "spark-engine",
  "spark-input",
  "spark-renderer",
  "spark-widget",
+ "tetris",
  "tracing",
  "tracing-subscriber",
 ]
@@ -3732,6 +3748,7 @@ version = "0.1.0"
 dependencies = [
  "spark-core",
  "spark-engine",
+ "spark-input",
  "spark-renderer",
  "tracing",
  "tracing-subscriber",
@@ -4424,7 +4441,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

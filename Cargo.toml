@@ -8,6 +8,7 @@ members = [
     "projects/bindings/*",
     "projects/examples/ping-pong",
     "projects/examples/tetris",
+    "projects/examples/snake",
 ]
 default-members = [
     "projects/bindings/spark-wasm",

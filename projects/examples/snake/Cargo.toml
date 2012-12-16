@@ -1,0 +1,24 @@
+[package]
+name = "snake"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "Spark Studio 示例：贪吃蛇试玩宿主（Valkyrie 项目）"
+
+[lib]
+name = "snake"
+path = "src/lib.rs"
+
+[[bin]]
+name = "snake"
+path = "src/main.rs"
+
+[dependencies]
+spark-core = { workspace = true }
+spark-engine = { workspace = true }
+spark-input = { workspace = true }
+spark-renderer = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
