@@ -109,8 +109,8 @@ pub fn resolve_project_dir(args: &[String]) -> PathBuf {
             }
         } else if let Some(rest) = a.strip_prefix("--cwd=") {
             cwd = Some(PathBuf::from(rest));
-        } else if a == "--safe-mode" || a == "--help" || a == "-h" {
-            // 忽略
+        } else if a == "--safe-mode" || a == "--help" || a == "-h" || a == "--play" {
+            // 忽略（由 main 处理 --play）
         } else if !a.starts_with('-') && cwd.is_none() {
             cwd = Some(PathBuf::from(a));
         }
@@ -124,15 +124,12 @@ fn has_cargo(root: &Path) -> bool {
 }
 
 fn has_script_files(root: &Path) -> bool {
-    let scripts = root.join("Assets").join("Scripts");
+    let scripts = root.join("assets").join("scripts");
     let Ok(rd) = std::fs::read_dir(scripts) else {
         return false;
     };
-    rd.filter_map(|e| e.ok()).any(|e| {
-        e.path()
-            .extension()
-            .is_some_and(|ext| ext == "script")
-    })
+    rd.filter_map(|e| e.ok())
+        .any(|e| e.path().extension().is_some_and(|ext| ext == "script"))
 }
 
 fn parse_kind(raw: &str) -> Result<ProjectKind, ProjectError> {
@@ -153,10 +150,12 @@ fn infer_kind(root: &Path) -> Result<(ProjectKind, bool), ProjectError> {
         (true, false) => Ok((ProjectKind::Rust, true)),
         (false, true) => Ok((ProjectKind::Valkyrie, true)),
         (true, true) => Err(ProjectError::AmbiguousKind {
-            detail: "检测到 Cargo.toml 与 Assets/Scripts/*.script，但 package.json 未声明 spark.kind。".into(),
+            detail:
+                "检测到 Cargo.toml 与 assets/scripts/*.script，但 package.json 未声明 spark.kind。"
+                    .into(),
         }),
         (false, false) => Err(ProjectError::AmbiguousKind {
-            detail: "未检测到 Cargo.toml 或 Assets/Scripts/*.script，且未声明 spark.kind。".into(),
+            detail: "未检测到 Cargo.toml 或 assets/scripts/*.script，且未声明 spark.kind。".into(),
         }),
     }
 }
@@ -172,18 +171,16 @@ pub fn load_project(root: &Path) -> Result<ProjectInfo, ProjectError> {
         path: pkg_path.clone(),
         detail: e.to_string(),
     })?;
-    let pkg: PackageJson =
-        serde_json::from_str(&text).map_err(|e| ProjectError::InvalidJson {
-            path: pkg_path,
-            detail: e.to_string(),
-        })?;
+    let pkg: PackageJson = serde_json::from_str(&text).map_err(|e| ProjectError::InvalidJson {
+        path: pkg_path,
+        detail: e.to_string(),
+    })?;
 
     let has_dep = |map: &Option<serde_json::Map<String, serde_json::Value>>| {
         map.as_ref()
             .is_some_and(|m| m.contains_key("@game-gpt/sparkle-engine"))
     };
-    let has_sparkle_engine_dep =
-        has_dep(&pkg.dependencies) || has_dep(&pkg.dev_dependencies);
+    let has_sparkle_engine_dep = has_dep(&pkg.dependencies) || has_dep(&pkg.dev_dependencies);
 
     let (kind, kind_inferred) = if let Some(k) = pkg.spark.as_ref().and_then(|s| s.kind.as_deref())
     {
@@ -209,14 +206,14 @@ pub fn load_project(root: &Path) -> Result<ProjectInfo, ProjectError> {
     })
 }
 
-/// 列出 `Assets/` 下一层目录与文件名（演示用浅扫描）。
+/// 列出 `assets/` 下一层目录与文件名（演示用浅扫描）。
 pub fn list_asset_entries(root: &Path) -> Vec<String> {
-    let assets = root.join("Assets");
+    let assets = root.join("assets");
     let mut out = Vec::new();
     if !assets.is_dir() {
         return out;
     }
-    out.push("Assets".into());
+    out.push("assets".into());
     if let Ok(rd) = std::fs::read_dir(&assets) {
         let mut names: Vec<_> = rd
             .filter_map(|e| e.ok())
@@ -250,8 +247,7 @@ mod tests {
 
     #[test]
     fn detects_three_example_kinds() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../examples");
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples");
         let ping = load_project(&root.join("ping-pong")).unwrap();
         assert_eq!(ping.kind, ProjectKind::Rust);
         assert!(!ping.kind_inferred);

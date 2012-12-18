@@ -20,6 +20,9 @@ spark-engine = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 spark-widget = { workspace = true }
+ping-pong = { path = "../../examples/ping-pong" }
+tetris = { path = "../../examples/tetris" }
+snake = { path = "../../examples/snake" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = { workspace = true }

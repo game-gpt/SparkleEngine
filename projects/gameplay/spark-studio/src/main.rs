@@ -1,6 +1,7 @@
 //! Spark Studio 入口：打开当前 npm 游戏项目的 Unity-like 编辑器。
 
 mod app;
+mod play;
 mod project;
 mod shell;
 mod state;
@@ -20,6 +21,7 @@ fn main() {
         .init();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let play_only = args.iter().any(|a| a == "--play");
     let root = resolve_project_dir(&args);
     let project = match load_project(&root) {
         Ok(p) => p,
@@ -41,6 +43,7 @@ fn main() {
         inferred = project.kind_inferred,
         root = %project.root.display(),
         scene = ?project.startup_scene,
+        play_only,
         "启动 Spark Studio"
     );
     println!(
@@ -53,13 +56,20 @@ fn main() {
         println!("spark-studio: startupScene = {scene}");
     }
 
-    let title = format!("Spark Studio — {}", project.name);
-    let host = StudioApp::new(project);
+    let title = if play_only {
+        format!("Spark Play — {}", project.name)
+    } else {
+        format!("Spark Studio — {}", project.name)
+    };
+    let mut host = StudioApp::new(project);
+    if play_only {
+        host = host.with_immediate_play();
+    }
     if let Err(err) = run_game(
         WindowConfig {
             title,
-            width: 1440,
-            height: 900,
+            width: if play_only { 960 } else { 1440 },
+            height: if play_only { 720 } else { 900 },
             clear_color: [0.10, 0.11, 0.12, 1.0],
         },
         host,

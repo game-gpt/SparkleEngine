@@ -13,12 +13,14 @@ const path = require("node:path");
 function usage() {
   console.log(`Usage:
   spark info
-  spark studio [--cwd <project-dir>] [--safe-mode]
+  spark run [--cwd <project-dir>]
+  spark studio [--cwd <project-dir>] [--safe-mode] [--play]
 
 Sparkle Engine CLI（@game-gpt/sparkle-engine）
 
-studio 读取当前（或 --cwd）目录的 package.json，打开该 npm 游戏项目的编辑器。
-不是 Launcher，不提供项目选择列表。
+run     读取 package.json，启动游戏（rust/hybrid → cargo run -p <runTarget>；
+        无 runTarget 的 valkyrie → spark-studio --play）。
+studio  打开该 npm 游戏项目的编辑器。--play 则跳过壳直接进对局。
 `);
 }
 
@@ -49,30 +51,28 @@ function findStudioBinary() {
   return null;
 }
 
-/** 预检：cwd 必须有 package.json（与 Studio 二进制一致）。 */
-function resolveStudioCwd(args) {
+function parseCwd(args) {
   let cwd = process.cwd();
-  const out = [];
+  const rest = [];
   for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
     if (a === "--cwd" && args[i + 1]) {
       cwd = path.resolve(args[i + 1]);
-      out.push("--cwd", cwd);
       i += 1;
       continue;
     }
     if (a.startsWith("--cwd=")) {
       cwd = path.resolve(a.slice("--cwd=".length));
-      out.push(`--cwd=${cwd}`);
       continue;
     }
-    if (!a.startsWith("-")) {
-      cwd = path.resolve(a);
-      out.push("--cwd", cwd);
-      continue;
-    }
-    out.push(a);
+    rest.push(a);
   }
+  return { cwd, rest };
+}
+
+/** 预检：cwd 必须有 package.json（与 Studio 二进制一致）。 */
+function resolveStudioCwd(args) {
+  const { cwd, rest } = parseCwd(args);
   const pkg = path.join(cwd, "package.json");
   if (!fs.existsSync(pkg)) {
     console.error(
@@ -80,7 +80,17 @@ function resolveStudioCwd(args) {
     );
     process.exit(2);
   }
-  return out.length ? out : ["--cwd", cwd];
+  const out = ["--cwd", cwd, ...rest];
+  return out;
+}
+
+function readSparkField(cwd) {
+  const pkgPath = path.join(cwd, "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  return {
+    name: pkg.name || path.basename(cwd),
+    spark: pkg.spark || {},
+  };
 }
 
 function runStudio(args) {
@@ -105,6 +115,42 @@ function runStudio(args) {
   process.exit(result.status ?? 1);
 }
 
+function runGame(args) {
+  const { cwd, rest } = parseCwd(args);
+  const pkgPath = path.join(cwd, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    console.error(
+      `当前目录不是 Spark 游戏项目。\n未找到 package.json（${cwd}）。`,
+    );
+    process.exit(2);
+  }
+  const { name, spark } = readSparkField(cwd);
+  const runTarget = spark.runTarget || null;
+  const root = engineRoot();
+
+  if (runTarget) {
+    const result = spawnSync(
+      "cargo",
+      ["run", "-p", runTarget, ...rest],
+      {
+        stdio: "inherit",
+        windowsHide: true,
+        env: process.env,
+        cwd: root,
+      },
+    );
+    if (result.error) {
+      console.error(result.error);
+      process.exit(1);
+    }
+    process.exit(result.status ?? 1);
+  }
+
+  // 无 runTarget：走 Studio --play（嵌入对局）
+  console.log(`spark run: 项目 ${name} 无 spark.runTarget，使用 spark-studio --play`);
+  runStudio(["--cwd", cwd, "--play", ...rest]);
+}
+
 function runInfo() {
   const { loadSpark } = require("../dist/index.js");
   const info = loadSpark().info();
@@ -122,6 +168,11 @@ function main() {
 
   if (cmd === "studio") {
     runStudio(argv.slice(1));
+    return;
+  }
+
+  if (cmd === "run") {
+    runGame(argv.slice(1));
     return;
   }
 

@@ -1,17 +1,18 @@
-//! Studio 宿主：`GameHost` + `UiRuntime`。
+//! Studio 宿主：`GameHost` + `UiRuntime`；Play 时嵌入示例对局。
 
 use spark_core::Vec2;
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
 use spark_widget::{Insets, UiCommand, UiFrame, UiRuntime};
 
-use crate::project::{list_asset_entries, ProjectInfo};
+use crate::play::PlaySession;
+use crate::project::{ProjectInfo, list_asset_entries};
 use crate::shell;
 use crate::state::{
-    default_selected, parse_select_cmd, BottomTab, CenterTab, EditorState, PlayMode, Tool,
-    CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_PAUSE, CMD_PLAY, CMD_STEP,
-    CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE,
-    CMD_TOOL_ROTATE, CMD_TOOL_SCALE, CMD_WINDOW_GALLERY,
+    BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_PAUSE, CMD_PLAY,
+    CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE,
+    CMD_TOOL_ROTATE, CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab, EditorState, PlayMode, Tool,
+    default_selected, parse_select_cmd,
 };
 
 pub struct StudioApp {
@@ -19,6 +20,7 @@ pub struct StudioApp {
     project: ProjectInfo,
     assets: Vec<String>,
     state: EditorState,
+    play: Option<PlaySession>,
     exit: bool,
     mounted: bool,
     dirty_ui: bool,
@@ -45,10 +47,28 @@ impl StudioApp {
             project,
             assets,
             state,
+            play: None,
             exit: false,
             mounted: false,
             dirty_ui: true,
         }
+    }
+
+    /// `--play`：跳过编辑器，直接进入对局。
+    pub fn with_immediate_play(mut self) -> Self {
+        match PlaySession::start(&self.project) {
+            Ok(session) => {
+                self.play = Some(session);
+                self.state.play = PlayMode::Play;
+                self.state.center = CenterTab::Game;
+                self.state.status = format!("Play：{}", self.project.name);
+            }
+            Err(e) => {
+                self.state.status = format!("无法 Play：{e}");
+                self.state.bottom = BottomTab::Console;
+            }
+        }
+        self
     }
 
     fn remount(&mut self) {
@@ -58,15 +78,37 @@ impl StudioApp {
         self.dirty_ui = false;
     }
 
+    fn start_play(&mut self) {
+        match PlaySession::start(&self.project) {
+            Ok(session) => {
+                self.play = Some(session);
+                self.state.play = PlayMode::Play;
+                self.state.center = CenterTab::Game;
+                self.state.status = format!("Play：正在运行 {}", self.project.name);
+                self.dirty_ui = true;
+            }
+            Err(e) => {
+                self.state.status = format!("Play 失败：{e}");
+                self.state.bottom = BottomTab::Console;
+                self.dirty_ui = true;
+            }
+        }
+    }
+
+    fn stop_play(&mut self) {
+        self.play = None;
+        self.state.play = PlayMode::Edit;
+        self.state.center = CenterTab::Scene;
+        self.state.status = "已停止 · 返回 Edit".into();
+        self.dirty_ui = true;
+    }
+
     fn handle_commands(&mut self) {
         let cmds: Vec<_> = self.ui.drain_commands().collect();
         for cmd in cmds {
             match cmd {
                 UiCommand::Custom(CMD_PLAY) => {
-                    self.state.play = PlayMode::Play;
-                    self.state.center = CenterTab::Game;
-                    self.state.status = "Play：运行预览（运行时接入中）".into();
-                    self.dirty_ui = true;
+                    self.start_play();
                 }
                 UiCommand::Custom(CMD_PAUSE) => {
                     if self.state.play == PlayMode::Play {
@@ -80,10 +122,7 @@ impl StudioApp {
                     self.dirty_ui = true;
                 }
                 UiCommand::Custom(CMD_STOP) => {
-                    self.state.play = PlayMode::Edit;
-                    self.state.center = CenterTab::Scene;
-                    self.state.status = "已停止 · 返回 Edit".into();
-                    self.dirty_ui = true;
+                    self.stop_play();
                 }
                 UiCommand::Custom(CMD_TOOL_HAND) => {
                     self.state.tool = Tool::Hand;
@@ -126,8 +165,7 @@ impl StudioApp {
                     self.dirty_ui = true;
                 }
                 UiCommand::Custom(CMD_WINDOW_GALLERY) => {
-                    self.state.status =
-                        "Window → Widget Gallery（调试工具，不占主导航）".into();
+                    self.state.status = "Window → Widget Gallery（调试工具，不占主导航）".into();
                     self.state.bottom = BottomTab::Console;
                     self.dirty_ui = true;
                 }
@@ -150,16 +188,20 @@ impl StudioApp {
 
 impl GameHost for StudioApp {
     fn update(&mut self, frame: &FrameCtx<'_>) {
-        if frame.input.key_pressed(Key::Escape) {
-            if self.state.play != PlayMode::Edit {
-                self.state.play = PlayMode::Edit;
-                self.state.center = CenterTab::Scene;
-                self.state.status = "Esc · 返回 Edit".into();
-                self.dirty_ui = true;
-            } else {
-                self.exit = true;
+        if self.play.is_some() {
+            if self.state.play == PlayMode::Paused {
                 return;
             }
+            let stop = self.play.as_mut().map(|p| p.update(frame)).unwrap_or(false);
+            if stop || frame.input.key_pressed(Key::Escape) {
+                self.stop_play();
+            }
+            return;
+        }
+
+        if frame.input.key_pressed(Key::Escape) {
+            self.exit = true;
+            return;
         }
 
         if !self.mounted || self.dirty_ui {
@@ -188,6 +230,10 @@ impl GameHost for StudioApp {
     }
 
     fn draw(&mut self, draw: &mut DrawList) {
+        if let Some(play) = self.play.as_mut() {
+            play.draw(draw);
+            return;
+        }
         self.ui.paint(draw);
     }
 

@@ -2,16 +2,17 @@
 
 use spark_core::Color;
 use spark_widget::{
-    button_widget, column, label_widget, panel, row, spacer_widget, Insets, LayoutSpec, Size,
-    Style, UiCommand, WidgetBuilder,
+    Insets, LayoutSpec, Size, Style, UiCommand, WidgetBuilder, button_widget, column, label_widget,
+    panel, row, spacer_widget,
 };
 
 use crate::project::{ProjectInfo, ProjectKind};
 use crate::state::{
-    entity_by_id, hierarchy_for, select_cmd, BottomTab, CenterTab, EditorState, PlayMode, Tool,
-    CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_EDIT_UNDO, CMD_FILE_SAVE,
-    CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT,
-    CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE, CMD_TOOL_SCALE, CMD_WINDOW_GALLERY,
+    BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_EDIT_UNDO,
+    CMD_FILE_SAVE, CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE,
+    CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE, CMD_TOOL_SCALE,
+    CMD_WINDOW_GALLERY, CenterTab, EditorState, PlayMode, Tool, entity_by_id, hierarchy_for,
+    select_cmd,
 };
 
 fn fill() -> LayoutSpec {
@@ -116,7 +117,11 @@ fn hierarchy_panel(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder 
     let mut children = Vec::new();
     for row in hierarchy_for(project.kind) {
         let indent = "  ".repeat(row.depth as usize);
-        let mark = if row.id == state.selected { "▸ " } else { "  " };
+        let mark = if row.id == state.selected {
+            "▸ "
+        } else {
+            "  "
+        };
         let label = format!("{mark}{indent}{}", row.name);
         let mut btn = button_widget()
             .text(label)
@@ -237,16 +242,20 @@ fn scene_panel(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder {
         CenterTab::Game => {
             children.push(bright_label("Game View"));
             if state.play == PlayMode::Edit {
-                children.push(dim_label("按 Play 进入运行预览"));
+                children.push(dim_label("按 Play 嵌入运行当前示例对局"));
             } else {
                 let hint = match project.kind {
                     ProjectKind::Rust => format!(
-                        "Play → cargo run -p {}",
-                        project.run_target.as_deref().unwrap_or(project.name.as_str())
+                        "Play 中：{}（也可 cargo run -p {}）",
+                        project.name,
+                        project
+                            .run_target
+                            .as_deref()
+                            .unwrap_or(project.name.as_str())
                     ),
-                    ProjectKind::Valkyrie => "Play → spark-vm".into(),
+                    ProjectKind::Valkyrie => "Play 中：试玩宿主（VM 接通前）".into(),
                     ProjectKind::Hybrid => format!(
-                        "Play → {} + Valkyrie VM",
+                        "Play 中：{}（脚本元数据仍可检视）",
                         project.run_target.as_deref().unwrap_or("native")
                     ),
                 };
@@ -267,15 +276,12 @@ fn scene_panel(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder {
                 }
                 ProjectKind::Valkyrie => {
                     children.push(dim_label(
-                        project
-                            .script_entry
-                            .as_deref()
-                            .unwrap_or("Assets/Scripts/"),
+                        project.script_entry.as_deref().unwrap_or("assets/scripts/"),
                     ));
                     children.push(dim_label("双击 Project 中的 *.script"));
                 }
                 ProjectKind::Hybrid => {
-                    children.push(dim_label("Rust src/ 与 Assets/Scripts/ 均可打开"));
+                    children.push(dim_label("Rust src/ 与 assets/scripts/ 均可打开"));
                 }
             }
         }
@@ -285,33 +291,37 @@ fn scene_panel(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder {
 }
 
 fn project_panel(asset_lines: &[String], state: &EditorState) -> WidgetBuilder {
-    let mut children = vec![row()
-        .layout(LayoutSpec {
-            width: Size::Fill,
-            height: Size::Px(28.0),
-            gap: 6.0,
-            ..LayoutSpec::horizontal()
-        })
-        .child(tool_btn(
-            "Project",
-            CMD_BOTTOM_PROJECT,
-            state.bottom == BottomTab::Project,
-        ))
-        .child(tool_btn(
-            "Console",
-            CMD_BOTTOM_CONSOLE,
-            state.bottom == BottomTab::Console,
-        ))
-        .child(tool_btn(
-            "Problems",
-            CMD_BOTTOM_PROBLEMS,
-            state.bottom == BottomTab::Problems,
-        ))];
+    let mut children = vec![
+        row()
+            .layout(LayoutSpec {
+                width: Size::Fill,
+                height: Size::Px(28.0),
+                gap: 6.0,
+                ..LayoutSpec::horizontal()
+            })
+            .child(tool_btn(
+                "Project",
+                CMD_BOTTOM_PROJECT,
+                state.bottom == BottomTab::Project,
+            ))
+            .child(tool_btn(
+                "Console",
+                CMD_BOTTOM_CONSOLE,
+                state.bottom == BottomTab::Console,
+            ))
+            .child(tool_btn(
+                "Problems",
+                CMD_BOTTOM_PROBLEMS,
+                state.bottom == BottomTab::Problems,
+            )),
+    ];
 
     match state.bottom {
         BottomTab::Project => {
             if asset_lines.is_empty() {
-                children.push(dim_label("未找到 Assets/。可创建 Assets/Scenes 并设置 spark.startupScene。"));
+                children.push(dim_label(
+                    "未找到 assets/。可创建 assets/scenes 并设置 spark.startupScene。",
+                ));
             } else {
                 for line in asset_lines.iter().take(24) {
                     children.push(dim_label(line.clone()));
@@ -384,17 +394,17 @@ pub fn build_shell(
         })
         .child(tool_btn("Hand", CMD_TOOL_HAND, state.tool == Tool::Hand))
         .child(tool_btn("Move", CMD_TOOL_MOVE, state.tool == Tool::Move))
-        .child(tool_btn("Rotate", CMD_TOOL_ROTATE, state.tool == Tool::Rotate))
+        .child(tool_btn(
+            "Rotate",
+            CMD_TOOL_ROTATE,
+            state.tool == Tool::Rotate,
+        ))
         .child(tool_btn("Scale", CMD_TOOL_SCALE, state.tool == Tool::Scale))
         .child(dim_label("│"))
         .child(dim_label("2D"))
         .child(dim_label("Center"))
         .child(spacer_widget())
-        .child(play_btn(
-            "▶ Play",
-            CMD_PLAY,
-            state.play == PlayMode::Edit,
-        ))
+        .child(play_btn("▶ Play", CMD_PLAY, state.play == PlayMode::Edit))
         .child(play_btn("❚❚", CMD_PAUSE, state.play == PlayMode::Paused))
         .child(menu_btn("Step", CMD_STEP))
         .child(menu_btn("Stop", CMD_STOP));
