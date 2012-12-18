@@ -3,8 +3,7 @@
 //! 调度器在每次 `call_in_phase` 前写入 [`crate::EngineShared`]；内置原生据此强制
 //! 阶段、确定性、组件写集、世界只读与原型可见集，避免描述符沦为文档元数据。
 
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use spark_script::{DeterminismClass, HostPhase, HostSchema};
 
@@ -18,11 +17,7 @@ pub enum ScriptAccessPolicy {
     Unrestricted,
     /// 已挂描述符：写集约束组件变更；读世界须声明至少一项 read 或 write。
     /// `archetypes` 非空时过滤 `query_*` 可见原型。
-    Declared {
-        reads: HashSet<Arc<str>>,
-        writes: HashSet<Arc<str>>,
-        archetypes: HashSet<Arc<str>>,
-    },
+    Declared { reads: HashSet<Arc<str>>, writes: HashSet<Arc<str>>, archetypes: HashSet<Arc<str>> },
 }
 
 impl ScriptAccessPolicy {
@@ -32,16 +27,13 @@ impl ScriptAccessPolicy {
         for a in &desc.access {
             if a.write {
                 writes.insert(Arc::clone(&a.component));
-            } else {
+            }
+            else {
                 reads.insert(Arc::clone(&a.component));
             }
         }
         let archetypes = desc.query_archetypes.iter().cloned().collect();
-        Self::Declared {
-            reads,
-            writes,
-            archetypes,
-        }
+        Self::Declared { reads, writes, archetypes }
     }
 
     /// 是否允许对 `component` 做写变更（`queue_add_component` 等）。
@@ -81,35 +73,19 @@ impl ScriptAccessPolicy {
 }
 
 /// 按 schema + 当前阶段检查宿主导入名是否可调用（限定名或唯一短名）。
-pub fn check_host_phase(
-    schema: &HostSchema,
-    import: &str,
-    phase: HostPhase,
-) -> Result<(), String> {
+pub fn check_host_phase(schema: &HostSchema, import: &str, phase: HostPhase) -> Result<(), String> {
     let func = schema.resolve_import(import)?;
-    if func.allows_phase(phase) {
-        Ok(())
-    } else {
-        Err(format!(
-            "host_phase_denied:{import}:phase={phase:?}"
-        ))
-    }
+    if func.allows_phase(phase) { Ok(()) } else { Err(format!("host_phase_denied:{import}:phase={phase:?}")) }
 }
 
 /// System 确定性要求是否允许调用该宿主导入名。
-pub fn check_host_determinism(
-    schema: &HostSchema,
-    import: &str,
-    required: DeterminismClass,
-) -> Result<(), String> {
+pub fn check_host_determinism(schema: &HostSchema, import: &str, required: DeterminismClass) -> Result<(), String> {
     let func = schema.resolve_import(import)?;
     if determinism_allows(required, func.determinism) {
         Ok(())
-    } else {
-        Err(format!(
-            "host_determinism_denied:{import}:policy={required:?}:host={:?}",
-            func.determinism
-        ))
+    }
+    else {
+        Err(format!("host_determinism_denied:{import}:policy={required:?}:host={:?}", func.determinism))
     }
 }
 
@@ -128,8 +104,7 @@ mod tests {
 
     #[test]
     fn declared_empty_write_set_blocks_component_mutation() {
-        let desc = ScriptSystemDescriptor::new("m", "s", "update", HostPhase::Update)
-            .read("Transform");
+        let desc = ScriptSystemDescriptor::new("m", "s", "update", HostPhase::Update).read("Transform");
         let policy = ScriptAccessPolicy::from_descriptor(&desc);
         assert!(!policy.allows_write("Transform"));
         assert!(!policy.allows_write("Health"));
@@ -145,9 +120,7 @@ mod tests {
 
     #[test]
     fn query_archetype_filter_from_descriptor() {
-        let desc = ScriptSystemDescriptor::new("m", "s", "update", HostPhase::Update)
-            .read("Transform")
-            .query_archetype("rock");
+        let desc = ScriptSystemDescriptor::new("m", "s", "update", HostPhase::Update).read("Transform").query_archetype("rock");
         let policy = ScriptAccessPolicy::from_descriptor(&desc);
         assert!(policy.allows_query_archetype("rock"));
         assert!(!policy.allows_query_archetype("tree"));
@@ -157,9 +130,7 @@ mod tests {
     fn check_host_phase_denies_wrong_phase() {
         let mut schema = HostSchema::new(1);
         schema.insert(
-            HostFunction::new(HostFunctionId::new("engine", "queue_spawn", 1))
-                .phases([HostPhase::Update])
-                .effect(HostEffect::SpawnEntity),
+            HostFunction::new(HostFunctionId::new("engine", "queue_spawn", 1)).phases([HostPhase::Update]).effect(HostEffect::SpawnEntity),
         );
         assert!(check_host_phase(&schema, "queue_spawn", HostPhase::Update).is_ok());
         assert!(check_host_phase(&schema, "engine.queue_spawn", HostPhase::Update).is_ok());
@@ -172,16 +143,8 @@ mod tests {
     #[test]
     fn check_host_determinism_denies_nondeterministic() {
         let mut schema = HostSchema::new(1);
-        schema.insert(
-            HostFunction::new(HostFunctionId::new("engine", "log", 1))
-                .determinism(DeterminismClass::Nondeterministic),
-        );
-        let err = check_host_determinism(
-            &schema,
-            "engine.log",
-            DeterminismClass::Deterministic,
-        )
-        .unwrap_err();
+        schema.insert(HostFunction::new(HostFunctionId::new("engine", "log", 1)).determinism(DeterminismClass::Nondeterministic));
+        let err = check_host_determinism(&schema, "engine.log", DeterminismClass::Deterministic).unwrap_err();
         assert!(err.contains("host_determinism_denied"), "{err}");
     }
 }

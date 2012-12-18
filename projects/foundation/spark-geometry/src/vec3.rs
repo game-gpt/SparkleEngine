@@ -8,26 +8,10 @@ pub struct Vec3 {
 }
 
 impl Vec3 {
-    pub const ZERO: Self = Self {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0,
-    };
-    pub const X: Self = Self {
-        x: 1.0,
-        y: 0.0,
-        z: 0.0,
-    };
-    pub const Y: Self = Self {
-        x: 0.0,
-        y: 1.0,
-        z: 0.0,
-    };
-    pub const Z: Self = Self {
-        x: 0.0,
-        y: 0.0,
-        z: 1.0,
-    };
+    pub const ZERO: Self = Self { x: 0.0, y: 0.0, z: 0.0 };
+    pub const X: Self = Self { x: 1.0, y: 0.0, z: 0.0 };
+    pub const Y: Self = Self { x: 0.0, y: 1.0, z: 0.0 };
+    pub const Z: Self = Self { x: 0.0, y: 0.0, z: 1.0 };
 
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
@@ -39,11 +23,7 @@ impl Vec3 {
 
     pub fn normalized(self) -> Self {
         let len = self.length();
-        if len <= 1e-8 {
-            Self::ZERO
-        } else {
-            Self::new(self.x / len, self.y / len, self.z / len)
-        }
+        if len <= 1e-8 { Self::ZERO } else { Self::new(self.x / len, self.y / len, self.z / len) }
     }
 
     pub fn dot(self, o: Self) -> f32 {
@@ -51,11 +31,7 @@ impl Vec3 {
     }
 
     pub fn cross(self, o: Self) -> Self {
-        Self::new(
-            self.y * o.z - self.z * o.y,
-            self.z * o.x - self.x * o.z,
-            self.x * o.y - self.y * o.x,
-        )
+        Self::new(self.y * o.z - self.z * o.y, self.z * o.x - self.x * o.z, self.x * o.y - self.y * o.x)
     }
 
     pub fn to_array(self) -> [f32; 3] {

@@ -18,10 +18,7 @@ pub struct UnitPose {
 
 impl UnitPose {
     pub fn at(x: f32, y: f32) -> Self {
-        Self {
-            pos: Vec2::new(x, y),
-            facing: 0.0,
-        }
+        Self { pos: Vec2::new(x, y), facing: 0.0 }
     }
 }
 
@@ -48,13 +45,7 @@ impl UnitRoster {
     pub fn spawn(&mut self, owner: PlayerId, pose: UnitPose, sight_radius: f32) -> UnitId {
         let id = UnitId(self.next);
         self.next = self.next.saturating_add(1);
-        self.units.push(Unit {
-            id,
-            owner,
-            pose,
-            sight_radius,
-            alive: true,
-        });
+        self.units.push(Unit { id, owner, pose, sight_radius, alive: true });
         id
     }
 
@@ -76,12 +67,7 @@ impl UnitRoster {
         }
     }
 
-    pub fn pick_nearest(
-        &self,
-        world: Vec2,
-        max_dist: f32,
-        owner: Option<PlayerId>,
-    ) -> Option<UnitId> {
+    pub fn pick_nearest(&self, world: Vec2, max_dist: f32, owner: Option<PlayerId>) -> Option<UnitId> {
         let max2 = max_dist * max_dist;
         let mut best: Option<(UnitId, f32)> = None;
         for u in self.iter() {
@@ -102,12 +88,7 @@ impl UnitRoster {
         best.map(|(id, _)| id)
     }
 
-    pub fn query_rect(
-        &self,
-        min: Vec2,
-        max: Vec2,
-        owner: Option<PlayerId>,
-    ) -> Vec<UnitId> {
+    pub fn query_rect(&self, min: Vec2, max: Vec2, owner: Option<PlayerId>) -> Vec<UnitId> {
         let (x0, x1) = (min.x.min(max.x), min.x.max(max.x));
         let (y0, y1) = (min.y.min(max.y), min.y.max(max.y));
         self.iter()
@@ -117,10 +98,7 @@ impl UnitRoster {
                         return false;
                     }
                 }
-                u.pose.pos.x >= x0
-                    && u.pose.pos.x <= x1
-                    && u.pose.pos.y >= y0
-                    && u.pose.pos.y <= y1
+                u.pose.pos.x >= x0 && u.pose.pos.x <= x1 && u.pose.pos.y >= y0 && u.pose.pos.y <= y1
             })
             .map(|u| u.id)
             .collect()

@@ -4,8 +4,10 @@
 
 use spark_ecs::{Schedule, World};
 
-use crate::ecs_host::{AppExit, EcsHost2d};
-use crate::render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d};
+use crate::{
+    ecs_host::{AppExit, EcsHost2d},
+    render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d},
+};
 use spark_renderer::DrawList;
 
 /// 2D 游戏装配根。建成后交给 [`EcsHost2d`]，不再由游戏持有主循环。
@@ -25,11 +27,7 @@ impl SparkApp {
     pub fn new() -> Self {
         let mut world = World::new();
         world.resources.insert(AppExit::default());
-        Self {
-            world,
-            sim: Schedule::new(),
-            render: RenderSchedule2d::new(),
-        }
+        Self { world, sim: Schedule::new(), render: RenderSchedule2d::new() }
     }
 
     pub fn world_mut(&mut self) -> &mut World {
@@ -41,11 +39,7 @@ impl SparkApp {
         self
     }
 
-    pub fn add_system(
-        &mut self,
-        name: &'static str,
-        f: impl FnMut(&mut World) + Send + 'static,
-    ) -> &mut Self {
+    pub fn add_system(&mut self, name: &'static str, f: impl FnMut(&mut World) + Send + 'static) -> &mut Self {
         self.sim.add_fn(name, f);
         self
     }
@@ -108,13 +102,7 @@ mod tests {
         app.add_plugin(&Paint);
         let mut host = app.into_host();
         let input = Input::default();
-        let frame = FrameCtx {
-            input: &input,
-            dt: 0.016,
-            screen_w: 8.0,
-            screen_h: 8.0,
-            timing: Default::default(),
-        };
+        let frame = FrameCtx { input: &input, dt: 0.016, screen_w: 8.0, screen_h: 8.0, timing: Default::default() };
         host.update(&frame);
         let mut draw = spark_renderer::DrawList::new(Color::rgb(0.0, 0.0, 0.0));
         host.draw(&mut draw);

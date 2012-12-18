@@ -11,20 +11,17 @@ export const platformPackage = "spark-unknown-wasm32";
  * 若尚未放入真实 `.wasm`，仍返回可用的 JS 回退实现（几何演示），便于 TS 联调。
  */
 export async function loadSpark(options = {}) {
-    const url = options.wasmUrl ??
-        new URL("../spark_engine_bg.wasm", import.meta.url);
+    const url = options.wasmUrl ?? new URL("../spark_engine_bg.wasm", import.meta.url);
     let exports;
     try {
         if (options.module) {
             const instance = await WebAssembly.instantiate(options.module, {});
             exports = instance.exports;
-        }
-        else {
+        } else {
             const result = await WebAssembly.instantiateStreaming(fetch(url.toString()), {});
             exports = result.instance.exports;
         }
-    }
-    catch {
+    } catch {
         exports = undefined;
     }
     if (exports?.spark_vec2_length) {

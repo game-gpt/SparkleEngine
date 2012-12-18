@@ -1,8 +1,10 @@
 //! winit → Spark 输入映射。仅本 crate 可见，游戏层零 winit。
 
 use spark_input::{ButtonState, Key, MouseBtn};
-use winit::event::{ElementState, MouseButton, MouseScrollDelta};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::{
+    event::{ElementState, MouseButton, MouseScrollDelta},
+    keyboard::{KeyCode, PhysicalKey},
+};
 
 pub fn button_state(state: ElementState) -> ButtonState {
     match state {
@@ -29,7 +31,8 @@ pub fn mouse_btn(button: MouseButton) -> Option<MouseBtn> {
 }
 
 pub fn key(physical: PhysicalKey) -> Option<Key> {
-    let PhysicalKey::Code(code) = physical else {
+    let PhysicalKey::Code(code) = physical
+    else {
         return None;
     };
     Some(match code {

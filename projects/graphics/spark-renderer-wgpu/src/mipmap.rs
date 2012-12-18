@@ -42,7 +42,8 @@ pub fn downsample_rgba(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8
                 out[o + 1] = 0;
                 out[o + 2] = 0;
                 out[o + 3] = 0;
-            } else {
+            }
+            else {
                 out[o] = ((r / a) * 255.0).round().clamp(0.0, 255.0) as u8;
                 out[o + 1] = ((g / a) * 255.0).round().clamp(0.0, 255.0) as u8;
                 out[o + 2] = ((b / a) * 255.0).round().clamp(0.0, 255.0) as u8;
@@ -65,11 +66,7 @@ pub fn create_rgba_texture_with_mips(
     let levels = mip_level_count(width, height);
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
+        size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
         mip_level_count: levels,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -83,23 +80,10 @@ pub fn create_rgba_texture_with_mips(
     let mut level_rgba = rgba.to_vec();
     for level in 0..levels {
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: level,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
+            wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: level, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
             &level_rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(level_w * 4),
-                rows_per_image: Some(level_h),
-            },
-            wgpu::Extent3d {
-                width: level_w,
-                height: level_h,
-                depth_or_array_layers: 1,
-            },
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(level_w * 4), rows_per_image: Some(level_h) },
+            wgpu::Extent3d { width: level_w, height: level_h, depth_or_array_layers: 1 },
         );
         if level + 1 >= levels {
             break;

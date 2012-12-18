@@ -3,9 +3,7 @@
 //! 错误使用 [`SparkError`]（即 `spark-diagnostics::Error`）：只保存稳定码与类型化参数，
 //! **不**把自然语言句子作为错误权威内容。
 
-pub use spark_diagnostics::{
-    Diagnostic, ErrorArg, ErrorArgs, ErrorCode, ErrorContext, MessageKey, Severity, codes,
-};
+pub use spark_diagnostics::{Diagnostic, ErrorArg, ErrorArgs, ErrorCode, ErrorContext, MessageKey, Severity, codes};
 
 mod light2d;
 
@@ -57,12 +55,7 @@ impl Rect {
         let y0 = self.y.max(other.y);
         let x1 = (self.x + self.w).min(other.x + other.w);
         let y1 = (self.y + self.h).min(other.y + other.h);
-        Self {
-            x: x0,
-            y: y0,
-            w: (x1 - x0).max(0.0),
-            h: (y1 - y0).max(0.0),
-        }
+        Self { x: x0, y: y0, w: (x1 - x0).max(0.0), h: (y1 - y0).max(0.0) }
     }
 
     pub fn is_empty(self) -> bool {

@@ -79,114 +79,29 @@ pub fn default_selected(kind: ProjectKind) -> u64 {
 }
 
 const PING_PONG: &[EntityRow] = &[
-    EntityRow {
-        id: 1,
-        name: "MainScene",
-        depth: 0,
-        component_summary: "Scene",
-    },
-    EntityRow {
-        id: 2,
-        name: "Camera",
-        depth: 1,
-        component_summary: "Transform, Camera",
-    },
-    EntityRow {
-        id: 3,
-        name: "Table",
-        depth: 1,
-        component_summary: "Transform, SpriteRenderer",
-    },
-    EntityRow {
-        id: 4,
-        name: "LeftPaddle",
-        depth: 1,
-        component_summary: "Transform, Paddle (Rust)",
-    },
-    EntityRow {
-        id: 5,
-        name: "RightPaddle",
-        depth: 1,
-        component_summary: "Transform, Paddle (Rust)",
-    },
-    EntityRow {
-        id: 6,
-        name: "Ball",
-        depth: 1,
-        component_summary: "Transform, Ball (Rust)",
-    },
+    EntityRow { id: 1, name: "MainScene", depth: 0, component_summary: "Scene" },
+    EntityRow { id: 2, name: "Camera", depth: 1, component_summary: "Transform, Camera" },
+    EntityRow { id: 3, name: "Table", depth: 1, component_summary: "Transform, SpriteRenderer" },
+    EntityRow { id: 4, name: "LeftPaddle", depth: 1, component_summary: "Transform, Paddle (Rust)" },
+    EntityRow { id: 5, name: "RightPaddle", depth: 1, component_summary: "Transform, Paddle (Rust)" },
+    EntityRow { id: 6, name: "Ball", depth: 1, component_summary: "Transform, Ball (Rust)" },
 ];
 
 const SNAKE: &[EntityRow] = &[
-    EntityRow {
-        id: 1,
-        name: "MainScene",
-        depth: 0,
-        component_summary: "Scene",
-    },
-    EntityRow {
-        id: 2,
-        name: "Camera",
-        depth: 1,
-        component_summary: "Transform, Camera",
-    },
-    EntityRow {
-        id: 3,
-        name: "Board",
-        depth: 1,
-        component_summary: "Transform",
-    },
-    EntityRow {
-        id: 4,
-        name: "Snake",
-        depth: 1,
-        component_summary: "Transform, SnakeController (Valkyrie)",
-    },
-    EntityRow {
-        id: 5,
-        name: "Food",
-        depth: 1,
-        component_summary: "Transform, Food (Valkyrie)",
-    },
-    EntityRow {
-        id: 6,
-        name: "HUD",
-        depth: 1,
-        component_summary: "WidgetRoot, Hud (Valkyrie)",
-    },
+    EntityRow { id: 1, name: "MainScene", depth: 0, component_summary: "Scene" },
+    EntityRow { id: 2, name: "Camera", depth: 1, component_summary: "Transform, Camera" },
+    EntityRow { id: 3, name: "Board", depth: 1, component_summary: "Transform" },
+    EntityRow { id: 4, name: "Snake", depth: 1, component_summary: "Transform, SnakeController (Valkyrie)" },
+    EntityRow { id: 5, name: "Food", depth: 1, component_summary: "Transform, Food (Valkyrie)" },
+    EntityRow { id: 6, name: "HUD", depth: 1, component_summary: "WidgetRoot, Hud (Valkyrie)" },
 ];
 
 const TETRIS: &[EntityRow] = &[
-    EntityRow {
-        id: 1,
-        name: "MainScene",
-        depth: 0,
-        component_summary: "Scene",
-    },
-    EntityRow {
-        id: 2,
-        name: "Camera",
-        depth: 1,
-        component_summary: "Transform, Camera",
-    },
-    EntityRow {
-        id: 3,
-        name: "Board",
-        depth: 1,
-        component_summary: "Transform, Board (Rust)",
-    },
-    EntityRow {
-        id: 4,
-        name: "ActivePiece",
-        depth: 1,
-        component_summary: "Transform, Piece (Rust)",
-    },
-    EntityRow {
-        id: 5,
-        name: "HUD",
-        depth: 1,
-        component_summary: "WidgetRoot, Hud (Valkyrie)",
-    },
+    EntityRow { id: 1, name: "MainScene", depth: 0, component_summary: "Scene" },
+    EntityRow { id: 2, name: "Camera", depth: 1, component_summary: "Transform, Camera" },
+    EntityRow { id: 3, name: "Board", depth: 1, component_summary: "Transform, Board (Rust)" },
+    EntityRow { id: 4, name: "ActivePiece", depth: 1, component_summary: "Transform, Piece (Rust)" },
+    EntityRow { id: 5, name: "HUD", depth: 1, component_summary: "WidgetRoot, Hud (Valkyrie)" },
 ];
 
 pub const CMD_FILE_SAVE: u64 = 100;
@@ -213,9 +128,5 @@ pub fn select_cmd(entity_id: u64) -> u64 {
 }
 
 pub fn parse_select_cmd(cmd: u64) -> Option<u64> {
-    if cmd >= CMD_SELECT_BASE {
-        Some(cmd - CMD_SELECT_BASE)
-    } else {
-        None
-    }
+    if cmd >= CMD_SELECT_BASE { Some(cmd - CMD_SELECT_BASE) } else { None }
 }

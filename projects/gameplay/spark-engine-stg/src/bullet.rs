@@ -23,23 +23,13 @@ pub struct BulletPool {
 
 impl BulletPool {
     pub fn with_capacity(cap: usize) -> Self {
-        Self {
-            next: 1,
-            slots: Vec::with_capacity(cap),
-        }
+        Self { next: 1, slots: Vec::with_capacity(cap) }
     }
 
     pub fn spawn(&mut self, pos: Vec2, vel: Vec2, radius: f32, layer: u8) -> Option<BulletId> {
         if let Some(slot) = self.slots.iter_mut().find(|b| !b.alive) {
             let id = slot.id;
-            *slot = Bullet {
-                id,
-                pos,
-                vel,
-                radius,
-                layer,
-                alive: true,
-            };
+            *slot = Bullet { id, pos, vel, radius, layer, alive: true };
             return Some(id);
         }
         if self.slots.capacity() > 0 && self.slots.len() >= self.slots.capacity() {
@@ -47,14 +37,7 @@ impl BulletPool {
         }
         let id = BulletId(self.next);
         self.next = self.next.saturating_add(1);
-        self.slots.push(Bullet {
-            id,
-            pos,
-            vel,
-            radius,
-            layer,
-            alive: true,
-        });
+        self.slots.push(Bullet { id, pos, vel, radius, layer, alive: true });
         Some(id)
     }
 

@@ -9,11 +9,7 @@ pub struct SpringConfig {
 
 impl SpringConfig {
     pub fn snappy() -> Self {
-        Self {
-            stiffness: 300.0,
-            damping: 20.0,
-            mass: 1.0,
-        }
+        Self { stiffness: 300.0, damping: 20.0, mass: 1.0 }
     }
 }
 

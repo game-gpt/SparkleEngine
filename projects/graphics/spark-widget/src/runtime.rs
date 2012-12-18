@@ -4,22 +4,24 @@ use spark_core::Vec2;
 use spark_input::Input;
 use spark_renderer::DrawList;
 
-use crate::accessibility::AccessibilityTree;
-use crate::asset::{NullTextureResolver, UiTextureResolver};
-use crate::binding::{NullViewModel, UiViewModel};
-use crate::command::UiCommandQueue;
-use crate::drag_drop::DragState;
-use crate::event::router;
-use crate::focus::FocusManager;
-use crate::id::WidgetId;
-use crate::inspector::UiInspector;
-use crate::motion::MotionManager;
-use crate::overlay::OverlayManager;
-use crate::paint;
-use crate::state::UiState;
-use crate::style::Theme;
-use crate::text::{EstimateMeasurer, FontMeasurer, MemoryClipboard, TextMeasurer};
-use crate::tree::WidgetTree;
+use crate::{
+    accessibility::AccessibilityTree,
+    asset::{NullTextureResolver, UiTextureResolver},
+    binding::{NullViewModel, UiViewModel},
+    command::UiCommandQueue,
+    drag_drop::DragState,
+    event::router,
+    focus::FocusManager,
+    id::WidgetId,
+    inspector::UiInspector,
+    motion::MotionManager,
+    overlay::OverlayManager,
+    paint,
+    state::UiState,
+    style::Theme,
+    text::{EstimateMeasurer, FontMeasurer, MemoryClipboard, TextMeasurer},
+    tree::WidgetTree,
+};
 
 /// GUI / HUD / Overlay 层标记。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -207,41 +209,20 @@ impl UiRuntime {
         if !self.state.dirty.layout {
             return;
         }
-        let metrics = crate::layout::UiMetrics {
-            dpi_scale: frame.dpi_scale.max(0.01),
-            ui_scale: frame.ui_scale.max(0.01),
-            safe_area: frame.safe_area,
-        };
-        self.overlays
-            .position_anchored(&mut self.tree, frame.screen_size);
-        crate::layout::run_layout(
-            &mut self.tree,
-            frame.screen_size,
-            metrics,
-            self.text_measurer.as_mut(),
-        );
+        let metrics =
+            crate::layout::UiMetrics { dpi_scale: frame.dpi_scale.max(0.01), ui_scale: frame.ui_scale.max(0.01), safe_area: frame.safe_area };
+        self.overlays.position_anchored(&mut self.tree, frame.screen_size);
+        crate::layout::run_layout(&mut self.tree, frame.screen_size, metrics, self.text_measurer.as_mut());
         // 二次定位：measure 后 desired 更准。
-        self.overlays
-            .position_anchored(&mut self.tree, frame.screen_size);
-        crate::layout::run_layout(
-            &mut self.tree,
-            frame.screen_size,
-            metrics,
-            self.text_measurer.as_mut(),
-        );
+        self.overlays.position_anchored(&mut self.tree, frame.screen_size);
+        crate::layout::run_layout(&mut self.tree, frame.screen_size, metrics, self.text_measurer.as_mut());
         self.state.dirty.clear_layout();
         self.state.dirty.mark_paint();
     }
 
     pub fn paint(&mut self, draw: &mut DrawList) {
         // DrawList 每帧重建：始终遍历绘制。`dirty.paint` 留给增量优化。
-        paint::paint_tree(
-            &self.tree,
-            &self.theme,
-            &self.motion,
-            self.textures.as_mut(),
-            draw,
-        );
+        paint::paint_tree(&self.tree, &self.theme, &self.motion, self.textures.as_mut(), draw);
         self.state.dirty.clear_paint();
     }
 
@@ -265,15 +246,8 @@ impl UiRuntime {
     }
 
     /// 在根下挂载 overlay，并登记到 [`OverlayManager`]。
-    pub fn open_overlay(
-        &mut self,
-        layer: crate::overlay::OverlayLayer,
-        builder: crate::widgets::WidgetBuilder,
-    ) -> Option<WidgetId> {
-        let dismiss_on_outside = matches!(
-            layer,
-            crate::overlay::OverlayLayer::Popup | crate::overlay::OverlayLayer::Tooltip
-        );
+    pub fn open_overlay(&mut self, layer: crate::overlay::OverlayLayer, builder: crate::widgets::WidgetBuilder) -> Option<WidgetId> {
+        let dismiss_on_outside = matches!(layer, crate::overlay::OverlayLayer::Popup | crate::overlay::OverlayLayer::Tooltip);
         self.open_overlay_anchored(layer, None, dismiss_on_outside, builder)
     }
 
@@ -285,16 +259,8 @@ impl UiRuntime {
         builder: crate::widgets::WidgetBuilder,
     ) -> Option<WidgetId> {
         let root = self.tree.root();
-        let id = builder
-            .layer(UiLayer::Overlay)
-            .mount(&mut self.tree, root)?;
-        self.overlays.push_entry(crate::overlay::OverlayEntry {
-            id,
-            layer,
-            anchor,
-            dismiss_on_outside,
-            ttl: None,
-        });
+        let id = builder.layer(UiLayer::Overlay).mount(&mut self.tree, root)?;
+        self.overlays.push_entry(crate::overlay::OverlayEntry { id, layer, anchor, dismiss_on_outside, ttl: None });
         if layer == crate::overlay::OverlayLayer::Modal {
             crate::focus::ensure_focus_in_trap(&self.tree, &mut self.focus, id);
             for node_id in self.tree.ids() {
@@ -308,15 +274,9 @@ impl UiRuntime {
     }
 
     /// 打开 toast（默认 2.5s 后自动关闭）。
-    pub fn show_toast(
-        &mut self,
-        builder: crate::widgets::WidgetBuilder,
-        duration_secs: f32,
-    ) -> Option<WidgetId> {
+    pub fn show_toast(&mut self, builder: crate::widgets::WidgetBuilder, duration_secs: f32) -> Option<WidgetId> {
         let root = self.tree.root();
-        let id = builder
-            .layer(UiLayer::Overlay)
-            .mount(&mut self.tree, root)?;
+        let id = builder.layer(UiLayer::Overlay).mount(&mut self.tree, root)?;
         self.overlays.push_entry(crate::overlay::OverlayEntry {
             id,
             layer: crate::overlay::OverlayLayer::Toast,
@@ -328,49 +288,23 @@ impl UiRuntime {
     }
 
     /// 打开贴靠 `anchor` 的 tooltip（替换已有 Tooltip 层）。
-    pub fn show_tooltip(
-        &mut self,
-        anchor: WidgetId,
-        builder: crate::widgets::WidgetBuilder,
-    ) -> Option<WidgetId> {
-        for id in self
-            .overlays
-            .remove_layer(crate::overlay::OverlayLayer::Tooltip)
-        {
+    pub fn show_tooltip(&mut self, anchor: WidgetId, builder: crate::widgets::WidgetBuilder) -> Option<WidgetId> {
+        for id in self.overlays.remove_layer(crate::overlay::OverlayLayer::Tooltip) {
             self.tree.unmount(id);
         }
-        self.open_overlay_anchored(
-            crate::overlay::OverlayLayer::Tooltip,
-            Some(anchor),
-            false,
-            builder,
-        )
+        self.open_overlay_anchored(crate::overlay::OverlayLayer::Tooltip, Some(anchor), false, builder)
     }
 
     /// 打开贴靠 `anchor` 的 popup（点击外部关闭）。
-    pub fn show_popup(
-        &mut self,
-        anchor: WidgetId,
-        builder: crate::widgets::WidgetBuilder,
-    ) -> Option<WidgetId> {
-        for id in self
-            .overlays
-            .remove_layer(crate::overlay::OverlayLayer::Popup)
-        {
+    pub fn show_popup(&mut self, anchor: WidgetId, builder: crate::widgets::WidgetBuilder) -> Option<WidgetId> {
+        for id in self.overlays.remove_layer(crate::overlay::OverlayLayer::Popup) {
             self.tree.unmount(id);
         }
-        self.open_overlay_anchored(
-            crate::overlay::OverlayLayer::Popup,
-            Some(anchor),
-            true,
-            builder,
-        )
+        self.open_overlay_anchored(crate::overlay::OverlayLayer::Popup, Some(anchor), true, builder)
     }
 
     pub fn dismiss_tooltips(&mut self) {
-        let removed = self
-            .overlays
-            .remove_layer(crate::overlay::OverlayLayer::Tooltip);
+        let removed = self.overlays.remove_layer(crate::overlay::OverlayLayer::Tooltip);
         if removed.is_empty() {
             return;
         }
@@ -391,17 +325,15 @@ impl UiRuntime {
             self.tree.unmount(entry.id);
             self.invalidate_layout();
             true
-        } else {
+        }
+        else {
             false
         }
     }
 }
 
 fn mark_layer(tree: &mut WidgetTree, id: WidgetId, layer: UiLayer) {
-    let children = tree
-        .node(id)
-        .map(|n| n.children.clone())
-        .unwrap_or_default();
+    let children = tree.node(id).map(|n| n.children.clone()).unwrap_or_default();
     if let Some(node) = tree.node_mut(id) {
         node.layer = layer;
     }
@@ -411,9 +343,5 @@ fn mark_layer(tree: &mut WidgetTree, id: WidgetId, layer: UiLayer) {
 }
 
 fn default_text_measurer() -> Box<dyn TextMeasurer> {
-    if let Some(font) = FontMeasurer::try_system() {
-        Box::new(font)
-    } else {
-        Box::new(EstimateMeasurer)
-    }
+    if let Some(font) = FontMeasurer::try_system() { Box::new(font) } else { Box::new(EstimateMeasurer) }
 }

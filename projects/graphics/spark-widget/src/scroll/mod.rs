@@ -2,9 +2,7 @@
 
 use spark_core::Vec2;
 
-use crate::id::WidgetId;
-use crate::node::WidgetKind;
-use crate::tree::WidgetTree;
+use crate::{id::WidgetId, node::WidgetKind, tree::WidgetTree};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScrollDirection {
@@ -23,12 +21,7 @@ pub struct ScrollState {
 
 impl Default for ScrollState {
     fn default() -> Self {
-        Self {
-            offset: Vec2::ZERO,
-            content_size: Vec2::ZERO,
-            viewport_size: Vec2::ZERO,
-            direction: ScrollDirection::Vertical,
-        }
+        Self { offset: Vec2::ZERO, content_size: Vec2::ZERO, viewport_size: Vec2::ZERO, direction: ScrollDirection::Vertical }
     }
 }
 
@@ -74,38 +67,34 @@ pub fn find_scroll_ancestor(tree: &WidgetTree, mut id: WidgetId) -> Option<Widge
 
 /// 调整最近 `ScrollView` 的偏移，使 `target` 落在可视区内。
 pub fn ensure_visible(tree: &mut WidgetTree, target: WidgetId) {
-    let Some(scroll_id) = find_scroll_ancestor(tree, target) else {
+    let Some(scroll_id) = find_scroll_ancestor(tree, target)
+    else {
         return;
     };
     let (target_rect, clip, offset, content_size, viewport_size) = {
-        let Some(target_node) = tree.node(target) else {
+        let Some(target_node) = tree.node(target)
+        else {
             return;
         };
-        let Some(scroll_node) = tree.node(scroll_id) else {
+        let Some(scroll_node) = tree.node(scroll_id)
+        else {
             return;
         };
-        let clip = scroll_node
-            .computed
-            .clip_rect
-            .unwrap_or(scroll_node.computed.content_rect);
-        (
-            target_node.computed.rect,
-            clip,
-            scroll_node.scroll.offset,
-            scroll_node.scroll.content_size,
-            scroll_node.scroll.viewport_size,
-        )
+        let clip = scroll_node.computed.clip_rect.unwrap_or(scroll_node.computed.content_rect);
+        (target_node.computed.rect, clip, scroll_node.scroll.offset, scroll_node.scroll.content_size, scroll_node.scroll.viewport_size)
     };
 
     let mut new_offset = offset;
     if target_rect.y < clip.y {
         new_offset.y -= clip.y - target_rect.y;
-    } else if target_rect.y + target_rect.h > clip.y + clip.h {
+    }
+    else if target_rect.y + target_rect.h > clip.y + clip.h {
         new_offset.y += (target_rect.y + target_rect.h) - (clip.y + clip.h);
     }
     if target_rect.x < clip.x {
         new_offset.x -= clip.x - target_rect.x;
-    } else if target_rect.x + target_rect.w > clip.x + clip.w {
+    }
+    else if target_rect.x + target_rect.w > clip.x + clip.w {
         new_offset.x += (target_rect.x + target_rect.w) - (clip.x + clip.w);
     }
 

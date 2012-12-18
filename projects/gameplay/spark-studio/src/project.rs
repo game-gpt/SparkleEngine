@@ -83,14 +83,8 @@ impl std::fmt::Display for ProjectError {
             Self::InvalidJson { path, detail } => {
                 write!(f, "无法解析 {}：{detail}", path.display())
             }
-            Self::AmbiguousKind { detail } => write!(
-                f,
-                "{detail}\n请在 package.json 中设置：\n\"spark\": {{ \"kind\": \"hybrid\" }}"
-            ),
-            Self::InvalidKind { value } => write!(
-                f,
-                "未知 spark.kind = \"{value}\"。允许：rust | valkyrie | hybrid"
-            ),
+            Self::AmbiguousKind { detail } => write!(f, "{detail}\n请在 package.json 中设置：\n\"spark\": {{ \"kind\": \"hybrid\" }}"),
+            Self::InvalidKind { value } => write!(f, "未知 spark.kind = \"{value}\"。允许：rust | valkyrie | hybrid"),
         }
     }
 }
@@ -107,11 +101,14 @@ pub fn resolve_project_dir(args: &[String]) -> PathBuf {
                 i += 2;
                 continue;
             }
-        } else if let Some(rest) = a.strip_prefix("--cwd=") {
+        }
+        else if let Some(rest) = a.strip_prefix("--cwd=") {
             cwd = Some(PathBuf::from(rest));
-        } else if a == "--safe-mode" || a == "--help" || a == "-h" || a == "--play" {
+        }
+        else if a == "--safe-mode" || a == "--help" || a == "-h" || a == "--play" {
             // 忽略（由 main 处理 --play）
-        } else if !a.starts_with('-') && cwd.is_none() {
+        }
+        else if !a.starts_with('-') && cwd.is_none() {
             cwd = Some(PathBuf::from(a));
         }
         i += 1;
@@ -125,11 +122,11 @@ fn has_cargo(root: &Path) -> bool {
 
 fn has_script_files(root: &Path) -> bool {
     let scripts = root.join("assets").join("scripts");
-    let Ok(rd) = std::fs::read_dir(scripts) else {
+    let Ok(rd) = std::fs::read_dir(scripts)
+    else {
         return false;
     };
-    rd.filter_map(|e| e.ok())
-        .any(|e| e.path().extension().is_some_and(|ext| ext == "script"))
+    rd.filter_map(|e| e.ok()).any(|e| e.path().extension().is_some_and(|ext| ext == "script"))
 }
 
 fn parse_kind(raw: &str) -> Result<ProjectKind, ProjectError> {
@@ -137,9 +134,7 @@ fn parse_kind(raw: &str) -> Result<ProjectKind, ProjectError> {
         "rust" => Ok(ProjectKind::Rust),
         "valkyrie" | "script" => Ok(ProjectKind::Valkyrie),
         "hybrid" => Ok(ProjectKind::Hybrid),
-        other => Err(ProjectError::InvalidKind {
-            value: other.to_string(),
-        }),
+        other => Err(ProjectError::InvalidKind { value: other.to_string() }),
     }
 }
 
@@ -150,9 +145,7 @@ fn infer_kind(root: &Path) -> Result<(ProjectKind, bool), ProjectError> {
         (true, false) => Ok((ProjectKind::Rust, true)),
         (false, true) => Ok((ProjectKind::Valkyrie, true)),
         (true, true) => Err(ProjectError::AmbiguousKind {
-            detail:
-                "检测到 Cargo.toml 与 assets/scripts/*.script，但 package.json 未声明 spark.kind。"
-                    .into(),
+            detail: "检测到 Cargo.toml 与 assets/scripts/*.script，但 package.json 未声明 spark.kind。".into(),
         }),
         (false, false) => Err(ProjectError::AmbiguousKind {
             detail: "未检测到 Cargo.toml 或 assets/scripts/*.script，且未声明 spark.kind。".into(),
@@ -163,39 +156,21 @@ fn infer_kind(root: &Path) -> Result<(ProjectKind, bool), ProjectError> {
 pub fn load_project(root: &Path) -> Result<ProjectInfo, ProjectError> {
     let pkg_path = root.join("package.json");
     if !pkg_path.is_file() {
-        return Err(ProjectError::NoPackageJson {
-            searched: root.to_path_buf(),
-        });
+        return Err(ProjectError::NoPackageJson { searched: root.to_path_buf() });
     }
-    let text = std::fs::read_to_string(&pkg_path).map_err(|e| ProjectError::InvalidJson {
-        path: pkg_path.clone(),
-        detail: e.to_string(),
-    })?;
-    let pkg: PackageJson = serde_json::from_str(&text).map_err(|e| ProjectError::InvalidJson {
-        path: pkg_path,
-        detail: e.to_string(),
-    })?;
+    let text = std::fs::read_to_string(&pkg_path).map_err(|e| ProjectError::InvalidJson { path: pkg_path.clone(), detail: e.to_string() })?;
+    let pkg: PackageJson = serde_json::from_str(&text).map_err(|e| ProjectError::InvalidJson { path: pkg_path, detail: e.to_string() })?;
 
-    let has_dep = |map: &Option<serde_json::Map<String, serde_json::Value>>| {
-        map.as_ref()
-            .is_some_and(|m| m.contains_key("@game-gpt/sparkle-engine"))
-    };
+    let has_dep =
+        |map: &Option<serde_json::Map<String, serde_json::Value>>| map.as_ref().is_some_and(|m| m.contains_key("@game-gpt/sparkle-engine"));
     let has_sparkle_engine_dep = has_dep(&pkg.dependencies) || has_dep(&pkg.dev_dependencies);
 
-    let (kind, kind_inferred) = if let Some(k) = pkg.spark.as_ref().and_then(|s| s.kind.as_deref())
-    {
-        (parse_kind(k)?, false)
-    } else {
-        infer_kind(root)?
-    };
+    let (kind, kind_inferred) =
+        if let Some(k) = pkg.spark.as_ref().and_then(|s| s.kind.as_deref()) { (parse_kind(k)?, false) } else { infer_kind(root)? };
 
     Ok(ProjectInfo {
         root: root.to_path_buf(),
-        name: pkg.name.unwrap_or_else(|| {
-            root.file_name()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "game".into())
-        }),
+        name: pkg.name.unwrap_or_else(|| root.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "game".into())),
         kind,
         kind_inferred,
         startup_scene: pkg.spark.as_ref().and_then(|s| s.startup_scene.clone()),
@@ -215,10 +190,7 @@ pub fn list_asset_entries(root: &Path) -> Vec<String> {
     }
     out.push("assets".into());
     if let Ok(rd) = std::fs::read_dir(&assets) {
-        let mut names: Vec<_> = rd
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect();
+        let mut names: Vec<_> = rd.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
         names.sort();
         for n in names {
             out.push(format!("  {n}/"));

@@ -10,5 +10,5 @@ mod plugin;
 mod runtime;
 
 pub use backend::{Live2dBackend, NullLive2dBackend};
-pub use plugin::{Live2dPlugin, LIVE2D_NATIVES};
+pub use plugin::{LIVE2D_NATIVES, Live2dPlugin};
 pub use runtime::{Live2dModelId, Live2dRuntime};

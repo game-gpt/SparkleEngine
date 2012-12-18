@@ -5,8 +5,10 @@
 //! 并行批次仍后续接入。
 //! 同一 [`crate::ScriptDomain`] 的执行默认视为串行资源。
 
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    sync::Arc,
+};
 
 use spark_script::{DeterminismClass, HostPhase};
 
@@ -29,17 +31,11 @@ pub struct ComponentAccess {
 
 impl ComponentAccess {
     pub fn read(component: impl Into<Arc<str>>) -> Self {
-        Self {
-            component: component.into(),
-            write: false,
-        }
+        Self { component: component.into(), write: false }
     }
 
     pub fn write(component: impl Into<Arc<str>>) -> Self {
-        Self {
-            component: component.into(),
-            write: true,
-        }
+        Self { component: component.into(), write: true }
     }
 }
 
@@ -61,12 +57,7 @@ pub struct ScriptSystemDescriptor {
 }
 
 impl ScriptSystemDescriptor {
-    pub fn new(
-        mod_id: impl Into<Arc<str>>,
-        name: impl Into<Arc<str>>,
-        entry: impl Into<Arc<str>>,
-        phase: HostPhase,
-    ) -> Self {
+    pub fn new(mod_id: impl Into<Arc<str>>, name: impl Into<Arc<str>>, entry: impl Into<Arc<str>>, phase: HostPhase) -> Self {
         Self {
             mod_id: mod_id.into(),
             name: name.into(),
@@ -171,22 +162,16 @@ impl ScriptSystemRegistry {
     }
 
     pub fn register(&mut self, desc: ScriptSystemDescriptor) {
-        if let Some(existing) = self
-            .systems
-            .iter_mut()
-            .find(|s| s.mod_id == desc.mod_id && s.name == desc.name)
-        {
+        if let Some(existing) = self.systems.iter_mut().find(|s| s.mod_id == desc.mod_id && s.name == desc.name) {
             *existing = desc;
-        } else {
+        }
+        else {
             self.systems.push(desc);
         }
     }
 
     /// 登记并立即校验当前全表声明（环 / 冲突）。
-    pub fn register_checked(
-        &mut self,
-        desc: ScriptSystemDescriptor,
-    ) -> Result<(), ScriptSystemError> {
+    pub fn register_checked(&mut self, desc: ScriptSystemDescriptor) -> Result<(), ScriptSystemError> {
         self.register(desc);
         self.validate_all()
     }
@@ -200,9 +185,7 @@ impl ScriptSystemRegistry {
     }
 
     pub fn for_phase(&self, phase: HostPhase) -> impl Iterator<Item = &ScriptSystemDescriptor> {
-        self.systems
-            .iter()
-            .filter(move |s| s.phase == phase || s.phase == HostPhase::Any)
+        self.systems.iter().filter(move |s| s.phase == phase || s.phase == HostPhase::Any)
     }
 
     /// 校验全表：Exclusive、访问冲突、before/after 环。
@@ -215,31 +198,19 @@ impl ScriptSystemRegistry {
     }
 
     /// 按 before/after 拓扑序返回某一 phase 的 System；并检查访问冲突。
-    pub fn ordered_for_phase(
-        &self,
-        phase: HostPhase,
-    ) -> Result<Vec<&ScriptSystemDescriptor>, ScriptSystemError> {
+    pub fn ordered_for_phase(&self, phase: HostPhase) -> Result<Vec<&ScriptSystemDescriptor>, ScriptSystemError> {
         let jobs: Vec<&ScriptSystemDescriptor> = self.for_phase(phase).collect();
         if jobs.is_empty() {
             return Ok(Vec::new());
         }
 
-        let exclusive: Vec<_> = jobs
-            .iter()
-            .filter(|s| s.parallelism == ScriptParallelism::Exclusive)
-            .collect();
+        let exclusive: Vec<_> = jobs.iter().filter(|s| s.parallelism == ScriptParallelism::Exclusive).collect();
         if exclusive.len() > 1 {
-            return Err(ScriptSystemError::ExclusiveConflict {
-                detail: format!("phase={phase:?} exclusive_count={}", exclusive.len()),
-            });
+            return Err(ScriptSystemError::ExclusiveConflict { detail: format!("phase={phase:?} exclusive_count={}", exclusive.len()) });
         }
         if exclusive.len() == 1 && jobs.len() > 1 {
             return Err(ScriptSystemError::ExclusiveConflict {
-                detail: format!(
-                    "phase={phase:?} exclusive={} peers={}",
-                    exclusive[0].graph_key(),
-                    jobs.len() - 1
-                ),
+                detail: format!("phase={phase:?} exclusive={} peers={}", exclusive[0].graph_key(), jobs.len() - 1),
             });
         }
 
@@ -248,11 +219,7 @@ impl ScriptSystemRegistry {
         // 图：edge A→B 表示 A 必须在 B 之前。
         let keys: Vec<String> = jobs.iter().map(|s| s.graph_key()).collect();
         let key_set: HashSet<&str> = keys.iter().map(|s| s.as_str()).collect();
-        let index: HashMap<&str, usize> = keys
-            .iter()
-            .enumerate()
-            .map(|(i, k)| (k.as_str(), i))
-            .collect();
+        let index: HashMap<&str, usize> = keys.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
 
         let mut adj: Vec<Vec<usize>> = vec![Vec::new(); jobs.len()];
         let mut indeg = vec![0usize; jobs.len()];
@@ -260,7 +227,8 @@ impl ScriptSystemRegistry {
         for (i, sys) in jobs.iter().enumerate() {
             for after_name in &sys.after {
                 let pred = resolve_order_target(&jobs, after_name.as_ref(), &key_set)?;
-                let Some(&p) = index.get(pred.as_str()) else {
+                let Some(&p) = index.get(pred.as_str())
+                else {
                     continue;
                 };
                 adj[p].push(i);
@@ -268,7 +236,8 @@ impl ScriptSystemRegistry {
             }
             for before_name in &sys.before {
                 let succ = resolve_order_target(&jobs, before_name.as_ref(), &key_set)?;
-                let Some(&s) = index.get(succ.as_str()) else {
+                let Some(&s) = index.get(succ.as_str())
+                else {
                     continue;
                 };
                 adj[i].push(s);
@@ -276,11 +245,7 @@ impl ScriptSystemRegistry {
             }
         }
 
-        let mut queue: VecDeque<usize> = indeg
-            .iter()
-            .enumerate()
-            .filter_map(|(i, d)| (*d == 0).then_some(i))
-            .collect();
+        let mut queue: VecDeque<usize> = indeg.iter().enumerate().filter_map(|(i, d)| (*d == 0).then_some(i)).collect();
         let mut ordered = Vec::with_capacity(jobs.len());
         while let Some(i) = queue.pop_front() {
             ordered.push(jobs[i]);
@@ -292,55 +257,33 @@ impl ScriptSystemRegistry {
             }
         }
         if ordered.len() != jobs.len() {
-            return Err(ScriptSystemError::Cycle {
-                detail: format!("phase={phase:?}"),
-            });
+            return Err(ScriptSystemError::Cycle { detail: format!("phase={phase:?}") });
         }
         Ok(ordered)
     }
 
     /// 由领域生命周期导出生成默认 System（每导出一条）。
-    pub fn register_lifecycle_exports(
-        &mut self,
-        mod_id: impl Into<Arc<str>>,
-        exports: &[Arc<str>],
-    ) {
+    pub fn register_lifecycle_exports(&mut self, mod_id: impl Into<Arc<str>>, exports: &[Arc<str>]) {
         let mod_id = mod_id.into();
         for name in exports {
-            let Some(phase) = lifecycle_phase(name.as_ref()) else {
+            let Some(phase) = lifecycle_phase(name.as_ref())
+            else {
                 continue;
             };
-            self.register(ScriptSystemDescriptor::new(
-                Arc::clone(&mod_id),
-                Arc::clone(name),
-                Arc::clone(name),
-                phase,
-            ));
+            self.register(ScriptSystemDescriptor::new(Arc::clone(&mod_id), Arc::clone(name), Arc::clone(name), phase));
         }
     }
 }
 
-fn resolve_order_target(
-    jobs: &[&ScriptSystemDescriptor],
-    target: &str,
-    key_set: &HashSet<&str>,
-) -> Result<String, ScriptSystemError> {
+fn resolve_order_target(jobs: &[&ScriptSystemDescriptor], target: &str, key_set: &HashSet<&str>) -> Result<String, ScriptSystemError> {
     if key_set.contains(target) {
         return Ok(target.to_string());
     }
-    let matches: Vec<_> = jobs
-        .iter()
-        .filter(|s| s.name.as_ref() == target || s.entry.as_ref() == target)
-        .map(|s| s.graph_key())
-        .collect();
+    let matches: Vec<_> = jobs.iter().filter(|s| s.name.as_ref() == target || s.entry.as_ref() == target).map(|s| s.graph_key()).collect();
     match matches.as_slice() {
         [one] => Ok(one.clone()),
-        [] => Err(ScriptSystemError::UnknownOrderTarget {
-            detail: target.into(),
-        }),
-        _ => Err(ScriptSystemError::UnknownOrderTarget {
-            detail: format!("ambiguous:{target}"),
-        }),
+        [] => Err(ScriptSystemError::UnknownOrderTarget { detail: target.into() }),
+        _ => Err(ScriptSystemError::UnknownOrderTarget { detail: format!("ambiguous:{target}") }),
     }
 }
 
@@ -356,12 +299,7 @@ fn check_access_conflicts(jobs: &[&ScriptSystemDescriptor]) -> Result<(), Script
                     }
                     if aa.write || ba.write {
                         return Err(ScriptSystemError::AccessConflict {
-                            detail: format!(
-                                "{} vs {} on {}",
-                                a.graph_key(),
-                                b.graph_key(),
-                                aa.component
-                            ),
+                            detail: format!("{} vs {} on {}", a.graph_key(), b.graph_key(), aa.component),
                         });
                     }
                 }
@@ -392,16 +330,8 @@ mod tests {
     #[test]
     fn registry_filters_by_phase() {
         let mut reg = ScriptSystemRegistry::new();
-        reg.register(ScriptSystemDescriptor::new(
-            "demo",
-            "move",
-            "fixed_update",
-            HostPhase::FixedUpdate,
-        ));
-        reg.register(
-            ScriptSystemDescriptor::new("demo", "draw", "render_prepare", HostPhase::RenderPrepare)
-                .read("Transform"),
-        );
+        reg.register(ScriptSystemDescriptor::new("demo", "move", "fixed_update", HostPhase::FixedUpdate));
+        reg.register(ScriptSystemDescriptor::new("demo", "draw", "render_prepare", HostPhase::RenderPrepare).read("Transform"));
         assert_eq!(reg.for_phase(HostPhase::FixedUpdate).count(), 1);
         assert_eq!(reg.for_phase(HostPhase::RenderPrepare).count(), 1);
         assert_eq!(reg.for_phase(HostPhase::Update).count(), 0);
@@ -410,16 +340,10 @@ mod tests {
     #[test]
     fn lifecycle_exports_register_phases() {
         let mut reg = ScriptSystemRegistry::new();
-        let exports = [
-            Arc::<str>::from("on_load"),
-            Arc::<str>::from("update"),
-            Arc::<str>::from("helper"),
-        ];
+        let exports = [Arc::<str>::from("on_load"), Arc::<str>::from("update"), Arc::<str>::from("helper")];
         reg.register_lifecycle_exports("m", &exports);
         assert_eq!(reg.len(), 2);
-        assert!(reg
-            .for_phase(HostPhase::Update)
-            .any(|s| s.entry.as_ref() == "update"));
+        assert!(reg.for_phase(HostPhase::Update).any(|s| s.entry.as_ref() == "update"));
     }
 
     #[test]
@@ -435,12 +359,8 @@ mod tests {
     #[test]
     fn write_write_access_conflicts() {
         let mut reg = ScriptSystemRegistry::new();
-        reg.register(
-            ScriptSystemDescriptor::new("m", "a", "a", HostPhase::Update).write("Transform"),
-        );
-        reg.register(
-            ScriptSystemDescriptor::new("m", "b", "b", HostPhase::Update).write("Transform"),
-        );
+        reg.register(ScriptSystemDescriptor::new("m", "a", "a", HostPhase::Update).write("Transform"));
+        reg.register(ScriptSystemDescriptor::new("m", "b", "b", HostPhase::Update).write("Transform"));
         let err = reg.ordered_for_phase(HostPhase::Update).unwrap_err();
         assert!(matches!(err, ScriptSystemError::AccessConflict { .. }));
     }

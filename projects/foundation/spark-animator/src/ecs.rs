@@ -4,9 +4,7 @@ use std::collections::HashMap;
 
 use spark_ecs::{Schedule, World};
 
-use crate::clip::AnimationClip;
-use crate::controller::Animator;
-use crate::player::AnimationPlayer;
+use crate::{clip::AnimationClip, controller::Animator, player::AnimationPlayer};
 
 /// 本帧动画步长（秒）。由宿主写入，系统不读窗口或渲染器。
 #[derive(Debug, Clone, Copy)]
@@ -22,9 +20,7 @@ pub struct ClipLibrary<T> {
 
 impl<T> Default for ClipLibrary<T> {
     fn default() -> Self {
-        Self {
-            clips: HashMap::new(),
-        }
+        Self { clips: HashMap::new() }
     }
 }
 
@@ -42,10 +38,7 @@ impl<T> ClipLibrary<T> {
     }
 
     pub fn durations(&self) -> HashMap<String, f32> {
-        self.clips
-            .iter()
-            .map(|(name, clip)| (name.clone(), clip.duration))
-            .collect()
+        self.clips.iter().map(|(name, clip)| (name.clone(), clip.duration)).collect()
     }
 }
 
@@ -100,17 +93,9 @@ where
 }
 
 fn delta(world: &World) -> f32 {
-    world
-        .resources
-        .get::<AnimationDelta>()
-        .map(|delta| delta.dt)
-        .unwrap_or(0.0)
+    world.resources.get::<AnimationDelta>().map(|delta| delta.dt).unwrap_or(0.0)
 }
 
 fn durations<T: Send + Sync + 'static>(world: &World) -> HashMap<String, f32> {
-    world
-        .resources
-        .get::<ClipLibrary<T>>()
-        .map(|library| library.durations())
-        .unwrap_or_default()
+    world.resources.get::<ClipLibrary<T>>().map(|library| library.durations()).unwrap_or_default()
 }

@@ -26,13 +26,7 @@ pub struct PlatformerConfig {
 
 impl Default for PlatformerConfig {
     fn default() -> Self {
-        Self {
-            gravity: 40.0,
-            move_speed: 8.0,
-            jump_speed: 14.0,
-            coyote_time: 0.08,
-            jump_buffer: 0.1,
-        }
+        Self { gravity: 40.0, move_speed: 8.0, jump_speed: 14.0, coyote_time: 0.08, jump_buffer: 0.1 }
     }
 }
 
@@ -57,16 +51,8 @@ impl PlatformerEngine {
     }
 
     pub fn tick(&mut self, dt: f32, input: ControllerInput) {
-        self.player
-            .integrate(dt, input, &self.config, &self.world);
-        self.camera.follow_center(
-            self.player.center(),
-            0.0,
-            0.0,
-            crate::camera::DEADZONE,
-            crate::camera::FOLLOW_LERP,
-            dt,
-        );
+        self.player.integrate(dt, input, &self.config, &self.world);
+        self.camera.follow_center(self.player.center(), 0.0, 0.0, crate::camera::DEADZONE, crate::camera::FOLLOW_LERP, dt);
     }
 }
 
@@ -78,10 +64,7 @@ mod tests {
     #[test]
     fn land_and_jump() {
         let mut eng = PlatformerEngine::new(".");
-        eng.world.push(SolidRect {
-            rect: Rect::new(0.0, 0.0, 20.0, 1.0),
-            kind: SolidKind::Solid,
-        });
+        eng.world.push(SolidRect { rect: Rect::new(0.0, 0.0, 20.0, 1.0), kind: SolidKind::Solid });
         eng.player.pos = Vec2::new(2.0, 3.0);
         eng.player.vel = Vec2::new(0.0, -1.0);
         for _ in 0..30 {
@@ -89,14 +72,7 @@ mod tests {
         }
         assert!(eng.player.on_ground);
         let y0 = eng.player.pos.y;
-        eng.tick(
-            1.0 / 60.0,
-            ControllerInput {
-                move_x: 0.0,
-                jump_pressed: true,
-                jump_held: true,
-            },
-        );
+        eng.tick(1.0 / 60.0, ControllerInput { move_x: 0.0, jump_pressed: true, jump_held: true });
         assert!(eng.player.vel.y > 0.0 || eng.player.pos.y > y0);
     }
 }

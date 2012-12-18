@@ -1,19 +1,19 @@
 {
-  "name": "snake",
-  "private": true,
-  "description": "Spark Studio 验收：纯 Valkyrie 贪吃蛇（native 试玩宿主直至 VM Play 接通）",
-  "scripts": {
-    "studio": "spark studio",
-    "run": "spark run",
-    "play": "cargo run -p snake"
-  },
-  "dependencies": {
-    "@game-gpt/sparkle-engine": "workspace:*"
-  },
-  "spark": {
-    "kind": "valkyrie",
-    "startupScene": "assets/scenes/main.scene",
-    "scriptEntry": "assets/scripts/game.script",
-    "runTarget": "snake"
-  }
+    "name": "snake",
+    "private": true,
+    "description": "Spark Studio 验收：纯 Valkyrie 贪吃蛇（native 试玩宿主直至 VM Play 接通）",
+    "scripts": {
+        "studio": "spark studio",
+        "run": "spark run",
+        "play": "cargo run -p snake"
+    },
+    "dependencies": {
+        "@game-gpt/sparkle-engine": "workspace:*"
+    },
+    "spark": {
+        "kind": "valkyrie",
+        "startupScene": "assets/scenes/main.scene",
+        "scriptEntry": "assets/scripts/game.script",
+        "runTarget": "snake"
+    }
 }

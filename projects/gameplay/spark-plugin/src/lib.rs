@@ -52,9 +52,7 @@ impl PluginError {
         use spark_diagnostics::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
         match self {
-            Self::DuplicateId { id } | Self::NotFound { id } => {
-                ErrorArgs::new().with("id", ErrorArg::String(Arc::from(id.as_str())))
-            }
+            Self::DuplicateId { id } | Self::NotFound { id } => ErrorArgs::new().with("id", ErrorArg::String(Arc::from(id.as_str()))),
         }
     }
 }
@@ -96,11 +94,7 @@ impl PluginRegistry {
         if self.plugins.iter().any(|p| p.info().id == id) {
             return Err(PluginError::DuplicateId { id: id.into() });
         }
-        tracing::info!(
-            event = "spark.plugin.registered",
-            plugin = id,
-            version = plugin.info().version,
-        );
+        tracing::info!(event = "spark.plugin.registered", plugin = id, version = plugin.info().version,);
         self.plugins.push(plugin);
         Ok(())
     }
@@ -150,7 +144,8 @@ impl PluginRegistry {
 
     /// 只安装指定 id。
     pub fn install_one(&mut self, id: &str, vm: &mut Vm) -> Result<(), PluginError> {
-        let Some(p) = self.plugins.iter_mut().find(|p| p.info().id == id) else {
+        let Some(p) = self.plugins.iter_mut().find(|p| p.info().id == id)
+        else {
             return Err(PluginError::NotFound { id: id.into() });
         };
         let names: Vec<&'static str> = p.native_names().to_vec();
@@ -175,11 +170,7 @@ mod tests {
 
     impl Plugin for EchoPlugin {
         fn info(&self) -> PluginInfo {
-            PluginInfo {
-                id: "echo",
-                version: "0.1.0",
-                description: "测试回声",
-            }
+            PluginInfo { id: "echo", version: "0.1.0", description: "测试回声" }
         }
 
         fn native_names(&self) -> &'static [&'static str] {
@@ -187,9 +178,7 @@ mod tests {
         }
 
         fn install(&mut self, vm: &mut Vm) {
-            vm.register_native("echo_ping", |_ctx: &mut NativeCtx<'_>, args: Vec<Value>| {
-                Ok(args.into_iter().next().unwrap_or(Value::Null))
-            });
+            vm.register_native("echo_ping", |_ctx: &mut NativeCtx<'_>, args: Vec<Value>| Ok(args.into_iter().next().unwrap_or(Value::Null)));
         }
     }
 
@@ -200,11 +189,7 @@ mod tests {
         assert!(reg.contains("echo"));
         assert_eq!(reg.native_names(), ["echo_ping"]);
 
-        let mut module = Module {
-            functions: vec![],
-            entry: 0,
-            native_names: vec!["plugin.echo_ping".into()],
-        };
+        let mut module = Module { functions: vec![], entry: 0, native_names: vec!["plugin.echo_ping".into()] };
         let mut f = FuncProto::new("on_load", 0);
         let c = f.add_const_number(7.0);
         f.emit(Op::LoadConst);

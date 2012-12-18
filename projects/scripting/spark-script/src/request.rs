@@ -3,11 +3,12 @@
 //! 单个 `compile(language, source, natives)` 字符串入口只可作为 REPL / 测试便利，
 //! 正式模组编译必须携带 profile、宿主 schema 与能力策略。
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
-use crate::host_schema::{CapabilityId, DeterminismClass, HostSchema};
-use crate::ScriptLanguage;
+use crate::{
+    ScriptLanguage,
+    host_schema::{CapabilityId, DeterminismClass, HostSchema},
+};
 
 /// 语言前端选择（与 profile 正交：同一前端可有多个 profile）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -85,11 +86,7 @@ pub struct LanguageProfile {
 
 impl LanguageProfile {
     pub fn new(frontend: LanguageFrontend, profile: impl Into<LanguageProfileId>) -> Self {
-        Self {
-            frontend,
-            profile: profile.into(),
-            language_version: None,
-        }
+        Self { frontend, profile: profile.into(), language_version: None }
     }
 
     pub fn with_language_version(mut self, version: impl Into<Arc<str>>) -> Self {
@@ -100,16 +97,9 @@ impl LanguageProfile {
     /// 由 [`ScriptLanguage`] 选择默认 Spark profile（便利映射，非完整语言生态声明）。
     pub fn default_for(language: ScriptLanguage) -> Self {
         match language {
-            ScriptLanguage::Valkyrie => Self::new(
-                LanguageFrontend::Valkyrie,
-                LanguageProfileId::spark_valkyrie_1(),
-            ),
-            ScriptLanguage::Lua => {
-                Self::new(LanguageFrontend::Lua, LanguageProfileId::spark_lua_1())
-            }
-            ScriptLanguage::Ruby => {
-                Self::new(LanguageFrontend::Ruby, LanguageProfileId::spark_ruby_1())
-            }
+            ScriptLanguage::Valkyrie => Self::new(LanguageFrontend::Valkyrie, LanguageProfileId::spark_valkyrie_1()),
+            ScriptLanguage::Lua => Self::new(LanguageFrontend::Lua, LanguageProfileId::spark_lua_1()),
+            ScriptLanguage::Ruby => Self::new(LanguageFrontend::Ruby, LanguageProfileId::spark_ruby_1()),
         }
     }
 }
@@ -123,10 +113,7 @@ pub struct PackageId {
 
 impl PackageId {
     pub fn new(name: impl Into<Arc<str>>, version: impl Into<Arc<str>>) -> Self {
-        Self {
-            name: name.into(),
-            version: version.into(),
-        }
+        Self { name: name.into(), version: version.into() }
     }
 
     pub fn anonymous() -> Self {
@@ -144,11 +131,7 @@ pub struct SourceFile {
 
 impl SourceFile {
     pub fn memory(name: impl Into<Arc<str>>, source: impl Into<Arc<str>>) -> Self {
-        Self {
-            path: None,
-            name: name.into(),
-            source: source.into(),
-        }
+        Self { path: None, name: name.into(), source: source.into() }
     }
 }
 
@@ -187,11 +170,7 @@ pub struct CompilationRequest {
 
 impl CompilationRequest {
     /// REPL / 测试便利：单文件 + 默认 profile。正式模组请用 [`Self::for_mod`]。
-    pub fn repl(
-        language: ScriptLanguage,
-        source: impl Into<Arc<str>>,
-        host_schema: HostSchema,
-    ) -> Self {
+    pub fn repl(language: ScriptLanguage, source: impl Into<Arc<str>>, host_schema: HostSchema) -> Self {
         Self {
             package: PackageId::anonymous(),
             sources: vec![SourceFile::memory("<repl>", source)],
@@ -218,19 +197,12 @@ impl CompilationRequest {
     ) -> Self {
         let entry_name = entry_name.into();
         let language = match language_token.map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("rgss") => LanguageProfile::new(
-                LanguageFrontend::Ruby,
-                LanguageProfileId::rgss_compat(),
-            ),
+            Some("rgss") => LanguageProfile::new(LanguageFrontend::Ruby, LanguageProfileId::rgss_compat()),
             _ => LanguageProfile::default_for(language),
         };
         Self {
             package,
-            sources: vec![SourceFile {
-                path: Some(entry_path),
-                name: Arc::clone(&entry_name),
-                source: source.into(),
-            }],
+            sources: vec![SourceFile { path: Some(entry_path), name: Arc::clone(&entry_name), source: source.into() }],
             entry_modules: vec![entry_name],
             language,
             host_schema,

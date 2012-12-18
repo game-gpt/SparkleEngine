@@ -1,11 +1,15 @@
 //! 翻译覆盖率：按 Locale / 命名空间汇总缺失、多余与仅 fallback 命中。
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
-use crate::document::{LocalizationDocument, MessageName};
-use crate::locale::LocaleId;
-use crate::message::NamespaceId;
+use crate::{
+    document::{LocalizationDocument, MessageName},
+    locale::LocaleId,
+    message::NamespaceId,
+};
 
 /// 单条消息相对基线的状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -47,20 +51,13 @@ impl CoverageReport {
 }
 
 /// 以 `baseline` 为权威键集，计算 `target` 覆盖率。
-pub fn coverage_against(
-    baseline: &LocalizationDocument,
-    target: &LocalizationDocument,
-) -> CoverageReport {
+pub fn coverage_against(baseline: &LocalizationDocument, target: &LocalizationDocument) -> CoverageReport {
     let mut report = CoverageReport::default();
     let base_keys: BTreeSet<_> = baseline.messages.keys().cloned().collect();
     let target_keys: BTreeSet<_> = target.messages.keys().cloned().collect();
 
     for key in &base_keys {
-        let status = if target_keys.contains(key) {
-            CoverageStatus::Present
-        } else {
-            CoverageStatus::Missing
-        };
+        let status = if target_keys.contains(key) { CoverageStatus::Present } else { CoverageStatus::Missing };
         push_entry(&mut report, target, key.clone(), status);
     }
     for key in target_keys.difference(&base_keys) {
@@ -95,24 +92,14 @@ pub fn coverage_set(
     merged
 }
 
-fn push_entry(
-    report: &mut CoverageReport,
-    doc: &LocalizationDocument,
-    message: MessageName,
-    status: CoverageStatus,
-) {
+fn push_entry(report: &mut CoverageReport, doc: &LocalizationDocument, message: MessageName, status: CoverageStatus) {
     match status {
         CoverageStatus::Present => report.present += 1,
         CoverageStatus::Missing => report.missing += 1,
         CoverageStatus::Extra => report.extra += 1,
         CoverageStatus::FallbackOnly => report.fallback_only += 1,
     }
-    report.entries.push(CoverageEntry {
-        namespace: doc.namespace.clone(),
-        locale: doc.locale.clone(),
-        message,
-        status,
-    });
+    report.entries.push(CoverageEntry { namespace: doc.namespace.clone(), locale: doc.locale.clone(), message, status });
 }
 
 fn recount(report: &mut CoverageReport) {
@@ -138,8 +125,7 @@ pub fn fallback_key(locale: LocaleId, message: impl Into<Arc<str>>) -> (LocaleId
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::MessageDefinition;
-    use crate::locale::LocaleId;
+    use crate::{document::MessageDefinition, locale::LocaleId};
 
     #[test]
     fn reports_missing_and_present() {

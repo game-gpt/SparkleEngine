@@ -2,8 +2,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use crate::channel::NetPacket;
-use crate::NetError;
+use crate::{NetError, channel::NetPacket};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PeerId(pub u32);
@@ -34,19 +33,11 @@ pub struct InMemoryTransport<'a> {
 
 impl Transport for InMemoryTransport<'_> {
     fn send(&mut self, to: PeerId, packet: NetPacket) -> Result<(), NetError> {
-        self.bus
-            .inbox
-            .entry(to)
-            .or_default()
-            .push_back((self.id, packet));
+        self.bus.inbox.entry(to).or_default().push_back((self.id, packet));
         Ok(())
     }
 
     fn recv(&mut self) -> Vec<(PeerId, NetPacket)> {
-        self.bus
-            .inbox
-            .get_mut(&self.id)
-            .map(|q| q.drain(..).collect())
-            .unwrap_or_default()
+        self.bus.inbox.get_mut(&self.id).map(|q| q.drain(..).collect()).unwrap_or_default()
     }
 }

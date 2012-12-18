@@ -15,10 +15,7 @@ pub struct PackageId {
 
 impl PackageId {
     pub fn new(name: impl Into<Arc<str>>, version: impl Into<Arc<str>>) -> Self {
-        Self {
-            name: name.into(),
-            version: version.into(),
-        }
+        Self { name: name.into(), version: version.into() }
     }
 
     pub fn anonymous() -> Self {
@@ -46,10 +43,7 @@ pub enum Ty {
     Asset,
     ResourceHandle,
     Array(Box<Ty>),
-    Map {
-        key: Box<Ty>,
-        value: Box<Ty>,
-    },
+    Map { key: Box<Ty>, value: Box<Ty> },
     Record,
     Function,
     Coroutine,

@@ -1,7 +1,9 @@
 //! 模组资源虚拟路径：限制在模组根目录内。
 
-use std::path::{Component, Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    path::{Component, Path, PathBuf},
+    sync::Arc,
+};
 
 use spark_core::{ErrorArg, SparkError, codes};
 
@@ -15,10 +17,7 @@ pub struct ModVfs {
 
 impl ModVfs {
     pub fn new(mod_id: impl Into<String>, root: impl Into<PathBuf>) -> Self {
-        Self {
-            mod_id: mod_id.into(),
-            root: root.into(),
-        }
+        Self { mod_id: mod_id.into(), root: root.into() }
     }
 
     /// 解析相对路径；禁止 `..` 逃逸出模组根。
@@ -54,7 +53,8 @@ impl ModVfs {
             Err(_) => {
                 if out.starts_with(&self.root) {
                     Ok(out)
-                } else {
+                }
+                else {
                     Err(SparkError::new(codes::vfs_path_invalid())
                         .arg("mod_id", ErrorArg::String(Arc::from(self.mod_id.as_str())))
                         .arg("path", ErrorArg::Path(Arc::from(rel)))
@@ -66,8 +66,7 @@ impl ModVfs {
 
     pub fn read_to_string(&self, rel: &str) -> Result<String, EngineError> {
         let p = self.resolve(rel)?;
-        std::fs::read_to_string(&p)
-            .map_err(|e| EngineError::from_io(p.display().to_string(), e))
+        std::fs::read_to_string(&p).map_err(|e| EngineError::from_io(p.display().to_string(), e))
     }
 
     pub fn read_bytes(&self, rel: &str) -> Result<Vec<u8>, EngineError> {

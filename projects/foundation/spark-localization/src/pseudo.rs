@@ -2,8 +2,10 @@
 
 use std::sync::Arc;
 
-use crate::document::{LocalizationDocument, MessageDefinition, MessageNode};
-use crate::locale::LocaleId;
+use crate::{
+    document::{LocalizationDocument, MessageDefinition, MessageNode},
+    locale::LocaleId,
+};
 
 /// 伪 Locale 变体。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,23 +41,13 @@ pub fn generate_pseudo(source: &LocalizationDocument, kind: PseudoKind) -> Local
 fn transform_definition(def: &MessageDefinition, kind: PseudoKind) -> MessageDefinition {
     match def {
         MessageDefinition::Text(text) => MessageDefinition::Text(Arc::from(transform_text(text, kind))),
-        MessageDefinition::Pattern(nodes) => {
-            MessageDefinition::Pattern(transform_nodes(nodes, kind))
-        }
-        MessageDefinition::Select {
-            argument,
-            kind: select_kind,
-            cases,
-        } => {
+        MessageDefinition::Pattern(nodes) => MessageDefinition::Pattern(transform_nodes(nodes, kind)),
+        MessageDefinition::Select { argument, kind: select_kind, cases } => {
             let mut new_cases = cases.clone();
             for nodes in new_cases.values_mut() {
                 *nodes = transform_nodes(nodes, kind);
             }
-            MessageDefinition::Select {
-                argument: argument.clone(),
-                kind: *select_kind,
-                cases: new_cases,
-            }
+            MessageDefinition::Select { argument: argument.clone(), kind: *select_kind, cases: new_cases }
         }
     }
 }
@@ -65,28 +57,14 @@ fn transform_nodes(nodes: &[MessageNode], kind: PseudoKind) -> Vec<MessageNode> 
         .iter()
         .map(|node| match node {
             MessageNode::Text(text) => MessageNode::Text(Arc::from(transform_text(text, kind))),
-            MessageNode::Argument { name, format } => MessageNode::Argument {
-                name: name.clone(),
-                format: format.clone(),
-            },
-            MessageNode::MessageRef { name, attribute } => MessageNode::MessageRef {
-                name: name.clone(),
-                attribute: attribute.clone(),
-            },
-            MessageNode::Select {
-                argument,
-                kind: select_kind,
-                cases,
-            } => {
+            MessageNode::Argument { name, format } => MessageNode::Argument { name: name.clone(), format: format.clone() },
+            MessageNode::MessageRef { name, attribute } => MessageNode::MessageRef { name: name.clone(), attribute: attribute.clone() },
+            MessageNode::Select { argument, kind: select_kind, cases } => {
                 let mut new_cases = cases.clone();
                 for child in new_cases.values_mut() {
                     *child = transform_nodes(child, kind);
                 }
-                MessageNode::Select {
-                    argument: argument.clone(),
-                    kind: *select_kind,
-                    cases: new_cases,
-                }
+                MessageNode::Select { argument: argument.clone(), kind: *select_kind, cases: new_cases }
             }
         })
         .collect()

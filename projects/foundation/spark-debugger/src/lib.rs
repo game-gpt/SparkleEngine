@@ -16,39 +16,17 @@ pub struct FrameStats {
 
 impl FrameStats {
     pub fn from_dt(dt_seconds: f32) -> Self {
-        let fps = if dt_seconds > 0.0 {
-            1.0 / dt_seconds
-        } else {
-            0.0
-        };
-        Self {
-            dt_seconds,
-            fps,
-            ..Default::default()
-        }
+        let fps = if dt_seconds > 0.0 { 1.0 / dt_seconds } else { 0.0 };
+        Self { dt_seconds, fps, ..Default::default() }
     }
 }
 
 /// 调试叠加图元（屏幕或世界坐标由调用方约定）。
 #[derive(Debug, Clone)]
 pub enum DebugPrim {
-    Line {
-        a: Vec2,
-        b: Vec2,
-        color: Color,
-        thickness: f32,
-    },
-    Rect {
-        rect: Rect,
-        color: Color,
-        filled: bool,
-    },
-    Text {
-        pos: Vec2,
-        size: f32,
-        color: Color,
-        text: String,
-    },
+    Line { a: Vec2, b: Vec2, color: Color, thickness: f32 },
+    Rect { rect: Rect, color: Color, filled: bool },
+    Text { pos: Vec2, size: f32, color: Color, text: String },
 }
 
 /// 本帧调试绘制缓冲。每帧 `clear` 后由系统写入，再 `flush` 到 `DrawList`。
@@ -60,10 +38,7 @@ pub struct DebugDraw {
 
 impl DebugDraw {
     pub fn new() -> Self {
-        Self {
-            prims: Vec::new(),
-            enabled: true,
-        }
+        Self { prims: Vec::new(), enabled: true }
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
@@ -82,46 +57,28 @@ impl DebugDraw {
         if !self.enabled {
             return;
         }
-        self.prims.push(DebugPrim::Line {
-            a,
-            b,
-            color,
-            thickness,
-        });
+        self.prims.push(DebugPrim::Line { a, b, color, thickness });
     }
 
     pub fn rect_outline(&mut self, rect: Rect, color: Color) {
         if !self.enabled {
             return;
         }
-        self.prims.push(DebugPrim::Rect {
-            rect,
-            color,
-            filled: false,
-        });
+        self.prims.push(DebugPrim::Rect { rect, color, filled: false });
     }
 
     pub fn rect_filled(&mut self, rect: Rect, color: Color) {
         if !self.enabled {
             return;
         }
-        self.prims.push(DebugPrim::Rect {
-            rect,
-            color,
-            filled: true,
-        });
+        self.prims.push(DebugPrim::Rect { rect, color, filled: true });
     }
 
     pub fn text(&mut self, pos: Vec2, size: f32, color: Color, text: impl Into<String>) {
         if !self.enabled {
             return;
         }
-        self.prims.push(DebugPrim::Text {
-            pos,
-            size,
-            color,
-            text: text.into(),
-        });
+        self.prims.push(DebugPrim::Text { pos, size, color, text: text.into() });
     }
 
     pub fn prims(&self) -> &[DebugPrim] {
@@ -135,31 +92,18 @@ impl DebugDraw {
         }
         for prim in &self.prims {
             match prim {
-                DebugPrim::Line {
-                    a,
-                    b,
-                    color,
-                    thickness,
-                } => {
+                DebugPrim::Line { a, b, color, thickness } => {
                     flush_line(draw, *a, *b, *color, *thickness);
                 }
-                DebugPrim::Rect {
-                    rect,
-                    color,
-                    filled,
-                } => {
+                DebugPrim::Rect { rect, color, filled } => {
                     if *filled {
                         draw.fill_rect(*rect, *color);
-                    } else {
+                    }
+                    else {
                         flush_rect_outline(draw, *rect, *color);
                     }
                 }
-                DebugPrim::Text {
-                    pos,
-                    size,
-                    color,
-                    text,
-                } => {
+                DebugPrim::Text { pos, size, color, text } => {
                     draw.text(pos.x, pos.y, *size, *color, text);
                 }
             }
@@ -177,7 +121,8 @@ fn flush_line(draw: &mut DrawList, a: Vec2, b: Vec2, color: Color, thickness: f3
         let y = (a.y + b.y) * 0.5 - t * 0.5;
         let x = a.x.min(b.x);
         draw.fill_rect(Rect::new(x, y, len, t), color);
-    } else {
+    }
+    else {
         let x = (a.x + b.x) * 0.5 - t * 0.5;
         let y = a.y.min(b.y);
         draw.fill_rect(Rect::new(x, y, t, len), color);
@@ -236,11 +181,7 @@ impl Default for DebugSession {
 
 impl DebugSession {
     pub fn new() -> Self {
-        Self {
-            draw: DebugDraw::new(),
-            stats: FrameStats::default(),
-            inspector: Box::new(NopInspector),
-        }
+        Self { draw: DebugDraw::new(), stats: FrameStats::default(), inspector: Box::new(NopInspector) }
     }
 
     pub fn set_inspector<I: Inspector + Send + 'static>(&mut self, inspector: I) {
@@ -258,18 +199,8 @@ impl DebugSession {
 
     /// 在屏角画出 FPS 等简要叠加。
     pub fn overlay_stats(&mut self, origin: Vec2) {
-        let text = format!(
-            "fps {:.0}  dt {:.2}ms  ents {}",
-            self.stats.fps,
-            self.stats.dt_seconds * 1000.0,
-            self.stats.entities
-        );
-        self.draw.text(
-            origin,
-            16.0,
-            Color::rgb(0.85, 0.95, 0.75),
-            text,
-        );
+        let text = format!("fps {:.0}  dt {:.2}ms  ents {}", self.stats.fps, self.stats.dt_seconds * 1000.0, self.stats.entities);
+        self.draw.text(origin, 16.0, Color::rgb(0.85, 0.95, 0.75), text);
     }
 
     pub fn flush_draw(&self, draw: &mut DrawList) {

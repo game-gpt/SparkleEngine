@@ -13,11 +13,7 @@ pub struct UiDirty {
 impl Default for UiDirty {
     fn default() -> Self {
         // 首帧必须跑一遍。
-        Self {
-            layout: true,
-            paint: true,
-            style: true,
-        }
+        Self { layout: true, paint: true, style: true }
     }
 }
 

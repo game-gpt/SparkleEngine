@@ -2,7 +2,7 @@
 
 use spark_geometry::{Mat4, Trs, Vec3};
 
-use crate::skeleton::{Skeleton, MAX_JOINTS};
+use crate::skeleton::{MAX_JOINTS, Skeleton};
 
 /// 每关节局部 TRS（与 `Skeleton::joints` 对齐）。
 #[derive(Debug, Clone)]
@@ -12,9 +12,7 @@ pub struct LocalPose {
 
 impl LocalPose {
     pub fn rest(skeleton: &Skeleton) -> Self {
-        Self {
-            locals: skeleton.joints.iter().map(|j| j.rest_local).collect(),
-        }
+        Self { locals: skeleton.joints.iter().map(|j| j.rest_local).collect() }
     }
 
     pub fn joint_count(&self) -> usize {
@@ -55,11 +53,7 @@ pub fn build_skin_palette(skeleton: &Skeleton, globals: &[Mat4]) -> Vec<Mat4> {
 }
 
 /// 挂点世界矩阵：`joint_global * socket.local`。
-pub fn socket_world_matrix(
-    skeleton: &Skeleton,
-    globals: &[Mat4],
-    socket_name: &str,
-) -> Option<Mat4> {
+pub fn socket_world_matrix(skeleton: &Skeleton, globals: &[Mat4], socket_name: &str) -> Option<Mat4> {
     let idx = skeleton.find_socket(socket_name)?;
     let socket = &skeleton.sockets[idx];
     let j = socket.parent_joint as usize;
@@ -68,10 +62,6 @@ pub fn socket_world_matrix(
 }
 
 /// 挂点世界位置。
-pub fn socket_world_position(
-    skeleton: &Skeleton,
-    globals: &[Mat4],
-    socket_name: &str,
-) -> Option<Vec3> {
+pub fn socket_world_position(skeleton: &Skeleton, globals: &[Mat4], socket_name: &str) -> Option<Vec3> {
     socket_world_matrix(skeleton, globals, socket_name).map(|m| m.transform_point(Vec3::ZERO))
 }

@@ -1,7 +1,6 @@
 //! 运行时句柄。
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::backend::Live2dBackend;
 

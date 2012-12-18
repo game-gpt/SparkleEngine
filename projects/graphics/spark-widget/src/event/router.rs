@@ -3,12 +3,14 @@
 use spark_core::Vec2;
 use spark_input::{Input, Key, MouseBtn};
 
-use crate::command::UiCommand;
-use crate::focus::{self, Direction};
-use crate::id::WidgetId;
-use crate::node::WidgetKind;
-use crate::runtime::{UiFrame, UiRuntime};
-use crate::tree::WidgetTree;
+use crate::{
+    command::UiCommand,
+    focus::{self, Direction},
+    id::WidgetId,
+    node::WidgetKind,
+    runtime::{UiFrame, UiRuntime},
+    tree::WidgetTree,
+};
 
 use super::{ClickEvent, PointerEvent};
 
@@ -51,16 +53,12 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                 focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
                 crate::scroll::ensure_visible(&mut runtime.tree, id);
             }
-            if runtime
-                .tree
-                .node(id)
-                .map(|n| n.content.drag_source)
-                .unwrap_or(false)
-            {
+            if runtime.tree.node(id).map(|n| n.content.drag_source).unwrap_or(false) {
                 runtime.drag.begin_press(id, pos);
             }
             runtime.state.input_blocked = true;
-        } else if hit.is_none() {
+        }
+        else if hit.is_none() {
             focus::set_focus(&mut runtime.tree, &mut runtime.focus, None);
             runtime.drag.cancel();
         }
@@ -68,30 +66,16 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
 
     if input.mouse_down(MouseBtn::Left) {
         if let Some(id) = runtime.state.captured {
-            if runtime
-                .tree
-                .node(id)
-                .map(|n| n.kind == WidgetKind::Slider)
-                .unwrap_or(false)
-            {
+            if runtime.tree.node(id).map(|n| n.kind == WidgetKind::Slider).unwrap_or(false) {
                 set_slider_value_at(&mut runtime.tree, id, pos.x);
             }
-            let payload = runtime
-                .tree
-                .node(id)
-                .filter(|n| n.content.drag_source)
-                .map(|n| crate::drag_drop::DragPayload::new(n.id.raw()));
+            let payload = runtime.tree.node(id).filter(|n| n.content.drag_source).map(|n| crate::drag_drop::DragPayload::new(n.id.raw()));
             if runtime.drag.update_move(pos, payload) {
-                runtime.drag.hover_target = hit.filter(|t| {
-                    runtime
-                        .tree
-                        .node(*t)
-                        .map(|n| n.content.drop_target)
-                        .unwrap_or(false)
-                });
+                runtime.drag.hover_target = hit.filter(|t| runtime.tree.node(*t).map(|n| n.content.drop_target).unwrap_or(false));
             }
             runtime.state.input_blocked = true;
-        } else if let Some(id) = hit {
+        }
+        else if let Some(id) = hit {
             if consumes_pointer(&runtime.tree, id) {
                 runtime.state.input_blocked = true;
             }
@@ -103,16 +87,13 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
         if let Some((source, _payload, target)) = runtime.drag.end() {
             if let Some(target) = target {
                 runtime.commands.push(UiCommand::Drop { source, target });
-                runtime.inspector.push_trace(
-                    "drop",
-                    Some(target),
-                    format!("source={}", source.raw()),
-                );
+                runtime.inspector.push_trace("drop", Some(target), format!("source={}", source.raw()));
             }
             runtime.state.input_blocked = true;
             runtime.state.captured = None;
             clear_pressed(&mut runtime.tree);
-        } else if !was_dragging {
+        }
+        else if !was_dragging {
             let captured = runtime.state.captured.take();
             let click_target = match (captured, hit) {
                 (Some(c), Some(h)) if c == h => Some(c),
@@ -125,15 +106,12 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                     node.state.pressed = false;
                 }
                 handle_click(runtime, id, pos);
-                runtime.inspector.push_trace(
-                    "click",
-                    Some(id),
-                    format!("pos=({:.1},{:.1})", pos.x, pos.y),
-                );
+                runtime.inspector.push_trace("click", Some(id), format!("pos=({:.1},{:.1})", pos.x, pos.y));
                 runtime.state.input_blocked = true;
             }
             clear_pressed(&mut runtime.tree);
-        } else {
+        }
+        else {
             runtime.state.captured = None;
             clear_pressed(&mut runtime.tree);
         }
@@ -144,18 +122,12 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
         let mut consumed = false;
         if let Some(target) = hit {
             for id in crate::event::bubble_path(&runtime.tree, target) {
-                let is_scroll = runtime
-                    .tree
-                    .node(id)
-                    .map(|n| matches!(n.kind, WidgetKind::ScrollView | WidgetKind::ListView))
-                    .unwrap_or(false);
+                let is_scroll = runtime.tree.node(id).map(|n| matches!(n.kind, WidgetKind::ScrollView | WidgetKind::ListView)).unwrap_or(false);
                 if is_scroll {
                     if let Some(node) = runtime.tree.node_mut(id) {
                         node.scroll.apply_wheel(wheel * 40.0);
                     }
-                    runtime
-                        .inspector
-                        .push_trace("scroll", Some(id), format!("wheel={wheel:.2}"));
+                    runtime.inspector.push_trace("scroll", Some(id), format!("wheel={wheel:.2}"));
                     consumed = true;
                     break;
                 }
@@ -163,7 +135,8 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
         }
         if consumed || modal.is_some() {
             runtime.state.input_blocked = true;
-        } else if let Some(id) = hit {
+        }
+        else if let Some(id) = hit {
             if consumes_pointer(&runtime.tree, id) {
                 runtime.state.input_blocked = true;
             }
@@ -172,10 +145,7 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
 
     dispatch_keys(runtime, input);
 
-    let _ = PointerEvent {
-        position: pos,
-        target: hit,
-    };
+    let _ = PointerEvent { position: pos, target: hit };
 }
 
 fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
@@ -229,21 +199,12 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         }
     }
 
-    if crate::text::apply_text_input(
-        &mut runtime.tree,
-        runtime.focus.focused,
-        input.text(),
-        &actions,
-        Some(runtime.clipboard.as_mut()),
-    ) {
+    if crate::text::apply_text_input(&mut runtime.tree, runtime.focus.focused, input.text(), &actions, Some(runtime.clipboard.as_mut())) {
         runtime.state.input_blocked = true;
         runtime.state.dirty.mark_layout();
-    } else if focused_is_field
-        && (ctrl
-            && (input.key_pressed(Key::C)
-                || input.key_pressed(Key::X)
-                || input.key_pressed(Key::V)
-                || input.key_pressed(Key::A)))
+    }
+    else if focused_is_field
+        && (ctrl && (input.key_pressed(Key::C) || input.key_pressed(Key::X) || input.key_pressed(Key::V) || input.key_pressed(Key::A)))
     {
         runtime.state.input_blocked = true;
     }
@@ -257,7 +218,8 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
     if input.key_pressed(Key::Tab) {
         if shift {
             focus::focus_previous_in(&runtime.tree, &mut runtime.focus, trap);
-        } else {
+        }
+        else {
             focus::focus_next_in(&runtime.tree, &mut runtime.focus, trap);
         }
         sync_focus_flags(&mut runtime.tree, runtime.focus.focused);
@@ -314,10 +276,12 @@ fn dispatch_keys(runtime: &mut UiRuntime, input: &Input) {
         if runtime.drag.is_dragging() {
             runtime.drag.cancel();
             runtime.state.input_blocked = true;
-        } else if let Some(entry) = runtime.overlays.pop_top() {
+        }
+        else if let Some(entry) = runtime.overlays.pop_top() {
             runtime.tree.unmount(entry.id);
             runtime.state.input_blocked = true;
-        } else {
+        }
+        else {
             runtime.commands.push(UiCommand::CloseOverlay);
             runtime.state.input_blocked = true;
         }
@@ -328,7 +292,8 @@ fn sync_composition(runtime: &mut UiRuntime, input: &Input) {
     let focused = runtime.focus.focused;
     let composition = input.composition().to_string();
     for id in runtime.tree.ids() {
-        let Some(node) = runtime.tree.node_mut(id) else {
+        let Some(node) = runtime.tree.node_mut(id)
+        else {
             continue;
         };
         if !matches!(node.kind, WidgetKind::TextField | WidgetKind::TextArea) {
@@ -336,7 +301,8 @@ fn sync_composition(runtime: &mut UiRuntime, input: &Input) {
         }
         if Some(id) == focused {
             node.content.composition = composition.clone();
-        } else if !node.content.composition.is_empty() {
+        }
+        else if !node.content.composition.is_empty() {
             node.content.composition.clear();
         }
     }
@@ -345,31 +311,23 @@ fn sync_composition(runtime: &mut UiRuntime, input: &Input) {
 fn handle_click(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
     // 冒泡路径：默认行为只在目标节点执行，之后沿祖先记录轨迹（后续接监听器时可 stop/prevent）。
     let path = crate::event::bubble_path(&runtime.tree, id);
-    let Some(&target) = path.first() else {
+    let Some(&target) = path.first()
+    else {
         return;
     };
 
     apply_click_default(runtime, target, pos);
 
     for &ancestor in path.iter().skip(1) {
-        runtime.inspector.push_trace(
-            "bubble",
-            Some(ancestor),
-            format!("click-from={}", target.raw()),
-        );
+        runtime.inspector.push_trace("bubble", Some(ancestor), format!("click-from={}", target.raw()));
     }
 
-    let _ = ClickEvent {
-        position: pos,
-        target: Some(target),
-    };
+    let _ = ClickEvent { position: pos, target: Some(target) };
 }
 
 fn apply_click_default(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
     if let Some(index) = crate::widgets::handle_tab_click(&mut runtime.tree, id) {
-        runtime
-            .inspector
-            .push_trace("tab", Some(id), format!("selected={index}"));
+        runtime.inspector.push_trace("tab", Some(id), format!("selected={index}"));
     }
 
     let kind = runtime.tree.node(id).map(|n| n.kind);
@@ -384,11 +342,7 @@ fn apply_click_default(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
         Some(WidgetKind::Radio) => {
             let parent = runtime.tree.node(id).and_then(|n| n.parent);
             if let Some(parent) = parent {
-                let siblings = runtime
-                    .tree
-                    .node(parent)
-                    .map(|n| n.children.clone())
-                    .unwrap_or_default();
+                let siblings = runtime.tree.node(parent).map(|n| n.children.clone()).unwrap_or_default();
                 for sibling in siblings {
                     if let Some(node) = runtime.tree.node_mut(sibling) {
                         if node.kind == WidgetKind::Radio {
@@ -398,7 +352,8 @@ fn apply_click_default(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
                         }
                     }
                 }
-            } else if let Some(node) = runtime.tree.node_mut(id) {
+            }
+            else if let Some(node) = runtime.tree.node_mut(id) {
                 node.content.checked = true;
                 node.state.checked = true;
             }
@@ -409,28 +364,22 @@ fn apply_click_default(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
         _ => {}
     }
 
-    let command = runtime
-        .tree
-        .node(id)
-        .and_then(|n| n.content.click_command.clone());
+    let command = runtime.tree.node(id).and_then(|n| n.content.click_command.clone());
     if let Some(command) = command {
         runtime.commands.push(command);
     }
 }
 
 fn set_slider_value_at(tree: &mut WidgetTree, id: WidgetId, x: f32) {
-    let Some(node) = tree.node(id) else {
+    let Some(node) = tree.node(id)
+    else {
         return;
     };
     if node.kind != WidgetKind::Slider {
         return;
     }
     let rect = node.computed.content_rect;
-    let t = if rect.w <= f32::EPSILON {
-        0.0
-    } else {
-        ((x - rect.x) / rect.w).clamp(0.0, 1.0)
-    };
+    let t = if rect.w <= f32::EPSILON { 0.0 } else { ((x - rect.x) / rect.w).clamp(0.0, 1.0) };
     let min = node.content.value_min;
     let max = node.content.value_max;
     if let Some(node) = tree.node_mut(id) {
@@ -440,7 +389,8 @@ fn set_slider_value_at(tree: &mut WidgetTree, id: WidgetId, x: f32) {
 
 /// 自上而下命中：后挂载的兄弟优先（更靠上）。
 pub fn hit_test(tree: &WidgetTree, id: WidgetId, point: Vec2) -> Option<WidgetId> {
-    let Some(node) = tree.node(id) else {
+    let Some(node) = tree.node(id)
+    else {
         return None;
     };
     if !node.state.visible || node.state.disabled {
@@ -451,18 +401,14 @@ pub fn hit_test(tree: &WidgetTree, id: WidgetId, point: Vec2) -> Option<WidgetId
     }
     // ScrollView 等裁剪区域外的子节点不可命中。
     if let Some(clip) = node.computed.clip_rect {
-        if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView)
-            && !clip.contains(point)
-        {
+        if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView) && !clip.contains(point) {
             return None;
         }
     }
 
     for child in node.children.iter().rev() {
         if let Some(clip) = node.computed.clip_rect {
-            if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView)
-                && !clip.contains(point)
-            {
+            if matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView) && !clip.contains(point) {
                 continue;
             }
         }
@@ -474,14 +420,18 @@ pub fn hit_test(tree: &WidgetTree, id: WidgetId, point: Vec2) -> Option<WidgetId
     // 容器默认穿透到子级；无子命中时，可命中自身（按钮等）。
     if is_hittable_leaf(node.kind) || node.focusable {
         Some(id)
-    } else if node.kind == WidgetKind::Root {
+    }
+    else if node.kind == WidgetKind::Root {
         None
-    } else if node.layer == crate::runtime::UiLayer::Hud {
+    }
+    else if node.layer == crate::runtime::UiLayer::Hud {
         // HUD 非交互区域（标签、面板空白）不吞命中，让世界输入通过。
         None
-    } else if node.children.is_empty() {
+    }
+    else if node.children.is_empty() {
         Some(id)
-    } else {
+    }
+    else {
         // GUI 容器空白区仍算命中（阻断世界，便于面板遮挡）。
         Some(id)
     }
@@ -507,7 +457,8 @@ fn is_hittable_leaf(kind: WidgetKind) -> bool {
 
 /// 指针事件是否应由该节点消费（从而阻断世界）。
 fn consumes_pointer(tree: &WidgetTree, id: WidgetId) -> bool {
-    let Some(node) = tree.node(id) else {
+    let Some(node) = tree.node(id)
+    else {
         return false;
     };
     match node.layer {
@@ -515,13 +466,7 @@ fn consumes_pointer(tree: &WidgetTree, id: WidgetId) -> bool {
         crate::runtime::UiLayer::Gui | crate::runtime::UiLayer::Overlay => {
             is_hittable_leaf(node.kind)
                 || node.focusable
-                || matches!(
-                    node.kind,
-                    WidgetKind::Modal
-                        | WidgetKind::Popup
-                        | WidgetKind::Panel
-                        | WidgetKind::Container
-                )
+                || matches!(node.kind, WidgetKind::Modal | WidgetKind::Popup | WidgetKind::Panel | WidgetKind::Container)
         }
     }
 }
@@ -552,7 +497,8 @@ fn is_descendant_or_self(tree: &WidgetTree, ancestor: WidgetId, mut id: WidgetId
         if id == ancestor {
             return true;
         }
-        let Some(parent) = tree.node(id).and_then(|n| n.parent) else {
+        let Some(parent) = tree.node(id).and_then(|n| n.parent)
+        else {
             return false;
         };
         id = parent;
@@ -586,10 +532,11 @@ fn sync_focus_flags(tree: &mut WidgetTree, focused: Option<WidgetId>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::UiMetrics;
-    use crate::layout::{LayoutSpec, Size, run_layout};
-    use crate::text::EstimateMeasurer;
-    use crate::widgets::{button_widget, checkbox_widget, column};
+    use crate::{
+        layout::{LayoutSpec, Size, UiMetrics, run_layout},
+        text::EstimateMeasurer,
+        widgets::{button_widget, checkbox_widget, column},
+    };
     use spark_input::ButtonState;
 
     fn frame<'a>(input: &'a Input, w: f32, h: f32) -> UiFrame<'a> {
@@ -608,43 +555,23 @@ mod tests {
         let mut tree = WidgetTree::new();
         let root = tree.root();
         // 根下绝对叠放两个按钮，后挂载者命中优先。
-        let panel = tree
-            .mount(root, crate::node::WidgetKind::Container)
-            .unwrap();
+        let panel = tree.mount(root, crate::node::WidgetKind::Container).unwrap();
         if let Some(node) = tree.node_mut(panel) {
-            node.layout = LayoutSpec {
-                kind: crate::layout::Layout::Absolute,
-                width: Size::Fill,
-                height: Size::Fill,
-                ..LayoutSpec::default()
-            };
+            node.layout = LayoutSpec { kind: crate::layout::Layout::Absolute, width: Size::Fill, height: Size::Fill, ..LayoutSpec::default() };
         }
         let a = button_widget()
             .key("a")
             .text("A")
-            .layout(LayoutSpec {
-                width: Size::Px(100.0),
-                height: Size::Px(40.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(100.0), height: Size::Px(40.0), ..LayoutSpec::default() })
             .mount(&mut tree, panel)
             .unwrap();
         let b = button_widget()
             .key("b")
             .text("B")
-            .layout(LayoutSpec {
-                width: Size::Px(100.0),
-                height: Size::Px(40.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(100.0), height: Size::Px(40.0), ..LayoutSpec::default() })
             .mount(&mut tree, panel)
             .unwrap();
-        run_layout(
-            &mut tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
         let point = tree.node(b).unwrap().computed.rect.center();
         let hit = hit_test(&tree, root, point).unwrap();
         assert_eq!(hit, b);
@@ -658,19 +585,10 @@ mod tests {
         button_widget()
             .text("Go")
             .on_click(UiCommand::Custom(7))
-            .layout(LayoutSpec {
-                width: Size::Px(80.0),
-                height: Size::Px(40.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(80.0), height: Size::Px(40.0), ..LayoutSpec::default() })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
         let btn = runtime.tree.node(root).unwrap().children[0];
         let center = runtime.tree.node(btn).unwrap().computed.rect.center();
@@ -699,19 +617,10 @@ mod tests {
         let root = runtime.tree.root();
         checkbox_widget()
             .text("X")
-            .layout(LayoutSpec {
-                width: Size::Px(120.0),
-                height: Size::Px(28.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(120.0), height: Size::Px(28.0), ..LayoutSpec::default() })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
         let id = runtime.tree.node(root).unwrap().children[0];
         let center = runtime.tree.node(id).unwrap().computed.rect.center();
 
@@ -732,42 +641,27 @@ mod tests {
 
     #[test]
     fn modal_blocks_hits_outside_and_escape_closes() {
-        use crate::overlay::OverlayLayer;
-        use crate::widgets::modal_widget;
+        use crate::{overlay::OverlayLayer, widgets::modal_widget};
 
         let mut runtime = UiRuntime::new();
         let root = runtime.tree.root();
         button_widget()
             .text("Behind")
             .on_click(UiCommand::Custom(1))
-            .layout(LayoutSpec {
-                width: Size::Px(80.0),
-                height: Size::Px(40.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(80.0), height: Size::Px(40.0), ..LayoutSpec::default() })
             .mount(&mut runtime.tree, root)
             .unwrap();
         runtime
             .open_overlay(
                 OverlayLayer::Modal,
-                modal_widget().child(
-                    button_widget()
-                        .text("Modal")
-                        .on_click(UiCommand::Custom(2))
-                        .layout(LayoutSpec {
-                            width: Size::Px(100.0),
-                            height: Size::Px(40.0),
-                            ..LayoutSpec::default()
-                        }),
-                ),
+                modal_widget().child(button_widget().text("Modal").on_click(UiCommand::Custom(2)).layout(LayoutSpec {
+                    width: Size::Px(100.0),
+                    height: Size::Px(40.0),
+                    ..LayoutSpec::default()
+                })),
             )
             .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(400.0, 300.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
         let behind = runtime.tree.node(root).unwrap().children[0];
         let behind_center = runtime.tree.node(behind).unwrap().computed.rect.center();
@@ -783,10 +677,7 @@ mod tests {
         input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
         let f = frame(&input, 400.0, 300.0);
         runtime.dispatch_input(&f);
-        assert!(
-            runtime.drain_commands().next().is_none(),
-            "clicks under modal must not reach behind button"
-        );
+        assert!(runtime.drain_commands().next().is_none(), "clicks under modal must not reach behind button");
         assert!(runtime.state.input_blocked);
 
         input.begin_frame();
@@ -801,9 +692,7 @@ mod tests {
         use crate::widgets::toast_widget;
 
         let mut runtime = UiRuntime::new();
-        runtime
-            .show_toast(toast_widget().text("Saved"), 0.5)
-            .unwrap();
+        runtime.show_toast(toast_widget().text("Saved"), 0.5).unwrap();
         assert!(!runtime.overlays.is_empty());
         runtime.update(0.6);
         assert!(runtime.overlays.is_empty());
@@ -817,11 +706,7 @@ mod tests {
         let root = runtime.tree.root();
         let src = panel()
             .drag_source(true)
-            .layout(LayoutSpec {
-                width: Size::Px(40.0),
-                height: Size::Px(40.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(40.0), height: Size::Px(40.0), ..LayoutSpec::default() })
             .mount(&mut runtime.tree, root)
             .unwrap();
         let dst = panel()
@@ -830,10 +715,7 @@ mod tests {
                 width: Size::Px(40.0),
                 height: Size::Px(40.0),
                 offset_x: 80.0,
-                ..LayoutSpec {
-                    kind: crate::layout::Layout::Absolute,
-                    ..LayoutSpec::default()
-                }
+                ..LayoutSpec { kind: crate::layout::Layout::Absolute, ..LayoutSpec::default() }
             })
             .mount(&mut runtime.tree, root)
             .unwrap();
@@ -850,12 +732,7 @@ mod tests {
             node.layout.offset_x = 80.0;
             node.layout.offset_y = 0.0;
         }
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
         let src_c = runtime.tree.node(src).unwrap().computed.rect.center();
         let dst_c = runtime.tree.node(dst).unwrap().computed.rect.center();
@@ -907,24 +784,13 @@ mod tests {
         let root = runtime.tree.root();
         let anchor = button_widget()
             .text("Menu")
-            .layout(LayoutSpec {
-                width: Size::Px(80.0),
-                height: Size::Px(32.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(80.0), height: Size::Px(32.0), ..LayoutSpec::default() })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        runtime
-            .show_popup(anchor, popup_widget().child(label_widget().text("Item")))
-            .unwrap();
+        runtime.show_popup(anchor, popup_widget().child(label_widget().text("Item"))).unwrap();
         assert!(!runtime.overlays.is_empty());
 
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(400.0, 300.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
         let mut input = Input::default();
         input.on_cursor(390.0, 290.0);
@@ -932,46 +798,29 @@ mod tests {
         let f = frame(&input, 400.0, 300.0);
         runtime.begin_frame(&f);
         runtime.dispatch_input(&f);
-        assert!(
-            runtime.overlays.is_empty(),
-            "outside click should dismiss popup"
-        );
+        assert!(runtime.overlays.is_empty(), "outside click should dismiss popup");
     }
 
     #[test]
     fn hud_chrome_does_not_block_world_input() {
-        use crate::runtime::UiLayer;
-        use crate::widgets::{button_widget, column, label_widget};
+        use crate::{
+            runtime::UiLayer,
+            widgets::{button_widget, column, label_widget},
+        };
 
         let mut runtime = UiRuntime::new();
         runtime
             .mount_hud(
                 column()
                     .layer(UiLayer::Hud)
-                    .layout(LayoutSpec {
-                        width: Size::Px(120.0),
-                        height: Size::Px(100.0),
-                        ..LayoutSpec::vertical().with_gap(8.0)
-                    })
+                    .layout(LayoutSpec { width: Size::Px(120.0), height: Size::Px(100.0), ..LayoutSpec::vertical().with_gap(8.0) })
+                    .child(label_widget().text("HP").layout(LayoutSpec::default().with_height(Size::Px(24.0))))
                     .child(
-                        label_widget()
-                            .text("HP")
-                            .layout(LayoutSpec::default().with_height(Size::Px(24.0))),
-                    )
-                    .child(
-                        button_widget()
-                            .text("Bag")
-                            .on_click(UiCommand::Custom(9))
-                            .layout(LayoutSpec::default().with_height(Size::Px(32.0))),
+                        button_widget().text("Bag").on_click(UiCommand::Custom(9)).layout(LayoutSpec::default().with_height(Size::Px(32.0))),
                     ),
             )
             .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(400.0, 300.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
         let hud = runtime.hud_root().unwrap();
         assert_eq!(runtime.tree.node(hud).unwrap().layer, UiLayer::Hud);
@@ -985,10 +834,7 @@ mod tests {
         let f = frame(&input, 400.0, 300.0);
         runtime.begin_frame(&f);
         runtime.dispatch_input(&f);
-        assert!(
-            !runtime.state.input_blocked,
-            "HUD label must not block world input"
-        );
+        assert!(!runtime.state.input_blocked, "HUD label must not block world input");
 
         let bag = runtime.tree.node(hud).unwrap().children[1];
         let bag_center = runtime.tree.node(bag).unwrap().computed.rect.center();
@@ -998,10 +844,7 @@ mod tests {
         let f = frame(&input, 400.0, 300.0);
         runtime.begin_frame(&f);
         runtime.dispatch_input(&f);
-        assert!(
-            runtime.state.input_blocked,
-            "HUD button should block world input"
-        );
+        assert!(runtime.state.input_blocked, "HUD button should block world input");
     }
 
     #[test]
@@ -1010,17 +853,8 @@ mod tests {
 
         let mut runtime = UiRuntime::new();
         let root = runtime.tree.root();
-        column()
-            .child(radio_widget().text("A").checked(true))
-            .child(radio_widget().text("B"))
-            .mount(&mut runtime.tree, root)
-            .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        column().child(radio_widget().text("A").checked(true)).child(radio_widget().text("B")).mount(&mut runtime.tree, root).unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
         let group = runtime.tree.node(root).unwrap().children[0];
         let a = runtime.tree.node(group).unwrap().children[0];
         let b = runtime.tree.node(group).unwrap().children[1];
@@ -1050,19 +884,10 @@ mod tests {
         let root = runtime.tree.root();
         let id = text_field_widget()
             .text("")
-            .layout(LayoutSpec {
-                width: Size::Px(120.0),
-                height: Size::Px(32.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(120.0), height: Size::Px(32.0), ..LayoutSpec::default() })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
         focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
 
         let mut input = Input::default();
@@ -1070,10 +895,7 @@ mod tests {
         let f = frame(&input, 200.0, 200.0);
         runtime.begin_frame(&f);
         runtime.dispatch_input(&f);
-        assert_eq!(
-            runtime.tree.node(id).unwrap().content.text.as_deref(),
-            Some("hi")
-        );
+        assert_eq!(runtime.tree.node(id).unwrap().content.text.as_deref(), Some("hi"));
         assert_eq!(runtime.tree.node(id).unwrap().content.cursor, 2);
 
         input.begin_frame();
@@ -1088,26 +910,18 @@ mod tests {
         input.on_key(Key::Backspace, ButtonState::Pressed);
         let f = frame(&input, 200.0, 200.0);
         runtime.dispatch_input(&f);
-        assert_eq!(
-            runtime.tree.node(id).unwrap().content.text.as_deref(),
-            Some("i")
-        );
+        assert_eq!(runtime.tree.node(id).unwrap().content.text.as_deref(), Some("i"));
     }
 
     #[test]
     fn modal_tab_traps_focus_inside() {
-        use crate::overlay::OverlayLayer;
-        use crate::widgets::modal_widget;
+        use crate::{overlay::OverlayLayer, widgets::modal_widget};
 
         let mut runtime = UiRuntime::new();
         let root = runtime.tree.root();
         let outside = button_widget()
             .text("out")
-            .layout(LayoutSpec {
-                width: Size::Px(80.0),
-                height: Size::Px(30.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(80.0), height: Size::Px(30.0), ..LayoutSpec::default() })
             .mount(&mut runtime.tree, root)
             .unwrap();
         runtime
@@ -1115,11 +929,7 @@ mod tests {
                 OverlayLayer::Modal,
                 modal_widget().child(
                     column()
-                        .layout(LayoutSpec {
-                            width: Size::Px(200.0),
-                            height: Size::Px(120.0),
-                            ..LayoutSpec::default()
-                        })
+                        .layout(LayoutSpec { width: Size::Px(200.0), height: Size::Px(120.0), ..LayoutSpec::default() })
                         .child(button_widget().text("a").layout(LayoutSpec {
                             width: Size::Px(80.0),
                             height: Size::Px(30.0),
@@ -1133,12 +943,7 @@ mod tests {
                 ),
             )
             .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(400.0, 300.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(400.0, 300.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
         let modal = runtime.overlays.top_modal().unwrap();
         let first = focus::collect_focusable_in(&runtime.tree, modal)[0];
@@ -1170,19 +975,10 @@ mod tests {
         let root = runtime.tree.root();
         let id = text_field_widget()
             .text("ab")
-            .layout(LayoutSpec {
-                width: Size::Px(120.0),
-                height: Size::Px(32.0),
-                ..LayoutSpec::default()
-            })
+            .layout(LayoutSpec { width: Size::Px(120.0), height: Size::Px(32.0), ..LayoutSpec::default() })
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
         focus::set_focus(&mut runtime.tree, &mut runtime.focus, Some(id));
         if let Some(n) = runtime.tree.node_mut(id) {
             n.content.cursor = 2;
@@ -1193,29 +989,15 @@ mod tests {
         let f = frame(&input, 200.0, 200.0);
         runtime.begin_frame(&f);
         runtime.dispatch_input(&f);
-        assert_eq!(
-            runtime.tree.node(id).unwrap().content.composition.as_str(),
-            "你"
-        );
+        assert_eq!(runtime.tree.node(id).unwrap().content.composition.as_str(), "你");
         assert!(runtime.state.input_blocked);
 
         input.begin_frame();
         input.on_ime_commit("你好");
         let f = frame(&input, 200.0, 200.0);
         runtime.dispatch_input(&f);
-        assert!(
-            runtime
-                .tree
-                .node(id)
-                .unwrap()
-                .content
-                .composition
-                .is_empty()
-        );
-        assert_eq!(
-            runtime.tree.node(id).unwrap().content.text.as_deref(),
-            Some("ab你好")
-        );
+        assert!(runtime.tree.node(id).unwrap().content.composition.is_empty());
+        assert_eq!(runtime.tree.node(id).unwrap().content.text.as_deref(), Some("ab你好"));
     }
 
     #[test]
@@ -1223,24 +1005,11 @@ mod tests {
         let mut runtime = UiRuntime::new();
         let root = runtime.tree.root();
         column()
-            .child(
-                button_widget()
-                    .text("1")
-                    .layout(LayoutSpec::default().with_height(Size::Px(30.0))),
-            )
-            .child(
-                button_widget()
-                    .text("2")
-                    .layout(LayoutSpec::default().with_height(Size::Px(30.0))),
-            )
+            .child(button_widget().text("1").layout(LayoutSpec::default().with_height(Size::Px(30.0))))
+            .child(button_widget().text("2").layout(LayoutSpec::default().with_height(Size::Px(30.0))))
             .mount(&mut runtime.tree, root)
             .unwrap();
-        run_layout(
-            &mut runtime.tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
         let mut input = Input::default();
         input.on_key(Key::Tab, ButtonState::Pressed);

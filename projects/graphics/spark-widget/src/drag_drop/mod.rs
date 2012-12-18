@@ -1,7 +1,9 @@
 //! 拖放状态与载荷。
 
-use std::any::{Any, TypeId};
-use std::sync::Arc;
+use std::{
+    any::{Any, TypeId},
+    sync::Arc,
+};
 
 use spark_core::Vec2;
 
@@ -15,10 +17,7 @@ pub struct DragPayload {
 
 impl DragPayload {
     pub fn new<T: Any + Send + Sync>(value: T) -> Self {
-        Self {
-            type_id: TypeId::of::<T>(),
-            data: Arc::new(value),
-        }
+        Self { type_id: TypeId::of::<T>(), data: Arc::new(value) }
     }
 
     pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
@@ -28,9 +27,7 @@ impl DragPayload {
 
 impl std::fmt::Debug for DragPayload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DragPayload")
-            .field("type_id", &self.type_id)
-            .finish_non_exhaustive()
+        f.debug_struct("DragPayload").field("type_id", &self.type_id).finish_non_exhaustive()
     }
 }
 
@@ -58,16 +55,13 @@ impl DragState {
         if self.active.is_some() {
             return true;
         }
-        let Some((source, origin)) = self.pending else {
+        let Some((source, origin)) = self.pending
+        else {
             return false;
         };
         let dx = pos.x - origin.x;
         let dy = pos.y - origin.y;
-        let threshold = if self.threshold > 0.0 {
-            self.threshold
-        } else {
-            6.0
-        };
+        let threshold = if self.threshold > 0.0 { self.threshold } else { 6.0 };
         if dx * dx + dy * dy >= threshold * threshold {
             self.active = Some(source);
             if payload.is_some() {
@@ -75,7 +69,8 @@ impl DragState {
             }
             self.pending = None;
             true
-        } else {
+        }
+        else {
             false
         }
     }

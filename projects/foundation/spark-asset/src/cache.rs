@@ -1,11 +1,12 @@
 //! 内存缓存与热重载队列。
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::handle::{AssetId, AssetKey};
-use crate::loader::{AssetLoader, ReloadEvent};
-use crate::AssetError;
+use crate::{
+    AssetError,
+    handle::{AssetId, AssetKey},
+    loader::{AssetLoader, ReloadEvent},
+};
 
 #[derive(Debug, Clone)]
 struct Entry {
@@ -30,12 +31,7 @@ impl Default for AssetCache {
 
 impl AssetCache {
     pub fn new() -> Self {
-        Self {
-            by_key: HashMap::new(),
-            entries: Vec::new(),
-            free: Vec::new(),
-            reloads: Vec::new(),
-        }
+        Self { by_key: HashMap::new(), entries: Vec::new(), free: Vec::new(), reloads: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -51,25 +47,15 @@ impl AssetCache {
     }
 
     pub fn bytes(&self, id: AssetId) -> Option<Arc<[u8]>> {
-        self.entries
-            .get(id.0 as usize)
-            .and_then(|e| e.as_ref())
-            .map(|e| Arc::clone(&e.bytes))
+        self.entries.get(id.0 as usize).and_then(|e| e.as_ref()).map(|e| Arc::clone(&e.bytes))
     }
 
     pub fn generation(&self, id: AssetId) -> Option<u32> {
-        self.entries
-            .get(id.0 as usize)
-            .and_then(|e| e.as_ref())
-            .map(|e| e.generation)
+        self.entries.get(id.0 as usize).and_then(|e| e.as_ref()).map(|e| e.generation)
     }
 
     /// 加载或返回已缓存句柄。
-    pub fn load(
-        &mut self,
-        key: impl Into<AssetKey>,
-        loader: &dyn AssetLoader,
-    ) -> Result<AssetId, AssetError> {
+    pub fn load(&mut self, key: impl Into<AssetKey>, loader: &dyn AssetLoader) -> Result<AssetId, AssetError> {
         let key = key.into();
         if let Some(id) = self.by_key.get(&key).copied() {
             return Ok(id);
@@ -80,15 +66,12 @@ impl AssetCache {
 
     pub fn insert(&mut self, key: AssetKey, data: impl Into<Vec<u8>>) -> AssetId {
         let bytes: Arc<[u8]> = Arc::from(data.into().into_boxed_slice());
-        let entry = Entry {
-            key: key.clone(),
-            bytes,
-            generation: 1,
-        };
+        let entry = Entry { key: key.clone(), bytes, generation: 1 };
         let id = if let Some(slot) = self.free.pop() {
             self.entries[slot as usize] = Some(entry);
             AssetId(slot)
-        } else {
+        }
+        else {
             let id = self.entries.len() as u32;
             self.entries.push(Some(entry));
             AssetId(id)
@@ -98,25 +81,19 @@ impl AssetCache {
     }
 
     /// 宿主检测到文件变化时调用：重新加载并推送 [`ReloadEvent`]。
-    pub fn notify_changed(
-        &mut self,
-        key: impl Into<AssetKey>,
-        loader: &dyn AssetLoader,
-    ) -> Result<AssetId, AssetError> {
+    pub fn notify_changed(&mut self, key: impl Into<AssetKey>, loader: &dyn AssetLoader) -> Result<AssetId, AssetError> {
         let key = key.into();
         let data = loader.load(&key).map_err(AssetError::from)?;
         if let Some(id) = self.by_key.get(&key).copied() {
             if let Some(Some(entry)) = self.entries.get_mut(id.0 as usize) {
                 entry.bytes = Arc::from(data.into_boxed_slice());
                 entry.generation = entry.generation.wrapping_add(1);
-                self.reloads
-                    .push(ReloadEvent::new(key.clone(), key.as_str()));
+                self.reloads.push(ReloadEvent::new(key.clone(), key.as_str()));
                 return Ok(id);
             }
         }
         let id = self.insert(key.clone(), data);
-        self.reloads
-            .push(ReloadEvent::new(key.clone(), key.as_str()));
+        self.reloads.push(ReloadEvent::new(key.clone(), key.as_str()));
         Ok(id)
     }
 
@@ -129,14 +106,16 @@ impl AssetCache {
     }
 
     pub fn remove(&mut self, key: &AssetKey) -> bool {
-        let Some(id) = self.by_key.remove(key) else {
+        let Some(id) = self.by_key.remove(key)
+        else {
             return false;
         };
         if let Some(slot) = self.entries.get_mut(id.0 as usize) {
             *slot = None;
             self.free.push(id.0);
             true
-        } else {
+        }
+        else {
             false
         }
     }

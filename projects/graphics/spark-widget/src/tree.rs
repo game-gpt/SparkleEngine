@@ -2,8 +2,10 @@
 
 use std::collections::HashMap;
 
-use crate::id::WidgetId;
-use crate::node::{WidgetKind, WidgetNode};
+use crate::{
+    id::WidgetId,
+    node::{WidgetKind, WidgetNode},
+};
 
 #[derive(Debug)]
 pub struct WidgetTree {
@@ -23,11 +25,7 @@ impl WidgetTree {
         let root = WidgetId::ROOT;
         let mut nodes = HashMap::new();
         nodes.insert(root, WidgetNode::new(root, WidgetKind::Root));
-        Self {
-            root,
-            nodes,
-            next_id: 1,
-        }
+        Self { root, nodes, next_id: 1 }
     }
 
     pub fn root(&self) -> WidgetId {
@@ -68,11 +66,7 @@ impl WidgetTree {
         if id == self.root {
             return;
         }
-        let children = self
-            .nodes
-            .get(&id)
-            .map(|n| n.children.clone())
-            .unwrap_or_default();
+        let children = self.nodes.get(&id).map(|n| n.children.clone()).unwrap_or_default();
         for child in children {
             self.unmount(child);
         }
@@ -86,11 +80,7 @@ impl WidgetTree {
     }
 
     pub fn clear_children(&mut self, id: WidgetId) {
-        let children = self
-            .nodes
-            .get(&id)
-            .map(|n| n.children.clone())
-            .unwrap_or_default();
+        let children = self.nodes.get(&id).map(|n| n.children.clone()).unwrap_or_default();
         for child in children {
             self.unmount(child);
         }
@@ -105,8 +95,10 @@ impl WidgetTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::WidgetKind;
-    use crate::widgets::{button_widget, column};
+    use crate::{
+        node::WidgetKind,
+        widgets::{button_widget, column},
+    };
 
     #[test]
     fn mount_and_unmount_subtree() {
@@ -125,11 +117,7 @@ mod tests {
     fn builder_mounts_children() {
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        let id = column()
-            .key("menu")
-            .child(button_widget().key("start"))
-            .mount(&mut tree, root)
-            .unwrap();
+        let id = column().key("menu").child(button_widget().key("start")).mount(&mut tree, root).unwrap();
         assert_eq!(tree.node(id).unwrap().children.len(), 1);
     }
 }

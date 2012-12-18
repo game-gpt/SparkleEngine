@@ -1,7 +1,6 @@
 //! 错误命名空间与稳定错误码。
 
-use std::fmt;
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 /// 错误码命名空间（如 `spark`、`spark.asset`）。
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -52,19 +51,12 @@ pub struct ErrorCode {
 
 impl ErrorCode {
     pub fn new(namespace: impl Into<Arc<str>>, id: impl Into<Arc<str>>) -> Self {
-        Self {
-            namespace: NamespaceId::new(namespace),
-            id: ErrorId::new(id),
-        }
+        Self { namespace: NamespaceId::new(namespace), id: ErrorId::new(id) }
     }
 
     /// 解析 `spark.asset.not_found`（首段为命名空间，其余为 id）。
     pub fn parse(dotted: &str) -> Self {
-        if let Some((ns, rest)) = dotted.split_once('.') {
-            Self::new(ns, rest)
-        } else {
-            Self::new("spark", dotted)
-        }
+        if let Some((ns, rest)) = dotted.split_once('.') { Self::new(ns, rest) } else { Self::new("spark", dotted) }
     }
 
     pub fn as_dotted(&self) -> String {

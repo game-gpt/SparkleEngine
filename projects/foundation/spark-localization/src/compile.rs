@@ -1,8 +1,10 @@
 //! 将作者文档编译为 [`LocalizationBundle`]。
 
-use crate::bundle::{CompiledMessage, LocalizationBundle};
-use crate::check::{CheckReport, check_document};
-use crate::document::LocalizationDocument;
+use crate::{
+    bundle::{CompiledMessage, LocalizationBundle},
+    check::{CheckReport, check_document},
+    document::LocalizationDocument,
+};
 
 /// 编译错误。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,9 +31,7 @@ impl CompileError {
         use spark_core::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
         match self {
-            Self::CheckFailed { count } => {
-                ErrorArgs::new().with("count", ErrorArg::Unsigned(*count as u64))
-            }
+            Self::CheckFailed { count } => ErrorArgs::new().with("count", ErrorArg::Unsigned(*count as u64)),
             Self::Internal { detail } => {
                 // `detail` 仅供调试器展开，不得作为用户可见句子权威。
                 ErrorArgs::new().with("opaque", ErrorArg::String(Arc::from(detail.as_str())))
@@ -57,9 +57,7 @@ pub struct CompileOptions {
 
 impl Default for CompileOptions {
     fn default() -> Self {
-        Self {
-            reject_on_check_failure: true,
-        }
+        Self { reject_on_check_failure: true }
     }
 }
 
@@ -71,10 +69,7 @@ pub struct CompileOutput {
 }
 
 /// 将一组 [`LocalizationDocument`] 编译为运行时包。
-pub fn compile_documents(
-    documents: &[LocalizationDocument],
-    options: CompileOptions,
-) -> Result<CompileOutput, CompileError> {
+pub fn compile_documents(documents: &[LocalizationDocument], options: CompileOptions) -> Result<CompileOutput, CompileError> {
     let mut report = CheckReport::default();
     for doc in documents {
         report.issues.extend(check_document(doc).issues);
@@ -86,12 +81,7 @@ pub fn compile_documents(
     let mut bundle = LocalizationBundle::new();
     for doc in documents {
         for (name, def) in &doc.messages {
-            bundle.insert(
-                doc.namespace.clone(),
-                name.clone(),
-                doc.locale.clone(),
-                CompiledMessage::from_definition(def),
-            );
+            bundle.insert(doc.namespace.clone(), name.clone(), doc.locale.clone(), CompiledMessage::from_definition(def));
         }
     }
 
@@ -106,28 +96,18 @@ pub fn compile_document(doc: &LocalizationDocument) -> Result<LocalizationBundle
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::MessageDefinition;
-    use crate::locale::LocaleId;
+    use crate::{document::MessageDefinition, locale::LocaleId};
     use std::sync::Arc;
 
     #[test]
     fn compiles_text_and_template_sugar() {
         let mut doc = LocalizationDocument::new(LocaleId::parse("en").unwrap(), "game");
         doc.insert("plain", MessageDefinition::Text(Arc::from("Hi")));
-        doc.insert(
-            "hello",
-            MessageDefinition::Text(Arc::from("Hello, {name}")),
-        );
+        doc.insert("hello", MessageDefinition::Text(Arc::from("Hello, {name}")));
         let bundle = compile_document(&doc).unwrap();
         assert_eq!(bundle.len(), 2);
-        assert!(matches!(
-            bundle.get_named("game", "plain", &doc.locale),
-            Some(CompiledMessage::Text(_))
-        ));
-        assert!(matches!(
-            bundle.get_named("game", "hello", &doc.locale),
-            Some(CompiledMessage::Pattern(_))
-        ));
+        assert!(matches!(bundle.get_named("game", "plain", &doc.locale), Some(CompiledMessage::Text(_))));
+        assert!(matches!(bundle.get_named("game", "hello", &doc.locale), Some(CompiledMessage::Pattern(_))));
         assert_ne!(bundle.content_hash, 0);
     }
 }

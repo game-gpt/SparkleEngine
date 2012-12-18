@@ -140,11 +140,7 @@ impl Input {
     pub fn on_ime_preedit(&mut self, text: impl AsRef<str>, cursor: Option<(usize, usize)>) {
         self.composition.clear();
         self.composition.push_str(text.as_ref());
-        self.composition_cursor = if self.composition.is_empty() {
-            None
-        } else {
-            cursor
-        };
+        self.composition_cursor = if self.composition.is_empty() { None } else { cursor };
     }
 
     /// IME 提交：清空预编辑并写入本帧文本。

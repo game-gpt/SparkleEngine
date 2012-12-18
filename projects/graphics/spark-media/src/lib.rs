@@ -11,12 +11,9 @@ mod probe;
 
 pub use decode::{AudioDecoder, PcmAudio};
 pub use demux::{MediaPacket, MediaReader, PacketKind};
-pub use probe::{probe_bytes, probe_path, AudioTrackInfo, MediaInfo, TrackInfo, VideoTrackInfo};
+pub use probe::{AudioTrackInfo, MediaInfo, TrackInfo, VideoTrackInfo, probe_bytes, probe_path};
 
-use std::fmt;
-use std::io;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{fmt, io, path::PathBuf, sync::Arc};
 
 use spark_core::{ErrorArg, ErrorArgs, SparkError};
 
@@ -30,25 +27,23 @@ pub enum MediaError {
     },
     NoAudioTrack,
     NoVideoTrack,
-    UnsupportedCodec { codec: String },
+    UnsupportedCodec {
+        codec: String,
+    },
     EndOfStream,
     /// 解码失败：Symphonia / 容器层稳定 kind 令牌。
-    Decode { kind: &'static str },
+    Decode {
+        kind: &'static str,
+    },
 }
 
 impl MediaError {
     pub fn open_io(path: impl Into<Option<PathBuf>>, kind: io::ErrorKind) -> Self {
-        Self::Open {
-            path: path.into(),
-            io_kind: io_kind_token(kind),
-        }
+        Self::Open { path: path.into(), io_kind: io_kind_token(kind) }
     }
 
     pub fn open_path(path: impl Into<PathBuf>, err: &io::Error) -> Self {
-        Self::Open {
-            path: Some(path.into()),
-            io_kind: io_kind_token(err.kind()),
-        }
+        Self::Open { path: Some(path.into()), io_kind: io_kind_token(err.kind()) }
     }
 
     pub fn decode_kind(kind: &'static str) -> Self {
@@ -71,19 +66,12 @@ impl MediaError {
             Self::Open { path, io_kind } => {
                 let mut args = ErrorArgs::new().with("io_kind", ErrorArg::String(Arc::from(*io_kind)));
                 if let Some(p) = path {
-                    args.insert(
-                        "path",
-                        ErrorArg::Path(Arc::from(p.to_string_lossy().as_ref())),
-                    );
+                    args.insert("path", ErrorArg::Path(Arc::from(p.to_string_lossy().as_ref())));
                 }
                 args
             }
-            Self::UnsupportedCodec { codec } => {
-                ErrorArgs::new().with("codec", ErrorArg::String(Arc::from(codec.as_str())))
-            }
-            Self::Decode { kind } => {
-                ErrorArgs::new().with("kind", ErrorArg::String(Arc::from(*kind)))
-            }
+            Self::UnsupportedCodec { codec } => ErrorArgs::new().with("codec", ErrorArg::String(Arc::from(codec.as_str()))),
+            Self::Decode { kind } => ErrorArgs::new().with("kind", ErrorArg::String(Arc::from(*kind))),
             _ => ErrorArgs::new(),
         }
     }

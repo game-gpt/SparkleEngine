@@ -1,8 +1,6 @@
 //! 无障碍语义树。
 
-use crate::id::WidgetId;
-use crate::node::WidgetKind;
-use crate::tree::WidgetTree;
+use crate::{id::WidgetId, node::WidgetKind, tree::WidgetTree};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -61,7 +59,8 @@ impl AccessibilityTree {
 }
 
 fn rebuild_rec(out: &mut AccessibilityTree, tree: &WidgetTree, id: WidgetId) {
-    let Some(node) = tree.node(id) else {
+    let Some(node) = tree.node(id)
+    else {
         return;
     };
     if !node.state.visible {
@@ -74,11 +73,7 @@ fn rebuild_rec(out: &mut AccessibilityTree, tree: &WidgetTree, id: WidgetId) {
             WidgetKind::TextField | WidgetKind::TextArea => node.content.text.clone(),
             _ => None,
         };
-        let checked = matches!(
-            node.kind,
-            WidgetKind::Checkbox | WidgetKind::Toggle | WidgetKind::Radio
-        )
-        .then_some(node.content.checked);
+        let checked = matches!(node.kind, WidgetKind::Checkbox | WidgetKind::Toggle | WidgetKind::Radio).then_some(node.content.checked);
         out.push(AccessibilityNode {
             id,
             role,
@@ -130,17 +125,10 @@ mod tests {
     fn rebuild_includes_interactive_widgets() {
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        column()
-            .child(button_widget().text("Go"))
-            .child(checkbox_widget().text("On").checked(true))
-            .mount(&mut tree, root)
-            .unwrap();
+        column().child(button_widget().text("Go")).child(checkbox_widget().text("On").checked(true)).mount(&mut tree, root).unwrap();
         let mut a11y = AccessibilityTree::default();
         a11y.rebuild_from(&tree);
         assert!(a11y.nodes().iter().any(|n| n.role == Role::Button && n.label == "Go"));
-        assert!(a11y
-            .nodes()
-            .iter()
-            .any(|n| n.role == Role::Checkbox && n.checked == Some(true)));
+        assert!(a11y.nodes().iter().any(|n| n.role == Role::Checkbox && n.checked == Some(true)));
     }
 }

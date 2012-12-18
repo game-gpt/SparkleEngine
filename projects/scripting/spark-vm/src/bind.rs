@@ -2,7 +2,7 @@
 //!
 //! 宿主调用须在 codegen 阶段按 [`Op::CallHost`] 槽位发射；链接只校验、不重写。
 
-use crate::{decode_op, FuncProto, Module, Op};
+use crate::{FuncProto, Module, Op, decode_op};
 
 /// 扫描模块：发现任何 `CallNative` 即失败。
 pub fn reject_residual_call_native(module: &Module) -> Result<(), String> {
@@ -17,7 +17,8 @@ fn scan_func(func: &FuncProto, fi: usize) -> Result<(), String> {
     while ip < func.code.len() {
         let at = ip;
         let op_byte = func.code[ip];
-        let Some(op) = decode_op(op_byte) else {
+        let Some(op) = decode_op(op_byte)
+        else {
             return Err(format!("unknown_opcode:{op_byte}@{at}"));
         };
         ip += 1;
@@ -71,11 +72,7 @@ mod tests {
         f.emit_u16(0);
         f.emit_u8(0);
         f.emit(Op::Return);
-        let module = Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: vec!["inc".into()],
-        };
+        let module = Module { functions: vec![f], entry: 0, native_names: vec!["inc".into()] };
         reject_residual_call_native(&module).unwrap();
     }
 
@@ -87,11 +84,7 @@ mod tests {
         f.emit_u16(si);
         f.emit_u8(0);
         f.emit(Op::Return);
-        let module = Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        };
+        let module = Module { functions: vec![f], entry: 0, native_names: Vec::new() };
         let err = reject_residual_call_native(&module).unwrap_err();
         assert!(err.contains("residual_call_native"), "{err}");
     }

@@ -17,19 +17,13 @@ impl Aabb3 {
     }
 
     pub fn from_center_extents(center: Vec3, extents: Vec3) -> Self {
-        Self {
-            min: center - extents,
-            max: center + extents,
-        }
+        Self { min: center - extents, max: center + extents }
     }
 
     /// 单位体素格 `[x,x+1) × [y,y+1) × [z,z+1)`。
     pub fn from_cell(x: i32, y: i32, z: i32) -> Self {
         let min = Vec3::new(x as f32, y as f32, z as f32);
-        Self {
-            min,
-            max: min + Vec3::new(1.0, 1.0, 1.0),
-        }
+        Self { min, max: min + Vec3::new(1.0, 1.0, 1.0) }
     }
 
     pub fn center(self) -> Vec3 {
@@ -45,12 +39,7 @@ impl Aabb3 {
     }
 
     pub fn contains_point(self, p: Vec3) -> bool {
-        p.x >= self.min.x
-            && p.x <= self.max.x
-            && p.y >= self.min.y
-            && p.y <= self.max.y
-            && p.z >= self.min.z
-            && p.z <= self.max.z
+        p.x >= self.min.x && p.x <= self.max.x && p.y >= self.min.y && p.y <= self.max.y && p.z >= self.min.z && p.z <= self.max.z
     }
 
     pub fn intersects(self, o: Self) -> bool {
@@ -64,24 +53,13 @@ impl Aabb3 {
 
     pub fn expand(self, margin: f32) -> Self {
         let m = Vec3::new(margin, margin, margin);
-        Self {
-            min: self.min - m,
-            max: self.max + m,
-        }
+        Self { min: self.min - m, max: self.max + m }
     }
 
     pub fn union(self, o: Self) -> Self {
         Self {
-            min: Vec3::new(
-                self.min.x.min(o.min.x),
-                self.min.y.min(o.min.y),
-                self.min.z.min(o.min.z),
-            ),
-            max: Vec3::new(
-                self.max.x.max(o.max.x),
-                self.max.y.max(o.max.y),
-                self.max.z.max(o.max.z),
-            ),
+            min: Vec3::new(self.min.x.min(o.min.x), self.min.y.min(o.min.y), self.min.z.min(o.min.z)),
+            max: Vec3::new(self.max.x.max(o.max.x), self.max.y.max(o.max.y), self.max.z.max(o.max.z)),
         }
     }
 

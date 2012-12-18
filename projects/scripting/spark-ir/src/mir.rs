@@ -2,8 +2,10 @@
 
 use std::sync::Arc;
 
-use crate::hir::{HirBinaryOp, HirUnaryOp, PackageId, Ty};
-use crate::host::HostId;
+use crate::{
+    hir::{HirBinaryOp, HirUnaryOp, PackageId, Ty},
+    host::HostId,
+};
 
 /// MIR 层效果标记（与宿主 schema 效果对齐）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -49,11 +51,7 @@ pub struct MirValue(pub u32);
 pub enum MirTerminator {
     Return { value: Option<MirValue> },
     Jump { target: u32 },
-    Branch {
-        cond: MirValue,
-        then_target: u32,
-        else_target: u32,
-    },
+    Branch { cond: MirValue, then_target: u32, else_target: u32 },
     Unreachable,
 }
 
@@ -69,34 +67,12 @@ pub enum MirInst {
     LoadLocal { dst: MirValue, index: u32 },
     StoreLocal { index: u32, src: MirValue },
     Move { dst: MirValue, src: MirValue },
-    Binary {
-        dst: MirValue,
-        op: HirBinaryOp,
-        lhs: MirValue,
-        rhs: MirValue,
-    },
-    Unary {
-        dst: MirValue,
-        op: HirUnaryOp,
-        src: MirValue,
-    },
-    Call {
-        dst: Option<MirValue>,
-        func: MirValue,
-        args: Vec<MirValue>,
-    },
+    Binary { dst: MirValue, op: HirBinaryOp, lhs: MirValue, rhs: MirValue },
+    Unary { dst: MirValue, op: HirUnaryOp, src: MirValue },
+    Call { dst: Option<MirValue>, func: MirValue, args: Vec<MirValue> },
     Print { src: MirValue },
-    HostCall {
-        dst: Option<MirValue>,
-        host_slot_or_name: HostRef,
-        args: Vec<MirValue>,
-    },
-    DynamicSend {
-        dst: Option<MirValue>,
-        receiver: MirValue,
-        method: Arc<str>,
-        args: Vec<MirValue>,
-    },
+    HostCall { dst: Option<MirValue>, host_slot_or_name: HostRef, args: Vec<MirValue> },
+    DynamicSend { dst: Option<MirValue>, receiver: MirValue, method: Arc<str>, args: Vec<MirValue> },
 }
 
 /// 宿主引用（降低后身份 / 已解析槽位）。

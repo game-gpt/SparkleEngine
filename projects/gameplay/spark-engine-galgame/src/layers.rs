@@ -19,13 +19,7 @@ pub struct LayerStack {
 impl LayerStack {
     pub fn set(&mut self, id: impl Into<String>, asset: Option<String>) {
         let id = LayerId(id.into());
-        self.layers.insert(
-            id,
-            LayerSlot {
-                asset,
-                visible: true,
-            },
-        );
+        self.layers.insert(id, LayerSlot { asset, visible: true });
     }
 
     pub fn hide(&mut self, id: &str) {

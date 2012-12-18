@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use bytemuck::{Pod, Zeroable};
 use spark_core::SparkError;
 use spark_renderer::{DrawList, RgbaImage, TexQuadCmd, TextureId};
-use spark_shader::{create_builtin, BuiltinShader};
+use spark_shader::{BuiltinShader, create_builtin};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -35,11 +35,7 @@ pub struct TexQuad2dGpu {
 }
 
 impl TexQuad2dGpu {
-    pub fn new(
-        device: &wgpu::Device,
-        format: wgpu::TextureFormat,
-        uniform_buf: &wgpu::Buffer,
-    ) -> Self {
+    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, uniform_buf: &wgpu::Buffer) -> Self {
         let shader = create_builtin(device, BuiltinShader::TexturedQuad);
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("tex-quad2d-bgl"),
@@ -47,11 +43,7 @@ impl TexQuad2dGpu {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
@@ -122,16 +114,7 @@ impl TexQuad2dGpu {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        Self {
-            pipeline,
-            bgl,
-            sampler,
-            textures: HashMap::new(),
-            vbo,
-            cap,
-            frame_ranges: Vec::new(),
-            world_vert_end: 0,
-        }
+        Self { pipeline, bgl, sampler, textures: HashMap::new(), vbo, cap, frame_ranges: Vec::new(), world_vert_end: 0 }
     }
 
     pub fn ingest_uploads(
@@ -142,40 +125,18 @@ impl TexQuad2dGpu {
         uploads: &[(TextureId, RgbaImage)],
     ) -> Result<(), SparkError> {
         for (id, img) in uploads {
-            let texture = crate::mipmap::create_rgba_texture_with_mips(
-                device,
-                queue,
-                "tex-quad2d",
-                img.width,
-                img.height,
-                &img.rgba,
-            );
+            let texture = crate::mipmap::create_rgba_texture_with_mips(device, queue, "tex-quad2d", img.width, img.height, &img.rgba);
             let view = texture.create_view(&Default::default());
             let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("tex-quad2d-bg"),
                 layout: &self.bgl,
                 entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: uniform_buf.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
-                    },
+                    wgpu::BindGroupEntry { binding: 0, resource: uniform_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&view) },
+                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
                 ],
             });
-            self.textures.insert(
-                id.0,
-                GpuTex {
-                    _texture: texture,
-                    bind,
-                },
-            );
+            self.textures.insert(id.0, GpuTex { _texture: texture, bind });
         }
         Ok(())
     }
@@ -210,7 +171,8 @@ impl TexQuad2dGpu {
         // 绕 dest 中心旋转屏幕坐标。着色器仍只做像素→NDC。
         let (p00, p10, p11, p01) = if q.angle_rad.abs() < 1e-8 {
             ([x0, y0], [x1, y0], [x1, y1], [x0, y1])
-        } else {
+        }
+        else {
             let (s, cos) = q.angle_rad.sin_cos();
             let cx = x0 + q.pivot_x;
             let cy = y0 + q.pivot_y;
@@ -222,46 +184,17 @@ impl TexQuad2dGpu {
             (rot(x0, y0), rot(x1, y0), rot(x1, y1), rot(x0, y1))
         };
         verts.extend_from_slice(&[
-            TexQuadVertex {
-                pos: p00,
-                uv: [u0, v0],
-                color: c,
-            },
-            TexQuadVertex {
-                pos: p10,
-                uv: [u1, v0],
-                color: c,
-            },
-            TexQuadVertex {
-                pos: p11,
-                uv: [u1, v1],
-                color: c,
-            },
-            TexQuadVertex {
-                pos: p00,
-                uv: [u0, v0],
-                color: c,
-            },
-            TexQuadVertex {
-                pos: p11,
-                uv: [u1, v1],
-                color: c,
-            },
-            TexQuadVertex {
-                pos: p01,
-                uv: [u0, v1],
-                color: c,
-            },
+            TexQuadVertex { pos: p00, uv: [u0, v0], color: c },
+            TexQuadVertex { pos: p10, uv: [u1, v0], color: c },
+            TexQuadVertex { pos: p11, uv: [u1, v1], color: c },
+            TexQuadVertex { pos: p00, uv: [u0, v0], color: c },
+            TexQuadVertex { pos: p11, uv: [u1, v1], color: c },
+            TexQuadVertex { pos: p01, uv: [u0, v1], color: c },
         ]);
     }
 
     /// 按命令顺序上传顶点；仅合并**连续**同纹理批，不重排。
-    pub fn prepare_draw(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        cmds: &[TexQuadCmd],
-    ) {
+    pub fn prepare_draw(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, cmds: &[TexQuadCmd]) {
         self.frame_ranges.clear();
         if cmds.is_empty() {
             return;
@@ -304,12 +237,7 @@ impl TexQuad2dGpu {
     }
 
     /// 只提交顶点落在 `[vert_lo, vert_hi)` 内的批（用于 world/hud 分层）。
-    pub fn encode_pass_range<'a>(
-        &'a self,
-        pass: &mut wgpu::RenderPass<'a>,
-        vert_lo: u32,
-        vert_hi: u32,
-    ) {
+    pub fn encode_pass_range<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, vert_lo: u32, vert_hi: u32) {
         if self.frame_ranges.is_empty() || vert_lo >= vert_hi {
             return;
         }
@@ -322,7 +250,8 @@ impl TexQuad2dGpu {
             if lo >= hi {
                 continue;
             }
-            let Some(tex) = self.textures.get(&id) else {
+            let Some(tex) = self.textures.get(&id)
+            else {
                 continue;
             };
             pass.set_bind_group(0, &tex.bind, &[]);
@@ -345,19 +274,9 @@ impl TexQuad2dGpu {
         self.frame_ranges.clear();
         let mut all_verts: Vec<TexQuadVertex> = Vec::new();
 
-        Self::append_cmds_ordered(
-            &self.textures,
-            &list.tex_quads,
-            &mut all_verts,
-            &mut self.frame_ranges,
-        );
+        Self::append_cmds_ordered(&self.textures, &list.tex_quads, &mut all_verts, &mut self.frame_ranges);
         self.world_vert_end = all_verts.len() as u32;
-        Self::append_cmds_ordered(
-            &self.textures,
-            &list.hud_tex_quads,
-            &mut all_verts,
-            &mut self.frame_ranges,
-        );
+        Self::append_cmds_ordered(&self.textures, &list.hud_tex_quads, &mut all_verts, &mut self.frame_ranges);
 
         if !all_verts.is_empty() {
             self.ensure_cap(device, all_verts.len() as u64);

@@ -18,12 +18,7 @@ pub enum BytecodeVerifyError {
     ConstOob { func: usize, offset: usize, index: u16, len: usize },
     StringOob { func: usize, offset: usize, index: u16, len: usize },
     FuncOob { func: usize, offset: usize, index: u32, len: usize },
-    HostSlotOob {
-        func: usize,
-        offset: usize,
-        slot: u16,
-        len: u32,
-    },
+    HostSlotOob { func: usize, offset: usize, slot: u16, len: u32 },
     ResidualCallNative { func: usize, offset: usize },
     MissingReturn { func: usize },
 }
@@ -63,25 +58,16 @@ pub fn verify_bytecode(module: &Module) -> Result<(), BytecodeVerifyError> {
 }
 
 /// 封存映像用：结构验证 + 禁止残留 `CallNative` + `CallHost` 槽位越界检查。
-pub fn verify_bytecode_with_host(
-    module: &Module,
-    host_slot_count: u32,
-) -> Result<(), BytecodeVerifyError> {
+pub fn verify_bytecode_with_host(module: &Module, host_slot_count: u32) -> Result<(), BytecodeVerifyError> {
     verify_bytecode_inner(module, Some(host_slot_count))
 }
 
-fn verify_bytecode_inner(
-    module: &Module,
-    host_slot_count: Option<u32>,
-) -> Result<(), BytecodeVerifyError> {
+fn verify_bytecode_inner(module: &Module, host_slot_count: Option<u32>) -> Result<(), BytecodeVerifyError> {
     if module.functions.is_empty() {
         return Err(BytecodeVerifyError::EmptyModule);
     }
     if module.entry >= module.functions.len() {
-        return Err(BytecodeVerifyError::EntryOutOfBounds {
-            entry: module.entry,
-            len: module.functions.len(),
-        });
+        return Err(BytecodeVerifyError::EntryOutOfBounds { entry: module.entry, len: module.functions.len() });
     }
     let func_count = module.functions.len() as u32;
     let native_len = module.native_names.len();
@@ -110,12 +96,9 @@ fn verify_function(
     while ip < func.code.len() {
         starts.push(ip);
         let op_byte = func.code[ip];
-        let Some(op) = decode_op(op_byte) else {
-            return Err(BytecodeVerifyError::UnknownOpcode {
-                func: func_index,
-                offset: ip,
-                op: op_byte,
-            });
+        let Some(op) = decode_op(op_byte)
+        else {
+            return Err(BytecodeVerifyError::UnknownOpcode { func: func_index, offset: ip, op: op_byte });
         };
         let at = ip;
         ip += 1;
@@ -125,40 +108,24 @@ fn verify_function(
                 let idx = read_u16(func, func_index, &mut ip, at)?;
                 if op == Op::LoadConst {
                     check_const(func, func_index, at, idx, func_count)?;
-                } else if (idx as usize) >= func.const_names.len()
-                    && (idx as usize) >= func.consts.len()
-                {
+                }
+                else if (idx as usize) >= func.const_names.len() && (idx as usize) >= func.consts.len() {
                     // LoadGlobal / StoreGlobal 用 const_names 槽。
                     if (idx as usize) >= func.const_names.len() {
-                        return Err(BytecodeVerifyError::ConstOob {
-                            func: func_index,
-                            offset: at,
-                            index: idx,
-                            len: func.const_names.len(),
-                        });
+                        return Err(BytecodeVerifyError::ConstOob { func: func_index, offset: at, index: idx, len: func.const_names.len() });
                     }
                 }
             }
             Op::LoadLocal | Op::StoreLocal => {
                 let slot = read_u16(func, func_index, &mut ip, at)?;
                 if slot >= func.locals {
-                    return Err(BytecodeVerifyError::LocalOob {
-                        func: func_index,
-                        offset: at,
-                        slot,
-                        locals: func.locals,
-                    });
+                    return Err(BytecodeVerifyError::LocalOob { func: func_index, offset: at, slot, locals: func.locals });
                 }
             }
             Op::LoadString | Op::GetField | Op::SetField => {
                 let idx = read_u16(func, func_index, &mut ip, at)?;
                 if (idx as usize) >= func.strings.len() {
-                    return Err(BytecodeVerifyError::StringOob {
-                        func: func_index,
-                        offset: at,
-                        index: idx,
-                        len: func.strings.len(),
-                    });
+                    return Err(BytecodeVerifyError::StringOob { func: func_index, offset: at, index: idx, len: func.strings.len() });
                 }
             }
             Op::Jump | Op::JumpIfFalse | Op::JumpIfTrue => {
@@ -175,20 +142,13 @@ fn verify_function(
                 if op == Op::CallHost {
                     if let Some(len) = host_slot_count {
                         if u32::from(idx) >= len {
-                            return Err(BytecodeVerifyError::HostSlotOob {
-                                func: func_index,
-                                offset: at,
-                                slot: idx,
-                                len,
-                            });
+                            return Err(BytecodeVerifyError::HostSlotOob { func: func_index, offset: at, slot: idx, len });
                         }
                     }
-                } else if op == Op::CallNative {
+                }
+                else if op == Op::CallNative {
                     if host_slot_count.is_some() {
-                        return Err(BytecodeVerifyError::ResidualCallNative {
-                            func: func_index,
-                            offset: at,
-                        });
+                        return Err(BytecodeVerifyError::ResidualCallNative { func: func_index, offset: at });
                     }
                     let in_strings = (idx as usize) < func.strings.len();
                     let in_natives = (idx as usize) < native_len;
@@ -200,13 +160,9 @@ fn verify_function(
                             len: func.strings.len().max(native_len),
                         });
                     }
-                } else if (idx as usize) >= func.strings.len() {
-                    return Err(BytecodeVerifyError::StringOob {
-                        func: func_index,
-                        offset: at,
-                        index: idx,
-                        len: func.strings.len(),
-                    });
+                }
+                else if (idx as usize) >= func.strings.len() {
+                    return Err(BytecodeVerifyError::StringOob { func: func_index, offset: at, index: idx, len: func.strings.len() });
                 }
             }
             Op::JitEnter => {
@@ -222,19 +178,11 @@ fn verify_function(
     let start_set: std::collections::HashSet<usize> = starts.iter().copied().collect();
     for (at, target) in jumps {
         if target < 0 || target as usize > func.code.len() {
-            return Err(BytecodeVerifyError::JumpOutOfBounds {
-                func: func_index,
-                offset: at,
-                target,
-            });
+            return Err(BytecodeVerifyError::JumpOutOfBounds { func: func_index, offset: at, target });
         }
         let t = target as usize;
         if t != func.code.len() && !start_set.contains(&t) {
-            return Err(BytecodeVerifyError::JumpOffBoundary {
-                func: func_index,
-                offset: at,
-                target: t,
-            });
+            return Err(BytecodeVerifyError::JumpOffBoundary { func: func_index, offset: at, target: t });
         }
     }
 
@@ -244,95 +192,45 @@ fn verify_function(
     Ok(())
 }
 
-fn check_const(
-    func: &FuncProto,
-    func_index: usize,
-    at: usize,
-    idx: u16,
-    func_count: u32,
-) -> Result<(), BytecodeVerifyError> {
+fn check_const(func: &FuncProto, func_index: usize, at: usize, idx: u16, func_count: u32) -> Result<(), BytecodeVerifyError> {
     if (idx as usize) >= func.consts.len() {
-        return Err(BytecodeVerifyError::ConstOob {
-            func: func_index,
-            offset: at,
-            index: idx,
-            len: func.consts.len(),
-        });
+        return Err(BytecodeVerifyError::ConstOob { func: func_index, offset: at, index: idx, len: func.consts.len() });
     }
     if let spark_gc::Value::Func(fidx) = func.consts[idx as usize] {
         if fidx >= func_count {
-            return Err(BytecodeVerifyError::FuncOob {
-                func: func_index,
-                offset: at,
-                index: fidx,
-                len: func_count as usize,
-            });
+            return Err(BytecodeVerifyError::FuncOob { func: func_index, offset: at, index: fidx, len: func_count as usize });
         }
     }
     Ok(())
 }
 
-fn read_u8(
-    func: &FuncProto,
-    func_index: usize,
-    ip: &mut usize,
-    at: usize,
-) -> Result<u8, BytecodeVerifyError> {
+fn read_u8(func: &FuncProto, func_index: usize, ip: &mut usize, at: usize) -> Result<u8, BytecodeVerifyError> {
     if *ip >= func.code.len() {
-        return Err(BytecodeVerifyError::TruncatedOperand {
-            func: func_index,
-            offset: at,
-        });
+        return Err(BytecodeVerifyError::TruncatedOperand { func: func_index, offset: at });
     }
     let v = func.code[*ip];
     *ip += 1;
     Ok(v)
 }
 
-fn read_u16(
-    func: &FuncProto,
-    func_index: usize,
-    ip: &mut usize,
-    at: usize,
-) -> Result<u16, BytecodeVerifyError> {
+fn read_u16(func: &FuncProto, func_index: usize, ip: &mut usize, at: usize) -> Result<u16, BytecodeVerifyError> {
     if *ip + 1 >= func.code.len() {
-        return Err(BytecodeVerifyError::TruncatedOperand {
-            func: func_index,
-            offset: at,
-        });
+        return Err(BytecodeVerifyError::TruncatedOperand { func: func_index, offset: at });
     }
     let v = u16::from_le_bytes([func.code[*ip], func.code[*ip + 1]]);
     *ip += 2;
     Ok(v)
 }
 
-fn read_i16(
-    func: &FuncProto,
-    func_index: usize,
-    ip: &mut usize,
-    at: usize,
-) -> Result<i16, BytecodeVerifyError> {
+fn read_i16(func: &FuncProto, func_index: usize, ip: &mut usize, at: usize) -> Result<i16, BytecodeVerifyError> {
     Ok(read_u16(func, func_index, ip, at)? as i16)
 }
 
-fn read_u32(
-    func: &FuncProto,
-    func_index: usize,
-    ip: &mut usize,
-    at: usize,
-) -> Result<u32, BytecodeVerifyError> {
+fn read_u32(func: &FuncProto, func_index: usize, ip: &mut usize, at: usize) -> Result<u32, BytecodeVerifyError> {
     if *ip + 3 >= func.code.len() {
-        return Err(BytecodeVerifyError::TruncatedOperand {
-            func: func_index,
-            offset: at,
-        });
+        return Err(BytecodeVerifyError::TruncatedOperand { func: func_index, offset: at });
     }
-    let v = u32::from_le_bytes([
-        func.code[*ip],
-        func.code[*ip + 1],
-        func.code[*ip + 2],
-        func.code[*ip + 3],
-    ]);
+    let v = u32::from_le_bytes([func.code[*ip], func.code[*ip + 1], func.code[*ip + 2], func.code[*ip + 3]]);
     *ip += 4;
     Ok(v)
 }
@@ -346,11 +244,7 @@ mod tests {
     fn rejects_unknown_opcode() {
         let mut f = FuncProto::new("main", 0);
         f.code.push(255);
-        let m = Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        };
+        let m = Module { functions: vec![f], entry: 0, native_names: Vec::new() };
         let err = verify_bytecode(&m).unwrap_err();
         assert!(matches!(err, BytecodeVerifyError::UnknownOpcode { .. }));
     }
@@ -363,11 +257,7 @@ mod tests {
         f.emit_i16(-2);
         f.emit(Op::LoadNull);
         f.emit(Op::Return);
-        let m = Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        };
+        let m = Module { functions: vec![f], entry: 0, native_names: Vec::new() };
         let err = verify_bytecode(&m).unwrap_err();
         assert!(matches!(err, BytecodeVerifyError::JumpOffBoundary { .. }));
     }
@@ -377,11 +267,7 @@ mod tests {
         let mut f = FuncProto::new("main", 0);
         f.emit(Op::LoadNull);
         f.emit(Op::Return);
-        let m = Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        };
+        let m = Module { functions: vec![f], entry: 0, native_names: Vec::new() };
         verify_bytecode(&m).unwrap();
     }
 
@@ -393,16 +279,9 @@ mod tests {
         f.emit_u16(99);
         f.emit_u8(1);
         f.emit(Op::Return);
-        let m = Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        };
+        let m = Module { functions: vec![f], entry: 0, native_names: Vec::new() };
         let err = verify_bytecode_with_host(&m, 2).unwrap_err();
-        assert!(matches!(
-            err,
-            BytecodeVerifyError::HostSlotOob { slot: 99, len: 2, .. }
-        ));
+        assert!(matches!(err, BytecodeVerifyError::HostSlotOob { slot: 99, len: 2, .. }));
     }
 
     #[test]
@@ -414,15 +293,8 @@ mod tests {
         f.emit_u16(si);
         f.emit_u8(1);
         f.emit(Op::Return);
-        let m = Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: vec!["print".into()],
-        };
+        let m = Module { functions: vec![f], entry: 0, native_names: vec!["print".into()] };
         let err = verify_bytecode_with_host(&m, 1).unwrap_err();
-        assert!(matches!(
-            err,
-            BytecodeVerifyError::ResidualCallNative { .. }
-        ));
+        assert!(matches!(err, BytecodeVerifyError::ResidualCallNative { .. }));
     }
 }

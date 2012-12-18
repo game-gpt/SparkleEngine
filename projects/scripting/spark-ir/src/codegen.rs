@@ -2,9 +2,11 @@
 
 use spark_vm::{FuncProto, Module, Op};
 
-use crate::hir::{HirBinaryOp, HirUnaryOp};
-use crate::host::HostBindTable;
-use crate::mir::{HostRef, MirFunction, MirInst, MirModule, MirTerminator, MirValue};
+use crate::{
+    hir::{HirBinaryOp, HirUnaryOp},
+    host::HostBindTable,
+    mir::{HostRef, MirFunction, MirInst, MirModule, MirTerminator, MirValue},
+};
 
 /// 宿主调用发射策略。
 #[derive(Debug, Clone, Copy)]
@@ -21,17 +23,10 @@ pub fn emit_module(module: &MirModule) -> Result<Module, String> {
 }
 
 /// 将已验证语义的 MIR 发射为 VM 模块。
-pub fn emit_module_with_host(
-    module: &MirModule,
-    host: HostEmitMode<'_>,
-) -> Result<Module, String> {
+pub fn emit_module_with_host(module: &MirModule, host: HostEmitMode<'_>) -> Result<Module, String> {
     let native_names = match host {
         HostEmitMode::NoHost => Vec::new(),
-        HostEmitMode::Bound(table) => table
-            .entries()
-            .iter()
-            .map(|e| e.id.qualified_name())
-            .collect(),
+        HostEmitMode::Bound(table) => table.entries().iter().map(|e| e.id.qualified_name()).collect(),
     };
     let mut functions = Vec::with_capacity(module.functions.len());
     let mut entry = None;
@@ -45,11 +40,7 @@ pub fn emit_module_with_host(
         return Err("empty_mir_module".into());
     }
     let entry = entry.ok_or_else(|| "missing_on_load_entry".to_string())?;
-    Ok(Module {
-        functions,
-        entry,
-        native_names,
-    })
+    Ok(Module { functions, entry, native_names })
 }
 
 fn emit_function(func: &MirFunction, host: HostEmitMode<'_>) -> Result<FuncProto, String> {
@@ -95,11 +86,7 @@ fn emit_function(func: &MirFunction, host: HostEmitMode<'_>) -> Result<FuncProto
                 pending_jumps.push((f.len(), *target));
                 f.emit_i16(0);
             }
-            MirTerminator::Branch {
-                cond,
-                then_target,
-                else_target,
-            } => {
+            MirTerminator::Branch { cond, then_target, else_target } => {
                 f.emit(Op::LoadLocal);
                 f.emit_u16(slot_of(*cond));
                 f.emit(Op::JumpIfFalse);
@@ -158,12 +145,7 @@ fn inst_max_value(inst: &MirInst) -> u32 {
             }
             m
         }
-        MirInst::DynamicSend {
-            dst,
-            receiver,
-            args,
-            ..
-        } => {
+        MirInst::DynamicSend { dst, receiver, args, .. } => {
             let mut m = receiver.0;
             if let Some(d) = dst {
                 m = m.max(d.0);
@@ -176,12 +158,7 @@ fn inst_max_value(inst: &MirInst) -> u32 {
     }
 }
 
-fn emit_inst(
-    f: &mut FuncProto,
-    inst: &MirInst,
-    slot_of: &dyn Fn(MirValue) -> u16,
-    host: HostEmitMode<'_>,
-) -> Result<(), String> {
+fn emit_inst(f: &mut FuncProto, inst: &MirInst, slot_of: &dyn Fn(MirValue) -> u16, host: HostEmitMode<'_>) -> Result<(), String> {
     match inst {
         MirInst::Nop => {}
         MirInst::ConstNull { dst } => {
@@ -191,7 +168,8 @@ fn emit_inst(
         MirInst::ConstBool { dst, value } => {
             if *value {
                 f.emit(Op::LoadTrue);
-            } else {
+            }
+            else {
                 f.emit(Op::LoadFalse);
             }
             store(f, slot_of(*dst));
@@ -260,16 +238,13 @@ fn emit_inst(
             f.emit_u8(args.len() as u8);
             if let Some(d) = dst {
                 store(f, slot_of(*d));
-            } else {
+            }
+            else {
                 f.emit(Op::Pop);
                 f.emit_u8(1);
             }
         }
-        MirInst::HostCall {
-            dst,
-            host_slot_or_name,
-            args,
-        } => {
+        MirInst::HostCall { dst, host_slot_or_name, args } => {
             for a in args {
                 f.emit(Op::LoadLocal);
                 f.emit_u16(slot_of(*a));
@@ -277,31 +252,26 @@ fn emit_inst(
             emit_host_call(f, host_slot_or_name, args.len() as u8, host)?;
             if let Some(d) = dst {
                 store(f, slot_of(*d));
-            } else {
+            }
+            else {
                 f.emit(Op::Pop);
                 f.emit_u8(1);
             }
         }
-        MirInst::DynamicSend { .. } => {
-            Err(format!("unsupported_mir_inst:{inst:?}"))?
-        }
+        MirInst::DynamicSend { .. } => Err(format!("unsupported_mir_inst:{inst:?}"))?,
     }
     Ok(())
 }
 
-fn emit_host_call(
-    f: &mut FuncProto,
-    host_ref: &HostRef,
-    argc: u8,
-    host: HostEmitMode<'_>,
-) -> Result<(), String> {
+fn emit_host_call(f: &mut FuncProto, host_ref: &HostRef, argc: u8, host: HostEmitMode<'_>) -> Result<(), String> {
     match host {
         HostEmitMode::NoHost => Err("host_call_without_bind_table".into()),
         HostEmitMode::Bound(table) => {
             let slot = match host_ref {
                 HostRef::Slot(s) => *s,
                 HostRef::Id(id) => {
-                    let Some(entry) = table.get(id) else {
+                    let Some(entry) = table.get(id)
+                    else {
                         return Err(format!("host_missing:{}", id.qualified_name()));
                     };
                     entry.slot
@@ -354,8 +324,10 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::hir::{HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, PackageId, Ty};
-    use crate::lower::lower_module;
+    use crate::{
+        hir::{HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, PackageId, Ty},
+        lower::lower_module,
+    };
     use spark_vm::{StdHost, Vm};
 
     #[test]
@@ -372,14 +344,8 @@ mod tests {
                 body: vec![HirStmt::Return {
                     value: Some(HirExpr::Binary {
                         op: HirBinaryOp::Add,
-                        lhs: Box::new(HirExpr::LiteralNumber {
-                            value: 40.0,
-                            span: None,
-                        }),
-                        rhs: Box::new(HirExpr::LiteralNumber {
-                            value: 2.0,
-                            span: None,
-                        }),
+                        lhs: Box::new(HirExpr::LiteralNumber { value: 40.0, span: None }),
+                        rhs: Box::new(HirExpr::LiteralNumber { value: 2.0, span: None }),
                         span: None,
                     }),
                     span: None,
@@ -404,23 +370,14 @@ mod tests {
                 HirFunction {
                     name: Arc::from("add"),
                     symbol: None,
-                    params: vec![
-                        (Arc::from("a"), Ty::Float),
-                        (Arc::from("b"), Ty::Float),
-                    ],
+                    params: vec![(Arc::from("a"), Ty::Float), (Arc::from("b"), Ty::Float)],
                     return_ty: Ty::Float,
                     locals: Vec::new(),
                     body: vec![HirStmt::Return {
                         value: Some(HirExpr::Binary {
                             op: HirBinaryOp::Add,
-                            lhs: Box::new(HirExpr::Local {
-                                index: 0,
-                                span: None,
-                            }),
-                            rhs: Box::new(HirExpr::Local {
-                                index: 1,
-                                span: None,
-                            }),
+                            lhs: Box::new(HirExpr::Local { index: 0, span: None }),
+                            rhs: Box::new(HirExpr::Local { index: 1, span: None }),
                             span: None,
                         }),
                         span: None,
@@ -435,20 +392,8 @@ mod tests {
                     locals: Vec::new(),
                     body: vec![HirStmt::Return {
                         value: Some(HirExpr::Call {
-                            callee: Box::new(HirExpr::FuncRef {
-                                func_index: 0,
-                                span: None,
-                            }),
-                            args: vec![
-                                HirExpr::LiteralNumber {
-                                    value: 40.0,
-                                    span: None,
-                                },
-                                HirExpr::LiteralNumber {
-                                    value: 2.0,
-                                    span: None,
-                                },
-                            ],
+                            callee: Box::new(HirExpr::FuncRef { func_index: 0, span: None }),
+                            args: vec![HirExpr::LiteralNumber { value: 40.0, span: None }, HirExpr::LiteralNumber { value: 2.0, span: None }],
                             span: None,
                         }),
                         span: None,
@@ -480,10 +425,7 @@ mod tests {
                 body: vec![HirStmt::Return {
                     value: Some(HirExpr::HostCall {
                         host: HostId::new("host", "double", 1),
-                        args: vec![HirExpr::LiteralNumber {
-                            value: 21.0,
-                            span: None,
-                        }],
+                        args: vec![HirExpr::LiteralNumber { value: 21.0, span: None }],
                         effects: Vec::new(),
                         span: None,
                     }),
@@ -495,10 +437,7 @@ mod tests {
         let mir = lower_module(&hir).unwrap();
         let binds = HostBindTable::from_ids([HostId::new("host", "double", 1)]).unwrap();
         let module = emit_module_with_host(&mir, HostEmitMode::Bound(&binds)).unwrap();
-        assert!(module.functions[0]
-            .code
-            .iter()
-            .any(|&b| b == Op::CallHost as u8));
+        assert!(module.functions[0].code.iter().any(|&b| b == Op::CallHost as u8));
         let mut vm = Vm::new(module);
         vm.prepare_host_slots(["host.double"]);
         vm.register_native("host.double", |_ctx, args| {

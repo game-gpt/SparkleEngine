@@ -11,11 +11,7 @@ impl Default for Board {
     fn default() -> Self {
         let width = 10;
         let height = 20;
-        Self {
-            width,
-            height,
-            cells: vec![0; (width * height) as usize],
-        }
+        Self { width, height, cells: vec![0; (width * height) as usize] }
     }
 }
 
@@ -52,7 +48,8 @@ impl Board {
                 for x in 0..w {
                     self.cells[x] = 0;
                 }
-            } else {
+            }
+            else {
                 y -= 1;
             }
         }

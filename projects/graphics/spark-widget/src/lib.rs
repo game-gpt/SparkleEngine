@@ -32,43 +32,35 @@ pub mod tree;
 pub mod widgets;
 
 pub use accessibility::{AccessibilityNode, AccessibilityTree, Role};
-pub use asset::{
-    MapTextureResolver, NullTextureResolver, ResolvedTexture, UiImage, UiTextureResolver,
-};
+pub use asset::{MapTextureResolver, NullTextureResolver, ResolvedTexture, UiImage, UiTextureResolver};
 pub use binding::{NullViewModel, UiViewModel};
 pub use command::{UiCommand, UiCommandQueue};
 pub use drag_drop::{DragPayload, DragState};
-pub use event::{
-    bubble_from, bubble_path, capture_path, hit_test, propagate, EventContext, Phase, UiEvent,
-};
+pub use event::{EventContext, Phase, UiEvent, bubble_from, bubble_path, capture_path, hit_test, propagate};
 pub use focus::{
-    collect_focusable, collect_focusable_in, ensure_focus_in_trap, focus_direction,
+    Direction, FocusManager, FocusPolicy, Neighbors, collect_focusable, collect_focusable_in, ensure_focus_in_trap, focus_direction,
     focus_direction_in, focus_next, focus_next_in, focus_previous, focus_previous_in, set_focus,
-    Direction, FocusManager, FocusPolicy, Neighbors,
 };
 pub use id::WidgetId;
 pub use inspector::{LayoutDump, UiEventTrace, UiInspector};
-pub use layout::{
-    Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size, UiMetrics,
-};
+pub use layout::{Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size, UiMetrics};
 pub use motion::{Easing, MotionManager, MotionSample, SpringConfig, StyleProperty, Transition};
 pub use node::{WidgetContent, WidgetKind, WidgetNode, WidgetStateFlags};
 pub use overlay::{OverlayEntry, OverlayLayer, OverlayManager};
 pub use paint::PaintContext;
 pub use response::EventResponse;
 pub use runtime::{UiFrame, UiLayer, UiRuntime};
-pub use scroll::{ensure_visible, find_scroll_ancestor, ScrollDirection, ScrollState};
+pub use scroll::{ScrollDirection, ScrollState, ensure_visible, find_scroll_ancestor};
 pub use state::{UiDirty, UiState};
 pub use style::{ComputedStyle, Style, Theme};
 pub use text::{
-    apply_text_input, measure_plain, Clipboard, EstimateMeasurer, FontMeasurer, MemoryClipboard,
-    TextEditAction, TextLayout, TextMeasurer, TextStyle,
+    Clipboard, EstimateMeasurer, FontMeasurer, MemoryClipboard, TextEditAction, TextLayout, TextMeasurer, TextStyle, apply_text_input,
+    measure_plain,
 };
 pub use tree::WidgetTree;
 pub use widgets::{
-    button_widget, checkbox_widget, column, content_height, grid, handle_tab_click, hud_root,
-    image_widget, label_widget, list_view, modal_widget, overlay_root, panel, popup_widget,
-    progress_widget, radio_widget, row, scroll_view, separator_widget, slider_widget, spacer_widget,
-    sync_tabs, sync_visible_rows, tab_view, text_field_widget, toast_widget, toggle_widget,
-    tooltip_widget, visible_row_range, WidgetBuilder,
+    WidgetBuilder, button_widget, checkbox_widget, column, content_height, grid, handle_tab_click, hud_root, image_widget, label_widget,
+    list_view, modal_widget, overlay_root, panel, popup_widget, progress_widget, radio_widget, row, scroll_view, separator_widget,
+    slider_widget, spacer_widget, sync_tabs, sync_visible_rows, tab_view, text_field_widget, toast_widget, toggle_widget, tooltip_widget,
+    visible_row_range,
 };

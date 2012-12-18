@@ -32,22 +32,17 @@ mod vfs;
 
 pub use access_policy::{ScriptAccessPolicy, check_host_phase};
 pub use api::{BuiltinApi, ENGINE_NATIVES, engine_host_schema};
+pub use app::{SparkApp, SparkPlugin};
+pub use app3d::{SparkApp3d, SparkPlugin3d};
 pub use command_apply::{
-    apply_script_commands, apply_script_commands_with, CommandApplyError, CommandApplyReport,
-    ComponentDescriptorId, ScriptArchetypeTag, ScriptComponentCatalog, ScriptMarker,
-    SCRIPT_MARKER_NAME,
+    CommandApplyError, CommandApplyReport, ComponentDescriptorId, SCRIPT_MARKER_NAME, ScriptArchetypeTag, ScriptComponentCatalog, ScriptMarker,
+    apply_script_commands, apply_script_commands_with,
 };
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
-pub use app::{SparkApp, SparkPlugin};
-pub use app3d::{SparkApp3d, SparkPlugin3d};
-pub use ecs_host::{
-    AppExit, DrawBuffer2d, DrawBuffer3d, DrawScratch2d, EcsHost2d, EcsHost3d, FrameSnapshot,
-};
+pub use ecs_host::{AppExit, DrawBuffer2d, DrawBuffer3d, DrawScratch2d, EcsHost2d, EcsHost3d, FrameSnapshot};
 pub use event_inbox::{ScriptEvent, ScriptEventInbox};
-pub use frame::{
-    FrameLoop, FrameLoopConfig, LoopedHost2d, LoopedHost3d, StepMode,
-};
+pub use frame::{FrameLoop, FrameLoopConfig, LoopedHost2d, LoopedHost3d, StepMode};
 pub use hooks::{HookBus, HookRef};
 pub use loader::{LoadedMod, ModLoader};
 pub use localization::LocalizationService;
@@ -56,32 +51,27 @@ pub use query_view::{ScriptQuerySnapshot, ScriptQueryView};
 pub use registry::{DataRegistry, RegValue};
 pub use render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d};
 pub use render3d::{RenderFrame3d, RenderSchedule3d, RenderSystem3d};
-pub use run::{
-    run_app_2d, run_app_3d, run_ecs_game, run_ecs_game_2d, run_ecs_game_3d, run_game, run_game_3d,
-    run_game_3d_with, run_game_with,
-};
-pub use script_system::{
-    ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError,
-    ScriptSystemRegistry,
-};
+pub use run::{run_app_2d, run_app_3d, run_ecs_game, run_ecs_game_2d, run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
+pub use script_system::{ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError, ScriptSystemRegistry};
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
 pub use vfs::ModVfs;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 use spark_core::SparkError;
 use spark_gc::Value;
 use spark_script::{
-    ArtifactCache, CompilationRequest, DeterminismClass, ExecutableImage, HostFunction,
-    HostFunctionId, HostPhase, HostSchema, PackageId, ScriptCompiler, ScriptError, ScriptLanguage,
+    ArtifactCache, CompilationRequest, DeterminismClass, ExecutableImage, HostFunction, HostFunctionId, HostPhase, HostSchema, PackageId,
+    ScriptCompiler, ScriptError, ScriptLanguage,
 };
 use spark_vm::{HostHooks, StdHost};
 
-use crate::api::install_builtins;
-use crate::loader::discover_and_order;
+use crate::{api::install_builtins, loader::discover_and_order};
 
 /// 引擎壳结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]
@@ -89,17 +79,31 @@ pub enum EngineError {
     Spark(SparkError),
     Script(ScriptError),
     Plugin(PluginError),
-    ModNotFound { id: String },
-    MissingDep { mod_id: String, dep: String },
-    CyclicDeps { mods: String },
-    DuplicateMod { id: String },
+    ModNotFound {
+        id: String,
+    },
+    MissingDep {
+        mod_id: String,
+        dep: String,
+    },
+    CyclicDeps {
+        mods: String,
+    },
+    DuplicateMod {
+        id: String,
+    },
     ManifestParse {
         path: String,
         source: crate::manifest::ManifestParseError,
     },
-    ManifestMissingId { path: String },
+    ManifestMissingId {
+        path: String,
+    },
     /// 文件系统失败：`kind` 为稳定机器令牌（如 `not_found`），不是 OS 本地化句子。
-    Io { path: String, kind: String },
+    Io {
+        path: String,
+        kind: String,
+    },
     HookFailed {
         hook: String,
         mod_id: String,
@@ -107,13 +111,17 @@ pub enum EngineError {
         source: ScriptError,
     },
     /// 脚本领域已被禁用（trap / 预算等）。
-    ScriptDomainDisabled { mod_id: String },
+    ScriptDomainDisabled {
+        mod_id: String,
+    },
     /// 脚本 System 声明 / 调度契约失败。
     ScriptSystem(ScriptSystemError),
     /// 脚本命令提交失败（未知 / 不支持组件等）。
     CommandApply(crate::command_apply::CommandApplyError),
     /// 模组语言无法解析（显式字段或入口扩展名）。
-    UnknownLanguage { token: String },
+    UnknownLanguage {
+        token: String,
+    },
 }
 
 impl EngineError {
@@ -144,57 +152,37 @@ impl EngineError {
             Self::Spark(e) => e.args.clone(),
             Self::Script(e) => e.args(),
             Self::Plugin(e) => e.args(),
-            Self::ModNotFound { id } | Self::DuplicateMod { id } => {
-                ErrorArgs::new().with("id", ErrorArg::String(Arc::from(id.as_str())))
-            }
+            Self::ModNotFound { id } | Self::DuplicateMod { id } => ErrorArgs::new().with("id", ErrorArg::String(Arc::from(id.as_str()))),
             Self::MissingDep { mod_id, dep } => ErrorArgs::new()
                 .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str())))
                 .with("dep", ErrorArg::String(Arc::from(dep.as_str()))),
-            Self::CyclicDeps { mods } => {
-                ErrorArgs::new().with("mods", ErrorArg::String(Arc::from(mods.as_str())))
+            Self::CyclicDeps { mods } => ErrorArgs::new().with("mods", ErrorArg::String(Arc::from(mods.as_str()))),
+            Self::ManifestParse { path, source } => source.args().with("path", ErrorArg::Path(Arc::from(path.as_str()))),
+            Self::ManifestMissingId { path } => ErrorArgs::new().with("path", ErrorArg::Path(Arc::from(path.as_str()))),
+            Self::Io { path, kind } => {
+                ErrorArgs::new().with("path", ErrorArg::Path(Arc::from(path.as_str()))).with("kind", ErrorArg::String(Arc::from(kind.as_str())))
             }
-            Self::ManifestParse { path, source } => source
+            Self::HookFailed { hook, mod_id, function, source } => source
                 .args()
-                .with("path", ErrorArg::Path(Arc::from(path.as_str()))),
-            Self::ManifestMissingId { path } => {
-                ErrorArgs::new().with("path", ErrorArg::Path(Arc::from(path.as_str())))
-            }
-            Self::Io { path, kind } => ErrorArgs::new()
-                .with("path", ErrorArg::Path(Arc::from(path.as_str())))
-                .with("kind", ErrorArg::String(Arc::from(kind.as_str()))),
-            Self::HookFailed {
-                hook,
-                mod_id,
-                function,
-                source,
-            } => source.args()
                 .with("hook", ErrorArg::String(Arc::from(hook.as_str())))
                 .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str())))
                 .with("function", ErrorArg::String(Arc::from(function.as_str()))),
-            Self::ScriptDomainDisabled { mod_id } => ErrorArgs::new()
-                .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str()))),
-            Self::ScriptSystem(e) => ErrorArgs::new()
-                .with("detail", ErrorArg::String(Arc::from(e.to_string()))),
+            Self::ScriptDomainDisabled { mod_id } => ErrorArgs::new().with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str()))),
+            Self::ScriptSystem(e) => ErrorArgs::new().with("detail", ErrorArg::String(Arc::from(e.to_string()))),
             Self::CommandApply(e) => match e {
                 crate::command_apply::CommandApplyError::UnknownComponent { component }
                 | crate::command_apply::CommandApplyError::UnsupportedComponent { component }
-                | crate::command_apply::CommandApplyError::EntityNotAlive {
-                    component,
-                    ..
-                } => ErrorArgs::new()
-                    .with("component", ErrorArg::String(Arc::clone(component))),
+                | crate::command_apply::CommandApplyError::EntityNotAlive { component, .. } => {
+                    ErrorArgs::new().with("component", ErrorArg::String(Arc::clone(component)))
+                }
             },
-            Self::UnknownLanguage { token } => ErrorArgs::new()
-                .with("token", ErrorArg::String(Arc::from(token.as_str()))),
+            Self::UnknownLanguage { token } => ErrorArgs::new().with("token", ErrorArg::String(Arc::from(token.as_str()))),
         }
     }
 
     /// 由 `std::io::Error` 构造；只保留稳定 `ErrorKind` 令牌。
     pub fn from_io(path: impl Into<String>, err: std::io::Error) -> Self {
-        Self::Io {
-            path: path.into(),
-            kind: io_kind_token(err.kind()).into(),
-        }
+        Self::Io { path: path.into(), kind: io_kind_token(err.kind()).into() }
     }
 }
 
@@ -323,15 +311,9 @@ impl EngineShared {
     }
 
     /// 进入一次脚本导出调用前设置阶段、访问契约与受限查询视图。
-    pub fn begin_script_call(
-        &mut self,
-        phase: HostPhase,
-        desc: Option<&ScriptSystemDescriptor>,
-    ) {
+    pub fn begin_script_call(&mut self, phase: HostPhase, desc: Option<&ScriptSystemDescriptor>) {
         self.active_phase = phase;
-        self.active_determinism = desc
-            .map(|d| d.determinism)
-            .unwrap_or(DeterminismClass::Nondeterministic);
+        self.active_determinism = desc.map(|d| d.determinism).unwrap_or(DeterminismClass::Nondeterministic);
         self.access = match desc {
             Some(d) => ScriptAccessPolicy::from_descriptor(d),
             None => ScriptAccessPolicy::Unrestricted,
@@ -397,10 +379,7 @@ impl SparkEngine {
     }
 
     /// 登记脚本 System 描述符（同 `mod_id`+`name` 覆盖），并校验声明契约。
-    pub fn register_script_system(
-        &mut self,
-        desc: ScriptSystemDescriptor,
-    ) -> Result<(), EngineError> {
+    pub fn register_script_system(&mut self, desc: ScriptSystemDescriptor) -> Result<(), EngineError> {
         self.script_systems.register_checked(desc)?;
         Ok(())
     }
@@ -462,17 +441,10 @@ impl SparkEngine {
         self.load_manifest_at(manifest, dir)
     }
 
-    fn load_manifest_at(
-        &mut self,
-        manifest: ModManifest,
-        root: PathBuf,
-    ) -> Result<(), EngineError> {
+    fn load_manifest_at(&mut self, manifest: ModManifest, root: PathBuf) -> Result<(), EngineError> {
         for dep in &manifest.dependencies {
             if !self.mods.contains_key(dep) {
-                return Err(EngineError::MissingDep {
-                    mod_id: manifest.id.clone(),
-                    dep: dep.clone(),
-                });
+                return Err(EngineError::MissingDep { mod_id: manifest.id.clone(), dep: dep.clone() });
             }
         }
 
@@ -483,84 +455,46 @@ impl SparkEngine {
             let host_schema = self.build_host_schema();
             self.shared.borrow_mut().host_schema = host_schema.clone();
             let image = load_mod_image(&manifest, &root, &host_schema)?;
-            let mut script_domain = ScriptDomain::from_image(
-                manifest.id.as_str(),
-                &image,
-                &host_schema,
-                ScriptBudget::default(),
-            )?;
-            install_builtins(
-                &mut script_domain.runtime.vm,
-                &self.shared,
-                &manifest.id,
-                &vfs,
-                &script_domain.command_buffer,
-            );
+            let mut script_domain = ScriptDomain::from_image(manifest.id.as_str(), &image, &host_schema, ScriptBudget::default())?;
+            install_builtins(&mut script_domain.runtime.vm, &self.shared, &manifest.id, &vfs, &script_domain.command_buffer);
             self.plugins.install_all(&mut script_domain.runtime.vm);
             let mut hooks = StdHost;
             // 装载只跑 `on_load`（顶层块已在封目标时提升为 `on_load`）。
-            self.shared
-                .borrow_mut()
-                .begin_script_call(HostPhase::OnLoad, None);
+            self.shared.borrow_mut().begin_script_call(HostPhase::OnLoad, None);
             let load_result = script_domain.call_lifecycle("on_load", &[], &mut hooks);
             self.shared.borrow_mut().end_script_call();
             let _ = load_result?;
-            self.script_systems.register_lifecycle_exports(
-                manifest.id.as_str(),
-                &script_domain.lifecycle_exports,
-            );
+            self.script_systems.register_lifecycle_exports(manifest.id.as_str(), &script_domain.lifecycle_exports);
             domain = Some(script_domain);
         }
 
         let id = manifest.id.clone();
-        self.mods.insert(
-            id.clone(),
-            LoadedMod {
-                manifest,
-                root,
-                vfs,
-                domain,
-                enabled: true,
-            },
-        );
+        self.mods.insert(id.clone(), LoadedMod { manifest, root, vfs, domain, enabled: true });
         tracing::info!(event = "spark.engine.mod_loaded", mod_id = %id);
         Ok(())
     }
 
     /// 触发命名钩子：调用各模组已注册的脚本函数。
-    pub fn fire_hook(
-        &mut self,
-        hook: &str,
-        args: &[Value],
-        host: &mut dyn HostHooks,
-    ) -> Result<(), EngineError> {
+    pub fn fire_hook(&mut self, hook: &str, args: &[Value], host: &mut dyn HostHooks) -> Result<(), EngineError> {
         let refs: Vec<HookRef> = self.shared.borrow().hooks.list(hook).to_vec();
         for href in refs {
-            if !self
-                .mods
-                .get(&href.mod_id)
-                .map(|m| m.enabled)
-                .unwrap_or(false)
-            {
+            if !self.mods.get(&href.mod_id).map(|m| m.enabled).unwrap_or(false) {
                 continue;
             }
-            let Some(m) = self.mods.get_mut(&href.mod_id) else {
+            let Some(m) = self.mods.get_mut(&href.mod_id)
+            else {
                 continue;
             };
-            let Some(domain) = m.domain.as_mut() else {
+            let Some(domain) = m.domain.as_mut()
+            else {
                 continue;
             };
-            domain
-                .call(&href.function, args, host)
-                .map_err(|err| match err {
-                    EngineError::Script(source) => EngineError::HookFailed {
-                        hook: hook.to_string(),
-                        mod_id: href.mod_id.clone(),
-                        function: href.function.clone(),
-                        source,
-                    },
-                    other => other,
-                })?;
+            domain.call(&href.function, args, host).map_err(|err| match err {
+                EngineError::Script(source) => {
+                    EngineError::HookFailed { hook: hook.to_string(), mod_id: href.mod_id.clone(), function: href.function.clone(), source }
+                }
+                other => other,
+            })?;
         }
         Ok(())
     }
@@ -573,10 +507,7 @@ impl SparkEngine {
     /// 热重载：重新编译入口并保留已启用状态。
     pub fn reload_mod(&mut self, id: &str) -> Result<(), EngineError> {
         let (manifest, root, enabled) = {
-            let m = self
-                .mods
-                .get(id)
-                .ok_or_else(|| EngineError::ModNotFound { id: id.into() })?;
+            let m = self.mods.get(id).ok_or_else(|| EngineError::ModNotFound { id: id.into() })?;
             (m.manifest.clone(), m.root.clone(), m.enabled)
         };
         self.shared.borrow_mut().hooks.remove_mod(id);
@@ -590,21 +521,13 @@ impl SparkEngine {
     }
 
     pub fn set_enabled(&mut self, id: &str, enabled: bool) -> Result<(), EngineError> {
-        let m = self
-            .mods
-            .get_mut(id)
-            .ok_or_else(|| EngineError::ModNotFound { id: id.into() })?;
+        let m = self.mods.get_mut(id).ok_or_else(|| EngineError::ModNotFound { id: id.into() })?;
         m.enabled = enabled;
         Ok(())
     }
 
     pub fn resolve_asset(&self, mod_id: &str, rel: &str) -> Result<PathBuf, EngineError> {
-        let m = self
-            .mods
-            .get(mod_id)
-            .ok_or_else(|| EngineError::ModNotFound {
-                id: mod_id.into(),
-            })?;
+        let m = self.mods.get(mod_id).ok_or_else(|| EngineError::ModNotFound { id: mod_id.into() })?;
         m.vfs.resolve(rel).map_err(EngineError::from)
     }
 
@@ -623,10 +546,7 @@ impl SparkEngine {
     }
 
     /// 取出各领域命令并提交到 ECS [`spark_ecs::World`]。
-    pub fn apply_script_commands_to_world(
-        &mut self,
-        world: &mut spark_ecs::World,
-    ) -> Result<CommandApplyReport, EngineError> {
+    pub fn apply_script_commands_to_world(&mut self, world: &mut spark_ecs::World) -> Result<CommandApplyReport, EngineError> {
         let batches = self.drain_script_commands();
         let mut report = CommandApplyReport::default();
         for (_mod_id, cmds) in batches {
@@ -644,42 +564,26 @@ impl SparkEngine {
     }
 
     /// 向指定模组领域入队事件（不立即派发）。
-    pub fn enqueue_script_event(
-        &mut self,
-        mod_id: &str,
-        name: impl Into<std::sync::Arc<str>>,
-        args: Vec<Value>,
-    ) -> Result<(), EngineError> {
-        let m = self
-            .mods
-            .get_mut(mod_id)
-            .ok_or_else(|| EngineError::ModNotFound {
-                id: mod_id.into(),
-            })?;
-        let domain = m
-            .domain
-            .as_mut()
-            .ok_or_else(|| EngineError::ModNotFound {
-                id: mod_id.into(),
-            })?;
+    pub fn enqueue_script_event(&mut self, mod_id: &str, name: impl Into<std::sync::Arc<str>>, args: Vec<Value>) -> Result<(), EngineError> {
+        let m = self.mods.get_mut(mod_id).ok_or_else(|| EngineError::ModNotFound { id: mod_id.into() })?;
+        let domain = m.domain.as_mut().ok_or_else(|| EngineError::ModNotFound { id: mod_id.into() })?;
         domain.enqueue_event(name, args);
         Ok(())
     }
 
     /// 派发所有已启用领域的事件 inbox。
-    pub fn dispatch_script_events(
-        &mut self,
-        host: &mut dyn HostHooks,
-    ) -> Result<(), EngineError> {
+    pub fn dispatch_script_events(&mut self, host: &mut dyn HostHooks) -> Result<(), EngineError> {
         let ids: Vec<String> = self.mods.keys().cloned().collect();
         for id in ids {
-            let Some(m) = self.mods.get_mut(&id) else {
+            let Some(m) = self.mods.get_mut(&id)
+            else {
                 continue;
             };
             if !m.enabled {
                 continue;
             }
-            let Some(domain) = m.domain.as_mut() else {
+            let Some(domain) = m.domain.as_mut()
+            else {
                 continue;
             };
             domain.dispatch_events(host)?;
@@ -691,16 +595,8 @@ impl SparkEngine {
     ///
     /// `fixed` 为 true 时优先调用 `fixed_update`，否则调用 `update`。
     /// 命令缓冲仅收集返回，由宿主在同步点提交到 ECS（本层不拥有 `World`）。
-    pub fn tick_scripts(
-        &mut self,
-        fixed: bool,
-        host: &mut dyn HostHooks,
-    ) -> Result<Vec<(String, Vec<ScriptCommand>)>, EngineError> {
-        let phase = if fixed {
-            HostPhase::FixedUpdate
-        } else {
-            HostPhase::Update
-        };
+    pub fn tick_scripts(&mut self, fixed: bool, host: &mut dyn HostHooks) -> Result<Vec<(String, Vec<ScriptCommand>)>, EngineError> {
+        let phase = if fixed { HostPhase::FixedUpdate } else { HostPhase::Update };
         self.run_script_phase(phase, host)?;
         self.dispatch_script_events(host)?;
         Ok(self.drain_script_commands())
@@ -711,47 +607,31 @@ impl SparkEngine {
     /// 调度前按 `before`/`after` 拓扑排序，并检查组件访问声明冲突。
     /// 每个描述符调用其 `entry` 导出；调用后不自动提交命令（由宿主调用
     /// [`Self::apply_script_commands_to_world`]）。
-    pub fn run_script_phase(
-        &mut self,
-        phase: HostPhase,
-        host: &mut dyn HostHooks,
-    ) -> Result<(), EngineError> {
+    pub fn run_script_phase(&mut self, phase: HostPhase, host: &mut dyn HostHooks) -> Result<(), EngineError> {
         let jobs: Vec<(String, String, Option<ScriptSystemDescriptor>)> = self
             .script_systems
             .ordered_for_phase(phase)?
             .into_iter()
-            .map(|s| {
-                (
-                    s.mod_id.to_string(),
-                    s.entry.to_string(),
-                    Some(s.clone()),
-                )
-            })
+            .map(|s| (s.mod_id.to_string(), s.entry.to_string(), Some(s.clone())))
             .collect();
         for (mod_id, entry, desc) in jobs {
-            let Some(m) = self.mods.get_mut(&mod_id) else {
+            let Some(m) = self.mods.get_mut(&mod_id)
+            else {
                 continue;
             };
             if !m.enabled {
                 continue;
             }
-            let Some(domain) = m.domain.as_mut() else {
+            let Some(domain) = m.domain.as_mut()
+            else {
                 continue;
             };
             if !domain.enabled {
                 continue;
             }
-            let has_entry = domain
-                .runtime
-                .vm
-                .module
-                .functions
-                .iter()
-                .any(|f| f.name == entry);
+            let has_entry = domain.runtime.vm.module.functions.iter().any(|f| f.name == entry);
             if has_entry {
-                self.shared
-                    .borrow_mut()
-                    .begin_script_call(phase, desc.as_ref());
+                self.shared.borrow_mut().begin_script_call(phase, desc.as_ref());
                 let call_result = domain.call_in_phase(&entry, &[], phase, host);
                 self.shared.borrow_mut().end_script_call();
                 let _ = call_result?;
@@ -780,10 +660,7 @@ impl SparkEngine {
         let mut schema = crate::api::engine_host_schema();
         for name in self.plugins.native_names() {
             let qualified = format!("plugin.{name}");
-            let known = schema
-                .functions
-                .iter()
-                .any(|f| f.id.qualified_name() == qualified);
+            let known = schema.functions.iter().any(|f| f.id.qualified_name() == qualified);
             if !known {
                 schema.insert(HostFunction::new(HostFunctionId::new("plugin", name, 1)));
             }
@@ -793,23 +670,14 @@ impl SparkEngine {
 }
 
 /// 装载模组脚本映像：显式 `.spkx` → 指纹磁盘缓存 → 源码编译（并回写缓存）。
-fn load_mod_image(
-    manifest: &ModManifest,
-    root: &Path,
-    host_schema: &HostSchema,
-) -> Result<ExecutableImage, EngineError> {
+fn load_mod_image(manifest: &ModManifest, root: &Path, host_schema: &HostSchema) -> Result<ExecutableImage, EngineError> {
     if let Some(artifact) = &manifest.artifact {
         let path = root.join(artifact);
         return load_spkx_checked(&path, host_schema);
     }
-    let entry = manifest.entry.as_deref().ok_or_else(|| EngineError::Io {
-        path: root.display().to_string(),
-        kind: "missing_entry".into(),
-    })?;
+    let entry = manifest.entry.as_deref().ok_or_else(|| EngineError::Io { path: root.display().to_string(), kind: "missing_entry".into() })?;
     let entry_path = root.join(entry);
-    let source = std::fs::read_to_string(&entry_path).map_err(|e| {
-        EngineError::from_io(entry_path.display().to_string(), e)
-    })?;
+    let source = std::fs::read_to_string(&entry_path).map_err(|e| EngineError::from_io(entry_path.display().to_string(), e))?;
     let lang = resolve_language(manifest.language.as_deref(), entry)?;
     let request = CompilationRequest::for_mod(
         PackageId::new(manifest.id.as_str(), manifest.version.as_str()),
@@ -839,16 +707,15 @@ fn load_mod_image(
         );
     }
     // 编译与装载必须共用同一份 schema（哈希校验）。
-    let package = ScriptCompiler::new()
-        .compile(&request)
-        .map_err(EngineError::Script)?;
+    let package = ScriptCompiler::new().compile(&request).map_err(EngineError::Script)?;
     if let Err(e) = std::fs::create_dir_all(&cache_dir) {
         tracing::warn!(
             event = "spark.engine.spkx_cache_mkdir_failed",
             path = %cache_dir.display(),
             error = %e
         );
-    } else if let Err(e) = package.image.write_spkx_file(&cache_path) {
+    }
+    else if let Err(e) = package.image.write_spkx_file(&cache_path) {
         tracing::warn!(
             event = "spark.engine.spkx_cache_write_failed",
             path = %cache_path.display(),
@@ -858,17 +725,10 @@ fn load_mod_image(
     Ok(package.image)
 }
 
-fn load_spkx_checked(
-    path: &Path,
-    host_schema: &HostSchema,
-) -> Result<ExecutableImage, EngineError> {
-    let image = ExecutableImage::read_spkx_file(path).map_err(|e| EngineError::Io {
-        path: path.display().to_string(),
-        kind: e.code().into(),
-    })?;
-    image
-        .check_host_schema(host_schema)
-        .map_err(|e| EngineError::Script(ScriptError::compile_reason(e.code())))?;
+fn load_spkx_checked(path: &Path, host_schema: &HostSchema) -> Result<ExecutableImage, EngineError> {
+    let image =
+        ExecutableImage::read_spkx_file(path).map_err(|e| EngineError::Io { path: path.display().to_string(), kind: e.code().into() })?;
+    image.check_host_schema(host_schema).map_err(|e| EngineError::Script(ScriptError::compile_reason(e.code())))?;
     Ok(image)
 }
 
@@ -877,9 +737,7 @@ fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
     if candidate.join("mod.von").is_file() {
         return Ok(candidate);
     }
-    let rd = std::fs::read_dir(root).map_err(|e| {
-        EngineError::from_io(root.display().to_string(), e)
-    })?;
+    let rd = std::fs::read_dir(root).map_err(|e| EngineError::from_io(root.display().to_string(), e))?;
     for ent in rd.flatten() {
         let p = ent.path();
         if !p.is_dir() {
@@ -904,26 +762,16 @@ fn resolve_language(explicit: Option<&str>, entry: &str) -> Result<ScriptLanguag
             "lua" => Ok(ScriptLanguage::Lua),
             "ruby" | "rgss" => Ok(ScriptLanguage::Ruby),
             "valkyrie" | "vk" | "v" => Ok(ScriptLanguage::Valkyrie),
-            other => Err(EngineError::UnknownLanguage {
-                token: other.into(),
-            }),
+            other => Err(EngineError::UnknownLanguage { token: other.into() }),
         };
     }
-    let ext = Path::new(entry)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
+    let ext = Path::new(entry).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     match ext.as_str() {
         "lua" => Ok(ScriptLanguage::Lua),
         "rb" | "rgss" => Ok(ScriptLanguage::Ruby),
         "vk" | "valkyrie" | "vky" => Ok(ScriptLanguage::Valkyrie),
-        "" => Err(EngineError::UnknownLanguage {
-            token: "missing".into(),
-        }),
-        other => Err(EngineError::UnknownLanguage {
-            token: format!("ext:{other}"),
-        }),
+        "" => Err(EngineError::UnknownLanguage { token: "missing".into() }),
+        other => Err(EngineError::UnknownLanguage { token: format!("ext:{other}") }),
     }
 }
 
@@ -936,18 +784,10 @@ mod tests {
         let eng = SparkEngine::new(".");
         {
             let mut s = eng.shared.borrow_mut();
-            s.registry
-                .set("meta", "version", RegValue::Number(1.0));
+            s.registry.set("meta", "version", RegValue::Number(1.0));
             s.hooks.register("init", "demo", "on_init");
         }
-        assert_eq!(
-            eng.shared
-                .borrow()
-                .registry
-                .get("meta", "version")
-                .and_then(|v| v.as_number()),
-            Some(1.0)
-        );
+        assert_eq!(eng.shared.borrow().registry.get("meta", "version").and_then(|v| v.as_number()), Some(1.0));
         assert_eq!(eng.shared.borrow().hooks.list("init").len(), 1);
     }
 
@@ -990,18 +830,9 @@ dependencies = ["core"]
                 &host,
             )
             .unwrap();
-        let domain = ScriptDomain::from_image(
-            "hand",
-            &package.image,
-            &host,
-            ScriptBudget::default(),
-        )
-        .unwrap();
+        let domain = ScriptDomain::from_image("hand", &package.image, &host, ScriptBudget::default()).unwrap();
         let mut eng = SparkEngine::new(".");
-        eng.shared
-            .borrow_mut()
-            .hooks
-            .register("init", "hand", "on_init");
+        eng.shared.borrow_mut().hooks.register("init", "hand", "on_init");
         eng.mods.insert(
             "hand".into(),
             LoadedMod {
@@ -1053,10 +884,7 @@ entry = "main.vk"
         let domain = m.domain.as_ref().unwrap();
         assert!(domain.enabled);
         assert!(domain.has_lifecycle("on_load"));
-        assert_eq!(
-            domain.runtime.vm.step_limit,
-            ScriptBudget::default().instruction_limit
-        );
+        assert_eq!(domain.runtime.vm.step_limit, ScriptBudget::default().instruction_limit);
     }
 
     #[test]
@@ -1089,12 +917,7 @@ entry = "main.vk"
         let spkx: Vec<_> = std::fs::read_dir(&cache_dir)
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path()
-                    .extension()
-                    .and_then(|x| x.to_str())
-                    == Some("spkx")
-            })
+            .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("spkx"))
             .collect();
         assert_eq!(spkx.len(), 1);
         let published = root.join("published.spkx");
@@ -1111,13 +934,7 @@ artifact = "published.spkx"
         let _ = std::fs::remove_file(root.join("main.vk"));
         let mut eng2 = SparkEngine::new(root.parent().unwrap());
         let id = eng2.load_mod_dir(&root).unwrap();
-        assert!(eng2
-            .get_mod(&id)
-            .unwrap()
-            .domain
-            .as_ref()
-            .unwrap()
-            .has_lifecycle("on_load"));
+        assert!(eng2.get_mod(&id).unwrap().domain.as_ref().unwrap().has_lifecycle("on_load"));
     }
 
     #[test]
@@ -1149,10 +966,7 @@ entry = "main.vk"
         let mut eng = SparkEngine::new(root.parent().unwrap());
         eng.load_mod_dir(&root).unwrap();
         assert!(eng.script_systems().len() >= 2);
-        assert!(eng
-            .script_systems()
-            .for_phase(spark_script::HostPhase::Update)
-            .any(|s| s.mod_id.as_ref() == "sys_demo"));
+        assert!(eng.script_systems().for_phase(spark_script::HostPhase::Update).any(|s| s.mod_id.as_ref() == "sys_demo"));
     }
 
     #[test]
@@ -1185,12 +999,7 @@ entry = "main.vk"
         let report = eng.apply_script_commands_to_world(&mut world).unwrap();
         assert_eq!(report.spawned.len(), 1);
         let e = report.spawned[0];
-        assert_eq!(
-            world
-                .get::<ScriptArchetypeTag>(e)
-                .map(|t| t.name.as_ref()),
-            Some("rock")
-        );
+        assert_eq!(world.get::<ScriptArchetypeTag>(e).map(|t| t.name.as_ref()), Some("rock"));
         assert_eq!(eng.shared.borrow().query.count("rock"), 1);
     }
 
@@ -1226,14 +1035,7 @@ entry = "main.vk"
         let mut world = spark_ecs::World::new();
         eng.apply_script_commands_to_world(&mut world).unwrap();
         let mut host = StdHost;
-        let v = eng
-            .get_mod_mut("query_demo")
-            .unwrap()
-            .domain
-            .as_mut()
-            .unwrap()
-            .call("update", &[], &mut host)
-            .unwrap();
+        let v = eng.get_mod_mut("query_demo").unwrap().domain.as_mut().unwrap().call("update", &[], &mut host).unwrap();
         assert_eq!(v.as_number(), Some(1.0));
         let bits = eng.shared.borrow().query.entity_at("rock", 0).unwrap();
         assert!(world.is_alive(spark_ecs::Entity::from_bits(bits)));
@@ -1270,9 +1072,7 @@ entry = "main.vk"
         eng.load_mod_dir(&root).unwrap();
         let mut world = spark_ecs::World::new();
         let mut hooks = StdHost;
-        let report = eng
-            .run_script_systems(HostPhase::Update, &mut world, &mut hooks)
-            .unwrap();
+        let report = eng.run_script_systems(HostPhase::Update, &mut world, &mut hooks).unwrap();
         assert_eq!(report.spawned.len(), 1);
         let view = ScriptQueryView::new(&world);
         assert_eq!(view.entities_with_archetype("npc").len(), 1);
@@ -1304,21 +1104,11 @@ entry = "main.vk"
         .unwrap();
         let mut eng = SparkEngine::new(root.parent().unwrap());
         eng.load_mod_dir(&root).unwrap();
-        eng.script_systems_mut().register(ScriptSystemDescriptor::new(
-            "phase_deny",
-            "draw",
-            "render_prepare",
-            HostPhase::RenderPrepare,
-        ));
+        eng.script_systems_mut().register(ScriptSystemDescriptor::new("phase_deny", "draw", "render_prepare", HostPhase::RenderPrepare));
         let mut world = spark_ecs::World::new();
         let mut hooks = StdHost;
-        let err = eng
-            .run_script_systems(HostPhase::RenderPrepare, &mut world, &mut hooks)
-            .unwrap_err();
-        assert!(
-            err.code().contains("script") || format!("{err:?}").contains("HostDenied"),
-            "{err:?}"
-        );
+        let err = eng.run_script_systems(HostPhase::RenderPrepare, &mut world, &mut hooks).unwrap_err();
+        assert!(err.code().contains("script") || format!("{err:?}").contains("HostDenied"), "{err:?}");
     }
 
     #[test]
@@ -1352,21 +1142,13 @@ entry = "main.vk"
         let mut eng = SparkEngine::new(root.parent().unwrap());
         eng.load_mod_dir(&root).unwrap();
         // 覆盖默认空访问生命周期：显式 Declared 且无写集。
-        eng.script_systems_mut().register(
-            ScriptSystemDescriptor::new("access_deny", "update", "update", HostPhase::Update)
-                .read("Transform"),
-        );
+        eng.script_systems_mut().register(ScriptSystemDescriptor::new("access_deny", "update", "update", HostPhase::Update).read("Transform"));
         let mut world = spark_ecs::World::new();
         eng.apply_script_commands_to_world(&mut world).unwrap();
         let mut hooks = StdHost;
-        let err = eng
-            .run_script_systems(HostPhase::Update, &mut world, &mut hooks)
-            .unwrap_err();
+        let err = eng.run_script_systems(HostPhase::Update, &mut world, &mut hooks).unwrap_err();
         let msg = format!("{err:?}");
-        assert!(
-            msg.contains("host_access_denied") || msg.contains("HostDenied") || msg.contains("script"),
-            "{msg}"
-        );
+        assert!(msg.contains("host_access_denied") || msg.contains("HostDenied") || msg.contains("script"), "{msg}");
     }
 
     #[test]
@@ -1395,22 +1177,12 @@ entry = "main.vk"
         let mut eng = SparkEngine::new(root.parent().unwrap());
         eng.load_mod_dir(&root).unwrap();
         // 空访问 Declared：禁止 query_*
-        eng.script_systems_mut().register(ScriptSystemDescriptor::new(
-            "query_deny",
-            "update",
-            "update",
-            HostPhase::Update,
-        ));
+        eng.script_systems_mut().register(ScriptSystemDescriptor::new("query_deny", "update", "update", HostPhase::Update));
         let mut world = spark_ecs::World::new();
         let mut hooks = StdHost;
-        let err = eng
-            .run_script_systems(HostPhase::Update, &mut world, &mut hooks)
-            .unwrap_err();
+        let err = eng.run_script_systems(HostPhase::Update, &mut world, &mut hooks).unwrap_err();
         let msg = format!("{err:?}");
-        assert!(
-            msg.contains("read_world") || msg.contains("HostDenied") || msg.contains("script"),
-            "{msg}"
-        );
+        assert!(msg.contains("read_world") || msg.contains("HostDenied") || msg.contains("script"), "{msg}");
     }
 
     #[test]
@@ -1443,23 +1215,14 @@ entry = "main.vk"
         .unwrap();
         let mut eng = SparkEngine::new(root.parent().unwrap());
         eng.load_mod_dir(&root).unwrap();
-        let desc = ScriptSystemDescriptor::new(
-            "query_filter",
-            "update",
-            "update",
-            HostPhase::Update,
-        )
-        .read("Transform")
-        .query_archetype("rock");
+        let desc = ScriptSystemDescriptor::new("query_filter", "update", "update", HostPhase::Update).read("Transform").query_archetype("rock");
         eng.script_systems_mut().register(desc.clone());
         let mut world = spark_ecs::World::new();
         eng.apply_script_commands_to_world(&mut world).unwrap();
         assert_eq!(eng.shared.borrow().query_base.count("rock"), 1);
         assert_eq!(eng.shared.borrow().query_base.count("tree"), 1);
 
-        eng.shared
-            .borrow_mut()
-            .begin_script_call(HostPhase::Update, Some(&desc));
+        eng.shared.borrow_mut().begin_script_call(HostPhase::Update, Some(&desc));
         assert_eq!(eng.shared.borrow().query.count("rock"), 1);
         assert_eq!(eng.shared.borrow().query.count("tree"), 0);
         let mut hooks = StdHost;
@@ -1486,16 +1249,8 @@ entry = "main.vk"
             "#;
         let host = HostSchema::new(1);
         let mut compiler = ScriptCompiler::new();
-        let package = compiler
-            .compile_source(ScriptLanguage::Valkyrie, source, &host)
-            .unwrap();
-        let domain = ScriptDomain::from_image(
-            "tick.mod",
-            &package.image,
-            &host,
-            ScriptBudget::default(),
-        )
-        .unwrap();
+        let package = compiler.compile_source(ScriptLanguage::Valkyrie, source, &host).unwrap();
+        let domain = ScriptDomain::from_image("tick.mod", &package.image, &host, ScriptBudget::default()).unwrap();
         domain.command_buffer.borrow_mut().spawn("marker");
         let mut eng = SparkEngine::new(".");
         eng.mods.insert(

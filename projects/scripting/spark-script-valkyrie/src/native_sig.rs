@@ -34,11 +34,7 @@ pub struct NativeParam {
 
 impl NativeParam {
     pub fn new(name: impl Into<Arc<str>>, ty: impl Into<TypeRef>) -> Self {
-        Self {
-            name: name.into(),
-            ty: ty.into(),
-            docs: None,
-        }
+        Self { name: name.into(), ty: ty.into(), docs: None }
     }
 
     pub fn with_docs(mut self, docs: impl Into<Arc<str>>) -> Self {

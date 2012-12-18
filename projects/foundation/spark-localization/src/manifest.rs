@@ -3,11 +3,9 @@
 //! 作者清单使用 Oak VON；JSON 仅作交换格式。清单不得写死本机路径；
 //! 资产一律经 `spark-asset` 逻辑路径解析。
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::locale::LocaleId;
-use crate::message::NamespaceId;
+use crate::{locale::LocaleId, message::NamespaceId};
 
 /// 单个 Locale 的安装与回退声明。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,11 +59,7 @@ impl LocalizationManifest {
     }
 
     pub fn bundled_locales(&self) -> Vec<LocaleId> {
-        self.locales
-            .iter()
-            .filter(|entry| entry.bundled)
-            .map(|entry| entry.locale.clone())
-            .collect()
+        self.locales.iter().filter(|entry| entry.bundled).map(|entry| entry.locale.clone()).collect()
     }
 }
 
@@ -76,12 +70,7 @@ mod tests {
     #[test]
     fn bundled_filter() {
         let mut manifest = LocalizationManifest::new(LocaleId::parse("en").unwrap());
-        manifest.locales.push(LocaleEntry {
-            locale: LocaleId::parse("en").unwrap(),
-            fallback: vec![],
-            bundled: true,
-            font_hint: None,
-        });
+        manifest.locales.push(LocaleEntry { locale: LocaleId::parse("en").unwrap(), fallback: vec![], bundled: true, font_hint: None });
         manifest.locales.push(LocaleEntry {
             locale: LocaleId::parse("ja-JP").unwrap(),
             fallback: vec![],

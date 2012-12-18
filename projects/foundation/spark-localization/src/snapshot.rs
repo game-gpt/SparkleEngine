@@ -2,13 +2,15 @@
 
 use std::sync::Arc;
 
-use crate::bundle::LocalizationBundle;
-use crate::diagnostic::DiagnosticFlags;
-use crate::document::{MessageDefinition, MessageName};
-use crate::eval::evaluate_compiled;
-use crate::locale::{LocaleId, TextDirection, build_fallback_chain};
-use crate::message::{MessageArgs, MessageId, MessageRef, NamespaceId};
-use crate::text::LocalizedText;
+use crate::{
+    bundle::LocalizationBundle,
+    diagnostic::DiagnosticFlags,
+    document::{MessageDefinition, MessageName},
+    eval::evaluate_compiled,
+    locale::{LocaleId, TextDirection, build_fallback_chain},
+    message::{MessageArgs, MessageId, MessageRef, NamespaceId},
+    text::LocalizedText,
+};
 
 /// Locale 切换后由 `spark-event` 传播的事件载荷。
 ///
@@ -32,19 +34,8 @@ pub struct LocaleSnapshot {
 
 impl LocaleSnapshot {
     /// 构造空快照（仅协商结果，无消息）。
-    pub fn empty(
-        locale: LocaleId,
-        product_default: &LocaleId,
-        available: &[LocaleId],
-        generation: u64,
-    ) -> Self {
-        Self::from_bundle(
-            locale,
-            product_default,
-            available,
-            generation,
-            LocalizationBundle::new(),
-        )
+    pub fn empty(locale: LocaleId, product_default: &LocaleId, available: &[LocaleId], generation: u64) -> Self {
+        Self::from_bundle(locale, product_default, available, generation, LocalizationBundle::new())
     }
 
     /// 从已编译语言包构造快照。
@@ -57,13 +48,7 @@ impl LocaleSnapshot {
     ) -> Self {
         let direction = locale.direction();
         let fallback_chain = build_fallback_chain(&locale, product_default, available);
-        Self {
-            locale,
-            fallback_chain,
-            direction,
-            generation,
-            bundle: Arc::new(bundle),
-        }
+        Self { locale, fallback_chain, direction, generation, bundle: Arc::new(bundle) }
     }
 
     /// 测试用：从扁平字符串表构造（内部编译为 bundle）。
@@ -78,7 +63,8 @@ impl LocaleSnapshot {
     ) -> Self {
         let mut bundle = LocalizationBundle::new();
         for (namespace, message, locale_tag, pattern) in entries {
-            let Ok(entry_locale) = LocaleId::parse(&locale_tag) else {
+            let Ok(entry_locale) = LocaleId::parse(&locale_tag)
+            else {
                 continue;
             };
             bundle.insert(
@@ -97,12 +83,9 @@ impl LocaleSnapshot {
 
     /// 查询并格式化消息。
     pub fn format(&self, message: &MessageRef, args: &MessageArgs) -> LocalizedText {
-        let Some(name) = message_name(message) else {
-            return LocalizedText::missing_placeholder(
-                &message.to_string(),
-                self.locale.clone(),
-                self.generation,
-            );
+        let Some(name) = message_name(message)
+        else {
+            return LocalizedText::missing_placeholder(&message.to_string(), self.locale.clone(), self.generation);
         };
 
         let ns = NamespaceId::new(message.namespace.as_str());
@@ -122,21 +105,15 @@ impl LocaleSnapshot {
             }
         }
 
-        let Some(compiled) = compiled else {
-            let mut text =
-                LocalizedText::missing_placeholder(name, self.locale.clone(), self.generation);
+        let Some(compiled) = compiled
+        else {
+            let mut text = LocalizedText::missing_placeholder(name, self.locale.clone(), self.generation);
             text.diagnostics = DiagnosticFlags::MISSING;
             return text;
         };
 
         let rendered = evaluate_compiled(compiled, args, &mut diagnostics);
-        LocalizedText {
-            text: rendered,
-            resolved_locale,
-            direction: self.direction,
-            generation: self.generation,
-            diagnostics,
-        }
+        LocalizedText { text: rendered, resolved_locale, direction: self.direction, generation: self.generation, diagnostics }
     }
 }
 
@@ -155,9 +132,7 @@ pub struct Localizer {
 
 impl Localizer {
     pub fn new(snapshot: LocaleSnapshot) -> Self {
-        Self {
-            snapshot: Arc::new(snapshot),
-        }
+        Self { snapshot: Arc::new(snapshot) }
     }
 
     pub fn snapshot(&self) -> Arc<LocaleSnapshot> {
@@ -180,11 +155,7 @@ impl Localizer {
         let current = next.locale.clone();
         let generation = next.generation;
         self.snapshot = Arc::new(next);
-        LocaleChanged {
-            previous,
-            current,
-            generation,
-        }
+        LocaleChanged { previous, current, generation }
     }
 
     pub fn format(&self, message: &MessageRef, args: &MessageArgs) -> LocalizedText {
@@ -195,13 +166,13 @@ impl Localizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::{MessageDefinition, MessageNode, SelectKind};
-    use crate::locale::{LocaleId, LocaleRequest, negotiate};
-    use crate::message::{MessageArgs, MessageRef, MessageValue};
-    use crate::compile::compile_documents;
-    use crate::compile::CompileOptions;
-    use std::collections::BTreeMap;
-    use std::sync::Arc;
+    use crate::{
+        compile::{CompileOptions, compile_documents},
+        document::{MessageDefinition, MessageNode, SelectKind},
+        locale::{LocaleId, LocaleRequest, negotiate},
+        message::{MessageArgs, MessageRef, MessageValue},
+    };
+    use std::{collections::BTreeMap, sync::Arc};
 
     fn loc(tag: &str) -> LocaleId {
         LocaleId::parse(tag).unwrap()
@@ -217,21 +188,13 @@ mod tests {
             &loc("en"),
             &available,
             2,
-            [(
-                Arc::from("astracraft"),
-                Arc::from("menu.continue"),
-                Arc::from("zh-Hans-CN"),
-                Arc::from("继续游戏"),
-            )],
+            [(Arc::from("astracraft"), Arc::from("menu.continue"), Arc::from("zh-Hans-CN"), Arc::from("继续游戏"))],
         );
         let changed = localizer.commit(zh);
         assert_eq!(changed.previous.as_str(), "en");
         assert_eq!(changed.current.as_str(), "zh-Hans-CN");
         assert_eq!(changed.generation, 2);
-        let text = localizer.format(
-            &MessageRef::named("astracraft", "menu.continue"),
-            &MessageArgs::new(),
-        );
+        let text = localizer.format(&MessageRef::named("astracraft", "menu.continue"), &MessageArgs::new());
         assert_eq!(text.text.as_ref(), "继续游戏");
         assert_eq!(text.generation, 2);
     }
@@ -239,23 +202,14 @@ mod tests {
     #[test]
     fn format_uses_fallback_chain() {
         let available = [loc("en"), loc("zh-Hans")];
-        let resolved = negotiate(
-            &LocaleRequest::new(vec![loc("zh-Hans-CN")], vec![]),
-            &available,
-            &loc("en"),
-        );
+        let resolved = negotiate(&LocaleRequest::new(vec![loc("zh-Hans-CN")], vec![]), &available, &loc("en"));
         assert_eq!(resolved.as_str(), "zh-Hans");
         let snap = LocaleSnapshot::from_entries(
             resolved,
             &loc("en"),
             &available,
             1,
-            [(
-                Arc::from("spark"),
-                Arc::from("widget.ok"),
-                Arc::from("en"),
-                Arc::from("OK"),
-            )],
+            [(Arc::from("spark"), Arc::from("widget.ok"), Arc::from("en"), Arc::from("OK"))],
         );
         let text = snap.format(&MessageRef::named("spark", "widget.ok"), &MessageArgs::new());
         assert_eq!(text.text.as_ref(), "OK");
@@ -270,12 +224,7 @@ mod tests {
             &loc("en"),
             &available,
             1,
-            [(
-                Arc::from("game"),
-                Arc::from("welcome"),
-                Arc::from("en"),
-                Arc::from("Hello, {player_name}"),
-            )],
+            [(Arc::from("game"), Arc::from("welcome"), Arc::from("en"), Arc::from("Hello, {player_name}"))],
         );
         let mut args = MessageArgs::new();
         args.insert("player_name", MessageValue::String(Arc::from("Ada")));
@@ -289,35 +238,20 @@ mod tests {
         cases.insert(
             Arc::from("one"),
             vec![
-                MessageNode::Argument {
-                    name: Arc::from("count"),
-                    format: crate::document::ArgumentFormat::None,
-                },
+                MessageNode::Argument { name: Arc::from("count"), format: crate::document::ArgumentFormat::None },
                 MessageNode::Text(Arc::from(" item")),
             ],
         );
         cases.insert(
             Arc::from("other"),
             vec![
-                MessageNode::Argument {
-                    name: Arc::from("count"),
-                    format: crate::document::ArgumentFormat::None,
-                },
+                MessageNode::Argument { name: Arc::from("count"), format: crate::document::ArgumentFormat::None },
                 MessageNode::Text(Arc::from(" items")),
             ],
         );
         let mut doc = crate::document::LocalizationDocument::new(loc("en"), "game");
-        doc.insert(
-            "item_count",
-            MessageDefinition::Select {
-                argument: Arc::from("count"),
-                kind: SelectKind::Cardinal,
-                cases,
-            },
-        );
-        let bundle = compile_documents(&[doc], CompileOptions::default())
-            .unwrap()
-            .bundle;
+        doc.insert("item_count", MessageDefinition::Select { argument: Arc::from("count"), kind: SelectKind::Cardinal, cases });
+        let bundle = compile_documents(&[doc], CompileOptions::default()).unwrap().bundle;
         let snap = LocaleSnapshot::from_bundle(loc("en"), &loc("en"), &[loc("en")], 1, bundle);
         let mut args = MessageArgs::new();
         args.insert("count", MessageValue::Integer(2));

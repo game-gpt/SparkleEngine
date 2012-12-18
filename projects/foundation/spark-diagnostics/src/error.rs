@@ -1,11 +1,12 @@
 //! 结构化错误值。
 
-use std::fmt;
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
-use crate::args::ErrorArgs;
-use crate::code::{ErrorCode, codes};
-use crate::context::ErrorContext;
+use crate::{
+    args::ErrorArgs,
+    code::{ErrorCode, codes},
+    context::ErrorContext,
+};
 
 /// 因果：标准库错误对象（第三方 opaque 等）。
 pub type ErrorCause = Arc<dyn std::error::Error + Send + Sync>;
@@ -39,12 +40,7 @@ impl PartialEq for Error {
 
 impl Error {
     pub fn new(code: ErrorCode) -> Self {
-        Self {
-            code,
-            args: ErrorArgs::new(),
-            context: ErrorContext::new(),
-            cause: None,
-        }
+        Self { code, args: ErrorArgs::new(), context: ErrorContext::new(), cause: None }
     }
 
     pub fn with_args(mut self, args: ErrorArgs) -> Self {
@@ -72,18 +68,15 @@ impl Error {
     }
 
     pub fn invalid_argument(name: impl AsRef<str>) -> Self {
-        Self::new(codes::invalid_argument())
-            .arg("name", crate::ErrorArg::String(Arc::from(name.as_ref())))
+        Self::new(codes::invalid_argument()).arg("name", crate::ErrorArg::String(Arc::from(name.as_ref())))
     }
 
     pub fn invalid_state(detail: impl AsRef<str>) -> Self {
-        Self::new(codes::invalid_state())
-            .arg("detail", crate::ErrorArg::String(Arc::from(detail.as_ref())))
+        Self::new(codes::invalid_state()).arg("detail", crate::ErrorArg::String(Arc::from(detail.as_ref())))
     }
 
     pub fn internal(detail: impl AsRef<str>) -> Self {
-        Self::new(codes::internal_invariant())
-            .arg("detail", crate::ErrorArg::String(Arc::from(detail.as_ref())))
+        Self::new(codes::internal_invariant()).arg("detail", crate::ErrorArg::String(Arc::from(detail.as_ref())))
     }
 }
 
@@ -96,9 +89,7 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.cause
-            .as_ref()
-            .map(|c| c.as_ref() as &(dyn std::error::Error + 'static))
+        self.cause.as_ref().map(|c| c.as_ref() as &(dyn std::error::Error + 'static))
     }
 }
 

@@ -14,10 +14,7 @@ pub struct HookBus {
 
 impl HookBus {
     pub fn register(&mut self, hook: impl Into<String>, mod_id: impl Into<String>, function: impl Into<String>) {
-        self.map.entry(hook.into()).or_default().push(HookRef {
-            mod_id: mod_id.into(),
-            function: function.into(),
-        });
+        self.map.entry(hook.into()).or_default().push(HookRef { mod_id: mod_id.into(), function: function.into() });
     }
 
     pub fn list(&self, hook: &str) -> &[HookRef] {

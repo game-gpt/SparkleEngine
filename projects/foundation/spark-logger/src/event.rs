@@ -44,13 +44,7 @@ pub struct LogEvent {
 
 impl LogEvent {
     pub fn new(level: crate::Level, target: &'static str, event: impl Into<EventId>) -> Self {
-        Self {
-            level,
-            target,
-            event: event.into(),
-            fields: ErrorArgs::new(),
-            error: None,
-        }
+        Self { level, target, event: event.into(), fields: ErrorArgs::new(), error: None }
     }
 
     pub fn field(mut self, name: impl Into<Arc<str>>, value: ErrorArg) -> Self {
@@ -79,10 +73,7 @@ impl LogEvent {
                 ErrorArg::Integer(n) => line.push_str(&n.to_string()),
                 ErrorArg::Unsigned(n) => line.push_str(&n.to_string()),
                 ErrorArg::Float(n) => line.push_str(&n.to_string()),
-                ErrorArg::String(s)
-                | ErrorArg::AssetKey(s)
-                | ErrorArg::Path(s)
-                | ErrorArg::TypeName(s) => {
+                ErrorArg::String(s) | ErrorArg::AssetKey(s) | ErrorArg::Path(s) | ErrorArg::TypeName(s) => {
                     line.push_str(s);
                 }
                 ErrorArg::Opcode(op) => line.push_str(&format!("0x{op:02x}")),
@@ -108,8 +99,7 @@ mod tests {
 
     #[test]
     fn code_line_keeps_stable_event() {
-        let ev = LogEvent::new(Level::Error, "media", "spark.media.open_failed")
-            .field("path", ErrorArg::Path(Arc::from("clips/intro.bin")));
+        let ev = LogEvent::new(Level::Error, "media", "spark.media.open_failed").field("path", ErrorArg::Path(Arc::from("clips/intro.bin")));
         let line = ev.code_line();
         assert!(line.contains("event=spark.media.open_failed"));
         assert!(line.contains("path=clips/intro.bin"));

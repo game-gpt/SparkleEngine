@@ -16,15 +16,14 @@ pub use camera2d::Camera2d;
 pub use camera3d::Camera3d;
 pub use draw::{DrawLayer2d, DrawList, QuadCmd, TexQuadCmd, TextCmd};
 pub use draw3d::{
-    DrawList3d, FrameLights3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex, ShadowParams3d,
-    MAX_SHADOW_CASCADES,
-    SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, MAX_SKIN_JOINTS,
+    DrawList3d, FrameLights3d, MAX_SHADOW_CASCADES, MAX_SKIN_JOINTS, MeshCmd, MeshId, MeshResidentKey, MeshVertex, ShadowParams3d,
+    SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex,
 };
 pub use frustum::{CullParams, Frustum};
 pub use particles::{Particle2d, ParticlePool2d};
 pub use spark_geometry::{Aabb3, Mat4, Vec3};
 pub use spark_input::{ButtonState, Input, Key, MouseBtn};
-pub use texture::{alloc_texture_id, RgbaImage, TextureId};
+pub use texture::{RgbaImage, TextureId, alloc_texture_id};
 pub use texture_cache::TextureCache;
 
 /// 启动窗口配置（后端无关字段）。
@@ -38,12 +37,7 @@ pub struct WindowConfig {
 
 impl Default for WindowConfig {
     fn default() -> Self {
-        Self {
-            title: "Spark".into(),
-            width: 1280,
-            height: 720,
-            clear_color: [0.05, 0.06, 0.10, 1.0],
-        }
+        Self { title: "Spark".into(), width: 1280, height: 720, clear_color: [0.05, 0.06, 0.10, 1.0] }
     }
 }
 
@@ -98,17 +92,9 @@ mod tests {
 
     #[test]
     fn retain_visible_drops_far_mesh() {
-        let cam = Camera3d {
-            eye: Vec3::new(0.0, 0.0, 5.0),
-            yaw: 0.0,
-            pitch: 0.0,
-            fov_y_rad: 70f32.to_radians(),
-            near: 0.1,
-            far: 100.0,
-        };
+        let cam = Camera3d { eye: Vec3::new(0.0, 0.0, 5.0), yaw: 0.0, pitch: 0.0, fov_y_rad: 70f32.to_radians(), near: 0.1, far: 100.0 };
         let mut list = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), cam.view_proj(16.0 / 9.0));
-        let verts: Arc<[MeshVertex]> =
-            Arc::from(vec![MeshVertex::new(0.0, 0.0, 0.0, Color::rgb(1.0, 1.0, 1.0))]);
+        let verts: Arc<[MeshVertex]> = Arc::from(vec![MeshVertex::new(0.0, 0.0, 0.0, Color::rgb(1.0, 1.0, 1.0))]);
         list.mesh_culled(
             Mat4::translation(Vec3::new(0.0, 0.0, 0.0)),
             Arc::clone(&verts),
@@ -135,21 +121,10 @@ mod tests {
     #[test]
     fn skinned_mesh_truncates_palette() {
         let mut list = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), Mat4::IDENTITY);
-        let vert = SkinnedVertex::new(
-            [0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0],
-            Color::rgb(1.0, 1.0, 1.0),
-            [0, 0, 0, 0],
-            [1.0, 0.0, 0.0, 0.0],
-        );
+        let vert =
+            SkinnedVertex::new([0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0], Color::rgb(1.0, 1.0, 1.0), [0, 0, 0, 0], [1.0, 0.0, 0.0, 0.0]);
         let palette: Vec<Mat4> = (0..MAX_SKIN_JOINTS + 8).map(|_| Mat4::IDENTITY).collect();
-        list.skinned_mesh(
-            Mat4::IDENTITY,
-            Arc::from(vec![vert]),
-            Arc::from(palette),
-            None,
-        );
+        list.skinned_mesh(Mat4::IDENTITY, Arc::from(vec![vert]), Arc::from(palette), None);
         assert_eq!(list.skinned_meshes.len(), 1);
         assert_eq!(list.skinned_meshes[0].joint_palette.len(), MAX_SKIN_JOINTS);
     }

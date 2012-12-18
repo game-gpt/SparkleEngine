@@ -58,11 +58,7 @@ impl RenderSchedule2d {
         self
     }
 
-    pub fn add_fn(
-        &mut self,
-        name: &'static str,
-        f: impl FnMut(&mut World, &RenderFrame2d, &mut DrawList) + Send + 'static,
-    ) -> &mut Self {
+    pub fn add_fn(&mut self, name: &'static str, f: impl FnMut(&mut World, &RenderFrame2d, &mut DrawList) + Send + 'static) -> &mut Self {
         self.add_system(FnRender2d { name, f })
     }
 
@@ -100,11 +96,7 @@ mod tests {
             assert!((frame.screen_w - 32.0).abs() < 1e-5);
             draw.clear = Color::rgb(0.2, 0.0, 0.0);
         });
-        let frame = RenderFrame2d {
-            screen_w: 32.0,
-            screen_h: 16.0,
-            clear: Color::rgb(0.0, 0.0, 0.0),
-        };
+        let frame = RenderFrame2d { screen_w: 32.0, screen_h: 16.0, clear: Color::rgb(0.0, 0.0, 0.0) };
         let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
         schedule.draw(&mut world, &frame, &mut draw);
         assert!((draw.clear.r - 0.2).abs() < 1e-5);

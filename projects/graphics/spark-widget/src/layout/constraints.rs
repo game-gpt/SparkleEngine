@@ -29,12 +29,8 @@ impl Size2 {
 
     pub fn clamp(self, constraints: Constraints) -> Self {
         Self {
-            width: self
-                .width
-                .clamp(constraints.min.width, constraints.max.width),
-            height: self
-                .height
-                .clamp(constraints.min.height, constraints.max.height),
+            width: self.width.clamp(constraints.min.width, constraints.max.width),
+            height: self.height.clamp(constraints.min.height, constraints.max.height),
         }
     }
 }
@@ -47,29 +43,17 @@ pub struct Constraints {
 
 impl Default for Constraints {
     fn default() -> Self {
-        Self {
-            min: Size2::default(),
-            max: Size2 {
-                width: f32::INFINITY,
-                height: f32::INFINITY,
-            },
-        }
+        Self { min: Size2::default(), max: Size2 { width: f32::INFINITY, height: f32::INFINITY } }
     }
 }
 
 impl Constraints {
     pub fn tight(size: Size2) -> Self {
-        Self {
-            min: size,
-            max: size,
-        }
+        Self { min: size, max: size }
     }
 
     pub fn loose(max: Size2) -> Self {
-        Self {
-            min: Size2::default(),
-            max,
-        }
+        Self { min: Size2::default(), max }
     }
 
     pub fn with_max_width(mut self, width: f32) -> Self {
@@ -87,10 +71,7 @@ impl Constraints {
         let height = (self.max.height - insets.vertical()).max(0.0);
         let min_w = self.min.width.min(width);
         let min_h = self.min.height.min(height);
-        Self {
-            min: Size2::new(min_w, min_h),
-            max: Size2::new(width, height),
-        }
+        Self { min: Size2::new(min_w, min_h), max: Size2::new(width, height) }
     }
 }
 

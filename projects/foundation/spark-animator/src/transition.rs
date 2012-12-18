@@ -19,12 +19,7 @@ pub struct AnimatorTransition {
 
 impl AnimatorTransition {
     pub fn new(from: impl Into<String>, to: impl Into<String>, duration: f32) -> Self {
-        Self {
-            from: from.into(),
-            to: to.into(),
-            duration: duration.max(0.0),
-            conditions: Vec::new(),
-        }
+        Self { from: from.into(), to: to.into(), duration: duration.max(0.0), conditions: Vec::new() }
     }
 
     pub fn when(mut self, condition: AnimatorCondition) -> Self {

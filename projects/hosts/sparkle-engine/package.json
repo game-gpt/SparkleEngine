@@ -1,50 +1,50 @@
 {
-  "name": "@game-gpt/sparkle-engine",
-  "version": "0.1.0",
-  "description": "Sparkle Engine npm 入口：经 optionalDependencies 加载平台原生 .node；全项目唯一 CLI 为 spark",
-  "type": "commonjs",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "bin": {
-    "spark": "./bin/spark.js"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "files": [
-    "bin",
-    "dist",
-    "README.md"
-  ],
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "optionalDependencies": {
-    "@game-gpt/sparkle-engine-win32-x64": "workspace:*",
-    "@game-gpt/sparkle-engine-win32-arm64": "workspace:*",
-    "@game-gpt/sparkle-engine-darwin-x64": "workspace:*",
-    "@game-gpt/sparkle-engine-darwin-arm64": "workspace:*",
-    "@game-gpt/sparkle-engine-linux-x64": "workspace:*",
-    "@game-gpt/sparkle-engine-linux-arm64": "workspace:*",
-    "@game-gpt/sparkle-engine-unknown-wasm32": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.0",
-    "typescript": "^5.7.0"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "license": "Apache-2.0",
-  "keywords": [
-    "spark",
-    "sparkle",
-    "game-engine",
-    "napi",
-    "wasm"
-  ]
+    "name": "@game-gpt/sparkle-engine",
+    "version": "0.1.0",
+    "description": "Sparkle Engine npm 入口：经 optionalDependencies 加载平台原生 .node；全项目唯一 CLI 为 spark",
+    "type": "commonjs",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "bin": {
+        "spark": "./bin/spark.js"
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "files": [
+        "bin",
+        "dist",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit"
+    },
+    "optionalDependencies": {
+        "@game-gpt/sparkle-engine-win32-x64": "workspace:*",
+        "@game-gpt/sparkle-engine-win32-arm64": "workspace:*",
+        "@game-gpt/sparkle-engine-darwin-x64": "workspace:*",
+        "@game-gpt/sparkle-engine-darwin-arm64": "workspace:*",
+        "@game-gpt/sparkle-engine-linux-x64": "workspace:*",
+        "@game-gpt/sparkle-engine-linux-arm64": "workspace:*",
+        "@game-gpt/sparkle-engine-unknown-wasm32": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.0",
+        "typescript": "^5.7.0"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "license": "Apache-2.0",
+    "keywords": [
+        "spark",
+        "sparkle",
+        "game-engine",
+        "napi",
+        "wasm"
+    ]
 }

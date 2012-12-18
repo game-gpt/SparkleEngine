@@ -8,10 +8,12 @@
 
 use std::sync::Arc;
 
-use spark_vm::{verify_bytecode_with_host, BytecodeVerifyError, Module};
+use spark_vm::{BytecodeVerifyError, Module, verify_bytecode_with_host};
 
-use crate::host_schema::HostSchema;
-use crate::request::{LanguageProfile, PackageId};
+use crate::{
+    host_schema::HostSchema,
+    request::{LanguageProfile, PackageId},
+};
 
 /// 制品格式版本（与编译器版本独立）。
 pub const ARTIFACT_FORMAT_VERSION: u32 = 1;
@@ -33,31 +35,13 @@ pub struct SparkObject {
 
 impl SparkObject {
     /// 由前端字节码封成目标。入口函数名必须为 `on_load`。
-    pub fn from_module(
-        package: PackageId,
-        language: LanguageProfile,
-        host: &HostSchema,
-        module: Module,
-    ) -> Result<Self, LinkError> {
-        let entry = module
-            .functions
-            .get(module.entry)
-            .ok_or(LinkError::MissingEntryFunction)?;
+    pub fn from_module(package: PackageId, language: LanguageProfile, host: &HostSchema, module: Module) -> Result<Self, LinkError> {
+        let entry = module.functions.get(module.entry).ok_or(LinkError::MissingEntryFunction)?;
         if entry.name != "on_load" {
-            return Err(LinkError::EntryMustBeOnLoad {
-                name: Arc::from(entry.name.as_str()),
-            });
+            return Err(LinkError::EntryMustBeOnLoad { name: Arc::from(entry.name.as_str()) });
         }
-        let exports = module
-            .functions
-            .iter()
-            .map(|f| Arc::<str>::from(f.name.as_str()))
-            .collect();
-        let imports = module
-            .native_names
-            .iter()
-            .map(|n| Arc::<str>::from(n.as_str()))
-            .collect();
+        let exports = module.functions.iter().map(|f| Arc::<str>::from(f.name.as_str())).collect();
+        let imports = module.native_names.iter().map(|n| Arc::<str>::from(n.as_str())).collect();
         Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
             compiler_version: Arc::from(env!("CARGO_PKG_VERSION")),
@@ -91,35 +75,24 @@ impl LinkedProgram {
     /// 单目标链接：校验宿主导入、拒绝残留 `CallNative`、记录生命周期导出。
     pub fn link_single(object: SparkObject, host: &HostSchema) -> Result<Self, LinkError> {
         if object.host_abi_version != host.abi_version {
-            return Err(LinkError::AbiVersionMismatch {
-                object: object.host_abi_version,
-                host: host.abi_version,
-            });
+            return Err(LinkError::AbiVersionMismatch { object: object.host_abi_version, host: host.abi_version });
         }
         if object.host_schema_hash != host.content_hash() {
             return Err(LinkError::HostSchemaMismatch);
         }
         for import in &object.imports {
             if host.resolve_import(import).is_err() {
-                return Err(LinkError::UnresolvedHost {
-                    name: Arc::clone(import),
-                });
+                return Err(LinkError::UnresolvedHost { name: Arc::clone(import) });
             }
         }
-        let lifecycle_exports = object
-            .exports
-            .iter()
-            .filter(|n| is_lifecycle_export(n))
-            .cloned()
-            .collect();
+        let lifecycle_exports = object.exports.iter().filter(|n| is_lifecycle_export(n)).cloned().collect();
         let mut module = object.module;
         spark_vm::reject_residual_call_native(&module).map_err(|detail| {
             if detail.starts_with("residual_call_native") {
                 LinkError::ResidualCallNative
-            } else {
-                LinkError::HostBindFailed {
-                    detail: Arc::from(detail),
-                }
+            }
+            else {
+                LinkError::HostBindFailed { detail: Arc::from(detail) }
             }
         })?;
         module.native_names = host.qualified_names();
@@ -136,65 +109,44 @@ impl LinkedProgram {
     }
 
     /// 多目标链接：须显式指定入口包（不再默认 `objects[0]`）。
-    pub fn link_many(
-        objects: &[SparkObject],
-        host: &HostSchema,
-        entry_package: &PackageId,
-    ) -> Result<Self, LinkError> {
+    pub fn link_many(objects: &[SparkObject], host: &HostSchema, entry_package: &PackageId) -> Result<Self, LinkError> {
         if objects.is_empty() {
             return Err(LinkError::EmptyLinkSet);
         }
         let entry_index = objects
             .iter()
-            .position(|o| {
-                o.package.name == entry_package.name && o.package.version == entry_package.version
-            })
-            .ok_or_else(|| LinkError::MissingEntryPackage {
-                name: Arc::clone(&entry_package.name),
-            })?;
+            .position(|o| o.package.name == entry_package.name && o.package.version == entry_package.version)
+            .ok_or_else(|| LinkError::MissingEntryPackage { name: Arc::clone(&entry_package.name) })?;
         for object in objects {
             if object.host_abi_version != host.abi_version {
-                return Err(LinkError::AbiVersionMismatch {
-                    object: object.host_abi_version,
-                    host: host.abi_version,
-                });
+                return Err(LinkError::AbiVersionMismatch { object: object.host_abi_version, host: host.abi_version });
             }
             if object.host_schema_hash != host.content_hash() {
                 return Err(LinkError::HostSchemaMismatch);
             }
             for import in &object.imports {
                 if host.resolve_import(import).is_err() {
-                    return Err(LinkError::UnresolvedHost {
-                        name: Arc::clone(import),
-                    });
+                    return Err(LinkError::UnresolvedHost { name: Arc::clone(import) });
                 }
             }
         }
         let mut lifecycle_exports = Vec::new();
         for object in objects {
             for n in &object.exports {
-                if is_lifecycle_export(n)
-                    && !lifecycle_exports
-                        .iter()
-                        .any(|e: &Arc<str>| e.as_ref() == n.as_ref())
-                {
+                if is_lifecycle_export(n) && !lifecycle_exports.iter().any(|e: &Arc<str>| e.as_ref() == n.as_ref()) {
                     lifecycle_exports.push(Arc::clone(n));
                 }
             }
         }
         let modules: Vec<Module> = objects.iter().map(|o| o.module.clone()).collect();
-        let mut module = Module::link_with_entry(&modules, entry_index).map_err(|detail| {
-            LinkError::MergeFailed {
-                detail: Arc::from(detail),
-            }
-        })?;
+        let mut module =
+            Module::link_with_entry(&modules, entry_index).map_err(|detail| LinkError::MergeFailed { detail: Arc::from(detail) })?;
         spark_vm::reject_residual_call_native(&module).map_err(|detail| {
             if detail.starts_with("residual_call_native") {
                 LinkError::ResidualCallNative
-            } else {
-                LinkError::HostBindFailed {
-                    detail: Arc::from(detail),
-                }
+            }
+            else {
+                LinkError::HostBindFailed { detail: Arc::from(detail) }
             }
         })?;
         module.native_names = host.qualified_names();
@@ -327,10 +279,7 @@ impl ExecutableImage {
     /// 装载前再次确认运行期 schema 与编译期一致。
     pub fn check_host_schema(&self, host: &HostSchema) -> Result<(), LinkError> {
         if self.host_abi_version != host.abi_version {
-            return Err(LinkError::AbiVersionMismatch {
-                object: self.host_abi_version,
-                host: host.abi_version,
-            });
+            return Err(LinkError::AbiVersionMismatch { object: self.host_abi_version, host: host.abi_version });
         }
         if self.host_schema_hash != host.content_hash() {
             return Err(LinkError::HostSchemaMismatch);
@@ -358,16 +307,7 @@ impl ExecutableImage {
         lifecycle_exports: Vec<Arc<str>>,
         module: Module,
     ) -> Self {
-        Self {
-            format_version,
-            package,
-            language,
-            host_schema_hash,
-            host_abi_version,
-            host_slot_count,
-            lifecycle_exports,
-            module,
-        }
+        Self { format_version, package, language, host_schema_hash, host_abi_version, host_slot_count, lifecycle_exports, module }
     }
 }
 
@@ -382,20 +322,12 @@ mod tests {
         let mut f = FuncProto::new("on_load", 0);
         f.emit(Op::LoadNull);
         f.emit(Op::Return);
-        Module {
-            functions: vec![f],
-            entry: 0,
-            native_names: vec!["print".into()],
-        }
+        Module { functions: vec![f], entry: 0, native_names: vec!["print".into()] }
     }
 
     fn schema_with_print() -> HostSchema {
         let mut schema = HostSchema::new(1);
-        schema.insert(
-            HostFunction::new(HostFunctionId::new("host", "print", 1))
-                .param(NativeParam::new("msg", "String"))
-                .returns("Null"),
-        );
+        schema.insert(HostFunction::new(HostFunctionId::new("host", "print", 1)).param(NativeParam::new("msg", "String")).returns("Null"));
         schema
     }
 
@@ -443,11 +375,7 @@ mod tests {
             PackageId::anonymous(),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
-            Module {
-                functions: vec![f],
-                entry: 0,
-                native_names: vec!["print".into()],
-            },
+            Module { functions: vec![f], entry: 0, native_names: vec!["print".into()] },
         )
         .unwrap();
         let err = LinkedProgram::link_single(obj, &host).unwrap_err();
@@ -467,22 +395,12 @@ mod tests {
             PackageId::anonymous(),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
-            Module {
-                functions: vec![f],
-                entry: 0,
-                native_names: vec!["print".into()],
-            },
+            Module { functions: vec![f], entry: 0, native_names: vec!["print".into()] },
         )
         .unwrap();
         let linked = LinkedProgram::link_single(obj, &host).unwrap();
-        assert!(linked.module.functions[0]
-            .code
-            .iter()
-            .any(|&b| b == Op::CallHost as u8));
-        assert!(!linked.module.functions[0]
-            .code
-            .iter()
-            .any(|&b| b == Op::CallNative as u8));
+        assert!(linked.module.functions[0].code.iter().any(|&b| b == Op::CallHost as u8));
+        assert!(!linked.module.functions[0].code.iter().any(|&b| b == Op::CallNative as u8));
     }
 
     #[test]
@@ -526,18 +444,11 @@ mod tests {
             host_schema_hash: 0,
             host_abi_version: 1,
             host_slot_count: 1,
-            module: Module {
-                functions: vec![f],
-                entry: 0,
-                native_names: vec!["print".into()],
-            },
+            module: Module { functions: vec![f], entry: 0, native_names: vec!["print".into()] },
             lifecycle_exports: Vec::new(),
         };
         let err = ExecutableImage::verify(program).unwrap_err();
-        assert!(matches!(
-            err,
-            VerifyError::Bytecode(BytecodeVerifyError::HostSlotOob { .. })
-        ));
+        assert!(matches!(err, VerifyError::Bytecode(BytecodeVerifyError::HostSlotOob { .. })));
     }
 
     #[test]
@@ -559,11 +470,7 @@ mod tests {
             PackageId::new("lib", "1"),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
-            Module {
-                functions: vec![lib_fn, lib_main],
-                entry: 1,
-                native_names: Vec::new(),
-            },
+            Module { functions: vec![lib_fn, lib_main], entry: 1, native_names: Vec::new() },
         )
         .unwrap();
 
@@ -588,11 +495,7 @@ mod tests {
             PackageId::new("app", "1"),
             crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
             &host,
-            Module {
-                functions: vec![stub, entry_main],
-                entry: 1,
-                native_names: Vec::new(),
-            },
+            Module { functions: vec![stub, entry_main], entry: 1, native_names: Vec::new() },
         )
         .unwrap();
 

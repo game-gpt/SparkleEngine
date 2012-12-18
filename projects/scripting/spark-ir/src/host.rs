@@ -2,8 +2,7 @@
 //!
 //! 脚本源码可写未限定短名；解析时映射到唯一 [`HostId`] 槽位。制品与链接按限定名，字节码按槽位。
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 /// 宿主函数稳定身份（与 `spark-script::HostFunctionId` 字段对齐）。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -14,16 +13,8 @@ pub struct HostId {
 }
 
 impl HostId {
-    pub fn new(
-        namespace: impl Into<Arc<str>>,
-        name: impl Into<Arc<str>>,
-        abi_version: u32,
-    ) -> Self {
-        Self {
-            namespace: namespace.into(),
-            name: name.into(),
-            abi_version,
-        }
+    pub fn new(namespace: impl Into<Arc<str>>, name: impl Into<Arc<str>>, abi_version: u32) -> Self {
+        Self { namespace: namespace.into(), name: name.into(), abi_version }
     }
 
     pub fn qualified_name(&self) -> String {
@@ -99,8 +90,7 @@ impl HostCompilePolicy {
     }
 
     pub fn grants(&self, cap: &str) -> bool {
-        self.granted_capabilities.is_empty()
-            || self.granted_capabilities.iter().any(|c| c.as_ref() == cap)
+        self.granted_capabilities.is_empty() || self.granted_capabilities.iter().any(|c| c.as_ref() == cap)
     }
 }
 
@@ -140,20 +130,11 @@ impl HostBindEntry {
     /// 校验一次宿主调用是否满足绑定表策略与 arity。
     pub fn check_call(&self, argc: usize, policy: &HostCompilePolicy) -> Result<(), String> {
         if self.param_count != u16::MAX && argc as u16 != self.param_count {
-            return Err(format!(
-                "host_arity:{}:expected_{}_got_{}",
-                self.id.qualified_name(),
-                self.param_count,
-                argc
-            ));
+            return Err(format!("host_arity:{}:expected_{}_got_{}", self.id.qualified_name(), self.param_count, argc));
         }
         for cap in &self.required_capabilities {
             if !policy.grants(cap.as_ref()) {
-                return Err(format!(
-                    "host_capability_denied:{}:{}",
-                    self.id.qualified_name(),
-                    cap
-                ));
+                return Err(format!("host_capability_denied:{}:{}", self.id.qualified_name(), cap));
             }
         }
         if !policy.determinism.allows_host(self.determinism) {
@@ -216,11 +197,7 @@ impl HostBindTable {
         }
         let slot = entry.slot;
         if slot as usize != self.entries.len() {
-            return Err(format!(
-                "host_slot_gap:expected_{}_got_{}",
-                self.entries.len(),
-                slot
-            ));
+            return Err(format!("host_slot_gap:expected_{}_got_{}", self.entries.len(), slot));
         }
         self.by_qualified.insert(q, slot);
         self.by_short.insert(short, slot);
@@ -263,10 +240,7 @@ impl HostBindTable {
 
     /// 槽位诊断名（限定名，顺序 = 槽位）。
     pub fn slot_names(&self) -> Vec<String> {
-        self.entries
-            .iter()
-            .map(|e| e.id.qualified_name())
-            .collect()
+        self.entries.iter().map(|e| e.id.qualified_name()).collect()
     }
 
     /// VM `prepare_host_slots` 调度名（限定名，与 `register_native` 键一致）。
@@ -302,24 +276,16 @@ mod tests {
         table.policy.granted_capabilities.clear();
         // 空授予列表 = 开放（REPL）；显式清空后再设非匹配
         table.policy.granted_capabilities = vec![Arc::from("other")];
-        assert!(table
-            .resolve_call("spawn", 1)
-            .unwrap_err()
-            .contains("host_capability_denied"));
+        assert!(table.resolve_call("spawn", 1).unwrap_err().contains("host_capability_denied"));
     }
 
     #[test]
     fn determinism_policy_rejects_nondeterministic_host() {
-        let mut table = HostBindTable::new().with_policy(HostCompilePolicy {
-            granted_capabilities: Vec::new(),
-            determinism: DeterminismKind::Deterministic,
-        });
+        let mut table = HostBindTable::new()
+            .with_policy(HostCompilePolicy { granted_capabilities: Vec::new(), determinism: DeterminismKind::Deterministic });
         let mut entry = HostBindEntry::stub(HostId::new("log", "print", 1), 0);
         entry.determinism = DeterminismKind::Nondeterministic;
         table.push(entry).unwrap();
-        assert!(table
-            .resolve_call("print", 0)
-            .unwrap_err()
-            .contains("host_determinism_denied"));
+        assert!(table.resolve_call("print", 0).unwrap_err().contains("host_determinism_denied"));
     }
 }

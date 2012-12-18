@@ -9,7 +9,7 @@ use lower::lower_root_to_hir;
 use oak_core::{Builder, SourceText};
 use oak_ruby::{RubyBuilder, RubyLanguage, RubyRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
-use spark_ir::{emit_module_with_host, lower_module, HostEmitMode};
+use spark_ir::{HostEmitMode, emit_module_with_host, lower_module};
 use spark_vm::Module;
 
 pub use oak_ruby::RubyRoot as ParsedRoot;
@@ -31,15 +31,11 @@ impl RubyScriptError {
     }
 
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
-        Self::Compile {
-            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
-        }
+        Self::Compile { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())) }
     }
 
     pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
-        Self::Parse {
-            args: ErrorArgs::new().with("reason", ErrorArg::String(detail.into())),
-        }
+        Self::Parse { args: ErrorArgs::new().with("reason", ErrorArg::String(detail.into())) }
     }
 
     pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
@@ -79,18 +75,11 @@ pub fn compile(source: &str) -> Result<Module, RubyScriptError> {
 }
 
 /// 带完整宿主绑定表的编译入口。
-pub fn compile_with_binds(
-    source: &str,
-    hosts: &HostBindTable,
-) -> Result<Module, RubyScriptError> {
+pub fn compile_with_binds(source: &str, hosts: &HostBindTable) -> Result<Module, RubyScriptError> {
     let root = parse(source)?;
     let hir = lower_root_to_hir(&root, hosts).map_err(RubyScriptError::compile_opaque)?;
     let mir = lower_module(&hir).map_err(RubyScriptError::compile_opaque)?;
-    let mode = if hosts.is_empty() {
-        HostEmitMode::NoHost
-    } else {
-        HostEmitMode::Bound(hosts)
-    };
+    let mode = if hosts.is_empty() { HostEmitMode::NoHost } else { HostEmitMode::Bound(hosts) };
     emit_module_with_host(&mir, mode).map_err(RubyScriptError::compile_opaque)
 }
 
@@ -111,7 +100,6 @@ pub fn parse(source: &str) -> Result<RubyRoot, RubyScriptError> {
 mod tests {
     use super::*;
 
-
     use spark_gc::Value;
     use spark_vm::{Op, StdHost, Vm};
 
@@ -126,11 +114,7 @@ mod tests {
     #[test]
     fn arithmetic_via_ir_has_no_call_native() {
         let module = compile("return 40 + 2").unwrap();
-        assert!(module.functions.iter().all(|f| {
-            !f.code
-                .iter()
-                .any(|&b| b == Op::CallNative as u8 || b == Op::CallHost as u8)
-        }));
+        assert!(module.functions.iter().all(|f| { !f.code.iter().any(|&b| b == Op::CallNative as u8 || b == Op::CallHost as u8) }));
     }
 
     #[test]
@@ -143,7 +127,8 @@ mod tests {
             else
               return 0
             end
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -159,7 +144,8 @@ mod tests {
               n = n + 1
             end
             return n
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -175,7 +161,8 @@ mod tests {
               n = n + 1
             end
             return n
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -195,7 +182,8 @@ mod tests {
               return 42
             end
             return 0
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -211,7 +199,8 @@ mod tests {
               n = n + i
             end
             return n
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -230,7 +219,8 @@ mod tests {
               end
             end
             return n
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -245,12 +235,10 @@ mod tests {
               return a + b
             end
             return add(40, 2)
-            "#)
+            "#,
+        )
         .unwrap();
-        assert!(
-            module.functions.iter().any(|f| f.name == "add"),
-            "expected IR method proto"
-        );
+        assert!(module.functions.iter().any(|f| f.name == "add"), "expected IR method proto");
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
         assert_eq!(value.as_number(), Some(42.0));
@@ -258,15 +246,9 @@ mod tests {
 
     #[test]
     fn host_call_via_ir() {
-        let module = compile_with_binds(
-            "return ping(7)",
-            &HostBindTable::from_ids([spark_ir::HostId::new("host", "ping", 1)]).unwrap(),
-        )
-        .unwrap();
-        assert!(module
-            .functions
-            .iter()
-            .any(|f| f.code.iter().any(|&b| b == Op::CallHost as u8)));
+        let module =
+            compile_with_binds("return ping(7)", &HostBindTable::from_ids([spark_ir::HostId::new("host", "ping", 1)]).unwrap()).unwrap();
+        assert!(module.functions.iter().any(|f| f.code.iter().any(|&b| b == Op::CallHost as u8)));
         let mut vm = Vm::new(module);
         vm.prepare_host_slots(["host.ping"]);
         vm.register_native("host.ping", |_ctx, args| {
@@ -285,7 +267,8 @@ mod tests {
               return a + b
             end
             return add(40, 2)
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -297,7 +280,8 @@ mod tests {
         let module = compile(
             r#"
             return 0x2A
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -312,13 +296,11 @@ mod tests {
               return 7
             end
             return Foo.bar()
-            "#)
+            "#,
+        )
         .unwrap_err();
         let msg = format!("{err:?}");
-        assert!(
-            msg.contains("ir_unsupported") || msg.contains("unsupported"),
-            "{msg}"
-        );
+        assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
     }
 
     #[test]
@@ -336,7 +318,8 @@ mod tests {
             end
             $c = Counter.new()
             return $c.bump()
-            "#)
+            "#,
+        )
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
@@ -352,7 +335,8 @@ mod tests {
               s = s + v
             }
             return s
-            "#)
+            "#,
+        )
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");
@@ -367,7 +351,8 @@ mod tests {
               s = s + i
             end
             return s
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         let value = vm.run(&mut StdHost).unwrap();
@@ -413,12 +398,7 @@ mod tests {
             end
             return i
             "#,
-            &HostBindTable::from_ids([spark_ir::HostId::new(
-                "host",
-                "Graphics_update",
-                1,
-            )])
-            .unwrap(),
+            &HostBindTable::from_ids([spark_ir::HostId::new("host", "Graphics_update", 1)]).unwrap(),
         )
         .unwrap_err();
         let msg = format!("{err:?}");
@@ -434,7 +414,8 @@ mod tests {
               n = n + 1
             end
             return n
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(module);
         vm.step_limit = 50_000_000;
@@ -454,7 +435,8 @@ mod tests {
             end
             $v = Game_Variables.new
             return 1
-            "#)
+            "#,
+        )
         .unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("ir_unsupported") || msg.contains("unsupported"), "{msg}");

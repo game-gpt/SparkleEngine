@@ -1,16 +1,15 @@
 //! 脚本编译门面：产出制品，不持有 VM / JIT。
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::artifact::{
-    ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError,
+use crate::{
+    ScriptError, ScriptLanguage,
+    artifact::{ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError},
+    cache::ArtifactCache,
+    dep_graph::PackageDepGraph,
+    host_schema::HostSchema,
+    request::{CompilationRequest, LanguageFrontend},
 };
-use crate::cache::ArtifactCache;
-use crate::dep_graph::PackageDepGraph;
-use crate::host_schema::HostSchema;
-use crate::request::{CompilationRequest, LanguageFrontend};
-use crate::{ScriptError, ScriptLanguage};
 
 /// 编译产物（目标 → 链接 → 映像）。
 #[derive(Debug, Clone)]
@@ -34,22 +33,16 @@ impl ScriptCompiler {
 
     /// 按正式 [`CompilationRequest`] 编译并链接、验证（命中缓存则跳过前端）。
     pub fn compile(&mut self, request: &CompilationRequest) -> Result<CompiledPackage, ScriptError> {
-        let source = request.primary_source().ok_or_else(|| {
-            ScriptError::compile_reason("compilation_request_missing_source")
-        })?;
+        let source = request.primary_source().ok_or_else(|| ScriptError::compile_reason("compilation_request_missing_source"))?;
         let key = ArtifactCache::key_for(request, source);
         if let Some(hit) = self.cache.get(key) {
             return Ok(hit);
         }
         let language = ScriptLanguage::from(request.language.frontend);
-        let binds = request
-            .host_schema
-            .to_bind_table_with_policy(crate::compile_policy_from_request(request))
-            .map_err(ScriptError::compile_reason)?;
+        let binds =
+            request.host_schema.to_bind_table_with_policy(crate::compile_policy_from_request(request)).map_err(ScriptError::compile_reason)?;
         let module = match language {
-            ScriptLanguage::Valkyrie => {
-                spark_script_valkyrie::compile_with_binds(source, &binds)?
-            }
+            ScriptLanguage::Valkyrie => spark_script_valkyrie::compile_with_binds(source, &binds)?,
             ScriptLanguage::Lua => spark_script_lua::compile_with_binds(source, &binds)?,
             ScriptLanguage::Ruby => spark_script_ruby::compile_with_binds(source, &binds)?,
         };
@@ -59,43 +52,23 @@ impl ScriptCompiler {
     }
 
     /// 语言 + 源码 + schema 的便利入口。
-    pub fn compile_source(
-        &mut self,
-        language: ScriptLanguage,
-        source: &str,
-        host: &HostSchema,
-    ) -> Result<CompiledPackage, ScriptError> {
+    pub fn compile_source(&mut self, language: ScriptLanguage, source: &str, host: &HostSchema) -> Result<CompiledPackage, ScriptError> {
         let request = CompilationRequest::repl(language, source, host.clone());
         self.compile(&request)
     }
 
     /// 只编译为目标 [`SparkObject`]（不链接），供写出 `.spko` 或后续 `link_many`。
-    pub fn compile_object(
-        &mut self,
-        request: &CompilationRequest,
-    ) -> Result<SparkObject, ScriptError> {
-        let source = request.primary_source().ok_or_else(|| {
-            ScriptError::compile_reason("compilation_request_missing_source")
-        })?;
+    pub fn compile_object(&mut self, request: &CompilationRequest) -> Result<SparkObject, ScriptError> {
+        let source = request.primary_source().ok_or_else(|| ScriptError::compile_reason("compilation_request_missing_source"))?;
         let language = ScriptLanguage::from(request.language.frontend);
-        let binds = request
-            .host_schema
-            .to_bind_table_with_policy(crate::compile_policy_from_request(request))
-            .map_err(ScriptError::compile_reason)?;
+        let binds =
+            request.host_schema.to_bind_table_with_policy(crate::compile_policy_from_request(request)).map_err(ScriptError::compile_reason)?;
         let module = match language {
-            ScriptLanguage::Valkyrie => {
-                spark_script_valkyrie::compile_with_binds(source, &binds)?
-            }
+            ScriptLanguage::Valkyrie => spark_script_valkyrie::compile_with_binds(source, &binds)?,
             ScriptLanguage::Lua => spark_script_lua::compile_with_binds(source, &binds)?,
             ScriptLanguage::Ruby => spark_script_ruby::compile_with_binds(source, &binds)?,
         };
-        SparkObject::from_module(
-            request.package.clone(),
-            request.language.clone(),
-            &request.host_schema,
-            module,
-        )
-        .map_err(script_link_error)
+        SparkObject::from_module(request.package.clone(), request.language.clone(), &request.host_schema, module).map_err(script_link_error)
     }
 
     /// 将已有目标链接并验证为完整包。
@@ -109,41 +82,28 @@ impl ScriptCompiler {
     ) -> Result<CompiledPackage, ScriptError> {
         let program = if objects.len() == 1 {
             LinkedProgram::link_single(objects[0].clone(), host).map_err(script_link_error)?
-        } else {
+        }
+        else {
             LinkedProgram::link_many(objects, host, entry_package).map_err(script_link_error)?
         };
         let image = ExecutableImage::verify(program.clone()).map_err(script_verify_error)?;
         let object = objects
             .iter()
-            .find(|o| {
-                o.package.name == entry_package.name && o.package.version == entry_package.version
-            })
+            .find(|o| o.package.name == entry_package.name && o.package.version == entry_package.version)
             .cloned()
             .ok_or_else(|| ScriptError::compile_reason("spark.script.link.missing_entry_package"))?;
-        Ok(CompiledPackage {
-            object,
-            program,
-            image,
-        })
+        Ok(CompiledPackage { object, program, image })
     }
 
     /// 按 [`PackageDepGraph`] 拓扑序重排目标（依赖在前，不把入口挪到下标 0）。
-    pub fn order_objects_for_link(
-        objects: Vec<SparkObject>,
-        graph: &PackageDepGraph,
-    ) -> Result<Vec<SparkObject>, ScriptError> {
-        let order = graph
-            .topo_order()
-            .map_err(|e| ScriptError::compile_reason(e.to_string()))?;
+    pub fn order_objects_for_link(objects: Vec<SparkObject>, graph: &PackageDepGraph) -> Result<Vec<SparkObject>, ScriptError> {
+        let order = graph.topo_order().map_err(|e| ScriptError::compile_reason(e.to_string()))?;
         if order.is_empty() {
             return Err(ScriptError::compile_reason("spark.script.link.empty_set"));
         }
         let mut by_key: HashMap<(Arc<str>, Arc<str>), SparkObject> = HashMap::new();
         for obj in objects {
-            by_key.insert(
-                (Arc::clone(&obj.package.name), Arc::clone(&obj.package.version)),
-                obj,
-            );
+            by_key.insert((Arc::clone(&obj.package.name), Arc::clone(&obj.package.version)), obj);
         }
         let mut ordered = Vec::with_capacity(order.len());
         for id in &order {
@@ -156,26 +116,12 @@ impl ScriptCompiler {
         Ok(ordered)
     }
 
-    pub(crate) fn seal(
-        &mut self,
-        request: &CompilationRequest,
-        module: spark_vm::Module,
-    ) -> Result<CompiledPackage, ScriptError> {
-        let object = SparkObject::from_module(
-            request.package.clone(),
-            request.language.clone(),
-            &request.host_schema,
-            module,
-        )
-        .map_err(script_link_error)?;
-        let program = LinkedProgram::link_single(object.clone(), &request.host_schema)
+    pub(crate) fn seal(&mut self, request: &CompilationRequest, module: spark_vm::Module) -> Result<CompiledPackage, ScriptError> {
+        let object = SparkObject::from_module(request.package.clone(), request.language.clone(), &request.host_schema, module)
             .map_err(script_link_error)?;
+        let program = LinkedProgram::link_single(object.clone(), &request.host_schema).map_err(script_link_error)?;
         let image = ExecutableImage::verify(program.clone()).map_err(script_verify_error)?;
-        Ok(CompiledPackage {
-            object,
-            program,
-            image,
-        })
+        Ok(CompiledPackage { object, program, image })
     }
 }
 
@@ -190,21 +136,16 @@ fn script_verify_error(err: VerifyError) -> ScriptError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::request::CompilationRequest;
-    use crate::ScriptLanguage;
+    use crate::{ScriptLanguage, request::CompilationRequest};
 
     #[test]
     fn compile_hits_artifact_cache() {
         let host = HostSchema::new(1);
         let mut compiler = ScriptCompiler::new();
-        let a = compiler
-            .compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host)
-            .unwrap();
+        let a = compiler.compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host).unwrap();
         assert_eq!(compiler.cache.misses, 1);
         assert_eq!(compiler.cache.hits, 0);
-        let b = compiler
-            .compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host)
-            .unwrap();
+        let b = compiler.compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host).unwrap();
         assert_eq!(compiler.cache.hits, 1);
         assert_eq!(compiler.cache.len(), 1);
         assert_eq!(a.image.host_schema_hash, b.image.host_schema_hash);
@@ -218,9 +159,7 @@ mod tests {
         let obj = compiler.compile_object(&req).unwrap();
         let bytes = obj.to_spko_bytes().unwrap();
         let loaded = SparkObject::from_spko_bytes(&bytes).unwrap();
-        let package = compiler
-            .link_objects(&[loaded], &host, &req.package)
-            .unwrap();
+        let package = compiler.link_objects(&[loaded], &host, &req.package).unwrap();
         let mut rt = crate::ScriptRuntime::from_image(&package.image, &host).unwrap();
         let v = rt.call_on_load_std().unwrap();
         assert_eq!(v.as_number(), Some(3.0));

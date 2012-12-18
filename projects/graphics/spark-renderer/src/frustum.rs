@@ -11,14 +11,7 @@ struct Plane {
 impl Plane {
     fn normalize(self) -> Self {
         let len = self.n.length();
-        if len < 1e-8 {
-            self
-        } else {
-            Self {
-                n: self.n * (1.0 / len),
-                d: self.d / len,
-            }
-        }
+        if len < 1e-8 { self } else { Self { n: self.n * (1.0 / len), d: self.d / len } }
     }
 
     fn signed_distance(self, p: Vec3) -> f32 {
@@ -37,18 +30,13 @@ impl Frustum {
     pub fn from_view_proj(vp: &Mat4) -> Self {
         let m = &vp.cols;
         // 列主序：列 i 行 j → m[i*4+j]
-        let row = |r: usize| -> (f32, f32, f32, f32) {
-            (m[r], m[4 + r], m[8 + r], m[12 + r])
-        };
+        let row = |r: usize| -> (f32, f32, f32, f32) { (m[r], m[4 + r], m[8 + r], m[12 + r]) };
         let (r0x, r0y, r0z, r0w) = row(0);
         let (r1x, r1y, r1z, r1w) = row(1);
         let (r2x, r2y, r2z, r2w) = row(2);
         let (r3x, r3y, r3z, r3w) = row(3);
 
-        let mk = |nx: f32, ny: f32, nz: f32, d: f32| Plane {
-            n: Vec3::new(nx, ny, nz),
-            d,
-        };
+        let mk = |nx: f32, ny: f32, nz: f32, d: f32| Plane { n: Vec3::new(nx, ny, nz), d };
 
         let planes = [
             mk(r3x + r0x, r3y + r0y, r3z + r0z, r3w + r0w).normalize(), // left
@@ -94,10 +82,7 @@ pub struct CullParams {
 
 impl CullParams {
     pub fn new(eye: Vec3) -> Self {
-        Self {
-            eye,
-            max_distance: None,
-        }
+        Self { eye, max_distance: None }
     }
 
     pub fn with_max_distance(mut self, d: f32) -> Self {

@@ -9,15 +9,14 @@ mod state;
 use spark_engine::run_game;
 use spark_renderer::WindowConfig;
 
-use crate::app::StudioApp;
-use crate::project::{load_project, resolve_project_dir};
+use crate::{
+    app::StudioApp,
+    project::{load_project, resolve_project_dir},
+};
 
 fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
+        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")))
         .init();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -32,9 +31,7 @@ fn main() {
     };
 
     if !project.has_sparkle_engine_dep {
-        eprintln!(
-            "spark-studio: 警告：package.json 未声明依赖 @game-gpt/sparkle-engine（继续打开）"
-        );
+        eprintln!("spark-studio: 警告：package.json 未声明依赖 @game-gpt/sparkle-engine（继续打开）");
     }
 
     tracing::info!(
@@ -46,21 +43,12 @@ fn main() {
         play_only,
         "启动 Spark Studio"
     );
-    println!(
-        "spark-studio: 打开项目 {} [{}] ({})",
-        project.name,
-        project.kind.as_str(),
-        project.root.display()
-    );
+    println!("spark-studio: 打开项目 {} [{}] ({})", project.name, project.kind.as_str(), project.root.display());
     if let Some(scene) = &project.startup_scene {
         println!("spark-studio: startupScene = {scene}");
     }
 
-    let title = if play_only {
-        format!("Spark Play — {}", project.name)
-    } else {
-        format!("Spark Studio — {}", project.name)
-    };
+    let title = if play_only { format!("Spark Play — {}", project.name) } else { format!("Spark Studio — {}", project.name) };
     let mut host = StudioApp::new(project);
     if play_only {
         host = host.with_immediate_play();

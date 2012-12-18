@@ -13,11 +13,7 @@ pub struct EngineInfo {
 
 impl Default for EngineInfo {
     fn default() -> Self {
-        Self {
-            name: "Spark Engine",
-            version: env!("CARGO_PKG_VERSION"),
-            npm_package: crate::NPM_PACKAGE_NAME,
-        }
+        Self { name: "Spark Engine", version: env!("CARGO_PKG_VERSION"), npm_package: crate::NPM_PACKAGE_NAME }
     }
 }
 

@@ -18,18 +18,10 @@ impl Default for Transform2 {
 }
 
 impl Transform2 {
-    pub const IDENTITY: Self = Self {
-        translation: Vec2::ZERO,
-        rotation: 0.0,
-        scale: 1.0,
-    };
+    pub const IDENTITY: Self = Self { translation: Vec2::ZERO, rotation: 0.0, scale: 1.0 };
 
     pub const fn new(translation: Vec2, rotation: f32, scale: f32) -> Self {
-        Self {
-            translation,
-            rotation,
-            scale,
-        }
+        Self { translation, rotation, scale }
     }
 
     pub fn transform_point(self, p: Vec2) -> Vec2 {
@@ -43,17 +35,9 @@ impl Transform2 {
     }
 
     pub fn inverse(self) -> Self {
-        let inv_s = if self.scale.abs() < 1e-8 {
-            0.0
-        } else {
-            1.0 / self.scale
-        };
+        let inv_s = if self.scale.abs() < 1e-8 { 0.0 } else { 1.0 / self.scale };
         let inv_r = -self.rotation;
         let t = self.translation.neg().rotate(inv_r).mul_scalar(inv_s);
-        Self {
-            translation: t,
-            rotation: inv_r,
-            scale: inv_s,
-        }
+        Self { translation: t, rotation: inv_r, scale: inv_s }
     }
 }

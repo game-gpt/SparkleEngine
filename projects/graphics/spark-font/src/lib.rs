@@ -2,9 +2,11 @@
 //!
 //! 本 crate **不**碰 GPU：`spark-renderer-wgpu` 只消费 `GlyphCache` 的图集字节与 UV，自行上传纹理。
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use fontdue::{Font, FontSettings};
 use spark_core::{ErrorArg, SparkError, codes};
@@ -44,10 +46,7 @@ impl GlyphCache {
                 }
             }
         }
-        Err(SparkError::new(codes::font_not_found()).arg(
-            "tried",
-            ErrorArg::String(Arc::from("msyh,simhei,arial")),
-        ))
+        Err(SparkError::new(codes::font_not_found()).arg("tried", ErrorArg::String(Arc::from("msyh,simhei,arial"))))
     }
 
     /// 从字节流装载（测试 / 打包字体）。
@@ -128,14 +127,8 @@ impl GlyphCache {
                 self.atlas[dy * self.atlas_w as usize + dx] = src;
             }
         }
-        let uv_min = [
-            self.cursor_x as f32 / self.atlas_w as f32,
-            self.cursor_y as f32 / self.atlas_h as f32,
-        ];
-        let uv_max = [
-            (self.cursor_x + gw) as f32 / self.atlas_w as f32,
-            (self.cursor_y + gh) as f32 / self.atlas_h as f32,
-        ];
+        let uv_min = [self.cursor_x as f32 / self.atlas_w as f32, self.cursor_y as f32 / self.atlas_h as f32];
+        let uv_max = [(self.cursor_x + gw) as f32 / self.atlas_w as f32, (self.cursor_y + gh) as f32 / self.atlas_h as f32];
         let info = GlyphInfo {
             uv_min,
             uv_max,
@@ -167,13 +160,7 @@ fn system_font_candidates() -> Vec<PathBuf> {
     // 用环境变量拼系统字体目录，避免写死盘符。
     if let Ok(windir) = std::env::var("WINDIR") {
         let fonts = PathBuf::from(windir).join("Fonts");
-        for name in [
-            "msyh.ttc",
-            "msyhbd.ttc",
-            "simhei.ttf",
-            "arial.ttf",
-            "segoeui.ttf",
-        ] {
+        for name in ["msyh.ttc", "msyhbd.ttc", "simhei.ttf", "arial.ttf", "segoeui.ttf"] {
             out.push(fonts.join(name));
         }
     }

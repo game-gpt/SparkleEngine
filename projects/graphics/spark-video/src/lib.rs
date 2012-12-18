@@ -3,13 +3,10 @@
 //! 当前交付轨元数据与压缩包泵；像素帧解码留给渲染/硬件路径。
 //! **无**过场剧本或游戏镜头语义。
 
-use std::path::Path;
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use spark_core::{SparkError, codes};
-use spark_media::{
-    MediaPacket, MediaReader, PacketKind, VideoTrackInfo,
-};
+use spark_media::{MediaPacket, MediaReader, PacketKind, VideoTrackInfo};
 
 /// 打开中的视频剪辑（可含同文件音频轨 ID，供上层 AV 同步）。
 pub struct VideoClip {
@@ -21,30 +18,16 @@ pub struct VideoClip {
 impl VideoClip {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, SparkError> {
         let reader = MediaReader::open_path(path).map_err(SparkError::from)?;
-        let video = reader
-            .default_video()
-            .cloned()
-            .ok_or_else(|| SparkError::new(codes::video_no_track()))?;
+        let video = reader.default_video().cloned().ok_or_else(|| SparkError::new(codes::video_no_track()))?;
         let audio_track_id = reader.default_audio().map(|a| a.track_id);
-        Ok(Self {
-            reader,
-            video,
-            audio_track_id,
-        })
+        Ok(Self { reader, video, audio_track_id })
     }
 
     pub fn open_bytes(bytes: impl Into<Vec<u8>>) -> Result<Self, SparkError> {
         let reader = MediaReader::open_bytes(bytes).map_err(SparkError::from)?;
-        let video = reader
-            .default_video()
-            .cloned()
-            .ok_or_else(|| SparkError::new(codes::video_no_track()))?;
+        let video = reader.default_video().cloned().ok_or_else(|| SparkError::new(codes::video_no_track()))?;
         let audio_track_id = reader.default_audio().map(|a| a.track_id);
-        Ok(Self {
-            reader,
-            video,
-            audio_track_id,
-        })
+        Ok(Self { reader, video, audio_track_id })
     }
 
     pub fn video_info(&self) -> &VideoTrackInfo {
@@ -78,11 +61,7 @@ impl VideoClip {
     /// 下一视频包；到 EOS 返回 `None`。
     pub fn next_video_packet(&mut self) -> Result<Option<MediaPacket>, SparkError> {
         loop {
-            match self
-                .reader
-                .next_packet(Some(self.video.track_id))
-                .map_err(SparkError::from)?
-            {
+            match self.reader.next_packet(Some(self.video.track_id)).map_err(SparkError::from)? {
                 None => return Ok(None),
                 Some(p) if p.kind == PacketKind::Video || p.track_id == self.video.track_id => {
                     return Ok(Some(p));
@@ -107,7 +86,8 @@ pub struct EncodedFrame {
 
 impl VideoClip {
     pub fn next_encoded_frame(&mut self) -> Result<Option<EncodedFrame>, SparkError> {
-        let Some(packet) = self.next_video_packet()? else {
+        let Some(packet) = self.next_video_packet()?
+        else {
             return Ok(None);
         };
         let pts = self.timestamp_to_duration(packet.ts);

@@ -136,9 +136,7 @@ impl<'a> Reader<'a> {
 
     pub fn u64(&mut self) -> Result<u64, ArtifactIoError> {
         let b = self.take(8)?;
-        Ok(u64::from_le_bytes([
-            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-        ]))
+        Ok(u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
     }
 
     pub fn f64(&mut self) -> Result<f64, ArtifactIoError> {
@@ -152,9 +150,7 @@ impl<'a> Reader<'a> {
 
     pub fn str(&mut self) -> Result<String, ArtifactIoError> {
         let b = self.bytes()?;
-        std::str::from_utf8(b)
-            .map(|s| s.to_string())
-            .map_err(|_| ArtifactIoError::Utf8)
+        std::str::from_utf8(b).map(|s| s.to_string()).map_err(|_| ArtifactIoError::Utf8)
     }
 }
 
@@ -233,15 +229,7 @@ fn read_func(r: &mut Reader<'_>) -> Result<FuncProto, ArtifactIoError> {
     for _ in 0..str_n {
         strings.push(r.str()?);
     }
-    Ok(FuncProto {
-        name,
-        arity,
-        locals,
-        code,
-        consts,
-        const_names,
-        strings,
-    })
+    Ok(FuncProto { name, arity, locals, code, consts, const_names, strings })
 }
 
 pub(crate) fn write_module(w: &mut Writer, m: &Module) -> Result<(), ArtifactIoError> {
@@ -269,11 +257,7 @@ pub(crate) fn read_module(r: &mut Reader<'_>) -> Result<Module, ArtifactIoError>
     for _ in 0..func_n {
         functions.push(read_func(r)?);
     }
-    Ok(Module {
-        functions,
-        entry,
-        native_names,
-    })
+    Ok(Module { functions, entry, native_names })
 }
 
 pub(crate) fn frontend_tag(f: LanguageFrontend) -> u8 {
@@ -305,9 +289,7 @@ pub(crate) fn write_language(w: &mut Writer, language: &crate::request::Language
     }
 }
 
-pub(crate) fn read_language(
-    r: &mut Reader<'_>,
-) -> Result<crate::request::LanguageProfile, ArtifactIoError> {
+pub(crate) fn read_language(r: &mut Reader<'_>) -> Result<crate::request::LanguageProfile, ArtifactIoError> {
     use crate::request::{LanguageProfile, LanguageProfileId};
     let frontend = frontend_from_tag(r.u8()?)?;
     let profile = LanguageProfileId::new(r.str()?);

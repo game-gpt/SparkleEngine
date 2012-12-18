@@ -43,27 +43,11 @@ impl Skeleton {
     /// 两骨竖直链：`root`(0) → `child`(1)，子骨长 `length`。挂点 `tip` 在子骨末端。
     pub fn two_bone_chain(length: f32) -> Self {
         let len = length.max(1e-3);
-        let root = Joint {
-            name: "root".into(),
-            parent: None,
-            inverse_bind: Mat4::IDENTITY,
-            rest_local: Trs::IDENTITY,
-        };
+        let root = Joint { name: "root".into(), parent: None, inverse_bind: Mat4::IDENTITY, rest_local: Trs::IDENTITY };
         let child_rest = Trs::from_translation(Vec3::new(0.0, len, 0.0));
-        let child = Joint {
-            name: "child".into(),
-            parent: Some(0),
-            inverse_bind: Mat4::translation(Vec3::new(0.0, -len, 0.0)),
-            rest_local: child_rest,
-        };
-        let tip = Socket {
-            name: "tip".into(),
-            parent_joint: 1,
-            local: Trs::from_translation(Vec3::new(0.0, len, 0.0)),
-        };
-        Self {
-            joints: vec![root, child],
-            sockets: vec![tip],
-        }
+        let child =
+            Joint { name: "child".into(), parent: Some(0), inverse_bind: Mat4::translation(Vec3::new(0.0, -len, 0.0)), rest_local: child_rest };
+        let tip = Socket { name: "tip".into(), parent_joint: 1, local: Trs::from_translation(Vec3::new(0.0, len, 0.0)) };
+        Self { joints: vec![root, child], sockets: vec![tip] }
     }
 }

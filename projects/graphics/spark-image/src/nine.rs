@@ -2,7 +2,7 @@
 
 use spark_core::{ErrorArg, Rect, SparkError, codes};
 
-use crate::{validate_region, PixelImage};
+use crate::{PixelImage, validate_region};
 
 /// 九宫格边距（相对源矩形内侧，像素）。
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -15,21 +15,11 @@ pub struct Margin {
 
 impl Margin {
     pub const fn uniform(v: f32) -> Self {
-        Self {
-            left: v,
-            right: v,
-            top: v,
-            bottom: v,
-        }
+        Self { left: v, right: v, top: v, bottom: v }
     }
 
     pub const fn new(left: f32, right: f32, top: f32, bottom: f32) -> Self {
-        Self {
-            left,
-            right,
-            top,
-            bottom,
-        }
+        Self { left, right, top, bottom }
     }
 }
 
@@ -60,11 +50,7 @@ pub struct NineQuad {
 
 impl NineSlice {
     pub fn new(source: Rect, margin: Margin) -> Self {
-        Self {
-            source,
-            margin,
-            mode: NineSliceMode::Stretch,
-        }
+        Self { source, margin, mode: NineSliceMode::Stretch }
     }
 
     pub fn with_mode(mut self, mode: NineSliceMode) -> Self {
@@ -80,8 +66,7 @@ impl NineSlice {
     fn validate_margin(&self) -> Result<(), SparkError> {
         let m = self.margin;
         if m.left < 0.0 || m.right < 0.0 || m.top < 0.0 || m.bottom < 0.0 {
-            return Err(SparkError::new(codes::image_nine_margin_invalid())
-                .arg("reason", ErrorArg::String("negative".into())));
+            return Err(SparkError::new(codes::image_nine_margin_invalid()).arg("reason", ErrorArg::String("negative".into())));
         }
         if m.left + m.right > self.source.w + 1e-3 || m.top + m.bottom > self.source.h + 1e-3 {
             return Err(SparkError::new(codes::image_nine_margin_invalid())
@@ -147,10 +132,7 @@ impl NineSlice {
                 let src = Rect::new(src_x[col], src_y[row], sw_i, sh_i);
                 match self.mode {
                     NineSliceMode::Stretch => {
-                        out.push(NineQuad {
-                            src,
-                            dst: Rect::new(dst_x[col], dst_y[row], dw_i, dh_i),
-                        });
+                        out.push(NineQuad { src, dst: Rect::new(dst_x[col], dst_y[row], dw_i, dh_i) });
                     }
                     NineSliceMode::Tile => {
                         push_tiled(&mut out, src, Rect::new(dst_x[col], dst_y[row], dw_i, dh_i));
@@ -171,10 +153,7 @@ fn push_tiled(out: &mut Vec<NineQuad>, src: Rect, dest: Rect) {
             let w = src.w.min(dest.x + dest.w - x);
             // 裁切源：末片可能小于完整格
             let src_piece = Rect::new(src.x, src.y, w.min(src.w), h.min(src.h));
-            out.push(NineQuad {
-                src: src_piece,
-                dst: Rect::new(x, y, w, h),
-            });
+            out.push(NineQuad { src: src_piece, dst: Rect::new(x, y, w, h) });
             x += src.w;
         }
         y += src.h;
@@ -192,27 +171,21 @@ mod tests {
         let img = PixelImage::solid(32, 32, Color::rgb(1.0, 1.0, 1.0)).unwrap();
         let nine = NineSlice::new(img.bounds(), Margin::uniform(8.0));
         nine.validate(&img).unwrap();
-        let quads = nine
-            .layout(Rect::new(0.0, 0.0, 100.0, 60.0))
-            .unwrap();
+        let quads = nine.layout(Rect::new(0.0, 0.0, 100.0, 60.0)).unwrap();
         // 3×3 全在
         assert_eq!(quads.len(), 9);
         // 左上角源 8×8，目标 8×8
         assert!((quads[0].src.w - 8.0).abs() < 1e-5);
         assert!((quads[0].dst.w - 8.0).abs() < 1e-5);
         // 中心目标宽 = 100 - 16
-        let center = quads
-            .iter()
-            .find(|q| (q.dst.x - 8.0).abs() < 1e-5 && (q.dst.y - 8.0).abs() < 1e-5)
-            .unwrap();
+        let center = quads.iter().find(|q| (q.dst.x - 8.0).abs() < 1e-5 && (q.dst.y - 8.0).abs() < 1e-5).unwrap();
         assert!((center.dst.w - 84.0).abs() < 1e-5);
         assert!((center.dst.h - 44.0).abs() < 1e-5);
     }
 
     #[test]
     fn nine_tile_center() {
-        let nine = NineSlice::new(Rect::new(0.0, 0.0, 30.0, 30.0), Margin::uniform(10.0))
-            .with_mode(NineSliceMode::Tile);
+        let nine = NineSlice::new(Rect::new(0.0, 0.0, 30.0, 30.0), Margin::uniform(10.0)).with_mode(NineSliceMode::Tile);
         let quads = nine.layout(Rect::new(0.0, 0.0, 50.0, 50.0)).unwrap();
         // 中心 30×30 目标，源中心 10×10 → 至少 9 片中心瓦 + 边角
         assert!(quads.len() > 9);

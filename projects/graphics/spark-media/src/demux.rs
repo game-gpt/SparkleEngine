@@ -1,17 +1,22 @@
 //! 解复用：按包拉取音视频轨。
 
-use std::fs::File;
-use std::path::Path;
+use std::{fs::File, path::Path};
 
-use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
-use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
-use symphonia::core::units::Time;
-use symphonia::default::get_probe;
+use symphonia::{
+    core::{
+        formats::{FormatOptions, FormatReader, SeekMode, SeekTo},
+        io::{MediaSourceStream, MediaSourceStreamOptions},
+        meta::MetadataOptions,
+        probe::Hint,
+        units::Time,
+    },
+    default::get_probe,
+};
 
-use crate::probe::{classify_tracks, AudioTrackInfo, MediaInfo, VideoTrackInfo};
-use crate::MediaError;
+use crate::{
+    MediaError,
+    probe::{AudioTrackInfo, MediaInfo, VideoTrackInfo, classify_tracks},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PacketKind {
@@ -44,35 +49,19 @@ impl MediaReader {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             hint.with_extension(ext);
         }
-        Self::open_mss(
-            MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default()),
-            hint,
-        )
+        Self::open_mss(MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default()), hint)
     }
 
     pub fn open_bytes(bytes: impl Into<Vec<u8>>) -> Result<Self, MediaError> {
         let cursor = std::io::Cursor::new(bytes.into());
-        Self::open_mss(
-            MediaSourceStream::new(Box::new(cursor), MediaSourceStreamOptions::default()),
-            Hint::new(),
-        )
+        Self::open_mss(MediaSourceStream::new(Box::new(cursor), MediaSourceStreamOptions::default()), Hint::new())
     }
 
     fn open_mss(mss: MediaSourceStream, hint: Hint) -> Result<Self, MediaError> {
-        let probed = get_probe().format(
-            &hint,
-            mss,
-            &FormatOptions {
-                enable_gapless: true,
-                ..Default::default()
-            },
-            &MetadataOptions::default(),
-        )?;
+        let probed =
+            get_probe().format(&hint, mss, &FormatOptions { enable_gapless: true, ..Default::default() }, &MetadataOptions::default())?;
         let info = classify_tracks(probed.format.tracks());
-        Ok(Self {
-            format: probed.format,
-            info,
-        })
+        Ok(Self { format: probed.format, info })
     }
 
     pub fn info(&self) -> &MediaInfo {
@@ -88,17 +77,12 @@ impl MediaReader {
     }
 
     /// 拉取下一包；`track_filter` 为 `None` 时接受任意轨。
-    pub fn next_packet(
-        &mut self,
-        track_filter: Option<u32>,
-    ) -> Result<Option<MediaPacket>, MediaError> {
+    pub fn next_packet(&mut self, track_filter: Option<u32>) -> Result<Option<MediaPacket>, MediaError> {
         loop {
             let packet = match self.format.next_packet() {
                 Ok(p) => p,
                 Err(symphonia::core::errors::Error::ResetRequired) => continue,
-                Err(symphonia::core::errors::Error::IoError(e))
-                    if e.kind() == std::io::ErrorKind::UnexpectedEof =>
-                {
+                Err(symphonia::core::errors::Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     return Ok(None);
                 }
                 Err(e) => return Err(e.into()),
@@ -122,15 +106,8 @@ impl MediaReader {
 
     /// 按秒粗略寻道（依赖容器 seek 支持）。
     pub fn seek_seconds(&mut self, seconds: f64) -> Result<(), MediaError> {
-        let track_id = self
-            .info
-            .default_video()
-            .map(|v| v.track_id)
-            .or_else(|| self.info.default_audio().map(|a| a.track_id));
-        let seek = SeekTo::Time {
-            time: Time::from(seconds),
-            track_id,
-        };
+        let track_id = self.info.default_video().map(|v| v.track_id).or_else(|| self.info.default_audio().map(|a| a.track_id));
+        let seek = SeekTo::Time { time: Time::from(seconds), track_id };
         self.format.seek(SeekMode::Coarse, seek)?;
         Ok(())
     }

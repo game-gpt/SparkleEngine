@@ -2,14 +2,14 @@
 //!
 //! **不**包含曲库或玩法语义；游戏自行映射事件到 [`PlayRequest`] / `Tone` / 资源路径。
 
-use std::f32::consts::PI;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    f32::consts::PI,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
-use rodio::buffer::SamplesBuffer;
-use rodio::source::Source;
-use rodio::{OutputStream, OutputStreamHandle, Sink};
+use rodio::{OutputStream, OutputStreamHandle, Sink, buffer::SamplesBuffer, source::Source};
 use spark_core::{SparkError, codes};
 
 /// 重新导出：游戏可预解码后缓存。
@@ -25,11 +25,7 @@ pub struct Tone {
 
 impl Tone {
     pub const fn new(freq_hz: f32, duration_ms: u32, volume: f32) -> Self {
-        Self {
-            freq_hz,
-            duration_ms,
-            volume,
-        }
+        Self { freq_hz, duration_ms, volume }
     }
 }
 
@@ -84,7 +80,8 @@ impl AudioQueue {
                     if let Err(e) = bus.play_file(&path) {
                         if let Some(out) = errors.as_deref_mut() {
                             out.push(e);
-                        } else {
+                        }
+                        else {
                             tracing::warn!(
                                 event = "spark.audio.play_file_failed",
                                 error = %e,
@@ -110,19 +107,11 @@ impl AudioBus {
         match OutputStream::try_default() {
             Ok((stream, handle)) => {
                 tracing::info!(event = "spark.audio.output_ready");
-                Self {
-                    _stream: Some(stream),
-                    handle: Some(handle),
-                    muted: false,
-                }
+                Self { _stream: Some(stream), handle: Some(handle), muted: false }
             }
             Err(err) => {
                 tracing::warn!(event = "spark.audio.output_unavailable", ?err);
-                Self {
-                    _stream: None,
-                    handle: None,
-                    muted: true,
-                }
+                Self { _stream: None, handle: None, muted: true }
             }
         }
     }
@@ -140,10 +129,12 @@ impl AudioBus {
         if self.is_muted() {
             return;
         }
-        let Some(handle) = self.handle.as_ref() else {
+        let Some(handle) = self.handle.as_ref()
+        else {
             return;
         };
-        let Ok(sink) = Sink::try_new(handle) else {
+        let Ok(sink) = Sink::try_new(handle)
+        else {
             return;
         };
         let vol = tone.volume.clamp(0.0, 1.0);
@@ -168,11 +159,11 @@ impl AudioBus {
         if self.is_muted() {
             return Ok(());
         }
-        let Some(handle) = self.handle.as_ref() else {
+        let Some(handle) = self.handle.as_ref()
+        else {
             return Ok(());
         };
-        let sink = Sink::try_new(handle)
-            .map_err(|e| SparkError::new(codes::audio_sink()).caused_by(e))?;
+        let sink = Sink::try_new(handle).map_err(|e| SparkError::new(codes::audio_sink()).caused_by(e))?;
         if pcm.samples.is_empty() {
             return Ok(());
         }
@@ -185,21 +176,15 @@ impl AudioBus {
     /// 播放 PCM 并返回可停止句柄。静音或无设备时返回 `Ok(None)`。
     ///
     /// `volume` 为 0..=1，`speed` 为 1.0 原速。`looping` 为真时循环到 [`Playback`] 停止。
-    pub fn start_pcm(
-        &self,
-        pcm: &PcmAudio,
-        volume: f32,
-        speed: f32,
-        looping: bool,
-    ) -> Result<Option<Playback>, SparkError> {
+    pub fn start_pcm(&self, pcm: &PcmAudio, volume: f32, speed: f32, looping: bool) -> Result<Option<Playback>, SparkError> {
         if self.is_muted() || pcm.samples.is_empty() {
             return Ok(None);
         }
-        let Some(handle) = self.handle.as_ref() else {
+        let Some(handle) = self.handle.as_ref()
+        else {
             return Ok(None);
         };
-        let sink = Sink::try_new(handle)
-            .map_err(|e| SparkError::new(codes::audio_sink()).caused_by(e))?;
+        let sink = Sink::try_new(handle).map_err(|e| SparkError::new(codes::audio_sink()).caused_by(e))?;
         sink.set_volume(volume.clamp(0.0, 1.0));
         sink.set_speed(speed.clamp(0.05, 4.0));
         sink.append(PcmStream::new(pcm, looping));
@@ -288,9 +273,7 @@ impl Source for PcmStream {
             return None;
         }
         let frames = self.samples.len() / self.channels as usize;
-        Some(Duration::from_secs_f64(
-            frames as f64 / self.sample_rate as f64,
-        ))
+        Some(Duration::from_secs_f64(frames as f64 / self.sample_rate as f64))
     }
 }
 
@@ -306,12 +289,7 @@ impl SineWave {
     fn new(freq: f32, duration_ms: u32) -> Self {
         let sample_rate = 44_100;
         let samples = (sample_rate as u64 * duration_ms as u64 / 1000) as usize;
-        Self {
-            freq: freq.max(20.0),
-            sample_rate,
-            samples_left: samples.max(1),
-            t: 0.0,
-        }
+        Self { freq: freq.max(20.0), sample_rate, samples_left: samples.max(1), t: 0.0 }
     }
 }
 
@@ -325,11 +303,7 @@ impl Iterator for SineWave {
         self.samples_left -= 1;
         let sample = (self.t * self.freq * 2.0 * PI).sin() * 0.25;
         self.t += 1.0 / self.sample_rate as f32;
-        let fade = if self.samples_left < 256 {
-            self.samples_left as f32 / 256.0
-        } else {
-            1.0
-        };
+        let fade = if self.samples_left < 256 { self.samples_left as f32 / 256.0 } else { 1.0 };
         Some(sample * fade)
     }
 }
@@ -359,11 +333,7 @@ mod tests {
 
     #[test]
     fn queue_drains_into_silent_bus() {
-        let bus = AudioBus {
-            _stream: None,
-            handle: None,
-            muted: true,
-        };
+        let bus = AudioBus { _stream: None, handle: None, muted: true };
         let mut q = AudioQueue::new();
         q.play_tone(Tone::new(440.0, 10, 0.5));
         q.play_file("nope.wav");
@@ -376,11 +346,7 @@ mod tests {
 
     #[test]
     fn pcm_stream_loops_then_stops() {
-        let pcm = PcmAudio {
-            sample_rate: 4,
-            channels: 1,
-            samples: vec![0.1, 0.2],
-        };
+        let pcm = PcmAudio { sample_rate: 4, channels: 1, samples: vec![0.1, 0.2] };
         let mut looping = PcmStream::new(&pcm, true);
         assert_eq!(looping.next(), Some(0.1));
         assert_eq!(looping.next(), Some(0.2));
@@ -393,16 +359,8 @@ mod tests {
 
     #[test]
     fn muted_start_pcm_returns_none() {
-        let bus = AudioBus {
-            _stream: None,
-            handle: None,
-            muted: true,
-        };
-        let pcm = PcmAudio {
-            sample_rate: 8,
-            channels: 1,
-            samples: vec![0.0, 1.0],
-        };
+        let bus = AudioBus { _stream: None, handle: None, muted: true };
+        let pcm = PcmAudio { sample_rate: 8, channels: 1, samples: vec![0.0, 1.0] };
         assert!(bus.start_pcm(&pcm, 1.0, 1.0, false).unwrap().is_none());
     }
 }

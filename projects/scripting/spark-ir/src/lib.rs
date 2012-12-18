@@ -9,15 +9,8 @@ mod host;
 mod lower;
 mod mir;
 
-pub use codegen::{emit_module, emit_module_with_host, HostEmitMode};
-pub use hir::{
-    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, PackageId, SymbolId, Ty,
-};
-pub use host::{
-    DeterminismKind, HostBindEntry, HostBindTable, HostCompilePolicy, HostEffectKind, HostId,
-    HostPhaseKind,
-};
+pub use codegen::{HostEmitMode, emit_module, emit_module_with_host};
+pub use hir::{HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, PackageId, SymbolId, Ty};
+pub use host::{DeterminismKind, HostBindEntry, HostBindTable, HostCompilePolicy, HostEffectKind, HostId, HostPhaseKind};
 pub use lower::lower_module;
-pub use mir::{
-    BasicBlock, HostRef, IrEffect, MirFunction, MirInst, MirModule, MirTerminator, MirValue,
-};
+pub use mir::{BasicBlock, HostRef, IrEffect, MirFunction, MirInst, MirModule, MirTerminator, MirValue};

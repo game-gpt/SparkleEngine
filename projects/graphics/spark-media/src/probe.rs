@@ -3,14 +3,17 @@
 //! Symphonia 0.5 以音频编解码为主；无 `sample_rate` 的轨视为视频/其它轨候选，
 //! 宽高在容器未暴露时为 `0`（后续可由专用解码器补全）。
 
-use std::fs::File;
-use std::path::Path;
+use std::{fs::File, path::Path};
 
-use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
-use symphonia::default::get_probe;
+use symphonia::{
+    core::{
+        formats::FormatOptions,
+        io::{MediaSourceStream, MediaSourceStreamOptions},
+        meta::MetadataOptions,
+        probe::Hint,
+    },
+    default::get_probe,
+};
 
 use crate::MediaError;
 
@@ -80,46 +83,26 @@ pub fn probe_path(path: impl AsRef<Path>) -> Result<MediaInfo, MediaError> {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         hint.with_extension(ext);
     }
-    probe_mss(
-        MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default()),
-        hint,
-    )
+    probe_mss(MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default()), hint)
 }
 
 pub fn probe_bytes(bytes: &[u8]) -> Result<MediaInfo, MediaError> {
     let cursor = std::io::Cursor::new(bytes.to_vec());
-    probe_mss(
-        MediaSourceStream::new(Box::new(cursor), MediaSourceStreamOptions::default()),
-        Hint::new(),
-    )
+    probe_mss(MediaSourceStream::new(Box::new(cursor), MediaSourceStreamOptions::default()), Hint::new())
 }
 
-pub(crate) fn classify_tracks<'a>(
-    tracks: impl IntoIterator<Item = &'a symphonia::core::formats::Track>,
-) -> MediaInfo {
+pub(crate) fn classify_tracks<'a>(tracks: impl IntoIterator<Item = &'a symphonia::core::formats::Track>) -> MediaInfo {
     let mut out = Vec::new();
     for track in tracks {
         let id = track.id;
         let codec = format!("{:?}", track.codec_params.codec);
         if let Some(rate) = track.codec_params.sample_rate {
-            let ch = track
-                .codec_params
-                .channels
-                .map(|c| c.count() as u16)
-                .unwrap_or(1);
-            out.push(TrackInfo::Audio(AudioTrackInfo {
-                track_id: id,
-                codec,
-                sample_rate: rate,
-                channels: ch.max(1),
-            }));
-        } else if track.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL {
+            let ch = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(1);
+            out.push(TrackInfo::Audio(AudioTrackInfo { track_id: id, codec, sample_rate: rate, channels: ch.max(1) }));
+        }
+        else if track.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL {
             // 无采样率的已注册编解码轨 → 视频候选（Symphonia 不提供宽高字段）
-            let (numer, denom) = track
-                .codec_params
-                .time_base
-                .map(|tb| (tb.numer, tb.denom))
-                .unwrap_or((1, 1));
+            let (numer, denom) = track.codec_params.time_base.map(|tb| (tb.numer, tb.denom)).unwrap_or((1, 1));
             out.push(TrackInfo::Video(VideoTrackInfo {
                 track_id: id,
                 codec,
@@ -128,25 +111,15 @@ pub(crate) fn classify_tracks<'a>(
                 time_base_numer: numer,
                 time_base_denom: denom.max(1),
             }));
-        } else {
-            out.push(TrackInfo::Other {
-                track_id: id,
-                codec,
-            });
+        }
+        else {
+            out.push(TrackInfo::Other { track_id: id, codec });
         }
     }
-    MediaInfo {
-        tracks: out,
-        format: "symphonia".into(),
-    }
+    MediaInfo { tracks: out, format: "symphonia".into() }
 }
 
 fn probe_mss(mss: MediaSourceStream, hint: Hint) -> Result<MediaInfo, MediaError> {
-    let probed = get_probe().format(
-        &hint,
-        mss,
-        &FormatOptions::default(),
-        &MetadataOptions::default(),
-    )?;
+    let probed = get_probe().format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())?;
     Ok(classify_tracks(probed.format.tracks()))
 }

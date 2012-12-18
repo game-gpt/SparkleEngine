@@ -42,7 +42,8 @@ impl CommandQueue {
     pub fn dispatch(&mut self, dt: f32, roster: &mut UnitRoster, _local: PlayerId) {
         let mut done = Vec::new();
         for (i, q) in self.items.iter().enumerate() {
-            let Some(u) = roster.get_mut(q.unit) else {
+            let Some(u) = roster.get_mut(q.unit)
+            else {
                 done.push(i);
                 continue;
             };
@@ -58,7 +59,8 @@ impl CommandQueue {
                     if dist <= step || dist < 1e-4 {
                         u.pose.pos = *target;
                         done.push(i);
-                    } else {
+                    }
+                    else {
                         u.pose.pos.x += dx / dist * step;
                         u.pose.pos.y += dy / dist * step;
                         u.pose.facing = dy.atan2(dx);

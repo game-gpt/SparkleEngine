@@ -46,13 +46,7 @@ pub struct PredictionClock {
 
 impl PredictionClock {
     pub fn new(buffer_cap: usize) -> Self {
-        Self {
-            local_tick: 0,
-            last_acked_tick: 0,
-            next_input_seq: Sequence(0),
-            pending: Vec::new(),
-            cap: buffer_cap.max(1),
-        }
+        Self { local_tick: 0, last_acked_tick: 0, next_input_seq: Sequence(0), pending: Vec::new(), cap: buffer_cap.max(1) }
     }
 
     /// 推进本地 tick 并登记一条输入序号。
@@ -86,8 +80,10 @@ impl PredictionClock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel::{ChannelKind, NetPacket, PacketHeader};
-    use crate::transport::{InMemoryBus, PeerId, Transport};
+    use crate::{
+        channel::{ChannelKind, NetPacket, PacketHeader},
+        transport::{InMemoryBus, PeerId, Transport},
+    };
 
     #[test]
     fn loopback_and_ack() {
@@ -99,11 +95,7 @@ mod tests {
             ea.send(
                 b,
                 NetPacket {
-                    header: PacketHeader {
-                        channel: ChannelKind::ReliableOrdered,
-                        sequence: Sequence(1),
-                        tick: 3,
-                    },
+                    header: PacketHeader { channel: ChannelKind::ReliableOrdered, sequence: Sequence(1), tick: 3 },
                     payload: b"hi".to_vec(),
                 },
             )

@@ -10,5 +10,5 @@ mod plugin;
 mod runtime;
 
 pub use backend::{NullSteamBackend, SteamBackend};
-pub use plugin::{SteamPlugin, STEAM_NATIVES};
+pub use plugin::{STEAM_NATIVES, SteamPlugin};
 pub use runtime::SteamRuntime;

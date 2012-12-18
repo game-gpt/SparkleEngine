@@ -3,10 +3,12 @@
 use spark_jit::JitEngine;
 use spark_vm::{HostHooks, StdHost, Vm};
 
-use crate::artifact::{ExecutableImage, LinkError};
-use crate::host_schema::HostSchema;
-use crate::request::LanguageProfile;
-use crate::ScriptError;
+use crate::{
+    ScriptError,
+    artifact::{ExecutableImage, LinkError},
+    host_schema::HostSchema,
+    request::LanguageProfile,
+};
 
 /// 运行时实例：VM + 可选 JIT。由映像创建，不解析源码。
 pub struct ScriptRuntime {
@@ -20,9 +22,7 @@ pub struct ScriptRuntime {
 impl ScriptRuntime {
     /// 使用编译期同一份 schema 装载映像。
     pub fn from_image(image: &ExecutableImage, host: &HostSchema) -> Result<Self, ScriptError> {
-        image
-            .check_host_schema(host)
-            .map_err(link_to_script_error)?;
+        image.check_host_schema(host).map_err(link_to_script_error)?;
         let mut vm = Vm::new(image.clone_module());
         vm.prepare_host_slots(host.qualified_names());
         Ok(Self {
@@ -43,10 +43,7 @@ impl ScriptRuntime {
     }
 
     /// 调用模组 `on_load` 生命周期（顶层语句块已封为目标时的入口）。
-    pub fn call_on_load(
-        &mut self,
-        host: &mut dyn HostHooks,
-    ) -> Result<spark_gc::Value, ScriptError> {
+    pub fn call_on_load(&mut self, host: &mut dyn HostHooks) -> Result<spark_gc::Value, ScriptError> {
         self.call("on_load", &[], host)
     }
 
@@ -56,12 +53,7 @@ impl ScriptRuntime {
         self.call_on_load(&mut host)
     }
 
-    pub fn call(
-        &mut self,
-        name: &str,
-        args: &[spark_gc::Value],
-        host: &mut dyn HostHooks,
-    ) -> Result<spark_gc::Value, ScriptError> {
+    pub fn call(&mut self, name: &str, args: &[spark_gc::Value], host: &mut dyn HostHooks) -> Result<spark_gc::Value, ScriptError> {
         let v = self.vm.call_function(name, args, host)?;
         let _ = self.jit.optimize_hot(&mut self.vm);
         Ok(v)

@@ -21,19 +21,13 @@ pub struct JsSparkHost {
 impl JsSparkHost {
     #[napi(constructor)]
     pub fn new() -> Self {
-        Self {
-            inner: SparkJsHost::new(),
-        }
+        Self { inner: SparkJsHost::new() }
     }
 
     #[napi]
     pub fn info(&self) -> JsEngineInfo {
         let i = self.inner.info();
-        JsEngineInfo {
-            name: i.name.into(),
-            version: i.version.into(),
-            npm_package: i.npm_package.into(),
-        }
+        JsEngineInfo { name: i.name.into(), version: i.version.into(), npm_package: i.npm_package.into() }
     }
 
     #[napi]
@@ -44,9 +38,7 @@ impl JsSparkHost {
     #[napi]
     pub fn load_bytes(&mut self, root: String, key: String) -> Result<u32> {
         // FFI 边界：向 JS 暴露稳定错误码（Display），不是自然语言句子。
-        self.inner
-            .load_bytes(&root, &key)
-            .map_err(|e| Error::from_reason(e.to_string()))
+        self.inner.load_bytes(&root, &key).map_err(|e| Error::from_reason(e.to_string()))
     }
 
     #[napi]

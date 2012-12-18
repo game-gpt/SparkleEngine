@@ -1,24 +1,20 @@
 //! 3D 游戏宿主：透视网格 + 深度 + 可选 HUD + 指针锁定。
 
-use std::cell::Cell;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Instant;
+use std::{cell::Cell, collections::HashMap, sync::Arc, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
 use spark_core::{Color, SparkError, codes};
 use spark_font::GlyphCache;
-use spark_renderer::{
-    DrawList, DrawList3d, FrameCtx, FrameLights3d, GameHost3d, Input, MeshCmd, MeshResidentKey,
-    MeshVertex, WindowConfig,
-};
+use spark_renderer::{DrawList, DrawList3d, FrameCtx, FrameLights3d, GameHost3d, Input, MeshCmd, MeshResidentKey, MeshVertex, WindowConfig};
 use spark_shader::{BuiltinShader, create_builtin};
-use winit::application::ApplicationHandler;
-use winit::dpi::LogicalSize;
-use winit::event::{DeviceEvent, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::ModifiersState;
-use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
+use winit::{
+    application::ApplicationHandler,
+    dpi::LogicalSize,
+    event::{DeviceEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::ModifiersState,
+    window::{CursorGrabMode, Window, WindowAttributes, WindowId},
+};
 
 use crate::winit_map;
 
@@ -84,12 +80,7 @@ struct GlyphVertex {
 
 fn mat4_to_cols(m: &spark_geometry::Mat4) -> [[f32; 4]; 4] {
     let c = m.as_cols();
-    [
-        [c[0], c[1], c[2], c[3]],
-        [c[4], c[5], c[6], c[7]],
-        [c[8], c[9], c[10], c[11]],
-        [c[12], c[13], c[14], c[15]],
-    ]
+    [[c[0], c[1], c[2], c[3]], [c[4], c[5], c[6], c[7]], [c[8], c[9], c[10], c[11]], [c[12], c[13], c[14], c[15]]]
 }
 
 /// 供 `tex_mesh` 模块复用。
@@ -163,9 +154,7 @@ impl GpuState3d {
         let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
         instance_desc.backends = wgpu::Backends::PRIMARY;
         let instance = wgpu::Instance::new(instance_desc);
-        let surface = instance
-            .create_surface(window.clone())
-            .map_err(|e| SparkError::new(codes::gpu_surface()).caused_by(e))?;
+        let surface = instance.create_surface(window.clone()).map_err(|e| SparkError::new(codes::gpu_surface()).caused_by(e))?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -175,8 +164,7 @@ impl GpuState3d {
             })
             .await
             .map_err(|_| {
-                SparkError::new(codes::gpu_adapter())
-                    .arg("reason", spark_core::ErrorArg::String(std::sync::Arc::from("no_adapter")))
+                SparkError::new(codes::gpu_adapter()).arg("reason", spark_core::ErrorArg::String(std::sync::Arc::from("no_adapter")))
             })?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -191,12 +179,7 @@ impl GpuState3d {
             .map_err(|e| SparkError::new(codes::gpu_device()).caused_by(e))?;
 
         let caps = surface.get_capabilities(&adapter);
-        let format = caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| f.is_srgb())
-            .unwrap_or(caps.formats[0]);
+        let format = caps.formats.iter().copied().find(|f| f.is_srgb()).unwrap_or(caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
@@ -226,9 +209,7 @@ impl GpuState3d {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
-                    min_binding_size: crate::dyn_ubo::binding_size(
-                        std::mem::size_of::<Uniforms3d>() as u64,
-                    ),
+                    min_binding_size: crate::dyn_ubo::binding_size(std::mem::size_of::<Uniforms3d>() as u64),
                 },
                 count: None,
             }],
@@ -238,16 +219,11 @@ impl GpuState3d {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
+                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                 count: None,
             }],
         });
-        let mesh_uniform_stride =
-            crate::dyn_ubo::uniform_stride(&device, std::mem::size_of::<Uniforms3d>() as u64);
+        let mesh_uniform_stride = crate::dyn_ubo::uniform_stride(&device, std::mem::size_of::<Uniforms3d>() as u64);
         let mesh_uniform_slots = 512usize;
         let mesh_uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("mesh3d-uniform-ring"),
@@ -276,10 +252,7 @@ impl GpuState3d {
         let lights_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("frame-lights-bg"),
             layout: &lights_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: lights_uniform.as_entire_binding(),
-            }],
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: lights_uniform.as_entire_binding() }],
         });
         let mesh_vert_layout = wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<MeshVertGpu>() as u64,
@@ -542,11 +515,7 @@ impl GpuState3d {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                cull_mode: None,
-                ..Default::default()
-            },
+            primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleList, cull_mode: None, ..Default::default() },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: Some(false),
@@ -563,11 +532,7 @@ impl GpuState3d {
         let (aw, ah) = glyph_cache.atlas_size();
         let glyph_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("glyph-atlas-3d"),
-            size: wgpu::Extent3d {
-                width: aw,
-                height: ah,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width: aw, height: ah, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -577,23 +542,10 @@ impl GpuState3d {
         });
         let glyph_view = glyph_tex.create_view(&Default::default());
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &glyph_tex,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
+            wgpu::TexelCopyTextureInfo { texture: &glyph_tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
             glyph_cache.atlas_bytes(),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(aw),
-                rows_per_image: Some(ah),
-            },
-            wgpu::Extent3d {
-                width: aw,
-                height: ah,
-                depth_or_array_layers: 1,
-            },
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(aw), rows_per_image: Some(ah) },
+            wgpu::Extent3d { width: aw, height: ah, depth_or_array_layers: 1 },
         );
         glyph_cache.take_dirty();
 
@@ -608,11 +560,7 @@ impl GpuState3d {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
+                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                 count: None,
             }],
         });
@@ -622,11 +570,7 @@ impl GpuState3d {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
@@ -656,27 +600,15 @@ impl GpuState3d {
         let solid_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("solid-hud-bg"),
             layout: &hud_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: hud_uniform.as_entire_binding(),
-            }],
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: hud_uniform.as_entire_binding() }],
         });
         let glyph_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("glyph-hud-bg"),
             layout: &glyph_bgl,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: hud_uniform.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&glyph_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: hud_uniform.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&glyph_view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&sampler) },
             ],
         });
 
@@ -773,8 +705,7 @@ impl GpuState3d {
         });
 
         tracing::info!(event = "spark.renderer.gpu3d_ready");
-        let tex_mesh =
-            crate::tex_mesh::TexMeshGpu::new(&device, format, &lights_bgl, shadow.sample_bgl());
+        let tex_mesh = crate::tex_mesh::TexMeshGpu::new(&device, format, &lights_bgl, shadow.sample_bgl());
         let skinned_mesh = crate::skinned_mesh::SkinnedMeshGpu::new(&device, format, &lights_bgl);
         let bloom = crate::bloom::BloomGpu::new(&device, format);
         Ok(Self {
@@ -834,23 +765,11 @@ impl GpuState3d {
     }
 
     fn upload_mesh_verts(&self, vertices: &[MeshVertex]) -> Vec<MeshVertGpu> {
-        vertices
-            .iter()
-            .map(|v| MeshVertGpu {
-                pos: v.pos,
-                normal: v.normal,
-                color: v.color,
-            })
-            .collect()
+        vertices.iter().map(|v| MeshVertGpu { pos: v.pos, normal: v.normal, color: v.color }).collect()
     }
 
     /// 提交一组顶点色网格（天空或不透明）；`view_proj` 由调用方选择主相机或天空 VP。
-    fn draw_mesh_cmds(
-        &self,
-        pass: &mut wgpu::RenderPass<'_>,
-        meshes: &[MeshCmd],
-        view_proj: &spark_geometry::Mat4,
-    ) {
+    fn draw_mesh_cmds(&self, pass: &mut wgpu::RenderPass<'_>, meshes: &[MeshCmd], view_proj: &spark_geometry::Mat4) {
         let vp = mat4_to_cols(view_proj);
         // 每条 draw 独立槽；游标跨 pass 累加，因 `write_buffer` 在 submit 前合并。
         let mut slot = self.mesh_uniform_next.get();
@@ -860,11 +779,9 @@ impl GpuState3d {
                 continue;
             }
             let drawable = if let Some(key) = mesh.resident {
-                self.mesh_cache
-                    .get(&key.id.0)
-                    .map(|e| e.vertex_count > 0)
-                    .unwrap_or(false)
-            } else {
+                self.mesh_cache.get(&key.id.0).map(|e| e.vertex_count > 0).unwrap_or(false)
+            }
+            else {
                 !mesh.vertices.is_empty() && (mesh.vertices.len() as u64) <= self.mesh_cap
             };
             if !drawable {
@@ -873,13 +790,9 @@ impl GpuState3d {
             if slot >= self.mesh_uniform_slots {
                 break;
             }
-            let uniforms = Uniforms3d {
-                view_proj: vp,
-                model: mat4_to_cols(&mesh.model),
-            };
+            let uniforms = Uniforms3d { view_proj: vp, model: mat4_to_cols(&mesh.model) };
             let off = slot as u64 * self.mesh_uniform_stride;
-            self.queue
-                .write_buffer(&self.mesh_uniform, off, bytemuck::bytes_of(&uniforms));
+            self.queue.write_buffer(&self.mesh_uniform, off, bytemuck::bytes_of(&uniforms));
             planned.push((off as u32, mi));
             slot += 1;
         }
@@ -888,7 +801,8 @@ impl GpuState3d {
             let mesh = &meshes[mi];
             pass.set_bind_group(0, &self.mesh_bind, &[dyn_off]);
             if let Some(key) = mesh.resident {
-                let Some(entry) = self.mesh_cache.get(&key.id.0) else {
+                let Some(entry) = self.mesh_cache.get(&key.id.0)
+                else {
                     continue;
                 };
                 if entry.vertex_count == 0 {
@@ -897,13 +811,13 @@ impl GpuState3d {
                 let vcount = entry.vertex_count;
                 pass.set_vertex_buffer(0, entry.buffer.slice(..));
                 pass.draw(0..vcount, 0..1);
-            } else {
+            }
+            else {
                 let gpu_verts = self.upload_mesh_verts(&mesh.vertices);
                 if gpu_verts.len() as u64 > self.mesh_cap {
                     continue;
                 }
-                self.queue
-                    .write_buffer(&self.mesh_vbo, 0, bytemuck::cast_slice(&gpu_verts));
+                self.queue.write_buffer(&self.mesh_vbo, 0, bytemuck::cast_slice(&gpu_verts));
                 pass.set_vertex_buffer(0, self.mesh_vbo.slice(..));
                 pass.draw(0..gpu_verts.len() as u32, 0..1);
             }
@@ -911,11 +825,7 @@ impl GpuState3d {
     }
 
     /// 确保驻留网格与 `revision` 一致，过期则重建 VBO。
-    fn resident_stale(
-        entry: Option<&ResidentMesh>,
-        key: MeshResidentKey,
-        vertex_count: usize,
-    ) -> bool {
+    fn resident_stale(entry: Option<&ResidentMesh>, key: MeshResidentKey, vertex_count: usize) -> bool {
         match entry {
             Some(e) => e.revision != key.revision || e.vertex_count as usize != vertex_count,
             None => vertex_count > 0,
@@ -937,17 +847,9 @@ impl GpuState3d {
             mapped_at_creation: false,
         });
         if !gpu_verts.is_empty() {
-            self.queue
-                .write_buffer(&buffer, 0, bytemuck::cast_slice(&gpu_verts));
+            self.queue.write_buffer(&buffer, 0, bytemuck::cast_slice(&gpu_verts));
         }
-        self.mesh_cache.insert(
-            key.id.0,
-            ResidentMesh {
-                buffer,
-                vertex_count: gpu_verts.len() as u32,
-                revision: key.revision,
-            },
-        );
+        self.mesh_cache.insert(key.id.0, ResidentMesh { buffer, vertex_count: gpu_verts.len() as u32, revision: key.revision });
     }
 
     fn ensure_solid_cap(&mut self, need: u64) -> Result<(), SparkError> {
@@ -999,30 +901,12 @@ impl GpuState3d {
             let y1 = q.rect.y + q.rect.h;
             let c = q.color.to_array();
             solids.extend_from_slice(&[
-                SolidVertex {
-                    pos: [x0, y0],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x1, y0],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x1, y1],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x0, y0],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x1, y1],
-                    color: c,
-                },
-                SolidVertex {
-                    pos: [x0, y1],
-                    color: c,
-                },
+                SolidVertex { pos: [x0, y0], color: c },
+                SolidVertex { pos: [x1, y0], color: c },
+                SolidVertex { pos: [x1, y1], color: c },
+                SolidVertex { pos: [x0, y0], color: c },
+                SolidVertex { pos: [x1, y1], color: c },
+                SolidVertex { pos: [x0, y1], color: c },
             ]);
         }
         let mut glyphs = Vec::new();
@@ -1033,7 +917,8 @@ impl GpuState3d {
                 if ch == '\n' {
                     continue;
                 }
-                let Some(g) = self.glyph_cache.glyph(ch, t.size) else {
+                let Some(g) = self.glyph_cache.glyph(ch, t.size)
+                else {
                     continue;
                 };
                 let x0 = pen_x;
@@ -1043,36 +928,12 @@ impl GpuState3d {
                 let c = t.color.to_array();
                 let (u0, v0, u1, v1) = (g.uv_min[0], g.uv_min[1], g.uv_max[0], g.uv_max[1]);
                 glyphs.extend_from_slice(&[
-                    GlyphVertex {
-                        pos: [x0, y0],
-                        uv: [u0, v0],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x1, y0],
-                        uv: [u1, v0],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x1, y1],
-                        uv: [u1, v1],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x0, y0],
-                        uv: [u0, v0],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x1, y1],
-                        uv: [u1, v1],
-                        color: c,
-                    },
-                    GlyphVertex {
-                        pos: [x0, y1],
-                        uv: [u0, v1],
-                        color: c,
-                    },
+                    GlyphVertex { pos: [x0, y0], uv: [u0, v0], color: c },
+                    GlyphVertex { pos: [x1, y0], uv: [u1, v0], color: c },
+                    GlyphVertex { pos: [x1, y1], uv: [u1, v1], color: c },
+                    GlyphVertex { pos: [x0, y0], uv: [u0, v0], color: c },
+                    GlyphVertex { pos: [x1, y1], uv: [u1, v1], color: c },
+                    GlyphVertex { pos: [x0, y1], uv: [u0, v1], color: c },
                 ]);
                 pen_x += g.advance;
             }
@@ -1087,27 +948,12 @@ impl GpuState3d {
                     aspect: wgpu::TextureAspect::All,
                 },
                 self.glyph_cache.atlas_bytes(),
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(aw),
-                    rows_per_image: Some(ah),
-                },
-                wgpu::Extent3d {
-                    width: aw,
-                    height: ah,
-                    depth_or_array_layers: 1,
-                },
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(aw), rows_per_image: Some(ah) },
+                wgpu::Extent3d { width: aw, height: ah, depth_or_array_layers: 1 },
             );
         }
 
-        self.queue.write_buffer(
-            &self.hud_uniform,
-            0,
-            bytemuck::bytes_of(&HudUniforms {
-                screen: [sw, sh],
-                _pad: [0.0; 2],
-            }),
-        );
+        self.queue.write_buffer(&self.hud_uniform, 0, bytemuck::bytes_of(&HudUniforms { screen: [sw, sh], _pad: [0.0; 2] }));
         if solids.len() as u64 > self.solid_cap {
             self.ensure_solid_cap(solids.len() as u64)?;
         }
@@ -1115,12 +961,10 @@ impl GpuState3d {
             self.ensure_glyph_cap(glyphs.len() as u64)?;
         }
         if !solids.is_empty() {
-            self.queue
-                .write_buffer(&self.solid_vbo, 0, bytemuck::cast_slice(&solids));
+            self.queue.write_buffer(&self.solid_vbo, 0, bytemuck::cast_slice(&solids));
         }
         if !glyphs.is_empty() {
-            self.queue
-                .write_buffer(&self.glyph_vbo, 0, bytemuck::cast_slice(&glyphs));
+            self.queue.write_buffer(&self.glyph_vbo, 0, bytemuck::cast_slice(&glyphs));
         }
 
         let (frame, _) = match self.surface.get_current_texture() {
@@ -1162,42 +1006,28 @@ impl GpuState3d {
                 uploads += 1;
             }
         }
-        self.tex_mesh
-            .ingest_uploads(&self.device, &self.queue, &list.texture_uploads)?;
+        self.tex_mesh.ingest_uploads(&self.device, &self.queue, &list.texture_uploads)?;
         self.tex_mesh.prepare_residents(&self.device, list);
         self.skinned_mesh.prepare_residents(&self.device, list);
 
         let lights_gpu = FrameLightsGpu::from_lights(&list.lights);
-        self.queue
-            .write_buffer(&self.lights_uniform, 0, bytemuck::bytes_of(&lights_gpu));
+        self.queue.write_buffer(&self.lights_uniform, 0, bytemuck::bytes_of(&lights_gpu));
 
         let use_bloom = list.bloom_strength > 0.001;
         if use_bloom {
-            self.bloom
-                .resize(&self.device, self.config.width, self.config.height);
+            self.bloom.resize(&self.device, self.config.width, self.config.height);
         }
         // 克隆场景 RT 视图，避免与后续 `bloom.apply` 借用冲突。
-        let scene_color = if use_bloom {
-            self.bloom.scene_view().map(|v| v.clone())
-        } else {
-            None
-        };
+        let scene_color = if use_bloom { self.bloom.scene_view().map(|v| v.clone()) } else { None };
         let color_view = scene_color.as_ref().unwrap_or(&view);
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("frame3d"),
-            });
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame3d") });
 
         self.shadow.write_params(&self.queue, list);
-        self.shadow
-            .render_casters(&mut encoder, &self.device, &self.queue, list);
+        self.shadow.render_casters(&mut encoder, &self.device, &self.queue, list);
 
         // SkyPass：大气穹顶 → 顶点色天体 → 加性光晕；不写深度；随后清深度再画不透明世界。
-        let has_sky = !list.sky_atmosphere_meshes.is_empty()
-            || !list.sky_meshes.is_empty()
-            || !list.sky_emissive_meshes.is_empty();
+        let has_sky = !list.sky_atmosphere_meshes.is_empty() || !list.sky_meshes.is_empty() || !list.sky_emissive_meshes.is_empty();
         if has_sky {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky"),
@@ -1217,10 +1047,7 @@ impl GpuState3d {
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
                     stencil_ops: None,
                 }),
                 ..Default::default()
@@ -1248,7 +1075,8 @@ impl GpuState3d {
                     b: list.clear.b as f64,
                     a: list.clear.a as f64,
                 })
-            } else {
+            }
+            else {
                 wgpu::LoadOp::Load
             };
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1256,10 +1084,7 @@ impl GpuState3d {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: color_view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: color_load,
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: color_load, store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -1277,21 +1102,8 @@ impl GpuState3d {
             pass.set_bind_group(1, &self.lights_bind, &[]);
             pass.set_bind_group(2, self.shadow.sample_bind(), &[]);
             self.draw_mesh_cmds(&mut pass, &list.meshes, &list.view_proj);
-            self.tex_mesh.draw(
-                &mut pass,
-                &self.queue,
-                list,
-                &self.lights_bind,
-                self.shadow.sample_bind(),
-            )?;
-            self.skinned_mesh.draw(
-                &mut pass,
-                &self.device,
-                &self.queue,
-                list,
-                &self.lights_bind,
-                &list.view_proj,
-            )?;
+            self.tex_mesh.draw(&mut pass, &self.queue, list, &self.lights_bind, self.shadow.sample_bind())?;
+            self.skinned_mesh.draw(&mut pass, &self.device, &self.queue, list, &self.lights_bind, &list.view_proj)?;
         }
 
         if !list.tex_meshes_xlu.is_empty() || !list.meshes_xlu.is_empty() {
@@ -1300,18 +1112,12 @@ impl GpuState3d {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: color_view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store }),
                     stencil_ops: None,
                 }),
                 ..Default::default()
@@ -1323,13 +1129,7 @@ impl GpuState3d {
                 self.draw_mesh_cmds(&mut pass, &list.meshes_xlu, &list.view_proj);
             }
             if !list.tex_meshes_xlu.is_empty() {
-                self.tex_mesh.draw_xlu(
-                    &mut pass,
-                    &self.queue,
-                    list,
-                    &self.lights_bind,
-                    self.shadow.sample_bind(),
-                )?;
+                self.tex_mesh.draw_xlu(&mut pass, &self.queue, list, &self.lights_bind, self.shadow.sample_bind())?;
             }
         }
 
@@ -1339,18 +1139,12 @@ impl GpuState3d {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: color_view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store }),
                     stencil_ops: None,
                 }),
                 ..Default::default()
@@ -1360,8 +1154,7 @@ impl GpuState3d {
                 self.draw_mesh_cmds(&mut pass, &list.meshes_emissive, &list.view_proj);
             }
             if !list.tex_meshes_emissive.is_empty() {
-                self.tex_mesh
-                    .draw_emissive(&mut pass, &self.queue, list, &self.lights_bind)?;
+                self.tex_mesh.draw_emissive(&mut pass, &self.queue, list, &self.lights_bind)?;
             }
         }
 
@@ -1372,18 +1165,12 @@ impl GpuState3d {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: color_view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
                     stencil_ops: None,
                 }),
                 ..Default::default()
@@ -1396,12 +1183,7 @@ impl GpuState3d {
 
         // 场景色 → bloom → 交换链；HUD 叠在交换链上保持清晰。
         if use_bloom {
-            self.bloom.apply(
-                &mut encoder,
-                &self.queue,
-                &view,
-                list.bloom_strength,
-            );
+            self.bloom.apply(&mut encoder, &self.queue, &view, list.bloom_strength);
         }
 
         {
@@ -1410,10 +1192,7 @@ impl GpuState3d {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
@@ -1444,11 +1223,7 @@ impl GpuState3d {
 fn make_depth(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Texture, wgpu::TextureView) {
     let tex = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("depth"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
+        size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -1500,12 +1275,7 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
         }
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _id: WindowId,
-        event: WindowEvent,
-    ) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
@@ -1518,8 +1288,7 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Some(k) = winit_map::key(event.physical_key) {
-                    self.input
-                        .on_key(k, winit_map::button_state(event.state));
+                    self.input.on_key(k, winit_map::button_state(event.state));
                 }
                 if event.state == winit::event::ElementState::Pressed {
                     if let Some(text) = event.text.as_ref() {
@@ -1540,18 +1309,14 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
             },
             WindowEvent::MouseInput { state, button, .. } => {
                 if let Some(b) = winit_map::mouse_btn(button) {
-                    self.input
-                        .on_mouse_button(b, winit_map::button_state(state));
+                    self.input.on_mouse_button(b, winit_map::button_state(state));
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 self.input.on_wheel(winit_map::wheel_lines(delta));
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.input.on_cursor(
-                    position.x as f32 / self.scale,
-                    position.y as f32 / self.scale,
-                );
+                self.input.on_cursor(position.x as f32 / self.scale, position.y as f32 / self.scale);
             }
             WindowEvent::ModifiersChanged(m) => {
                 self.modifiers = m.state();
@@ -1561,15 +1326,9 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
         }
     }
 
-    fn device_event(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-        _device_id: winit::event::DeviceId,
-        event: DeviceEvent,
-    ) {
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: winit::event::DeviceId, event: DeviceEvent) {
         if let DeviceEvent::MouseMotion { delta } = event {
-            self.input
-                .on_mouse_delta(delta.0 as f32, delta.1 as f32);
+            self.input.on_mouse_delta(delta.0 as f32, delta.1 as f32);
         }
     }
 
@@ -1582,17 +1341,18 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
 
 impl<H: GameHost3d> HostApp3d<H> {
     fn frame(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(gpu) = self.state.as_mut() else {
+        let Some(gpu) = self.state.as_mut()
+        else {
             return;
         };
 
         let want_grab = self.host.cursor_grab();
         if want_grab != self.grab_applied {
             if want_grab {
-                let _ = gpu.window.set_cursor_grab(CursorGrabMode::Locked)
-                    .or_else(|_| gpu.window.set_cursor_grab(CursorGrabMode::Confined));
+                let _ = gpu.window.set_cursor_grab(CursorGrabMode::Locked).or_else(|_| gpu.window.set_cursor_grab(CursorGrabMode::Confined));
                 gpu.window.set_cursor_visible(false);
-            } else {
+            }
+            else {
                 let _ = gpu.window.set_cursor_grab(CursorGrabMode::None);
                 gpu.window.set_cursor_visible(true);
             }
@@ -1610,13 +1370,7 @@ impl<H: GameHost3d> HostApp3d<H> {
 
         let t_update = Instant::now();
         {
-            let frame = FrameCtx {
-                input: &self.input,
-                dt,
-                screen_w: sw,
-                screen_h: sh,
-                timing: prev_timing,
-            };
+            let frame = FrameCtx { input: &self.input, dt, screen_w: sw, screen_h: sh, timing: prev_timing };
             self.host.update(&frame);
         }
         let update_ms = t_update.elapsed().as_secs_f32() * 1000.0;
@@ -1646,12 +1400,7 @@ impl<H: GameHost3d> HostApp3d<H> {
         }
         let render_ms = t_render.elapsed().as_secs_f32() * 1000.0;
 
-        self.timing = spark_renderer::FrameTiming {
-            frame_sec: raw_sec,
-            update_ms,
-            draw_ms,
-            render_ms,
-        };
+        self.timing = spark_renderer::FrameTiming { frame_sec: raw_sec, update_ms, draw_ms, render_ms };
         self.frame_index = self.frame_index.wrapping_add(1);
         let frame_ms = raw_sec * 1000.0;
         if frame_ms > 33.0 || self.frame_index % 120 == 0 {
@@ -1673,13 +1422,8 @@ impl<H: GameHost3d> HostApp3d<H> {
 }
 
 /// 窗口事件泵 + GPU 提交（3D）。帧相位编排请走 `spark_engine::run_game_3d`。
-pub fn run_window_3d<H: GameHost3d + 'static>(
-    config: WindowConfig,
-    host: H,
-) -> Result<(), SparkError> {
-    let event_loop = EventLoop::new().map_err(|e| {
-        SparkError::new(codes::gpu_event_loop()).caused_by(e)
-    })?;
+pub fn run_window_3d<H: GameHost3d + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
+    let event_loop = EventLoop::new().map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))?;
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = HostApp3d {
         config,
@@ -1693,7 +1437,5 @@ pub fn run_window_3d<H: GameHost3d + 'static>(
         grab_applied: false,
         modifiers: ModifiersState::default(),
     };
-    event_loop
-        .run_app(&mut app)
-        .map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
+    event_loop.run_app(&mut app).map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
 }

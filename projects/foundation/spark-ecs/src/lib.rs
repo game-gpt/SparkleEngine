@@ -2,8 +2,10 @@
 //!
 //! **Component** 为纯数据；系统为纯逻辑。界面树在 `spark-widget`，不进本 crate。
 
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+};
 
 /// 任意 `'static + Send + Sync` 类型均可作 Component。
 pub trait Component: Send + Sync + 'static {}
@@ -53,9 +55,7 @@ impl Column {
         Self {
             data: Box::new(Vec::<T>::new()),
             swap_remove: |any, row| {
-                any.downcast_mut::<Vec<T>>()
-                    .expect("列类型")
-                    .swap_remove(row);
+                any.downcast_mut::<Vec<T>>().expect("列类型").swap_remove(row);
             },
             take_push: |src, row, dst| {
                 // 不变式：src/dst 为不同 `Vec<T>`，无别名。
@@ -85,12 +85,7 @@ struct Archetype {
 
 impl Archetype {
     fn empty() -> Self {
-        Self {
-            type_ids: Vec::new(),
-            entities: Vec::new(),
-            columns: Vec::new(),
-            col_of: HashMap::new(),
-        }
+        Self { type_ids: Vec::new(), entities: Vec::new(), columns: Vec::new(), col_of: HashMap::new() }
     }
 
     fn with_types(ids: Vec<TypeId>, ctors: Vec<fn() -> Column>) -> Self {
@@ -100,12 +95,7 @@ impl Archetype {
             col_of.insert(id, i);
             columns.push(ctor());
         }
-        Self {
-            type_ids: ids,
-            entities: Vec::new(),
-            columns,
-            col_of,
-        }
+        Self { type_ids: ids, entities: Vec::new(), columns, col_of }
     }
 
     fn len(&self) -> usize {
@@ -125,21 +115,15 @@ impl Resources {
     }
 
     pub fn remove<T: Send + Sync + 'static>(&mut self) -> Option<T> {
-        self.map
-            .remove(&TypeId::of::<T>())
-            .and_then(|b| b.downcast::<T>().ok().map(|b| *b))
+        self.map.remove(&TypeId::of::<T>()).and_then(|b| b.downcast::<T>().ok().map(|b| *b))
     }
 
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
-        self.map
-            .get(&TypeId::of::<T>())
-            .and_then(|b| b.downcast_ref::<T>())
+        self.map.get(&TypeId::of::<T>()).and_then(|b| b.downcast_ref::<T>())
     }
 
     pub fn get_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
-        self.map
-            .get_mut(&TypeId::of::<T>())
-            .and_then(|b| b.downcast_mut::<T>())
+        self.map.get_mut(&TypeId::of::<T>()).and_then(|b| b.downcast_mut::<T>())
     }
 }
 
@@ -176,22 +160,16 @@ impl World {
     }
 
     fn register_ctor<T: Component>(&mut self) {
-        self.ctors
-            .entry(TypeId::of::<T>())
-            .or_insert(Column::new::<T>);
+        self.ctors.entry(TypeId::of::<T>()).or_insert(Column::new::<T>);
     }
 
     fn ensure_archetype(&mut self, types: Vec<TypeId>) -> usize {
         if let Some(&idx) = self.archetype_index.get(&types) {
             return idx;
         }
-        let ctors: Vec<fn() -> Column> = types
-            .iter()
-            .map(|t| *self.ctors.get(t).expect("Component 构造器未注册"))
-            .collect();
+        let ctors: Vec<fn() -> Column> = types.iter().map(|t| *self.ctors.get(t).expect("Component 构造器未注册")).collect();
         let idx = self.archetypes.len();
-        self.archetypes
-            .push(Archetype::with_types(types.clone(), ctors));
+        self.archetypes.push(Archetype::with_types(types.clone(), ctors));
         self.archetype_index.insert(types, idx);
         idx
     }
@@ -200,7 +178,8 @@ impl World {
         if let Some(index) = self.free.pop() {
             let generation = self.generations[index as usize];
             Entity::new(index, generation)
-        } else {
+        }
+        else {
             let index = self.locations.len() as u32;
             self.locations.push(None);
             self.generations.push(1);
@@ -221,8 +200,7 @@ impl World {
 
     pub fn is_alive(&self, entity: Entity) -> bool {
         let i = entity.index() as usize;
-        matches!(self.locations.get(i), Some(Some(_)))
-            && self.generations.get(i).copied() == Some(entity.generation())
+        matches!(self.locations.get(i), Some(Some(_))) && self.generations.get(i).copied() == Some(entity.generation())
     }
 
     pub fn entity_count(&self) -> usize {
@@ -237,13 +215,7 @@ impl World {
         let entity = self.alloc_entity();
         let row = self.archetypes[0].len() as u32;
         self.archetypes[0].entities.push(entity);
-        self.set_loc(
-            entity,
-            EntityLoc {
-                archetype: 0,
-                row,
-            },
-        );
+        self.set_loc(entity, EntityLoc { archetype: 0, row });
         entity
     }
 
@@ -258,13 +230,7 @@ impl World {
             arch.entities.push(entity);
             arch.columns[0].vec_mut::<T>().push(component);
         }
-        self.set_loc(
-            entity,
-            EntityLoc {
-                archetype: arch_idx as u32,
-                row,
-            },
-        );
+        self.set_loc(entity, EntityLoc { archetype: arch_idx as u32, row });
         entity
     }
 
@@ -284,13 +250,7 @@ impl World {
             arch.columns[ia].vec_mut::<A>().push(a);
             arch.columns[ib].vec_mut::<B>().push(b);
         }
-        self.set_loc(
-            entity,
-            EntityLoc {
-                archetype: arch_idx as u32,
-                row,
-            },
-        );
+        self.set_loc(entity, EntityLoc { archetype: arch_idx as u32, row });
         entity
     }
 
@@ -301,13 +261,7 @@ impl World {
         let loc = self.locations[entity.index() as usize].unwrap();
         let swapped = self.swap_remove_row(loc.archetype as usize, loc.row as usize);
         if let Some(moved) = swapped {
-            self.set_loc(
-                moved,
-                EntityLoc {
-                    archetype: loc.archetype,
-                    row: loc.row,
-                },
-            );
+            self.set_loc(moved, EntityLoc { archetype: loc.archetype, row: loc.row });
         }
         self.invalidate(entity);
         true
@@ -321,11 +275,7 @@ impl World {
         for col in &mut arch.columns {
             (col.swap_remove)(col.data.as_mut(), row);
         }
-        if row < last {
-            Some(arch.entities[row])
-        } else {
-            None
-        }
+        if row < last { Some(arch.entities[row]) } else { None }
     }
 
     pub fn get<T: Component>(&self, entity: Entity) -> Option<&T> {
@@ -375,10 +325,7 @@ impl World {
         let loc = self.locations[entity.index() as usize].unwrap();
         let src_idx = loc.archetype as usize;
         let row = loc.row as usize;
-        if !self.archetypes[src_idx]
-            .col_of
-            .contains_key(&TypeId::of::<T>())
-        {
+        if !self.archetypes[src_idx].col_of.contains_key(&TypeId::of::<T>()) {
             return None;
         }
         let mut new_types = self.archetypes[src_idx].type_ids.clone();
@@ -387,14 +334,7 @@ impl World {
         self.migrate_except::<T>(entity, src_idx, row, dst_idx)
     }
 
-    fn migrate<T: Component>(
-        &mut self,
-        entity: Entity,
-        src_idx: usize,
-        row: usize,
-        dst_idx: usize,
-        new_value: Option<T>,
-    ) {
+    fn migrate<T: Component>(&mut self, entity: Entity, src_idx: usize, row: usize, dst_idx: usize, new_value: Option<T>) {
         let src_types = self.archetypes[src_idx].type_ids.clone();
         let dst_row = self.archetypes[dst_idx].len() as u32;
 
@@ -404,11 +344,7 @@ impl World {
             // 分属不同 archetype，列缓冲无别名。
             let (src_arch, dst_arch) = two_mut(&mut self.archetypes, src_idx, dst_idx);
             let take = src_arch.columns[src_col].take_push;
-            take(
-                src_arch.columns[src_col].data.as_mut(),
-                row,
-                dst_arch.columns[dst_col].data.as_mut(),
-            );
+            take(src_arch.columns[src_col].data.as_mut(), row, dst_arch.columns[dst_col].data.as_mut());
         }
 
         if let Some(v) = new_value {
@@ -424,37 +360,15 @@ impl World {
             let last = src.entities.len() - 1;
             src.entities.swap_remove(row);
             // 各列已在 take_push 中 swap_remove(row)
-            if row < last {
-                Some(src.entities[row])
-            } else {
-                None
-            }
+            if row < last { Some(src.entities[row]) } else { None }
         };
         if let Some(moved) = swapped {
-            self.set_loc(
-                moved,
-                EntityLoc {
-                    archetype: src_idx as u32,
-                    row: row as u32,
-                },
-            );
+            self.set_loc(moved, EntityLoc { archetype: src_idx as u32, row: row as u32 });
         }
-        self.set_loc(
-            entity,
-            EntityLoc {
-                archetype: dst_idx as u32,
-                row: dst_row,
-            },
-        );
+        self.set_loc(entity, EntityLoc { archetype: dst_idx as u32, row: dst_row });
     }
 
-    fn migrate_except<T: Component>(
-        &mut self,
-        entity: Entity,
-        src_idx: usize,
-        row: usize,
-        dst_idx: usize,
-    ) -> Option<T> {
+    fn migrate_except<T: Component>(&mut self, entity: Entity, src_idx: usize, row: usize, dst_idx: usize) -> Option<T> {
         let skip = TypeId::of::<T>();
         let src_types = self.archetypes[src_idx].type_ids.clone();
         let dst_row = self.archetypes[dst_idx].len() as u32;
@@ -470,11 +384,7 @@ impl World {
             let dst_col = self.archetypes[dst_idx].col_of[tid];
             let (src_arch, dst_arch) = two_mut(&mut self.archetypes, src_idx, dst_idx);
             let take = src_arch.columns[src_col].take_push;
-            take(
-                src_arch.columns[src_col].data.as_mut(),
-                row,
-                dst_arch.columns[dst_col].data.as_mut(),
-            );
+            take(src_arch.columns[src_col].data.as_mut(), row, dst_arch.columns[dst_col].data.as_mut());
         }
 
         self.archetypes[dst_idx].entities.push(entity);
@@ -482,35 +392,20 @@ impl World {
             let src = &mut self.archetypes[src_idx];
             let last = src.entities.len() - 1;
             src.entities.swap_remove(row);
-            if row < last {
-                Some(src.entities[row])
-            } else {
-                None
-            }
+            if row < last { Some(src.entities[row]) } else { None }
         };
         if let Some(moved) = swapped {
-            self.set_loc(
-                moved,
-                EntityLoc {
-                    archetype: src_idx as u32,
-                    row: row as u32,
-                },
-            );
+            self.set_loc(moved, EntityLoc { archetype: src_idx as u32, row: row as u32 });
         }
-        self.set_loc(
-            entity,
-            EntityLoc {
-                archetype: dst_idx as u32,
-                row: dst_row,
-            },
-        );
+        self.set_loc(entity, EntityLoc { archetype: dst_idx as u32, row: dst_row });
         taken
     }
 
     pub fn for_each<T: Component>(&self, mut f: impl FnMut(Entity, &T)) {
         let tid = TypeId::of::<T>();
         for arch in &self.archetypes {
-            let Some(&col) = arch.col_of.get(&tid) else {
+            let Some(&col) = arch.col_of.get(&tid)
+            else {
                 continue;
             };
             let vec = arch.columns[col].vec::<T>();
@@ -523,7 +418,8 @@ impl World {
     pub fn for_each_mut<T: Component>(&mut self, mut f: impl FnMut(Entity, &mut T)) {
         let tid = TypeId::of::<T>();
         for arch in &mut self.archetypes {
-            let Some(&col) = arch.col_of.get(&tid) else {
+            let Some(&col) = arch.col_of.get(&tid)
+            else {
                 continue;
             };
             let n = arch.entities.len();
@@ -535,10 +431,7 @@ impl World {
         }
     }
 
-    pub fn for_each2_mut<A: Component, B: Component>(
-        &mut self,
-        mut f: impl FnMut(Entity, &mut A, &mut B),
-    ) {
+    pub fn for_each2_mut<A: Component, B: Component>(&mut self, mut f: impl FnMut(Entity, &mut A, &mut B)) {
         let ta = TypeId::of::<A>();
         let tb = TypeId::of::<B>();
         for arch in &mut self.archetypes {
@@ -554,16 +447,11 @@ impl World {
             }
             let (a_slice, b_slice) = if ia < ib {
                 let (left, right) = arch.columns.split_at_mut(ib);
-                (
-                    left[ia].vec_mut::<A>().as_mut_slice(),
-                    right[0].vec_mut::<B>().as_mut_slice(),
-                )
-            } else {
+                (left[ia].vec_mut::<A>().as_mut_slice(), right[0].vec_mut::<B>().as_mut_slice())
+            }
+            else {
                 let (left, right) = arch.columns.split_at_mut(ia);
-                (
-                    right[0].vec_mut::<A>().as_mut_slice(),
-                    left[ib].vec_mut::<B>().as_mut_slice(),
-                )
+                (right[0].vec_mut::<A>().as_mut_slice(), left[ib].vec_mut::<B>().as_mut_slice())
             };
             for i in 0..n {
                 f(entities[i], &mut a_slice[i], &mut b_slice[i]);
@@ -577,7 +465,8 @@ fn two_mut<T>(slice: &mut [T], i: usize, j: usize) -> (&mut T, &mut T) {
     if i < j {
         let (left, right) = slice.split_at_mut(j);
         (&mut left[i], &mut right[0])
-    } else {
+    }
+    else {
         let (left, right) = slice.split_at_mut(i);
         (&mut right[0], &mut left[j])
     }
@@ -641,11 +530,7 @@ impl Schedule {
         self
     }
 
-    pub fn add_fn(
-        &mut self,
-        name: &'static str,
-        f: impl FnMut(&mut World) + Send + 'static,
-    ) -> &mut Self {
+    pub fn add_fn(&mut self, name: &'static str, f: impl FnMut(&mut World) + Send + 'static) -> &mut Self {
         self.add_system(FunctionSystem::new(name, f))
     }
 

@@ -11,11 +11,7 @@ pub struct Theme {
 
 impl Default for Theme {
     fn default() -> Self {
-        Self {
-            colors: UiColors::default(),
-            typography: Typography::default(),
-            spacing: Spacing::default(),
-        }
+        Self { colors: UiColors::default(), typography: Typography::default(), spacing: Spacing::default() }
     }
 }
 
@@ -57,11 +53,7 @@ pub struct Typography {
 
 impl Default for Typography {
     fn default() -> Self {
-        Self {
-            body_size: 16.0,
-            heading_size: 22.0,
-            label_size: 14.0,
-        }
+        Self { body_size: 16.0, heading_size: 22.0, label_size: 14.0 }
     }
 }
 
@@ -75,11 +67,6 @@ pub struct Spacing {
 
 impl Default for Spacing {
     fn default() -> Self {
-        Self {
-            xs: 4.0,
-            sm: 8.0,
-            md: 12.0,
-            lg: 20.0,
-        }
+        Self { xs: 4.0, sm: 8.0, md: 12.0, lg: 20.0 }
     }
 }

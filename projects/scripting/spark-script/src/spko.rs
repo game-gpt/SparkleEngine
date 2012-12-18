@@ -4,12 +4,11 @@
 
 use std::sync::Arc;
 
-use crate::artifact::{SparkObject, ARTIFACT_FORMAT_VERSION};
-use crate::codec::{
-    read_language, read_module, write_language, write_module, ArtifactIoError, Reader, Writer,
-    SPKO_MAGIC,
+use crate::{
+    artifact::{ARTIFACT_FORMAT_VERSION, SparkObject},
+    codec::{ArtifactIoError, Reader, SPKO_MAGIC, Writer, read_language, read_module, write_language, write_module},
+    request::PackageId,
 };
-use crate::request::PackageId;
 
 impl SparkObject {
     /// 编码为 `.spko` 字节。
@@ -44,9 +43,7 @@ impl SparkObject {
         }
         let format_version = r.u32()?;
         if format_version != ARTIFACT_FORMAT_VERSION {
-            return Err(ArtifactIoError::UnsupportedFormat {
-                version: format_version,
-            });
+            return Err(ArtifactIoError::UnsupportedFormat { version: format_version });
         }
         let compiler_version = Arc::<str>::from(r.str()?);
         let host_abi_version = r.u32()?;
@@ -64,17 +61,7 @@ impl SparkObject {
             imports.push(Arc::<str>::from(r.str()?));
         }
         let module = read_module(&mut r)?;
-        Ok(Self {
-            format_version,
-            compiler_version,
-            package,
-            language,
-            host_schema_hash,
-            host_abi_version,
-            module,
-            exports,
-            imports,
-        })
+        Ok(Self { format_version, compiler_version, package, language, host_schema_hash, host_abi_version, module, exports, imports })
     }
 
     /// 写入 `.spko` 文件。
@@ -94,21 +81,19 @@ impl SparkObject {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artifact::{ExecutableImage, LinkedProgram};
-    use crate::codec::SPKO_MAGIC;
-    use crate::host_schema::{HostFunction, HostFunctionId, HostSchema};
-    use crate::request::{LanguageProfile, PackageId};
-    use crate::ScriptLanguage;
+    use crate::{
+        ScriptLanguage,
+        artifact::{ExecutableImage, LinkedProgram},
+        codec::SPKO_MAGIC,
+        host_schema::{HostFunction, HostFunctionId, HostSchema},
+        request::{LanguageProfile, PackageId},
+    };
     use spark_script_valkyrie::NativeParam;
     use spark_vm::{FuncProto, Module, Op};
 
     fn schema_with_print() -> HostSchema {
         let mut schema = HostSchema::new(1);
-        schema.insert(
-            HostFunction::new(HostFunctionId::new("host", "print", 1))
-                .param(NativeParam::new("msg", "String"))
-                .returns("Null"),
-        );
+        schema.insert(HostFunction::new(HostFunctionId::new("host", "print", 1)).param(NativeParam::new("msg", "String")).returns("Null"));
         schema
     }
 
@@ -124,11 +109,7 @@ mod tests {
             PackageId::new("unit", "0.1"),
             LanguageProfile::default_for(ScriptLanguage::Valkyrie),
             &host,
-            Module {
-                functions: vec![f],
-                entry: 0,
-                native_names: vec!["print".into()],
-            },
+            Module { functions: vec![f], entry: 0, native_names: vec!["print".into()] },
         )
         .unwrap();
         let bytes = obj.to_spko_bytes().unwrap();

@@ -13,19 +13,13 @@ pub struct Camera2d {
 
 impl Default for Camera2d {
     fn default() -> Self {
-        Self {
-            origin: Vec2::ZERO,
-            zoom: 1.0,
-        }
+        Self { origin: Vec2::ZERO, zoom: 1.0 }
     }
 }
 
 impl Camera2d {
     pub fn new(origin: Vec2, zoom: f32) -> Self {
-        Self {
-            origin,
-            zoom: sanitize_zoom(zoom),
-        }
+        Self { origin, zoom: sanitize_zoom(zoom) }
     }
 
     pub fn world_to_screen(&self, world: Vec2) -> Vec2 {
@@ -42,15 +36,7 @@ impl Camera2d {
     ///
     /// `deadzone` 是相对中心的世界单位半宽与半高。`screen_w` / `screen_h` 为像素。
     /// 屏幕尺寸为 0 时，`origin` 本身就是跟随点。
-    pub fn follow_center(
-        &mut self,
-        target: Vec2,
-        screen_w: f32,
-        screen_h: f32,
-        deadzone: Vec2,
-        lerp: f32,
-        dt: f32,
-    ) {
+    pub fn follow_center(&mut self, target: Vec2, screen_w: f32, screen_h: f32, deadzone: Vec2, lerp: f32, dt: f32) {
         let z = sanitize_zoom(self.zoom);
         self.zoom = z;
         let half = Vec2::new(screen_w * 0.5 / z, screen_h * 0.5 / z);
@@ -65,20 +51,13 @@ impl Camera2d {
             desired.y = target.y - dy.signum() * deadzone.y;
         }
         let t = (lerp * dt).clamp(0.0, 1.0);
-        let next = Vec2::new(
-            center.x + (desired.x - center.x) * t,
-            center.y + (desired.y - center.y) * t,
-        );
+        let next = Vec2::new(center.x + (desired.x - center.x) * t, center.y + (desired.y - center.y) * t);
         self.origin = Vec2::new(next.x - half.x, next.y - half.y);
     }
 }
 
 fn sanitize_zoom(zoom: f32) -> f32 {
-    if zoom.is_finite() && zoom > 1.0e-6 {
-        zoom
-    } else {
-        1.0
-    }
+    if zoom.is_finite() && zoom > 1.0e-6 { zoom } else { 1.0 }
 }
 
 #[cfg(test)]

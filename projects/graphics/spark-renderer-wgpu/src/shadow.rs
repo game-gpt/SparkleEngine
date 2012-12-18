@@ -2,10 +2,9 @@
 
 use bytemuck::{Pod, Zeroable};
 use spark_renderer::{
-    DrawList3d, Frustum, MeshCmd, MeshResidentKey, MeshVertex, ShadowParams3d, TexMeshCmd,
-    TexMeshVertex, MAX_SHADOW_CASCADES,
+    DrawList3d, Frustum, MAX_SHADOW_CASCADES, MeshCmd, MeshResidentKey, MeshVertex, ShadowParams3d, TexMeshCmd, TexMeshVertex,
 };
-use spark_shader::{create_builtin, BuiltinShader};
+use spark_shader::{BuiltinShader, create_builtin};
 use wgpu::util::DeviceExt;
 
 use crate::game3d::mat4_to_cols_pub;
@@ -64,11 +63,7 @@ impl ShadowMapGpu {
     pub fn new(device: &wgpu::Device) -> Self {
         let map = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("sun-shadow-map"),
-            size: wgpu::Extent3d {
-                width: MAP_SIZE,
-                height: MAP_SIZE,
-                depth_or_array_layers: MAX_SHADOW_CASCADES as u32,
-            },
+            size: wgpu::Extent3d { width: MAP_SIZE, height: MAP_SIZE, depth_or_array_layers: MAX_SHADOW_CASCADES as u32 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -104,15 +99,12 @@ impl ShadowMapGpu {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
-                    min_binding_size: crate::dyn_ubo::binding_size(
-                        std::mem::size_of::<ObjectUniforms>() as u64,
-                    ),
+                    min_binding_size: crate::dyn_ubo::binding_size(std::mem::size_of::<ObjectUniforms>() as u64),
                 },
                 count: None,
             }],
         });
-        let object_uniform_stride =
-            crate::dyn_ubo::uniform_stride(device, std::mem::size_of::<ObjectUniforms>() as u64);
+        let object_uniform_stride = crate::dyn_ubo::uniform_stride(device, std::mem::size_of::<ObjectUniforms>() as u64);
         let object_uniform_slots = 512usize;
         let object_uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("shadow-object-uniform-ring"),
@@ -128,9 +120,7 @@ impl ShadowMapGpu {
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &object_uniform,
                     offset: 0,
-                    size: crate::dyn_ubo::binding_size(
-                        std::mem::size_of::<ObjectUniforms>() as u64,
-                    ),
+                    size: crate::dyn_ubo::binding_size(std::mem::size_of::<ObjectUniforms>() as u64),
                 }),
             }],
         });
@@ -165,11 +155,7 @@ impl ShadowMapGpu {
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 2,
-                    slope_scale: 1.5,
-                    clamp: 0.0,
-                },
+                bias: wgpu::DepthBiasState { constant: 2, slope_scale: 1.5, clamp: 0.0 },
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
@@ -201,11 +187,7 @@ impl ShadowMapGpu {
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 2,
-                    slope_scale: 1.5,
-                    clamp: 0.0,
-                },
+                bias: wgpu::DepthBiasState { constant: 2, slope_scale: 1.5, clamp: 0.0 },
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
@@ -234,11 +216,7 @@ impl ShadowMapGpu {
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                     count: None,
                 },
             ],
@@ -260,18 +238,9 @@ impl ShadowMapGpu {
             label: Some("shadow-sample-bg"),
             layout: &shadow_bgl,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&sample_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&shadow_samp),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: shadow_uniform.as_entire_binding(),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&sample_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&shadow_samp) },
+                wgpu::BindGroupEntry { binding: 2, resource: shadow_uniform.as_entire_binding() },
             ],
         });
 
@@ -326,13 +295,7 @@ impl ShadowMapGpu {
     }
 
     /// 将不透明投射体写入各级联阴影层。
-    pub fn render_casters(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        list: &DrawList3d,
-    ) {
+    pub fn render_casters(&mut self, encoder: &mut wgpu::CommandEncoder, device: &wgpu::Device, queue: &wgpu::Queue, list: &DrawList3d) {
         if !list.shadow.enabled {
             return;
         }
@@ -345,10 +308,7 @@ impl ShadowMapGpu {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.layer_views[layer],
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
                     stencil_ops: None,
                 }),
                 ..Default::default()
@@ -358,24 +318,10 @@ impl ShadowMapGpu {
             let light_frustum = Frustum::from_view_proj(&light_vp);
             let mut ubo_slot = 0usize;
             pass.set_pipeline(&self.depth_pipeline_mesh);
-            self.draw_mesh_depth(
-                &mut pass,
-                queue,
-                &list.meshes,
-                &light_vp,
-                &light_frustum,
-                &mut ubo_slot,
-            );
+            self.draw_mesh_depth(&mut pass, queue, &list.meshes, &light_vp, &light_frustum, &mut ubo_slot);
 
             pass.set_pipeline(&self.depth_pipeline_tex);
-            self.draw_tex_depth(
-                &mut pass,
-                queue,
-                &list.tex_meshes,
-                &light_vp,
-                &light_frustum,
-                &mut ubo_slot,
-            );
+            self.draw_tex_depth(&mut pass, queue, &list.tex_meshes, &light_vp, &light_frustum, &mut ubo_slot);
         }
     }
 
@@ -421,13 +367,7 @@ impl ShadowMapGpu {
         }
     }
 
-    fn ensure_mesh(
-        &mut self,
-        device: &wgpu::Device,
-        id: u64,
-        revision: u32,
-        verts: &[MeshVertex],
-    ) {
+    fn ensure_mesh(&mut self, device: &wgpu::Device, id: u64, revision: u32, verts: &[MeshVertex]) {
         if let Some(e) = self.mesh_cache.get(&id) {
             if e.revision == revision && e.vertex_count as usize == verts.len() {
                 return;
@@ -449,23 +389,10 @@ impl ShadowMapGpu {
             contents: bytemuck::cast_slice(&packed),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        self.mesh_cache.insert(
-            id,
-            DepthResident {
-                buffer,
-                vertex_count: verts.len() as u32,
-                revision,
-            },
-        );
+        self.mesh_cache.insert(id, DepthResident { buffer, vertex_count: verts.len() as u32, revision });
     }
 
-    fn ensure_tex(
-        &mut self,
-        device: &wgpu::Device,
-        id: u64,
-        revision: u32,
-        verts: &[TexMeshVertex],
-    ) {
+    fn ensure_tex(&mut self, device: &wgpu::Device, id: u64, revision: u32, verts: &[TexMeshVertex]) {
         if let Some(e) = self.tex_cache.get(&id) {
             if e.revision == revision && e.vertex_count as usize == verts.len() {
                 return;
@@ -487,14 +414,7 @@ impl ShadowMapGpu {
             contents: bytemuck::cast_slice(&packed),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        self.tex_cache.insert(
-            id,
-            DepthResident {
-                buffer,
-                vertex_count: verts.len() as u32,
-                revision,
-            },
-        );
+        self.tex_cache.insert(id, DepthResident { buffer, vertex_count: verts.len() as u32, revision });
     }
 
     fn draw_mesh_depth(
@@ -512,15 +432,13 @@ impl ShadowMapGpu {
             if !mesh.casts_shadow {
                 continue;
             }
-            if mesh
-                .world_aabb()
-                .is_some_and(|aabb| !light_frustum.intersects_aabb(&aabb))
-            {
+            if mesh.world_aabb().is_some_and(|aabb| !light_frustum.intersects_aabb(&aabb)) {
                 continue;
             }
             let drawable = if let Some(key) = mesh.resident {
                 self.mesh_cache.contains_key(&key.id.0)
-            } else {
+            }
+            else {
                 !mesh.vertices.is_empty() && (mesh.vertices.len() as u64) <= self.transient_cap
             };
             if !drawable {
@@ -529,10 +447,7 @@ impl ShadowMapGpu {
             if *ubo_slot >= self.object_uniform_slots {
                 break;
             }
-            let uniforms = ObjectUniforms {
-                view_proj: vp,
-                model: mat4_to_cols_pub(&mesh.model),
-            };
+            let uniforms = ObjectUniforms { view_proj: vp, model: mat4_to_cols_pub(&mesh.model) };
             let off = *ubo_slot as u64 * self.object_uniform_stride;
             queue.write_buffer(&self.object_uniform, off, bytemuck::bytes_of(&uniforms));
             planned.push((off as u32, mi));
@@ -542,12 +457,14 @@ impl ShadowMapGpu {
             let mesh = &meshes[mi];
             pass.set_bind_group(0, &self.object_bind, &[dyn_off]);
             if let Some(key) = mesh.resident {
-                let Some(e) = self.mesh_cache.get(&key.id.0) else {
+                let Some(e) = self.mesh_cache.get(&key.id.0)
+                else {
                     continue;
                 };
                 pass.set_vertex_buffer(0, e.buffer.slice(..));
                 pass.draw(0..e.vertex_count, 0..1);
-            } else if (mesh.vertices.len() as u64) <= self.transient_cap {
+            }
+            else if (mesh.vertices.len() as u64) <= self.transient_cap {
                 let mut packed = Vec::with_capacity(mesh.vertices.len() * 10);
                 for v in mesh.vertices.iter() {
                     packed.extend_from_slice(&v.pos);
@@ -576,15 +493,13 @@ impl ShadowMapGpu {
             if !mesh.casts_shadow {
                 continue;
             }
-            if mesh
-                .world_aabb()
-                .is_some_and(|aabb| !light_frustum.intersects_aabb(&aabb))
-            {
+            if mesh.world_aabb().is_some_and(|aabb| !light_frustum.intersects_aabb(&aabb)) {
                 continue;
             }
             let drawable = if let Some(key) = mesh.resident {
                 self.tex_cache.contains_key(&key.id.0)
-            } else {
+            }
+            else {
                 !mesh.vertices.is_empty() && (mesh.vertices.len() as u64) <= self.transient_cap
             };
             if !drawable {
@@ -593,10 +508,7 @@ impl ShadowMapGpu {
             if *ubo_slot >= self.object_uniform_slots {
                 break;
             }
-            let uniforms = ObjectUniforms {
-                view_proj: vp,
-                model: mat4_to_cols_pub(&mesh.model),
-            };
+            let uniforms = ObjectUniforms { view_proj: vp, model: mat4_to_cols_pub(&mesh.model) };
             let off = *ubo_slot as u64 * self.object_uniform_stride;
             queue.write_buffer(&self.object_uniform, off, bytemuck::bytes_of(&uniforms));
             planned.push((off as u32, mi));
@@ -606,12 +518,14 @@ impl ShadowMapGpu {
             let mesh = &meshes[mi];
             pass.set_bind_group(0, &self.object_bind, &[dyn_off]);
             if let Some(key) = mesh.resident {
-                let Some(e) = self.tex_cache.get(&key.id.0) else {
+                let Some(e) = self.tex_cache.get(&key.id.0)
+                else {
                     continue;
                 };
                 pass.set_vertex_buffer(0, e.buffer.slice(..));
                 pass.draw(0..e.vertex_count, 0..1);
-            } else if (mesh.vertices.len() as u64) <= self.transient_cap {
+            }
+            else if (mesh.vertices.len() as u64) <= self.transient_cap {
                 let mut packed = Vec::with_capacity(mesh.vertices.len() * 12);
                 for v in mesh.vertices.iter() {
                     packed.extend_from_slice(&v.pos);
@@ -635,17 +549,7 @@ fn pack_shadow_uniforms(s: &ShadowParams3d) -> ShadowUniformsGpu {
     let count = s.cascade_count.clamp(1, MAX_SHADOW_CASCADES as u32) as f32;
     ShadowUniformsGpu {
         light_view_proj,
-        params: [
-            if s.enabled { 1.0 } else { 0.0 },
-            s.bias,
-            s.strength,
-            count,
-        ],
-        splits: [
-            s.split_end[0],
-            s.split_end[1],
-            s.split_end[2],
-            1.0 / MAP_SIZE as f32,
-        ],
+        params: [if s.enabled { 1.0 } else { 0.0 }, s.bias, s.strength, count],
+        splits: [s.split_end[0], s.split_end[1], s.split_end[2], 1.0 / MAP_SIZE as f32],
     }
 }

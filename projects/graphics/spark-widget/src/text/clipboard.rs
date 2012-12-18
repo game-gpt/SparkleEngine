@@ -20,11 +20,7 @@ impl MemoryClipboard {
 
 impl Clipboard for MemoryClipboard {
     fn get_text(&mut self) -> Option<String> {
-        if self.text.is_empty() {
-            None
-        } else {
-            Some(self.text.clone())
-        }
+        if self.text.is_empty() { None } else { Some(self.text.clone()) }
     }
 
     fn set_text(&mut self, text: &str) {

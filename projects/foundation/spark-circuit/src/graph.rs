@@ -54,9 +54,7 @@ impl CircuitError {
 
     pub fn args(&self) -> ErrorArgs {
         match self {
-            Self::UnknownNode(id) => {
-                ErrorArgs::new().with("node", ErrorArg::Unsigned(u64::from(*id)))
-            }
+            Self::UnknownNode(id) => ErrorArgs::new().with("node", ErrorArg::Unsigned(u64::from(*id))),
         }
     }
 }
@@ -153,7 +151,8 @@ impl CircuitGraph {
         if a >= self.node_count || b >= self.node_count {
             return Err(CircuitError::UnknownNode(a.max(b)));
         }
-        let Some(adj) = self.adj.get_mut(channel.0 as usize) else {
+        let Some(adj) = self.adj.get_mut(channel.0 as usize)
+        else {
             return Ok(());
         };
         adj[a as usize].retain(|&n| n != b);
@@ -180,11 +179,7 @@ impl CircuitGraph {
     }
 
     /// 多源可达（含所有源）。空源得到全 false。
-    pub fn reachable_from_any(
-        &self,
-        sources: &[NodeId],
-        channel: Channel,
-    ) -> Result<Vec<bool>, CircuitError> {
+    pub fn reachable_from_any(&self, sources: &[NodeId], channel: Channel) -> Result<Vec<bool>, CircuitError> {
         for &s in sources {
             if s >= self.node_count {
                 return Err(CircuitError::UnknownNode(s));
@@ -225,7 +220,8 @@ impl CircuitGraph {
             stack.clear();
             stack.push(start as NodeId);
             while let Some(cur) = stack.pop() {
-                let Some(neis) = adj.get(cur as usize) else {
+                let Some(neis) = adj.get(cur as usize)
+                else {
                     continue;
                 };
                 for &n in neis {
@@ -255,12 +251,7 @@ impl CircuitGraph {
     }
 
     /// `a` 与 `b` 是否在同一连通分量（同通道）。
-    pub fn same_component(
-        &self,
-        a: NodeId,
-        b: NodeId,
-        channel: Channel,
-    ) -> Result<bool, CircuitError> {
+    pub fn same_component(&self, a: NodeId, b: NodeId, channel: Channel) -> Result<bool, CircuitError> {
         if a >= self.node_count {
             return Err(CircuitError::UnknownNode(a));
         }
@@ -358,7 +349,8 @@ impl CircuitGraph {
         while qh < queue.len() {
             let cur = queue[qh];
             qh += 1;
-            let Some(neis) = adj.get(cur as usize) else {
+            let Some(neis) = adj.get(cur as usize)
+            else {
                 continue;
             };
             for &n in neis {

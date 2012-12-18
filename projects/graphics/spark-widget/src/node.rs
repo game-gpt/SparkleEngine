@@ -1,8 +1,10 @@
 //! Widget 节点与种类。
 
-use crate::id::WidgetId;
-use crate::layout::{ComputedLayout, LayoutSpec};
-use crate::style::Style;
+use crate::{
+    id::WidgetId,
+    layout::{ComputedLayout, LayoutSpec},
+    style::Style,
+};
 
 /// Widget 种类（retained）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,10 +97,7 @@ pub struct WidgetStateFlags {
 
 impl WidgetStateFlags {
     pub fn enabled_visible() -> Self {
-        Self {
-            visible: true,
-            ..Self::default()
-        }
+        Self { visible: true, ..Self::default() }
     }
 }
 

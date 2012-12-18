@@ -3,8 +3,10 @@
 use spark_ecs::{Schedule, World};
 use spark_renderer::DrawList3d;
 
-use crate::ecs_host::{AppExit, EcsHost3d};
-use crate::render3d::{RenderFrame3d, RenderSchedule3d, RenderSystem3d};
+use crate::{
+    ecs_host::{AppExit, EcsHost3d},
+    render3d::{RenderFrame3d, RenderSchedule3d, RenderSystem3d},
+};
 
 /// 3D 游戏装配根。建成后交给 [`EcsHost3d`]。
 pub struct SparkApp3d {
@@ -23,11 +25,7 @@ impl SparkApp3d {
     pub fn new() -> Self {
         let mut world = World::new();
         world.resources.insert(AppExit::default());
-        Self {
-            world,
-            sim: Schedule::new(),
-            render: RenderSchedule3d::new(),
-        }
+        Self { world, sim: Schedule::new(), render: RenderSchedule3d::new() }
     }
 
     pub fn world_mut(&mut self) -> &mut World {
@@ -39,11 +37,7 @@ impl SparkApp3d {
         self
     }
 
-    pub fn add_system(
-        &mut self,
-        name: &'static str,
-        f: impl FnMut(&mut World) + Send + 'static,
-    ) -> &mut Self {
+    pub fn add_system(&mut self, name: &'static str, f: impl FnMut(&mut World) + Send + 'static) -> &mut Self {
         self.sim.add_fn(name, f);
         self
     }
@@ -105,13 +99,7 @@ mod tests {
         app.add_plugin(&Paint);
         let mut host = app.into_host();
         let input = Input::default();
-        host.update(&FrameCtx {
-            input: &input,
-            dt: 0.016,
-            screen_w: 800.0,
-            screen_h: 600.0,
-            timing: Default::default(),
-        });
+        host.update(&FrameCtx { input: &input, dt: 0.016, screen_w: 800.0, screen_h: 600.0, timing: Default::default() });
         let mut draw = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), Mat4::IDENTITY);
         host.draw(&mut draw);
         assert!((draw.clear.r - 2.0).abs() < 1e-5);

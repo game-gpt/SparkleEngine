@@ -3,7 +3,7 @@
 pub mod bubble;
 pub mod router;
 
-pub use bubble::{bubble_from, bubble_path, capture_path, propagate, Phase};
+pub use bubble::{Phase, bubble_from, bubble_path, capture_path, propagate};
 pub use router::hit_test;
 
 use crate::id::WidgetId;
@@ -58,4 +58,3 @@ pub struct EventContext<'a> {
     pub commands: &'a mut crate::command::UiCommandQueue,
     pub phase: Phase,
 }
-

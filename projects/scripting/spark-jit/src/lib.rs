@@ -53,10 +53,7 @@ impl Default for JitEngine {
 
 impl JitEngine {
     pub fn new(threshold: u32) -> Self {
-        Self {
-            threshold,
-            stubs: HashMap::new(),
-        }
+        Self { threshold, stubs: HashMap::new() }
     }
 
     pub fn stubs(&self) -> &HashMap<usize, JitStub> {
@@ -66,22 +63,11 @@ impl JitEngine {
     /// 扫描 VM 热度，对超阈值函数做字节码特化。
     pub fn optimize_hot(&mut self, vm: &mut Vm) -> Result<usize, JitError> {
         let mut n = 0;
-        let hot: Vec<(usize, u32)> = vm
-            .hotness
-            .iter()
-            .enumerate()
-            .filter(|(i, h)| **h >= self.threshold && !self.stubs.contains_key(i))
-            .map(|(i, h)| (i, *h))
-            .collect();
+        let hot: Vec<(usize, u32)> =
+            vm.hotness.iter().enumerate().filter(|(i, h)| **h >= self.threshold && !self.stubs.contains_key(i)).map(|(i, h)| (i, *h)).collect();
         for (idx, hotness) in hot {
             specialize_func(&mut vm.module.functions[idx])?;
-            self.stubs.insert(
-                idx,
-                JitStub {
-                    func: idx,
-                    specialized_from_hotness: hotness,
-                },
-            );
+            self.stubs.insert(idx, JitStub { func: idx, specialized_from_hotness: hotness });
             n += 1;
         }
         Ok(n)
@@ -124,25 +110,25 @@ fn operand_bytes(op: u8) -> usize {
         || op == Op::JumpIfTrue as u8
     {
         2
-    } else if op == Op::Call as u8 || op == Op::Pop as u8 {
+    }
+    else if op == Op::Call as u8 || op == Op::Pop as u8 {
         1
-    } else if op == Op::JitEnter as u8 {
+    }
+    else if op == Op::JitEnter as u8 {
         4
-    } else if op == Op::LoadString as u8 {
+    }
+    else if op == Op::LoadString as u8 {
         2
-    } else if op == Op::CallNative as u8 || op == Op::CallHost as u8 {
+    }
+    else if op == Op::CallNative as u8 || op == Op::CallHost as u8 {
         3
-    } else {
+    }
+    else {
         0
     }
 }
 
-fn try_fold_const_binop(
-    f: &mut FuncProto,
-    code: &[u8],
-    i: &mut usize,
-    out: &mut Vec<u8>,
-) -> Result<bool, JitError> {
+fn try_fold_const_binop(f: &mut FuncProto, code: &[u8], i: &mut usize, out: &mut Vec<u8>) -> Result<bool, JitError> {
     if *i + 6 >= code.len() {
         return Ok(false);
     }
@@ -152,34 +138,32 @@ fn try_fold_const_binop(
     let bin = code[*i + 6];
     let a = u16::from_le_bytes([code[*i + 1], code[*i + 2]]) as usize;
     let b = u16::from_le_bytes([code[*i + 4], code[*i + 5]]) as usize;
-    let Some(x) = f.consts.get(a).and_then(|v| v.as_number()) else {
+    let Some(x) = f.consts.get(a).and_then(|v| v.as_number())
+    else {
         return Ok(false);
     };
-    let Some(y) = f.consts.get(b).and_then(|v| v.as_number()) else {
+    let Some(y) = f.consts.get(b).and_then(|v| v.as_number())
+    else {
         return Ok(false);
     };
 
-    if bin == Op::Add as u8
-        || bin == Op::Sub as u8
-        || bin == Op::Mul as u8
-        || bin == Op::Div as u8
-        || bin == Op::Mod as u8
-    {
+    if bin == Op::Add as u8 || bin == Op::Sub as u8 || bin == Op::Mul as u8 || bin == Op::Div as u8 || bin == Op::Mod as u8 {
         let r = if bin == Op::Add as u8 {
             x + y
-        } else if bin == Op::Sub as u8 {
+        }
+        else if bin == Op::Sub as u8 {
             x - y
-        } else if bin == Op::Mul as u8 {
+        }
+        else if bin == Op::Mul as u8 {
             x * y
-        } else if bin == Op::Mod as u8 {
-            if y == 0.0 {
-                0.0
-            } else {
-                x % y
-            }
-        } else if y == 0.0 {
+        }
+        else if bin == Op::Mod as u8 {
+            if y == 0.0 { 0.0 } else { x % y }
+        }
+        else if y == 0.0 {
             0.0
-        } else {
+        }
+        else {
             x / y
         };
         let idx = f.add_const_number(r);
@@ -191,27 +175,30 @@ fn try_fold_const_binop(
 
     let cmp = if bin == Op::Eq as u8 {
         Some(x == y)
-    } else if bin == Op::Ne as u8 {
+    }
+    else if bin == Op::Ne as u8 {
         Some(x != y)
-    } else if bin == Op::Lt as u8 {
+    }
+    else if bin == Op::Lt as u8 {
         Some(x < y)
-    } else if bin == Op::Le as u8 {
+    }
+    else if bin == Op::Le as u8 {
         Some(x <= y)
-    } else if bin == Op::Gt as u8 {
+    }
+    else if bin == Op::Gt as u8 {
         Some(x > y)
-    } else if bin == Op::Ge as u8 {
+    }
+    else if bin == Op::Ge as u8 {
         Some(x >= y)
-    } else {
+    }
+    else {
         None
     };
-    let Some(flag) = cmp else {
+    let Some(flag) = cmp
+    else {
         return Ok(false);
     };
-    out.push(if flag {
-        Op::LoadTrue as u8
-    } else {
-        Op::LoadFalse as u8
-    });
+    out.push(if flag { Op::LoadTrue as u8 } else { Op::LoadFalse as u8 });
     *i += 7;
     Ok(true)
 }
@@ -249,11 +236,7 @@ mod tests {
         // 应变为单 LoadConst + Return
         assert_eq!(f.code[0], Op::LoadConst as u8);
         assert_eq!(f.code[3], Op::Return as u8);
-        let mut vm = Vm::new(VmModule {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        });
+        let mut vm = Vm::new(VmModule { functions: vec![f], entry: 0, native_names: Vec::new() });
         let v = vm.run(&mut Nop).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
     }
@@ -272,11 +255,7 @@ mod tests {
         specialize_func(&mut f).unwrap();
         assert_eq!(f.code[0], Op::LoadConst as u8);
         assert_eq!(f.code[3], Op::Return as u8);
-        let mut vm = Vm::new(VmModule {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        });
+        let mut vm = Vm::new(VmModule { functions: vec![f], entry: 0, native_names: Vec::new() });
         let v = vm.run(&mut Nop).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
     }
@@ -295,11 +274,7 @@ mod tests {
         specialize_func(&mut f).unwrap();
         assert_eq!(f.code[0], Op::LoadConst as u8);
         assert_eq!(f.code[3], Op::Return as u8);
-        let mut vm = Vm::new(VmModule {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        });
+        let mut vm = Vm::new(VmModule { functions: vec![f], entry: 0, native_names: Vec::new() });
         let v = vm.run(&mut Nop).unwrap();
         assert_eq!(v.as_number(), Some(2.0));
     }
@@ -318,11 +293,7 @@ mod tests {
         specialize_func(&mut f).unwrap();
         assert_eq!(f.code[0], Op::LoadTrue as u8);
         assert_eq!(f.code[1], Op::Return as u8);
-        let mut vm = Vm::new(VmModule {
-            functions: vec![f],
-            entry: 0,
-            native_names: Vec::new(),
-        });
+        let mut vm = Vm::new(VmModule { functions: vec![f], entry: 0, native_names: Vec::new() });
         let v = vm.run(&mut Nop).unwrap();
         assert!(v.truthy());
     }

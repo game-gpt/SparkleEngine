@@ -2,10 +2,12 @@
 
 use spark_geometry::{Quat, Trs, Vec3};
 
-use crate::clip::{AnimationClip, AnimationFrame};
-use crate::pose::LocalPose;
-use crate::skeleton::Skeleton;
-use crate::track::{JointTrack, QuatKey, SkinnedAnimationClip, Vec3Key};
+use crate::{
+    clip::{AnimationClip, AnimationFrame},
+    pose::LocalPose,
+    skeleton::Skeleton,
+    track::{JointTrack, QuatKey, SkinnedAnimationClip, Vec3Key},
+};
 
 /// 把时间折进 `[0, duration)`。时长过小则返回 0。
 pub fn wrap_time(time: f32, duration: f32) -> f32 {
@@ -39,7 +41,8 @@ pub fn sample_frames<T: Clone>(frames: &[AnimationFrame<T>], time: f32) -> Optio
     for frame in frames {
         if frame.time <= time {
             chosen = frame;
-        } else {
+        }
+        else {
             break;
         }
     }
@@ -47,11 +50,7 @@ pub fn sample_frames<T: Clone>(frames: &[AnimationFrame<T>], time: f32) -> Optio
 }
 
 /// 在 `time`（秒）采样局部姿态。超出时长时循环。
-pub fn sample_skinned_clip(
-    skeleton: &Skeleton,
-    clip: &SkinnedAnimationClip,
-    time: f32,
-) -> LocalPose {
+pub fn sample_skinned_clip(skeleton: &Skeleton, clip: &SkinnedAnimationClip, time: f32) -> LocalPose {
     let mut pose = LocalPose::rest(skeleton);
     let t = wrap_time(time, clip.duration);
     for track in &clip.tracks {

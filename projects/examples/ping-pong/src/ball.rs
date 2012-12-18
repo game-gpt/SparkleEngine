@@ -13,13 +13,6 @@ pub struct Ball {
 impl Ball {
     pub fn serve(court_w: f32, court_h: f32, to_right: bool) -> Self {
         let speed = 360.0;
-        Self {
-            x: court_w * 0.5,
-            y: court_h * 0.5,
-            vx: if to_right { speed } else { -speed },
-            vy: speed * 0.35,
-            radius: 8.0,
-            speed,
-        }
+        Self { x: court_w * 0.5, y: court_h * 0.5, vx: if to_right { speed } else { -speed }, vy: speed * 0.35, radius: 8.0, speed }
     }
 }

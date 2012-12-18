@@ -1,7 +1,9 @@
 use spark_core::{Color, Rect, SparkError, Vec2};
 
-use crate::camera2d::Camera2d;
-use crate::texture::{alloc_texture_id, RgbaImage, TextureId};
+use crate::{
+    camera2d::Camera2d,
+    texture::{RgbaImage, TextureId, alloc_texture_id},
+};
 
 #[derive(Debug, Clone)]
 pub struct QuadCmd {
@@ -104,28 +106,15 @@ impl DrawList {
             Some(clip) => rect.intersect(*clip),
             None => rect,
         };
-        if clipped.is_empty() {
-            None
-        } else {
-            Some(clipped)
-        }
+        if clipped.is_empty() { None } else { Some(clipped) }
     }
 
     fn map_world(&self, rect: Rect) -> Rect {
         if self.layer != DrawLayer2d::World {
             return rect;
         }
-        let z = if self.camera.zoom.is_finite() && self.camera.zoom > 1.0e-6 {
-            self.camera.zoom
-        } else {
-            1.0
-        };
-        Rect::new(
-            (rect.x - self.camera.origin.x) * z,
-            (rect.y - self.camera.origin.y) * z,
-            rect.w * z,
-            rect.h * z,
-        )
+        let z = if self.camera.zoom.is_finite() && self.camera.zoom > 1.0e-6 { self.camera.zoom } else { 1.0 };
+        Rect::new((rect.x - self.camera.origin.x) * z, (rect.y - self.camera.origin.y) * z, rect.w * z, rect.h * z)
     }
 
     pub fn begin_world(&mut self) {
@@ -137,13 +126,11 @@ impl DrawList {
     }
 
     pub fn fill_rect(&mut self, rect: Rect, color: Color) {
-        let Some(rect) = self.clip_against_stack(rect) else {
+        let Some(rect) = self.clip_against_stack(rect)
+        else {
             return;
         };
-        let q = QuadCmd {
-            rect: self.map_world(rect),
-            color,
-        };
+        let q = QuadCmd { rect: self.map_world(rect), color };
         match self.layer {
             DrawLayer2d::World => self.quads.push(q),
             DrawLayer2d::Hud => self.hud_quads.push(q),
@@ -157,21 +144,11 @@ impl DrawList {
                 return;
             }
         }
-        self.texts.push(TextCmd {
-            pos: Vec2::new(x, y),
-            size,
-            color,
-            text: text.into(),
-        });
+        self.texts.push(TextCmd { pos: Vec2::new(x, y), size, color, text: text.into() });
     }
 
     /// 分配稳定纹理 ID 并排队上传。请缓存返回的 ID。
-    pub fn create_texture(
-        &mut self,
-        width: u32,
-        height: u32,
-        rgba: Vec<u8>,
-    ) -> Result<TextureId, SparkError> {
+    pub fn create_texture(&mut self, width: u32, height: u32, rgba: Vec<u8>) -> Result<TextureId, SparkError> {
         let img = RgbaImage::from_rgba8(width, height, rgba)?;
         let id = alloc_texture_id();
         self.texture_uploads.push((id, img));
@@ -179,13 +156,7 @@ impl DrawList {
     }
 
     /// 用已有 ID 重新上传像素。
-    pub fn update_texture(
-        &mut self,
-        id: TextureId,
-        width: u32,
-        height: u32,
-        rgba: Vec<u8>,
-    ) -> Result<(), SparkError> {
+    pub fn update_texture(&mut self, id: TextureId, width: u32, height: u32, rgba: Vec<u8>) -> Result<(), SparkError> {
         let img = RgbaImage::from_rgba8(width, height, rgba)?;
         self.texture_uploads.push((id, img));
         Ok(())
@@ -199,39 +170,20 @@ impl DrawList {
     }
 
     /// 绘制纹理四边形，绕相对 `dest` 左上角的枢轴旋转 `angle_rad` 弧度。
-    pub fn tex_rect_rot(
-        &mut self,
-        texture: TextureId,
-        dest: Rect,
-        uv: Rect,
-        color: Color,
-        angle_rad: f32,
-        pivot_x: f32,
-        pivot_y: f32,
-    ) {
-        let Some(dest) = self.clip_against_stack(dest) else {
+    pub fn tex_rect_rot(&mut self, texture: TextureId, dest: Rect, uv: Rect, color: Color, angle_rad: f32, pivot_x: f32, pivot_y: f32) {
+        let Some(dest) = self.clip_against_stack(dest)
+        else {
             return;
         };
         let dest = self.map_world(dest);
         let z = if self.layer == DrawLayer2d::World {
             let zoom = self.camera.zoom;
-            if zoom.is_finite() && zoom > 1.0e-6 {
-                zoom
-            } else {
-                1.0
-            }
-        } else {
+            if zoom.is_finite() && zoom > 1.0e-6 { zoom } else { 1.0 }
+        }
+        else {
             1.0
         };
-        let q = TexQuadCmd {
-            texture,
-            dest,
-            uv,
-            color,
-            angle_rad,
-            pivot_x: pivot_x * z,
-            pivot_y: pivot_y * z,
-        };
+        let q = TexQuadCmd { texture, dest, uv, color, angle_rad, pivot_x: pivot_x * z, pivot_y: pivot_y * z };
         match self.layer {
             DrawLayer2d::World => self.tex_quads.push(q),
             DrawLayer2d::Hud => self.hud_tex_quads.push(q),

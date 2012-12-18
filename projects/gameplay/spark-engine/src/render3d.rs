@@ -57,11 +57,7 @@ impl RenderSchedule3d {
         self
     }
 
-    pub fn add_fn(
-        &mut self,
-        name: &'static str,
-        f: impl FnMut(&mut World, &RenderFrame3d, &mut DrawList3d) + Send + 'static,
-    ) -> &mut Self {
+    pub fn add_fn(&mut self, name: &'static str, f: impl FnMut(&mut World, &RenderFrame3d, &mut DrawList3d) + Send + 'static) -> &mut Self {
         self.add_system(FnRender3d { name, f })
     }
 
@@ -98,15 +94,7 @@ mod tests {
             draw.clear = Color::rgb(n as f32, 0.0, 0.0);
         });
         let mut draw = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), Mat4::IDENTITY);
-        schedule.draw(
-            &mut world,
-            &RenderFrame3d {
-                screen_w: 1.0,
-                screen_h: 1.0,
-                clear: Color::rgb(0.0, 0.0, 0.0),
-            },
-            &mut draw,
-        );
+        schedule.draw(&mut world, &RenderFrame3d { screen_w: 1.0, screen_h: 1.0, clear: Color::rgb(0.0, 0.0, 0.0) }, &mut draw);
         assert!((draw.clear.r - 1.0).abs() < 1e-5);
     }
 }

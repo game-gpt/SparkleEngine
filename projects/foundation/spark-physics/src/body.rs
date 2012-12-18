@@ -31,29 +31,12 @@ pub struct RigidBody2 {
 
 impl RigidBody2 {
     pub fn aabb(kind: BodyKind, center: Vec2, half_extents: Vec2) -> Self {
-        let rect = Rect::new(
-            center.x - half_extents.x,
-            center.y - half_extents.y,
-            half_extents.x * 2.0,
-            half_extents.y * 2.0,
-        );
-        Self {
-            kind,
-            position: center,
-            velocity: Vec2::ZERO,
-            collider: Collider2::Aabb(rect),
-            mass: 1.0,
-        }
+        let rect = Rect::new(center.x - half_extents.x, center.y - half_extents.y, half_extents.x * 2.0, half_extents.y * 2.0);
+        Self { kind, position: center, velocity: Vec2::ZERO, collider: Collider2::Aabb(rect), mass: 1.0 }
     }
 
     pub fn circle(kind: BodyKind, center: Vec2, radius: f32) -> Self {
-        Self {
-            kind,
-            position: center,
-            velocity: Vec2::ZERO,
-            collider: Collider2::Circle(Circle::new(center, radius)),
-            mass: 1.0,
-        }
+        Self { kind, position: center, velocity: Vec2::ZERO, collider: Collider2::Circle(Circle::new(center, radius)), mass: 1.0 }
     }
 
     pub fn sync_collider(&mut self) {
@@ -73,12 +56,7 @@ impl RigidBody2 {
     pub fn aabb_bounds(&self) -> Rect {
         match &self.collider {
             Collider2::Aabb(r) => *r,
-            Collider2::Circle(c) => Rect::new(
-                c.center.x - c.radius,
-                c.center.y - c.radius,
-                c.radius * 2.0,
-                c.radius * 2.0,
-            ),
+            Collider2::Circle(c) => Rect::new(c.center.x - c.radius, c.center.y - c.radius, c.radius * 2.0, c.radius * 2.0),
         }
     }
 }

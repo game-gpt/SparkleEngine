@@ -13,8 +13,6 @@ mod severity;
 pub use args::{ErrorArg, ErrorArgs};
 pub use code::{ErrorCode, ErrorId, NamespaceId, codes};
 pub use context::ErrorContext;
-pub use diagnostic::{
-    Diagnostic, DiagnosticLabel, DiagnosticNote, MessageKey, SourceSpan,
-};
+pub use diagnostic::{Diagnostic, DiagnosticLabel, DiagnosticNote, MessageKey, SourceSpan};
 pub use error::{Error, ErrorCause};
 pub use severity::Severity;

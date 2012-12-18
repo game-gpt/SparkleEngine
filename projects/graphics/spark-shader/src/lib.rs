@@ -89,19 +89,14 @@ pub struct ShaderSource<'a> {
 
 impl<'a> From<BuiltinShader> for ShaderSource<'a> {
     fn from(value: BuiltinShader) -> Self {
-        Self {
-            label: value.label(),
-            wgsl: value.wgsl(),
-        }
+        Self { label: value.label(), wgsl: value.wgsl() }
     }
 }
 
 /// 在设备上创建 `ShaderModule`。
 pub fn create_module(device: &Device, source: ShaderSource<'_>) -> wgpu::ShaderModule {
-    device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some(source.label),
-        source: wgpu::ShaderSource::Wgsl(source.wgsl.into()),
-    })
+    device
+        .create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(source.label), source: wgpu::ShaderSource::Wgsl(source.wgsl.into()) })
 }
 
 /// 创建内建着色器模块。
@@ -112,8 +107,7 @@ pub fn create_builtin(device: &Device, builtin: BuiltinShader) -> wgpu::ShaderMo
 /// 校验 WGSL 非空（装载前快速失败；真正编译错误仍由 wgpu 报告）。
 pub fn validate_source(source: &ShaderSource<'_>) -> Result<(), SparkError> {
     if source.wgsl.trim().is_empty() {
-        return Err(SparkError::new(codes::shader_empty())
-            .arg("label", ErrorArg::String(Arc::from(source.label))));
+        return Err(SparkError::new(codes::shader_empty()).arg("label", ErrorArg::String(Arc::from(source.label))));
     }
     Ok(())
 }

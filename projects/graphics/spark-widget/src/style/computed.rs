@@ -105,12 +105,7 @@ fn apply_kind_defaults(theme: &Theme, kind: WidgetKind, style: &mut ComputedStyl
     }
 }
 
-fn apply_pseudo(
-    theme: &Theme,
-    state: &WidgetStateFlags,
-    kind: WidgetKind,
-    style: &mut ComputedStyle,
-) {
+fn apply_pseudo(theme: &Theme, state: &WidgetStateFlags, kind: WidgetKind, style: &mut ComputedStyle) {
     if state.disabled {
         style.background = theme.colors.disabled;
         style.foreground = Color::rgb(0.75, 0.76, 0.78);
@@ -122,7 +117,8 @@ fn apply_pseudo(
         WidgetKind::Button => {
             if state.pressed {
                 style.background = multiply_rgb(theme.colors.accent, 0.75);
-            } else if state.hovered {
+            }
+            else if state.hovered {
                 style.background = multiply_rgb(theme.colors.accent, 1.12);
             }
             if state.focused {
@@ -132,7 +128,8 @@ fn apply_pseudo(
         WidgetKind::TextField | WidgetKind::TextArea => {
             if state.focused {
                 style.border = theme.colors.accent;
-            } else if state.hovered {
+            }
+            else if state.hovered {
                 style.border = multiply_rgb(theme.colors.border, 1.3);
             }
         }
@@ -156,10 +153,5 @@ fn apply_pseudo(
 }
 
 fn multiply_rgb(color: Color, factor: f32) -> Color {
-    Color::rgba(
-        (color.r * factor).min(1.0),
-        (color.g * factor).min(1.0),
-        (color.b * factor).min(1.0),
-        color.a,
-    )
+    Color::rgba((color.r * factor).min(1.0), (color.g * factor).min(1.0), (color.b * factor).min(1.0), color.a)
 }

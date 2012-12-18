@@ -38,11 +38,7 @@ impl Vec2Ext for Vec2 {
 
     fn try_normalized(self) -> Option<Self> {
         let len = self.length();
-        if len < 1e-8 {
-            None
-        } else {
-            Some(Self::new(self.x / len, self.y / len))
-        }
+        if len < 1e-8 { None } else { Some(Self::new(self.x / len, self.y / len)) }
     }
 
     fn dot(self, other: Self) -> f32 {
@@ -54,10 +50,7 @@ impl Vec2Ext for Vec2 {
     }
 
     fn lerp(self, other: Self, t: f32) -> Self {
-        Self::new(
-            self.x + (other.x - self.x) * t,
-            self.y + (other.y - self.y) * t,
-        )
+        Self::new(self.x + (other.x - self.x) * t, self.y + (other.y - self.y) * t)
     }
 
     fn rotate(self, radians: f32) -> Self {
@@ -96,11 +89,7 @@ impl Vec2Ext for Vec2 {
     fn clamp_length(self, max: f32) -> Self {
         let max = max.max(0.0);
         let d2 = self.length_squared();
-        if d2 <= max * max || d2 < 1e-12 {
-            self
-        } else {
-            self.mul_scalar(max / d2.sqrt())
-        }
+        if d2 <= max * max || d2 < 1e-12 { self } else { self.mul_scalar(max / d2.sqrt()) }
     }
 }
 

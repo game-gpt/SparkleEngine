@@ -79,11 +79,7 @@ impl Clock {
     pub fn begin_frame(&mut self, real_dt: f32) -> u32 {
         let real_dt = real_dt.clamp(0.0, 0.25);
         if self.paused || self.scale == 0.0 {
-            self.delta_seconds = if self.mode_fixed {
-                self.fixed_dt
-            } else {
-                0.0
-            };
+            self.delta_seconds = if self.mode_fixed { self.fixed_dt } else { 0.0 };
             return 0;
         }
 

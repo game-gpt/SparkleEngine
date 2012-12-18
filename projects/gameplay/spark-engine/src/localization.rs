@@ -1,9 +1,7 @@
 //! 引擎侧本地化服务：准备快照、帧边界原子提交、经事件总线广播。
 
 use spark_event::EventBus;
-use spark_localization::{
-    LocaleChanged, LocaleId, LocaleSnapshot, Localizer, MessageArgs, MessageRef, LocalizedText,
-};
+use spark_localization::{LocaleChanged, LocaleId, LocaleSnapshot, LocalizedText, Localizer, MessageArgs, MessageRef};
 
 /// 持有当前 [`Localizer`]，并把待切换快照推迟到帧边界提交。
 #[derive(Debug)]
@@ -22,11 +20,7 @@ impl Default for LocalizationService {
 impl LocalizationService {
     pub fn new(initial: LocaleSnapshot) -> Self {
         let next_generation = initial.generation.saturating_add(1);
-        Self {
-            localizer: Localizer::new(initial),
-            pending: None,
-            next_generation,
-        }
+        Self { localizer: Localizer::new(initial), pending: None, next_generation }
     }
 
     /// 以产品默认 Locale 的空快照启动。
@@ -109,12 +103,7 @@ mod tests {
             &loc("en"),
             &available,
             0,
-            [(
-                Arc::from("ui"),
-                Arc::from("ok"),
-                Arc::from("zh-Hans"),
-                Arc::from("好"),
-            )],
+            [(Arc::from("ui"), Arc::from("ok"), Arc::from("zh-Hans"), Arc::from("好"))],
         );
         service.queue_snapshot(zh);
         assert!(service.has_pending());
@@ -125,21 +114,10 @@ mod tests {
         assert_eq!(changed.previous.as_str(), "en");
         assert_eq!(changed.current.as_str(), "zh-Hans");
         assert_eq!(service.locale().as_str(), "zh-Hans");
-        assert_eq!(
-            service
-                .format(&MessageRef::named("ui", "ok"), &MessageArgs::new())
-                .text
-                .as_ref(),
-            "好"
-        );
+        assert_eq!(service.format(&MessageRef::named("ui", "ok"), &MessageArgs::new()).text.as_ref(), "好");
 
         bus.update_all();
-        let events: Vec<_> = bus
-            .events::<LocaleChanged>()
-            .unwrap()
-            .iter()
-            .cloned()
-            .collect();
+        let events: Vec<_> = bus.events::<LocaleChanged>().unwrap().iter().cloned().collect();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].current.as_str(), "zh-Hans");
     }
@@ -152,22 +130,11 @@ mod tests {
             &loc("en"),
             &available,
             1,
-            [(
-                Arc::from("ui"),
-                Arc::from("ok"),
-                Arc::from("en"),
-                Arc::from("OK"),
-            )],
+            [(Arc::from("ui"), Arc::from("ok"), Arc::from("en"), Arc::from("OK"))],
         );
         let mut service = LocalizationService::new(en);
         // 模拟装载失败：不 queue，仅 cancel。
         service.cancel_pending();
-        assert_eq!(
-            service
-                .format(&MessageRef::named("ui", "ok"), &MessageArgs::new())
-                .text
-                .as_ref(),
-            "OK"
-        );
+        assert_eq!(service.format(&MessageRef::named("ui", "ok"), &MessageArgs::new()).text.as_ref(), "OK");
     }
 }

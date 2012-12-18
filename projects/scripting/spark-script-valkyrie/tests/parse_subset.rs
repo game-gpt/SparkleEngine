@@ -12,11 +12,7 @@ fn probe_valkyrie_sources() {
         "",
     ] {
         let r = spark_script_valkyrie::parse(src);
-        eprintln!(
-            "SRC={src:?} ok={} err={:?}",
-            r.is_ok(),
-            r.as_ref().err()
-        );
+        eprintln!("SRC={src:?} ok={} err={:?}", r.is_ok(), r.as_ref().err());
         assert!(r.is_ok(), "parse failed for {src:?}: {r:?}");
     }
 }

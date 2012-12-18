@@ -4,24 +4,16 @@
 //! `if` / `elseif`、`while`、`repeat`/`until`、`and`/`or`、`do` 块、顶层 `function`、脚本调用与宿主调用、`print`。
 //! 不支持的构造返回错误令牌；调用方必须拒绝，不得回退旧编译器。
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use oak_lua::ast::{
-    LuaAssignmentStatement, LuaCallExpression, LuaExpression, LuaFunctionStatement,
-    LuaIfStatement, LuaLocalStatement, LuaRepeatStatement, LuaRoot, LuaStatement,
-    LuaWhileStatement,
+    LuaAssignmentStatement, LuaCallExpression, LuaExpression, LuaFunctionStatement, LuaIfStatement, LuaLocalStatement, LuaRepeatStatement,
+    LuaRoot, LuaStatement, LuaWhileStatement,
 };
-use spark_ir::{
-    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindTable,
-    PackageId, Ty,
-};
+use spark_ir::{HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindTable, PackageId, Ty};
 
 /// 尝试将整个根降低为 HIR。
-pub(crate) fn lower_root_to_hir(
-    root: &LuaRoot,
-    hosts: &HostBindTable,
-) -> Result<HirModule, String> {
+pub(crate) fn lower_root_to_hir(root: &LuaRoot, hosts: &HostBindTable) -> Result<HirModule, String> {
     let mut fn_index: HashMap<String, u32> = HashMap::new();
     let mut fn_count = 0u32;
     for stmt in &root.statements {
@@ -41,14 +33,10 @@ pub(crate) fn lower_root_to_hir(
 
     let mut locals: HashMap<String, u32> = HashMap::new();
     let mut local_tys: Vec<(Arc<str>, Ty)> = Vec::new();
-    let (mut body, saw_return) =
-        lower_block_stmts(&root.statements, &mut locals, &mut local_tys, &fn_index, hosts)?;
+    let (mut body, saw_return) = lower_block_stmts(&root.statements, &mut locals, &mut local_tys, &fn_index, hosts)?;
 
     if !saw_return {
-        body.push(HirStmt::Return {
-            value: Some(HirExpr::LiteralNull { span: None }),
-            span: None,
-        });
+        body.push(HirStmt::Return { value: Some(HirExpr::LiteralNull { span: None }), span: None });
     }
 
     // 模组入口是 `on_load`；若源码已声明则丢弃顶层块。
@@ -64,11 +52,7 @@ pub(crate) fn lower_root_to_hir(
         });
     }
 
-    Ok(HirModule {
-        package: PackageId::anonymous(),
-        name: Arc::from("main"),
-        functions,
-    })
+    Ok(HirModule { package: PackageId::anonymous(), name: Arc::from("main"), functions })
 }
 
 fn function_name(f: &LuaFunctionStatement) -> Result<String, String> {
@@ -76,10 +60,7 @@ fn function_name(f: &LuaFunctionStatement) -> Result<String, String> {
         return Err("ir_unsupported_method_def".into());
     }
     if f.name.len() != 1 {
-        return Err(format!(
-            "ir_unsupported_qualified_name:{}",
-            f.name.join(".")
-        ));
+        return Err(format!("ir_unsupported_qualified_name:{}", f.name.join(".")));
     }
     if f.is_vararg {
         return Err("ir_unsupported_varargs".into());
@@ -87,11 +68,7 @@ fn function_name(f: &LuaFunctionStatement) -> Result<String, String> {
     Ok(f.name[0].clone())
 }
 
-fn lower_function(
-    f: &LuaFunctionStatement,
-    fn_index: &HashMap<String, u32>,
-    hosts: &HostBindTable,
-) -> Result<HirFunction, String> {
+fn lower_function(f: &LuaFunctionStatement, fn_index: &HashMap<String, u32>, hosts: &HostBindTable) -> Result<HirFunction, String> {
     let name = function_name(f)?;
     let mut locals: HashMap<String, u32> = HashMap::new();
     let mut params: Vec<(Arc<str>, Ty)> = Vec::new();
@@ -100,23 +77,11 @@ fn lower_function(
         params.push((Arc::from(p.as_str()), Ty::Dynamic));
     }
     let mut local_tys: Vec<(Arc<str>, Ty)> = Vec::new();
-    let (mut body, saw_return) =
-        lower_block_stmts(&f.block, &mut locals, &mut local_tys, fn_index, hosts)?;
+    let (mut body, saw_return) = lower_block_stmts(&f.block, &mut locals, &mut local_tys, fn_index, hosts)?;
     if !saw_return {
-        body.push(HirStmt::Return {
-            value: Some(HirExpr::LiteralNull { span: None }),
-            span: None,
-        });
+        body.push(HirStmt::Return { value: Some(HirExpr::LiteralNull { span: None }), span: None });
     }
-    Ok(HirFunction {
-        name: Arc::from(name),
-        symbol: None,
-        params,
-        return_ty: Ty::Dynamic,
-        locals: local_tys,
-        body,
-        span: None,
-    })
+    Ok(HirFunction { name: Arc::from(name), symbol: None, params, return_ty: Ty::Dynamic, locals: local_tys, body, span: None })
 }
 
 fn lower_block_stmts(
@@ -133,8 +98,7 @@ fn lower_block_stmts(
             continue;
         }
         if let LuaStatement::Do(block) = stmt {
-            let (inner, is_ret) =
-                lower_block_stmts(block, locals, local_tys, fn_index, hosts)?;
+            let (inner, is_ret) = lower_block_stmts(block, locals, local_tys, fn_index, hosts)?;
             if is_ret {
                 saw_return = true;
             }
@@ -142,8 +106,7 @@ fn lower_block_stmts(
             continue;
         }
         if let LuaStatement::Repeat(r) = stmt {
-            let (first, is_ret) =
-                lower_block_stmts(&r.block, locals, local_tys, fn_index, hosts)?;
+            let (first, is_ret) = lower_block_stmts(&r.block, locals, local_tys, fn_index, hosts)?;
             if is_ret {
                 saw_return = true;
             }
@@ -178,19 +141,10 @@ fn lower_statement(
             };
             Ok((HirStmt::Return { value, span: None }, true))
         }
-        LuaStatement::Local(l) => Ok((
-            lower_local(l, locals, local_tys, fn_index, hosts)?,
-            false,
-        )),
-        LuaStatement::Assignment(a) => Ok((
-            lower_assignment(a, locals, fn_index, hosts)?,
-            false,
-        )),
+        LuaStatement::Local(l) => Ok((lower_local(l, locals, local_tys, fn_index, hosts)?, false)),
+        LuaStatement::Assignment(a) => Ok((lower_assignment(a, locals, fn_index, hosts)?, false)),
         LuaStatement::If(i) => Ok((lower_if(i, locals, local_tys, fn_index, hosts)?, false)),
-        LuaStatement::While(w) => Ok((
-            lower_while(w, locals, local_tys, fn_index, hosts)?,
-            false,
-        )),
+        LuaStatement::While(w) => Ok((lower_while(w, locals, local_tys, fn_index, hosts)?, false)),
         LuaStatement::Expression(e) => {
             let expr = lower_expr(e, locals, fn_index, hosts)?;
             Ok((HirStmt::Expr { expr, span: None }, false))
@@ -212,15 +166,7 @@ fn lower_repeat_tail(
     // repeat body until cond  ≡  body; while not cond do body end
     let cond = lower_expr(&r.condition, locals, fn_index, hosts)?;
     let (loop_body, _) = lower_block_stmts(&r.block, locals, local_tys, fn_index, hosts)?;
-    Ok(HirStmt::While {
-        cond: HirExpr::Unary {
-            op: HirUnaryOp::Not,
-            expr: Box::new(cond),
-            span: None,
-        },
-        body: loop_body,
-        span: None,
-    })
+    Ok(HirStmt::While { cond: HirExpr::Unary { op: HirUnaryOp::Not, expr: Box::new(cond), span: None }, body: loop_body, span: None })
 }
 
 fn lower_local(
@@ -240,17 +186,14 @@ fn lower_local(
     };
     let index = if let Some(&idx) = locals.get(&name) {
         idx
-    } else {
+    }
+    else {
         let idx = locals.len() as u32;
         locals.insert(name.clone(), idx);
         local_tys.push((Arc::from(name.as_str()), Ty::Dynamic));
         idx
     };
-    Ok(HirStmt::AssignLocal {
-        index,
-        value,
-        span: None,
-    })
+    Ok(HirStmt::AssignLocal { index, value, span: None })
 }
 
 fn lower_assignment(
@@ -262,18 +205,16 @@ fn lower_assignment(
     if a.targets.len() != 1 || a.values.len() != 1 {
         return Err("ir_unsupported_multi_assign".into());
     }
-    let LuaExpression::Identifier(name) = &a.targets[0] else {
+    let LuaExpression::Identifier(name) = &a.targets[0]
+    else {
         return Err("ir_unsupported_assign_target".into());
     };
-    let Some(&index) = locals.get(name) else {
+    let Some(&index) = locals.get(name)
+    else {
         return Err(format!("ir_unknown_local:{name}"));
     };
     let value = lower_expr(&a.values[0], locals, fn_index, hosts)?;
-    Ok(HirStmt::AssignLocal {
-        index,
-        value,
-        span: None,
-    })
+    Ok(HirStmt::AssignLocal { index, value, span: None })
 }
 
 fn lower_if(
@@ -284,8 +225,7 @@ fn lower_if(
     hosts: &HostBindTable,
 ) -> Result<HirStmt, String> {
     let cond = lower_expr(&i.condition, locals, fn_index, hosts)?;
-    let (then_body, _) =
-        lower_block_stmts(&i.then_block, locals, local_tys, fn_index, hosts)?;
+    let (then_body, _) = lower_block_stmts(&i.then_block, locals, local_tys, fn_index, hosts)?;
     let mut else_body = match &i.else_block {
         Some(block) => lower_block_stmts(block, locals, local_tys, fn_index, hosts)?.0,
         None => Vec::new(),
@@ -294,19 +234,9 @@ fn lower_if(
     for (cond_e, block) in i.else_ifs.iter().rev() {
         let cond = lower_expr(cond_e, locals, fn_index, hosts)?;
         let (then_body, _) = lower_block_stmts(block, locals, local_tys, fn_index, hosts)?;
-        else_body = vec![HirStmt::If {
-            cond,
-            then_body,
-            else_body,
-            span: None,
-        }];
+        else_body = vec![HirStmt::If { cond, then_body, else_body, span: None }];
     }
-    Ok(HirStmt::If {
-        cond,
-        then_body,
-        else_body,
-        span: None,
-    })
+    Ok(HirStmt::If { cond, then_body, else_body, span: None })
 }
 
 fn lower_while(
@@ -318,11 +248,7 @@ fn lower_while(
 ) -> Result<HirStmt, String> {
     let cond = lower_expr(&w.condition, locals, fn_index, hosts)?;
     let (body, _) = lower_block_stmts(&w.block, locals, local_tys, fn_index, hosts)?;
-    Ok(HirStmt::While {
-        cond,
-        body,
-        span: None,
-    })
+    Ok(HirStmt::While { cond, body, span: None })
 }
 
 fn lower_expr(
@@ -333,30 +259,15 @@ fn lower_expr(
 ) -> Result<HirExpr, String> {
     match expr {
         LuaExpression::Nil => Ok(HirExpr::LiteralNull { span: None }),
-        LuaExpression::Boolean(b) => Ok(HirExpr::LiteralBool {
-            value: *b,
-            span: None,
-        }),
-        LuaExpression::Number(n) => Ok(HirExpr::LiteralNumber {
-            value: *n,
-            span: None,
-        }),
-        LuaExpression::String(s) => Ok(HirExpr::LiteralString {
-            value: Arc::from(s.as_str()),
-            span: None,
-        }),
+        LuaExpression::Boolean(b) => Ok(HirExpr::LiteralBool { value: *b, span: None }),
+        LuaExpression::Number(n) => Ok(HirExpr::LiteralNumber { value: *n, span: None }),
+        LuaExpression::String(s) => Ok(HirExpr::LiteralString { value: Arc::from(s.as_str()), span: None }),
         LuaExpression::Identifier(name) => {
             if let Some(&index) = locals.get(name) {
-                return Ok(HirExpr::Local {
-                    index,
-                    span: None,
-                });
+                return Ok(HirExpr::Local { index, span: None });
             }
             if let Some(&fidx) = fn_index.get(name) {
-                return Ok(HirExpr::FuncRef {
-                    func_index: fidx,
-                    span: None,
-                });
+                return Ok(HirExpr::FuncRef { func_index: fidx, span: None });
             }
             Err(format!("ir_unknown_name:{name}"))
         }
@@ -367,19 +278,10 @@ fn lower_expr(
                 // 与旧字节码路径一致的短路：`and`/`or` 经 `HirExpr::If`。
                 // 字面量 / 局部左值重复求值无副作用；复杂左值仍可能双求值。
                 return Ok(if b.op == "and" {
-                    HirExpr::If {
-                        cond: Box::new(lhs.clone()),
-                        then_branch: Box::new(rhs),
-                        else_branch: Box::new(lhs),
-                        span: None,
-                    }
-                } else {
-                    HirExpr::If {
-                        cond: Box::new(lhs.clone()),
-                        then_branch: Box::new(lhs),
-                        else_branch: Box::new(rhs),
-                        span: None,
-                    }
+                    HirExpr::If { cond: Box::new(lhs.clone()), then_branch: Box::new(rhs), else_branch: Box::new(lhs), span: None }
+                }
+                else {
+                    HirExpr::If { cond: Box::new(lhs.clone()), then_branch: Box::new(lhs), else_branch: Box::new(rhs), span: None }
                 });
             }
             let hir_op = match b.op.as_str() {
@@ -409,11 +311,7 @@ fn lower_expr(
                 "not" => HirUnaryOp::Not,
                 other => return Err(format!("ir_unsupported_unary:{other}")),
             };
-            Ok(HirExpr::Unary {
-                op,
-                expr: Box::new(lower_expr(&u.operand, locals, fn_index, hosts)?),
-                span: None,
-            })
+            Ok(HirExpr::Unary { op, expr: Box::new(lower_expr(&u.operand, locals, fn_index, hosts)?), span: None })
         }
         LuaExpression::Call(c) => lower_call(c, locals, fn_index, hosts),
         other => Err(format!("ir_unsupported_expr:{other:?}")),
@@ -426,46 +324,28 @@ fn lower_call(
     fn_index: &HashMap<String, u32>,
     hosts: &HostBindTable,
 ) -> Result<HirExpr, String> {
-    let LuaExpression::Identifier(name) = &c.function else {
+    let LuaExpression::Identifier(name) = &c.function
+    else {
         return Err("ir_unsupported_callee".into());
     };
-    let argv: Result<Vec<_>, _> = c
-        .arguments
-        .iter()
-        .map(|a| lower_expr(a, locals, fn_index, hosts))
-        .collect();
+    let argv: Result<Vec<_>, _> = c.arguments.iter().map(|a| lower_expr(a, locals, fn_index, hosts)).collect();
     let argv = argv?;
 
     if name == "print" || name == "println" {
         if argv.len() != 1 {
             return Err("ir_print_arity_one".into());
         }
-        return Ok(HirExpr::Print {
-            value: Box::new(argv.into_iter().next().unwrap()),
-            span: None,
-        });
+        return Ok(HirExpr::Print { value: Box::new(argv.into_iter().next().unwrap()), span: None });
     }
     match hosts.resolve_call(name, argv.len()) {
         Ok(entry) => {
-            return Ok(HirExpr::HostCall {
-                host: entry.id.clone(),
-                args: argv,
-                effects: entry.effects.clone(),
-                span: None,
-            });
+            return Ok(HirExpr::HostCall { host: entry.id.clone(), args: argv, effects: entry.effects.clone(), span: None });
         }
         Err(e) if e.starts_with("host_unknown:") => {}
         Err(e) => return Err(e),
     }
     if let Some(&fidx) = fn_index.get(name) {
-        return Ok(HirExpr::Call {
-            callee: Box::new(HirExpr::FuncRef {
-                func_index: fidx,
-                span: None,
-            }),
-            args: argv,
-            span: None,
-        });
+        return Ok(HirExpr::Call { callee: Box::new(HirExpr::FuncRef { func_index: fidx, span: None }), args: argv, span: None });
     }
     Err(format!("ir_unknown_function:{name}"))
 }

@@ -6,7 +6,7 @@ mod import;
 mod mesh;
 mod skin;
 
-pub use import::{import_path, import_slice, GltfAsset, GltfError, ImportedMesh};
+pub use import::{GltfAsset, GltfError, ImportedMesh, import_path, import_slice};
 pub use spark_animator::{Skeleton, SkinnedAnimationClip};
 pub use spark_renderer::SkinnedVertex;
 
@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn imported_skeleton_builds_rest_palette() {
-        use spark_animator::{build_skin_palette, evaluate_pose, socket_world_position, LocalPose};
+        use spark_animator::{LocalPose, build_skin_palette, evaluate_pose, socket_world_position};
 
         let json = include_str!("../tests/fixtures/two_bone.gltf");
         let asset = import_slice(json.as_bytes()).expect("import");
@@ -81,11 +81,7 @@ mod tests {
         let palette = build_skin_palette(&sk, &globals);
         assert_eq!(palette.len(), 2);
         let tip = socket_world_position(&sk, &globals, "tip").expect("tip");
-        assert!(
-            (tip.y - 2.0).abs() < 1e-3,
-            "tip should sit at y=2 in rest pose, got {}",
-            tip.y
-        );
+        assert!((tip.y - 2.0).abs() < 1e-3, "tip should sit at y=2 in rest pose, got {}", tip.y);
     }
 
     fn base64_encode(bytes: &[u8]) -> String {

@@ -36,10 +36,7 @@ pub struct DataRegistry {
 
 impl DataRegistry {
     pub fn set(&mut self, namespace: impl Into<String>, key: impl Into<String>, value: RegValue) {
-        self.tables
-            .entry(namespace.into())
-            .or_default()
-            .insert(key.into(), value);
+        self.tables.entry(namespace.into()).or_default().insert(key.into(), value);
     }
 
     pub fn get(&self, namespace: &str, key: &str) -> Option<&RegValue> {
@@ -51,10 +48,7 @@ impl DataRegistry {
     }
 
     pub fn keys(&self, namespace: &str) -> Vec<String> {
-        self.tables
-            .get(namespace)
-            .map(|t| t.keys().cloned().collect())
-            .unwrap_or_default()
+        self.tables.get(namespace).map(|t| t.keys().cloned().collect()).unwrap_or_default()
     }
 
     pub fn namespaces(&self) -> Vec<String> {

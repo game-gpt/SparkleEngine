@@ -81,11 +81,12 @@ impl ScriptPlayer {
     }
 
     pub fn choose(&mut self, index: usize, flags: &mut FlagStore) -> Result<(), SparkError> {
-        let Some(choices) = self.waiting_choice.take() else {
-            return Err(SparkError::new(choice_invalid())
-                .arg("reason", ErrorArg::String("no_choices".into())));
+        let Some(choices) = self.waiting_choice.take()
+        else {
+            return Err(SparkError::new(choice_invalid()).arg("reason", ErrorArg::String("no_choices".into())));
         };
-        let Some(c) = choices.get(index) else {
+        let Some(c) = choices.get(index)
+        else {
             return Err(SparkError::new(choice_invalid())
                 .arg("reason", ErrorArg::String("index_out_of_bounds".into()))
                 .arg("index", ErrorArg::Unsigned(index as u64))

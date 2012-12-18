@@ -1,8 +1,6 @@
 //! 消息标识、具名参数与类型化取值。
 
-use std::collections::BTreeMap;
-use std::fmt;
-use std::sync::Arc;
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 /// 命名空间 ID（构建期可映射为紧凑整数；运行时保留字符串入口）。
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -66,10 +64,7 @@ pub struct MessageRef {
 
 impl MessageRef {
     pub fn new(namespace: impl Into<Arc<str>>, message: MessageId) -> Self {
-        Self {
-            namespace: NamespaceId::new(namespace),
-            message,
-        }
+        Self { namespace: NamespaceId::new(namespace), message }
     }
 
     pub fn named(namespace: impl Into<Arc<str>>, message: impl Into<Arc<str>>) -> Self {
@@ -125,10 +120,7 @@ pub struct MessageDecimal {
 
 impl MessageDecimal {
     pub fn from_i64(value: i64) -> Self {
-        Self {
-            coefficient: i128::from(value),
-            scale: 0,
-        }
+        Self { coefficient: i128::from(value), scale: 0 }
     }
 }
 

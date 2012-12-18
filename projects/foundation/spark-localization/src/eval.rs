@@ -1,49 +1,34 @@
 //! 编译消息求值（读热路径，无 IO）。
 
-use std::fmt::Write;
-use std::sync::Arc;
+use std::{fmt::Write, sync::Arc};
 
-use crate::bundle::CompiledMessage;
-use crate::diagnostic::{DiagnosticFlags, MessageDiagnostic};
-use crate::document::{MessageNode, SelectKind};
-use crate::message::{MessageArgs, MessageValue};
+use crate::{
+    bundle::CompiledMessage,
+    diagnostic::{DiagnosticFlags, MessageDiagnostic},
+    document::{MessageNode, SelectKind},
+    message::{MessageArgs, MessageValue},
+};
 
-pub(crate) fn evaluate_compiled(
-    message: &CompiledMessage,
-    args: &MessageArgs,
-    diagnostics: &mut DiagnosticFlags,
-) -> Arc<str> {
+pub(crate) fn evaluate_compiled(message: &CompiledMessage, args: &MessageArgs, diagnostics: &mut DiagnosticFlags) -> Arc<str> {
     match message {
         CompiledMessage::Text(text) => text.clone(),
         CompiledMessage::Pattern(nodes) => Arc::from(eval_nodes(nodes, args, diagnostics, &mut Vec::new())),
-        CompiledMessage::Select {
-            argument,
-            kind,
-            cases,
-        } => {
+        CompiledMessage::Select { argument, kind, cases } => {
             let case_key = resolve_select_case(argument, *kind, args, diagnostics);
-            let nodes = cases
-                .get(case_key.as_ref())
-                .or_else(|| cases.get("other"))
-                .map(|n| n.as_ref())
-                .unwrap_or(&[]);
+            let nodes = cases.get(case_key.as_ref()).or_else(|| cases.get("other")).map(|n| n.as_ref()).unwrap_or(&[]);
             Arc::from(eval_nodes(nodes, args, diagnostics, &mut Vec::new()))
         }
     }
 }
 
-fn resolve_select_case(
-    argument: &str,
-    kind: SelectKind,
-    args: &MessageArgs,
-    diagnostics: &mut DiagnosticFlags,
-) -> Arc<str> {
+fn resolve_select_case(argument: &str, kind: SelectKind, args: &MessageArgs, diagnostics: &mut DiagnosticFlags) -> Arc<str> {
     match args.get(argument) {
         Some(MessageValue::Integer(v)) => match kind {
             SelectKind::Cardinal | SelectKind::Ordinal => {
                 if *v == 1 {
                     Arc::from("one")
-                } else {
+                }
+                else {
                     Arc::from("other")
                 }
             }
@@ -60,20 +45,13 @@ fn resolve_select_case(
             Arc::from("other")
         }
         None => {
-            diagnostics.insert(DiagnosticFlags::from_diagnostic(
-                MessageDiagnostic::MissingArgument,
-            ));
+            diagnostics.insert(DiagnosticFlags::from_diagnostic(MessageDiagnostic::MissingArgument));
             Arc::from("other")
         }
     }
 }
 
-fn eval_nodes(
-    nodes: &[MessageNode],
-    args: &MessageArgs,
-    diagnostics: &mut DiagnosticFlags,
-    stack: &mut Vec<Arc<str>>,
-) -> String {
+fn eval_nodes(nodes: &[MessageNode], args: &MessageArgs, diagnostics: &mut DiagnosticFlags, stack: &mut Vec<Arc<str>>) -> String {
     let mut out = String::new();
     for node in nodes {
         match node {
@@ -89,7 +67,8 @@ fn eval_nodes(
                     let scale = d.scale as usize;
                     if scale == 0 {
                         let _ = write!(&mut out, "{}", d.coefficient);
-                    } else {
+                    }
+                    else {
                         let div = 10i128.pow(d.scale);
                         let whole = d.coefficient / div;
                         let frac = (d.coefficient % div).abs();
@@ -101,9 +80,7 @@ fn eval_nodes(
                     out.push('?');
                 }
                 None => {
-                    diagnostics.insert(DiagnosticFlags::from_diagnostic(
-                        MessageDiagnostic::MissingArgument,
-                    ));
+                    diagnostics.insert(DiagnosticFlags::from_diagnostic(MessageDiagnostic::MissingArgument));
                     out.push('?');
                 }
             },
@@ -112,22 +89,15 @@ fn eval_nodes(
                 if stack.iter().any(|s| s.as_ref() == name.as_str()) {
                     diagnostics.insert(DiagnosticFlags::from_diagnostic(MessageDiagnostic::Cycle));
                     out.push('?');
-                } else {
+                }
+                else {
                     diagnostics.insert(DiagnosticFlags::from_diagnostic(MessageDiagnostic::Missing));
                     out.push('?');
                 }
             }
-            MessageNode::Select {
-                argument,
-                kind,
-                cases,
-            } => {
+            MessageNode::Select { argument, kind, cases } => {
                 let case_key = resolve_select_case(argument, *kind, args, diagnostics);
-                let child = cases
-                    .get(case_key.as_ref())
-                    .or_else(|| cases.get("other"))
-                    .map(|n| n.as_slice())
-                    .unwrap_or(&[]);
+                let child = cases.get(case_key.as_ref()).or_else(|| cases.get("other")).map(|n| n.as_slice()).unwrap_or(&[]);
                 out.push_str(&eval_nodes(child, args, diagnostics, stack));
             }
         }

@@ -5,10 +5,7 @@
 
 use std::sync::Arc;
 
-use spark_ir::{
-    DeterminismKind, HostBindEntry, HostBindTable, HostCompilePolicy, HostEffectKind, HostId,
-    HostPhaseKind,
-};
+use spark_ir::{DeterminismKind, HostBindEntry, HostBindTable, HostCompilePolicy, HostEffectKind, HostId, HostPhaseKind};
 use spark_script_valkyrie::{NativeParam, TypeRef};
 
 /// 宿主调用的效果分类（编译器内部约束，不必全部暴露为用户语法）。
@@ -107,16 +104,8 @@ pub struct HostFunctionId {
 }
 
 impl HostFunctionId {
-    pub fn new(
-        namespace: impl Into<Arc<str>>,
-        name: impl Into<Arc<str>>,
-        abi_version: u32,
-    ) -> Self {
-        Self {
-            namespace: namespace.into(),
-            name: name.into(),
-            abi_version,
-        }
+    pub fn new(namespace: impl Into<Arc<str>>, name: impl Into<Arc<str>>, abi_version: u32) -> Self {
+        Self { namespace: namespace.into(), name: name.into(), abi_version }
     }
 
     /// 调试 / 诊断用限定名：`namespace.name`。
@@ -224,9 +213,7 @@ impl HostFunction {
         if self.allowed_phases.is_empty() {
             return true;
         }
-        self.allowed_phases
-            .iter()
-            .any(|p| *p == HostPhase::Any || *p == phase)
+        self.allowed_phases.iter().any(|p| *p == HostPhase::Any || *p == phase)
     }
 }
 
@@ -239,20 +226,14 @@ pub struct HostSchema {
 
 impl HostSchema {
     pub fn new(abi_version: u32) -> Self {
-        Self {
-            abi_version,
-            functions: Vec::new(),
-        }
+        Self { abi_version, functions: Vec::new() }
     }
 
     pub fn insert(&mut self, func: HostFunction) {
-        if let Some(existing) = self
-            .functions
-            .iter_mut()
-            .find(|f| f.id == func.id)
-        {
+        if let Some(existing) = self.functions.iter_mut().find(|f| f.id == func.id) {
             *existing = func;
-        } else {
+        }
+        else {
             self.functions.push(func);
         }
     }
@@ -263,11 +244,7 @@ impl HostSchema {
 
     /// 解析宿主导入名：优先完整 [`HostFunctionId::qualified_name`]，否则要求短名全局唯一。
     pub fn resolve_import(&self, import: &str) -> Result<&HostFunction, String> {
-        if let Some(f) = self
-            .functions
-            .iter()
-            .find(|f| f.id.qualified_name() == import)
-        {
+        if let Some(f) = self.functions.iter().find(|f| f.id.qualified_name() == import) {
             return Ok(f);
         }
         self.resolve_short_name(import)
@@ -279,11 +256,7 @@ impl HostSchema {
 
     /// 按短名解析；冲突或缺失时返回错误令牌。
     pub fn resolve_short_name(&self, name: &str) -> Result<&HostFunction, String> {
-        let matches: Vec<_> = self
-            .functions
-            .iter()
-            .filter(|f| f.id.name.as_ref() == name)
-            .collect();
+        let matches: Vec<_> = self.functions.iter().filter(|f| f.id.name.as_ref() == name).collect();
         match matches.as_slice() {
             [f] => Ok(f),
             [] => Err(format!("host_unknown:{name}")),
@@ -297,41 +270,27 @@ impl HostSchema {
     }
 
     /// 带编译策略导出绑定表（能力 / 确定性来自 [`CompilationRequest`]）。
-    pub fn to_bind_table_with_policy(
-        &self,
-        policy: HostCompilePolicy,
-    ) -> Result<HostBindTable, String> {
+    pub fn to_bind_table_with_policy(&self, policy: HostCompilePolicy) -> Result<HostBindTable, String> {
         let mut table = HostBindTable::new().with_policy(policy);
         for (i, func) in self.functions.iter().enumerate() {
             let param_count = if func.params.is_empty() {
                 // 空参数表 = 未声明 arity（桩 / 动态脚本）；非空才做个数检查。
                 u16::MAX
-            } else {
+            }
+            else {
                 func.params.len() as u16
             };
-            let param_tys = func
-                .params
-                .iter()
-                .map(|p| Arc::clone(&p.ty.path))
-                .collect();
+            let param_tys = func.params.iter().map(|p| Arc::clone(&p.ty.path)).collect();
             let return_ty = func.return_ty.as_ref().map(|t| Arc::clone(&t.path));
             table.push(HostBindEntry {
-                id: HostId::new(
-                    Arc::clone(&func.id.namespace),
-                    Arc::clone(&func.id.name),
-                    func.id.abi_version,
-                ),
+                id: HostId::new(Arc::clone(&func.id.namespace), Arc::clone(&func.id.name), func.id.abi_version),
                 slot: i as u32,
                 param_count,
                 param_tys,
                 return_ty,
                 effects: func.effects.iter().map(|e| map_effect(*e)).collect(),
                 allowed_phases: func.allowed_phases.iter().map(|p| map_phase(*p)).collect(),
-                required_capabilities: func
-                    .required_capabilities
-                    .iter()
-                    .map(|c| Arc::clone(&c.path))
-                    .collect(),
+                required_capabilities: func.required_capabilities.iter().map(|c| Arc::clone(&c.path)).collect(),
                 determinism: map_determinism(func.determinism),
             })?;
         }
@@ -340,10 +299,7 @@ impl HostSchema {
 
     /// 链接后的稳定槽位下标（按插入顺序）。
     pub fn slot_of(&self, id: &HostFunctionId) -> Option<u32> {
-        self.functions
-            .iter()
-            .position(|f| f.id == *id)
-            .map(|i| i as u32)
+        self.functions.iter().position(|f| f.id == *id).map(|i| i as u32)
     }
 
     /// 按短名查找槽位（短名须唯一）。
@@ -354,10 +310,7 @@ impl HostSchema {
 
     /// 制品 / 链接用的稳定键：[`HostFunctionId::qualified_name`] 顺序 = 槽位。
     pub fn qualified_names(&self) -> Vec<String> {
-        self.functions
-            .iter()
-            .map(|f| f.id.qualified_name())
-            .collect()
+        self.functions.iter().map(|f| f.id.qualified_name()).collect()
     }
 
     /// VM `register_native` / `prepare_host_slots` 调度名（限定名，与槽位同序）。
@@ -367,8 +320,10 @@ impl HostSchema {
 
     /// schema 内容指纹（缓存键 / 装载校验用）。
     pub fn content_hash(&self) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+        };
         let mut h = DefaultHasher::new();
         self.abi_version.hash(&mut h);
         for f in &self.functions {
@@ -434,11 +389,7 @@ fn map_determinism(d: DeterminismClass) -> DeterminismKind {
 /// 由编译请求构造绑定策略。
 pub fn compile_policy_from_request(request: &crate::request::CompilationRequest) -> HostCompilePolicy {
     HostCompilePolicy {
-        granted_capabilities: request
-            .required_capabilities
-            .iter()
-            .map(|c| Arc::clone(&c.path))
-            .collect(),
+        granted_capabilities: request.required_capabilities.iter().map(|c| Arc::clone(&c.path)).collect(),
         determinism: map_determinism(request.determinism),
     }
 }
@@ -446,8 +397,7 @@ pub fn compile_policy_from_request(request: &crate::request::CompilationRequest)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::request::CompilationRequest;
-    use crate::{ScriptCompiler, ScriptLanguage};
+    use crate::{ScriptCompiler, ScriptLanguage, request::CompilationRequest};
 
     #[test]
     fn schema_slots_and_hash_are_stable() {
@@ -470,16 +420,10 @@ mod tests {
 
         let spawn_id = HostFunctionId::new("spark.ecs", "spawn", 1);
         assert_eq!(schema.slot_of(&spawn_id), Some(0));
-        assert_eq!(
-            schema.dispatch_names(),
-            vec!["spark.ecs.spawn".to_string(), "spark.log.print".to_string()]
-        );
+        assert_eq!(schema.dispatch_names(), vec!["spark.ecs.spawn".to_string(), "spark.log.print".to_string()]);
         let binds = schema.to_bind_table().unwrap();
         assert_eq!(binds.len(), 2);
-        assert_eq!(
-            binds.resolve("spawn").unwrap().id.namespace.as_ref(),
-            "spark.ecs"
-        );
+        assert_eq!(binds.resolve("spawn").unwrap().id.namespace.as_ref(), "spark.ecs");
         let h1 = schema.content_hash();
         let h2 = schema.content_hash();
         assert_eq!(h1, h2);
@@ -505,24 +449,16 @@ mod tests {
                 .effect(HostEffect::SpawnEntity)
                 .determinism(DeterminismClass::Deterministic),
         );
-        let mut request = CompilationRequest::repl(
-            ScriptLanguage::Valkyrie,
-            "return spawn()",
-            host,
-        );
+        let mut request = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return spawn()", host);
         request.required_capabilities = vec![CapabilityId::new("other")];
         request.determinism = DeterminismClass::Deterministic;
         let err = ScriptCompiler::new().compile(&request).unwrap_err();
-        assert!(
-            format!("{err:?}").contains("capability") || err.code().contains("compile"),
-            "{err:?}"
-        );
+        assert!(format!("{err:?}").contains("capability") || err.code().contains("compile"), "{err:?}");
     }
 
     #[test]
     fn allows_phase_respects_function_and_caller() {
-        let f = HostFunction::new(HostFunctionId::new("ecs", "spawn", 1))
-            .phases([HostPhase::FixedUpdate, HostPhase::Update]);
+        let f = HostFunction::new(HostFunctionId::new("ecs", "spawn", 1)).phases([HostPhase::FixedUpdate, HostPhase::Update]);
         assert!(f.allows_phase(HostPhase::Update));
         assert!(!f.allows_phase(HostPhase::RenderPrepare));
         assert!(f.allows_phase(HostPhase::Any));

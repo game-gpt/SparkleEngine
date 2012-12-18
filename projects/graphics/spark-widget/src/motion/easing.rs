@@ -19,7 +19,8 @@ impl Easing {
             Self::EaseInOut => {
                 if t < 0.5 {
                     2.0 * t * t
-                } else {
+                }
+                else {
                     1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
                 }
             }

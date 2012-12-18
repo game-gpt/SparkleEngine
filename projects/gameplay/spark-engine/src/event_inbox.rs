@@ -33,10 +33,7 @@ impl ScriptEventInbox {
     }
 
     pub fn push(&mut self, name: impl Into<Arc<str>>, args: Vec<Value>) {
-        self.events.push(ScriptEvent {
-            name: name.into(),
-            args,
-        });
+        self.events.push(ScriptEvent { name: name.into(), args });
     }
 
     /// 取出全部事件并清空（供 phase 批量派发）。

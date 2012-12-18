@@ -11,7 +11,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 function usage() {
-  console.log(`Usage:
+    console.log(`Usage:
   spark info
   spark run [--cwd <project-dir>]
   spark studio [--cwd <project-dir>] [--safe-mode] [--play]
@@ -26,169 +26,158 @@ studio  打开该 npm 游戏项目的编辑器。--play 则跳过壳直接进对
 
 /** SparkEngine 仓库根：projects/hosts/sparkle-engine/bin → ../../../.. */
 function engineRoot() {
-  return path.resolve(__dirname, "../../../..");
+    return path.resolve(__dirname, "../../../..");
 }
 
 function findStudioBinary() {
-  const env =
-    (typeof process.env.SPARK_STUDIO_BIN === "string" &&
-      process.env.SPARK_STUDIO_BIN.trim()) ||
-    "";
-  if (env) {
-    const abs = path.resolve(env);
-    if (!fs.existsSync(abs)) {
-      throw new Error(`SPARK_STUDIO_BIN 指向的文件不存在：${abs}`);
+    const env = (typeof process.env.SPARK_STUDIO_BIN === "string" && process.env.SPARK_STUDIO_BIN.trim()) || "";
+    if (env) {
+        const abs = path.resolve(env);
+        if (!fs.existsSync(abs)) {
+            throw new Error(`SPARK_STUDIO_BIN 指向的文件不存在：${abs}`);
+        }
+        return abs;
     }
-    return abs;
-  }
 
-  const root = engineRoot();
-  const name = process.platform === "win32" ? "spark-studio.exe" : "spark-studio";
-  for (const profile of ["release", "debug"]) {
-    const candidate = path.join(root, "target", profile, name);
-    if (fs.existsSync(candidate)) return candidate;
-  }
-  return null;
+    const root = engineRoot();
+    const name = process.platform === "win32" ? "spark-studio.exe" : "spark-studio";
+    for (const profile of ["release", "debug"]) {
+        const candidate = path.join(root, "target", profile, name);
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    return null;
 }
 
 function parseCwd(args) {
-  let cwd = process.cwd();
-  const rest = [];
-  for (let i = 0; i < args.length; i += 1) {
-    const a = args[i];
-    if (a === "--cwd" && args[i + 1]) {
-      cwd = path.resolve(args[i + 1]);
-      i += 1;
-      continue;
+    let cwd = process.cwd();
+    const rest = [];
+    for (let i = 0; i < args.length; i += 1) {
+        const a = args[i];
+        if (a === "--cwd" && args[i + 1]) {
+            cwd = path.resolve(args[i + 1]);
+            i += 1;
+            continue;
+        }
+        if (a.startsWith("--cwd=")) {
+            cwd = path.resolve(a.slice("--cwd=".length));
+            continue;
+        }
+        rest.push(a);
     }
-    if (a.startsWith("--cwd=")) {
-      cwd = path.resolve(a.slice("--cwd=".length));
-      continue;
-    }
-    rest.push(a);
-  }
-  return { cwd, rest };
+    return { cwd, rest };
 }
 
 /** 预检：cwd 必须有 package.json（与 Studio 二进制一致）。 */
 function resolveStudioCwd(args) {
-  const { cwd, rest } = parseCwd(args);
-  const pkg = path.join(cwd, "package.json");
-  if (!fs.existsSync(pkg)) {
-    console.error(
-      `当前目录不是 Spark 游戏项目。\n未找到 package.json（${cwd}）。\n请在已安装 @game-gpt/sparkle-engine 的项目目录中运行 spark studio。`,
-    );
-    process.exit(2);
-  }
-  const out = ["--cwd", cwd, ...rest];
-  return out;
+    const { cwd, rest } = parseCwd(args);
+    const pkg = path.join(cwd, "package.json");
+    if (!fs.existsSync(pkg)) {
+        console.error(
+            `当前目录不是 Spark 游戏项目。\n未找到 package.json（${cwd}）。\n请在已安装 @game-gpt/sparkle-engine 的项目目录中运行 spark studio。`,
+        );
+        process.exit(2);
+    }
+    const out = ["--cwd", cwd, ...rest];
+    return out;
 }
 
 function readSparkField(cwd) {
-  const pkgPath = path.join(cwd, "package.json");
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-  return {
-    name: pkg.name || path.basename(cwd),
-    spark: pkg.spark || {},
-  };
+    const pkgPath = path.join(cwd, "package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+    return {
+        name: pkg.name || path.basename(cwd),
+        spark: pkg.spark || {},
+    };
 }
 
 function runStudio(args) {
-  const bin = findStudioBinary();
-  if (!bin) {
-    console.error(
-      "找不到 spark-studio 二进制。请先在仓库根执行：cargo build -p spark-studio",
-    );
-    process.exit(1);
-  }
-  const forwarded = resolveStudioCwd(args);
-  const result = spawnSync(bin, forwarded, {
-    stdio: "inherit",
-    windowsHide: true,
-    env: process.env,
-    cwd: process.cwd(),
-  });
-  if (result.error) {
-    console.error(result.error);
-    process.exit(1);
-  }
-  process.exit(result.status ?? 1);
-}
-
-function runGame(args) {
-  const { cwd, rest } = parseCwd(args);
-  const pkgPath = path.join(cwd, "package.json");
-  if (!fs.existsSync(pkgPath)) {
-    console.error(
-      `当前目录不是 Spark 游戏项目。\n未找到 package.json（${cwd}）。`,
-    );
-    process.exit(2);
-  }
-  const { name, spark } = readSparkField(cwd);
-  const runTarget = spark.runTarget || null;
-  const root = engineRoot();
-
-  if (runTarget) {
-    const result = spawnSync(
-      "cargo",
-      ["run", "-p", runTarget, ...rest],
-      {
+    const bin = findStudioBinary();
+    if (!bin) {
+        console.error("找不到 spark-studio 二进制。请先在仓库根执行：cargo build -p spark-studio");
+        process.exit(1);
+    }
+    const forwarded = resolveStudioCwd(args);
+    const result = spawnSync(bin, forwarded, {
         stdio: "inherit",
         windowsHide: true,
         env: process.env,
-        cwd: root,
-      },
-    );
+        cwd: process.cwd(),
+    });
     if (result.error) {
-      console.error(result.error);
-      process.exit(1);
+        console.error(result.error);
+        process.exit(1);
     }
     process.exit(result.status ?? 1);
-  }
+}
 
-  // 无 runTarget：走 Studio --play（嵌入对局）
-  console.log(`spark run: 项目 ${name} 无 spark.runTarget，使用 spark-studio --play`);
-  runStudio(["--cwd", cwd, "--play", ...rest]);
+function runGame(args) {
+    const { cwd, rest } = parseCwd(args);
+    const pkgPath = path.join(cwd, "package.json");
+    if (!fs.existsSync(pkgPath)) {
+        console.error(`当前目录不是 Spark 游戏项目。\n未找到 package.json（${cwd}）。`);
+        process.exit(2);
+    }
+    const { name, spark } = readSparkField(cwd);
+    const runTarget = spark.runTarget || null;
+    const root = engineRoot();
+
+    if (runTarget) {
+        const result = spawnSync("cargo", ["run", "-p", runTarget, ...rest], {
+            stdio: "inherit",
+            windowsHide: true,
+            env: process.env,
+            cwd: root,
+        });
+        if (result.error) {
+            console.error(result.error);
+            process.exit(1);
+        }
+        process.exit(result.status ?? 1);
+    }
+
+    // 无 runTarget：走 Studio --play（嵌入对局）
+    console.log(`spark run: 项目 ${name} 无 spark.runTarget，使用 spark-studio --play`);
+    runStudio(["--cwd", cwd, "--play", ...rest]);
 }
 
 function runInfo() {
-  const { loadSpark } = require("../dist/index.js");
-  const info = loadSpark().info();
-  console.log(JSON.stringify(info, null, 2));
+    const { loadSpark } = require("../dist/index.js");
+    const info = loadSpark().info();
+    console.log(JSON.stringify(info, null, 2));
 }
 
 function main() {
-  const argv = process.argv.slice(2);
-  const cmd = argv[0];
+    const argv = process.argv.slice(2);
+    const cmd = argv[0];
 
-  if (!cmd || cmd === "-h" || cmd === "--help") {
-    usage();
-    return;
-  }
-
-  if (cmd === "studio") {
-    runStudio(argv.slice(1));
-    return;
-  }
-
-  if (cmd === "run") {
-    runGame(argv.slice(1));
-    return;
-  }
-
-  if (cmd === "info") {
-    try {
-      runInfo();
-    } catch (err) {
-      console.error(err instanceof Error ? err.message : err);
-      process.exit(1);
+    if (!cmd || cmd === "-h" || cmd === "--help") {
+        usage();
+        return;
     }
-    return;
-  }
 
-  console.error(`未知命令：${cmd}`);
-  usage();
-  process.exit(1);
+    if (cmd === "studio") {
+        runStudio(argv.slice(1));
+        return;
+    }
+
+    if (cmd === "run") {
+        runGame(argv.slice(1));
+        return;
+    }
+
+    if (cmd === "info") {
+        try {
+            runInfo();
+        } catch (err) {
+            console.error(err instanceof Error ? err.message : err);
+            process.exit(1);
+        }
+        return;
+    }
+
+    console.error(`未知命令：${cmd}`);
+    usage();
+    process.exit(1);
 }
 
 main();

@@ -27,33 +27,18 @@ impl ActionMap {
     }
 
     pub fn down(&self, input: &Input, action: &str) -> bool {
-        self.keys
-            .get(action)
-            .is_some_and(|keys| keys.iter().any(|k| input.key_down(*k)))
-            || self
-                .mouse
-                .get(action)
-                .is_some_and(|btns| btns.iter().any(|b| input.mouse_down(*b)))
+        self.keys.get(action).is_some_and(|keys| keys.iter().any(|k| input.key_down(*k)))
+            || self.mouse.get(action).is_some_and(|btns| btns.iter().any(|b| input.mouse_down(*b)))
     }
 
     pub fn pressed(&self, input: &Input, action: &str) -> bool {
-        self.keys
-            .get(action)
-            .is_some_and(|keys| keys.iter().any(|k| input.key_pressed(*k)))
-            || self
-                .mouse
-                .get(action)
-                .is_some_and(|btns| btns.iter().any(|b| input.mouse_pressed(*b)))
+        self.keys.get(action).is_some_and(|keys| keys.iter().any(|k| input.key_pressed(*k)))
+            || self.mouse.get(action).is_some_and(|btns| btns.iter().any(|b| input.mouse_pressed(*b)))
     }
 
     pub fn released(&self, input: &Input, action: &str) -> bool {
-        self.keys
-            .get(action)
-            .is_some_and(|keys| keys.iter().any(|k| input.key_released(*k)))
-            || self
-                .mouse
-                .get(action)
-                .is_some_and(|btns| btns.iter().any(|b| input.mouse_released(*b)))
+        self.keys.get(action).is_some_and(|keys| keys.iter().any(|k| input.key_released(*k)))
+            || self.mouse.get(action).is_some_and(|btns| btns.iter().any(|b| input.mouse_released(*b)))
     }
 
     /// 负方向与正方向合成的一维轴，结果在 -1、0、1 之间。

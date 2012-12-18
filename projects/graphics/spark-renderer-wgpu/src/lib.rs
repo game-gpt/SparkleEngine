@@ -21,23 +21,23 @@ pub(crate) const RESIDENT_UPLOADS_PER_FRAME: usize = 8;
 pub use game3d::run_window_3d;
 pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
-    alloc_texture_id, Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx,
-    Frustum, GameHost, GameHost3d, Input, Key, Mat4, MeshCmd, MeshId, MeshResidentKey, MeshVertex,
-    MouseBtn, QuadCmd, RgbaImage, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, TexQuadCmd,
-    TextCmd, TextureId, Vec3, WindowConfig, MAX_SKIN_JOINTS,
+    Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost, GameHost3d, Input, Key, MAX_SKIN_JOINTS, Mat4,
+    MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, RgbaImage, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex,
+    TexQuadCmd, TextCmd, TextureId, Vec3, WindowConfig, alloc_texture_id,
 };
 
-use std::sync::Arc;
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
 use spark_core::{Color, SparkError, codes};
 use spark_shader::{BuiltinShader, create_builtin};
-use winit::application::ApplicationHandler;
-use winit::dpi::LogicalSize;
-use winit::event::{DeviceEvent, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::{
+    application::ApplicationHandler,
+    dpi::LogicalSize,
+    event::{DeviceEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Window, WindowAttributes, WindowId},
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -91,9 +91,7 @@ impl GpuState {
         let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
         instance_desc.backends = wgpu::Backends::PRIMARY;
         let instance = wgpu::Instance::new(instance_desc);
-        let surface = instance
-            .create_surface(window.clone())
-            .map_err(|e| SparkError::new(codes::gpu_surface()).caused_by(e))?;
+        let surface = instance.create_surface(window.clone()).map_err(|e| SparkError::new(codes::gpu_surface()).caused_by(e))?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -103,8 +101,7 @@ impl GpuState {
             })
             .await
             .map_err(|_| {
-                SparkError::new(codes::gpu_adapter())
-                    .arg("reason", spark_core::ErrorArg::String(std::sync::Arc::from("no_adapter")))
+                SparkError::new(codes::gpu_adapter()).arg("reason", spark_core::ErrorArg::String(std::sync::Arc::from("no_adapter")))
             })?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -119,12 +116,7 @@ impl GpuState {
             .map_err(|e| SparkError::new(codes::gpu_device()).caused_by(e))?;
 
         let caps = surface.get_capabilities(&adapter);
-        let format = caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| f.is_srgb())
-            .unwrap_or(caps.formats[0]);
+        let format = caps.formats.iter().copied().find(|f| f.is_srgb()).unwrap_or(caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
@@ -153,32 +145,21 @@ impl GpuState {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
+                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                 count: None,
             }],
         });
         let solid_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("solid-bg"),
             layout: &solid_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buf.as_entire_binding(),
-            }],
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniform_buf.as_entire_binding() }],
         });
 
         let mut glyph_cache = GlyphCache::load_system()?;
         let (aw, ah) = glyph_cache.atlas_size();
         let glyph_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("glyph-atlas"),
-            size: wgpu::Extent3d {
-                width: aw,
-                height: ah,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width: aw, height: ah, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -188,23 +169,10 @@ impl GpuState {
         });
         let glyph_view = glyph_tex.create_view(&Default::default());
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &glyph_tex,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
+            wgpu::TexelCopyTextureInfo { texture: &glyph_tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
             glyph_cache.atlas_bytes(),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(aw),
-                rows_per_image: Some(ah),
-            },
-            wgpu::Extent3d {
-                width: aw,
-                height: ah,
-                depth_or_array_layers: 1,
-            },
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(aw), rows_per_image: Some(ah) },
+            wgpu::Extent3d { width: aw, height: ah, depth_or_array_layers: 1 },
         );
         glyph_cache.take_dirty();
 
@@ -220,11 +188,7 @@ impl GpuState {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
@@ -249,18 +213,9 @@ impl GpuState {
             label: Some("glyph-bg"),
             layout: &glyph_bgl,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&glyph_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: uniform_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&glyph_view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&sampler) },
             ],
         });
 
@@ -433,16 +388,8 @@ impl GpuState {
                 aspect: wgpu::TextureAspect::All,
             },
             self.glyph_cache.atlas_bytes(),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(aw),
-                rows_per_image: Some(ah),
-            },
-            wgpu::Extent3d {
-                width: aw,
-                height: ah,
-                depth_or_array_layers: 1,
-            },
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(aw), rows_per_image: Some(ah) },
+            wgpu::Extent3d { width: aw, height: ah, depth_or_array_layers: 1 },
         );
         let _ = &self.glyph_view;
     }
@@ -450,14 +397,7 @@ impl GpuState {
     fn render(&mut self, list: &DrawList) -> Result<(), SparkError> {
         let sw = self.config.width as f32;
         let sh = self.config.height as f32;
-        self.queue.write_buffer(
-            &self.uniform_buf,
-            0,
-            bytemuck::bytes_of(&Uniforms {
-                screen: [sw, sh],
-                _pad: [0.0, 0.0],
-            }),
-        );
+        self.queue.write_buffer(&self.uniform_buf, 0, bytemuck::bytes_of(&Uniforms { screen: [sw, sh], _pad: [0.0, 0.0] }));
 
         let mut solids = Vec::with_capacity((list.quads.len() + list.hud_quads.len()) * 6);
         for q in &list.quads {
@@ -474,18 +414,15 @@ impl GpuState {
         }
         self.upload_atlas_if_needed();
 
-        self.tex_quads
-            .prepare_frame(&self.device, &self.queue, &self.uniform_buf, list)?;
+        self.tex_quads.prepare_frame(&self.device, &self.queue, &self.uniform_buf, list)?;
 
         self.ensure_solid_cap(solids.len() as u64)?;
         self.ensure_glyph_cap(glyphs.len() as u64)?;
         if !solids.is_empty() {
-            self.queue
-                .write_buffer(&self.solid_vbo, 0, bytemuck::cast_slice(&solids));
+            self.queue.write_buffer(&self.solid_vbo, 0, bytemuck::cast_slice(&solids));
         }
         if !glyphs.is_empty() {
-            self.queue
-                .write_buffer(&self.glyph_vbo, 0, bytemuck::cast_slice(&glyphs));
+            self.queue.write_buffer(&self.glyph_vbo, 0, bytemuck::cast_slice(&glyphs));
         }
 
         let (frame, suboptimal) = match self.surface.get_current_texture() {
@@ -495,18 +432,12 @@ impl GpuState {
                 self.surface.configure(&self.device, &self.config);
                 return Ok(());
             }
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => {
+            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Validation => {
                 return Ok(());
             }
         };
         let view = frame.texture.create_view(&Default::default());
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("frame"),
-            });
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame") });
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("main"),
@@ -544,8 +475,7 @@ impl GpuState {
                 pass.set_vertex_buffer(0, self.solid_vbo.slice(..));
                 pass.draw(world_solid_end..hud_solid_end, 0..1);
             }
-            self.tex_quads
-                .encode_pass_range(&mut pass, split, u32::MAX);
+            self.tex_quads.encode_pass_range(&mut pass, split, u32::MAX);
             if !glyphs.is_empty() {
                 pass.set_pipeline(&self.glyph_pipeline);
                 pass.set_bind_group(0, &self.glyph_bind, &[]);
@@ -570,45 +500,24 @@ fn push_solid_quad(solids: &mut Vec<SolidVertex>, q: &spark_renderer::QuadCmd) {
     let y1 = q.rect.y + q.rect.h;
     let c = q.color.to_array();
     solids.extend_from_slice(&[
-        SolidVertex {
-            pos: [x0, y0],
-            color: c,
-        },
-        SolidVertex {
-            pos: [x1, y0],
-            color: c,
-        },
-        SolidVertex {
-            pos: [x1, y1],
-            color: c,
-        },
-        SolidVertex {
-            pos: [x0, y0],
-            color: c,
-        },
-        SolidVertex {
-            pos: [x1, y1],
-            color: c,
-        },
-        SolidVertex {
-            pos: [x0, y1],
-            color: c,
-        },
+        SolidVertex { pos: [x0, y0], color: c },
+        SolidVertex { pos: [x1, y0], color: c },
+        SolidVertex { pos: [x1, y1], color: c },
+        SolidVertex { pos: [x0, y0], color: c },
+        SolidVertex { pos: [x1, y1], color: c },
+        SolidVertex { pos: [x0, y1], color: c },
     ]);
 }
 
-fn push_text_glyphs(
-    glyphs: &mut Vec<GlyphVertex>,
-    cache: &mut GlyphCache,
-    t: &spark_renderer::TextCmd,
-) {
+fn push_text_glyphs(glyphs: &mut Vec<GlyphVertex>, cache: &mut GlyphCache, t: &spark_renderer::TextCmd) {
     let mut pen_x = t.pos.x;
     let baseline = t.pos.y + t.size;
     for ch in t.text.chars() {
         if ch == '\n' {
             continue;
         }
-        let Some(g) = cache.glyph(ch, t.size) else {
+        let Some(g) = cache.glyph(ch, t.size)
+        else {
             continue;
         };
         let x0 = pen_x;
@@ -618,36 +527,12 @@ fn push_text_glyphs(
         let c = t.color.to_array();
         let (u0, v0, u1, v1) = (g.uv_min[0], g.uv_min[1], g.uv_max[0], g.uv_max[1]);
         glyphs.extend_from_slice(&[
-            GlyphVertex {
-                pos: [x0, y0],
-                uv: [u0, v0],
-                color: c,
-            },
-            GlyphVertex {
-                pos: [x1, y0],
-                uv: [u1, v0],
-                color: c,
-            },
-            GlyphVertex {
-                pos: [x1, y1],
-                uv: [u1, v1],
-                color: c,
-            },
-            GlyphVertex {
-                pos: [x0, y0],
-                uv: [u0, v0],
-                color: c,
-            },
-            GlyphVertex {
-                pos: [x1, y1],
-                uv: [u1, v1],
-                color: c,
-            },
-            GlyphVertex {
-                pos: [x0, y1],
-                uv: [u0, v1],
-                color: c,
-            },
+            GlyphVertex { pos: [x0, y0], uv: [u0, v0], color: c },
+            GlyphVertex { pos: [x1, y0], uv: [u1, v0], color: c },
+            GlyphVertex { pos: [x1, y1], uv: [u1, v1], color: c },
+            GlyphVertex { pos: [x0, y0], uv: [u0, v0], color: c },
+            GlyphVertex { pos: [x1, y1], uv: [u1, v1], color: c },
+            GlyphVertex { pos: [x0, y1], uv: [u0, v1], color: c },
         ]);
         pen_x += g.advance;
     }
@@ -693,12 +578,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         }
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _id: WindowId,
-        event: WindowEvent,
-    ) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match &event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -709,13 +589,11 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // 与 surface / uniform 一致：物理像素
-                self.input
-                    .on_cursor(position.x as f32, position.y as f32);
+                self.input.on_cursor(position.x as f32, position.y as f32);
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 if let Some(btn) = winit_map::mouse_btn(*button) {
-                    self.input
-                        .on_mouse_button(btn, winit_map::button_state(*state));
+                    self.input.on_mouse_button(btn, winit_map::button_state(*state));
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
@@ -723,8 +601,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Some(key) = winit_map::key(event.physical_key) {
-                    self.input
-                        .on_key(key, winit_map::button_state(event.state));
+                    self.input.on_key(key, winit_map::button_state(event.state));
                 }
                 if event.state == winit::event::ElementState::Pressed {
                     if let Some(text) = event.text.as_ref() {
@@ -746,7 +623,8 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
             _ => {}
         }
 
-        let Some(gpu) = self.state.as_mut() else {
+        let Some(gpu) = self.state.as_mut()
+        else {
             return;
         };
 
@@ -768,13 +646,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         let sh = gpu.config.height as f32;
 
         {
-            let frame = FrameCtx {
-                input: &self.input,
-                dt,
-                screen_w: sw,
-                screen_h: sh,
-                timing: Default::default(),
-            };
+            let frame = FrameCtx { input: &self.input, dt, screen_w: sw, screen_h: sh, timing: Default::default() };
             self.host.update(&frame);
         }
         self.input.begin_frame();
@@ -800,13 +672,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         gpu.window.request_redraw();
     }
 
-    fn device_event(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-        _device_id: winit::event::DeviceId,
-        _event: DeviceEvent,
-    ) {
-    }
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: winit::event::DeviceId, _event: DeviceEvent) {}
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(s) = self.state.as_ref() {
@@ -816,25 +682,11 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
 }
 
 /// 窗口事件泵 + GPU 提交（2D）。帧相位编排请走 `spark_engine::run_game`。
-pub fn run_window_2d<H: GameHost + 'static>(
-    config: WindowConfig,
-    host: H,
-) -> Result<(), SparkError> {
-    let event_loop = EventLoop::new().map_err(|e| {
-        SparkError::new(codes::gpu_event_loop()).caused_by(e)
-    })?;
+pub fn run_window_2d<H: GameHost + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
+    let event_loop = EventLoop::new().map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    let mut app = HostApp {
-        config,
-        host,
-        input: Input::default(),
-        state: None,
-        last: Instant::now(),
-        scale: 1.0,
-    };
-    event_loop
-        .run_app(&mut app)
-        .map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
+    let mut app = HostApp { config, host, input: Input::default(), state: None, last: Instant::now(), scale: 1.0 };
+    event_loop.run_app(&mut app).map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
 }
 
 /// 仅清屏窗口（无宿主逻辑）。

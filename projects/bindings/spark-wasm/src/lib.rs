@@ -14,8 +14,8 @@ mod host;
 
 pub use host::SparkWasmHost;
 
-use spark_geometry::Vec2Ext;
 use spark_core::Vec2;
+use spark_geometry::Vec2Ext;
 
 /// npm 平台包名（与 TS 包对齐）。
 pub const NPM_PLATFORM_PACKAGE: &str = "spark-unknown-wasm32";

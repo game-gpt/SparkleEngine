@@ -20,9 +20,6 @@ impl Circle {
     }
 
     pub fn expanded(self, by: f32) -> Self {
-        Self {
-            center: self.center,
-            radius: (self.radius + by).max(0.0),
-        }
+        Self { center: self.center, radius: (self.radius + by).max(0.0) }
     }
 }

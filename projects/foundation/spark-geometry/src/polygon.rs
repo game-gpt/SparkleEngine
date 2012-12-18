@@ -31,9 +31,7 @@ impl Polygon {
         for i in 0..n {
             let vi = self.vertices[i];
             let vj = self.vertices[j];
-            let intersect = ((vi.y > p.y) != (vj.y > p.y))
-                && (p.x
-                    < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y + 1e-12) + vi.x);
+            let intersect = ((vi.y > p.y) != (vj.y > p.y)) && (p.x < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y + 1e-12) + vi.x);
             if intersect {
                 inside = !inside;
             }

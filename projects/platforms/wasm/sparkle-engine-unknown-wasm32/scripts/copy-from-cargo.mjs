@@ -12,17 +12,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, "..");
 // projects/platforms/wasm/<pkg> → 仓库根
 const engineRoot = resolve(pkgRoot, "../../../..");
-const src = join(
-  engineRoot,
-  "target/wasm32-unknown-unknown/release/spark_wasm.wasm",
-);
+const src = join(engineRoot, "target/wasm32-unknown-unknown/release/spark_wasm.wasm");
 const dest = join(pkgRoot, "spark_engine_bg.wasm");
 
 if (!existsSync(src)) {
-  console.error(
-    `未找到 ${src}\n请先：rustup target add wasm32-unknown-unknown\n然后：cargo build -p spark-wasm --target wasm32-unknown-unknown --release`,
-  );
-  process.exit(1);
+    console.error(
+        `未找到 ${src}\n请先：rustup target add wasm32-unknown-unknown\n然后：cargo build -p spark-wasm --target wasm32-unknown-unknown --release`,
+    );
+    process.exit(1);
 }
 
 mkdirSync(pkgRoot, { recursive: true });

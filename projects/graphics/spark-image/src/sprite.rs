@@ -2,7 +2,7 @@
 
 use spark_core::{ErrorArg, Rect, SparkError, Vec2, codes};
 
-use crate::{validate_region, PixelImage};
+use crate::{PixelImage, validate_region};
 
 /// 图集中的精灵：像素源矩形 + 归一化轴心（相对源矩形，默认中心 `(0.5, 0.5)`）。
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -13,10 +13,7 @@ pub struct Sprite {
 
 impl Sprite {
     pub fn new(region: Rect) -> Self {
-        Self {
-            region,
-            pivot: Vec2::new(0.5, 0.5),
-        }
+        Self { region, pivot: Vec2::new(0.5, 0.5) }
     }
 
     pub fn with_pivot(mut self, pivot: Vec2) -> Self {
@@ -36,12 +33,7 @@ impl Sprite {
 
     /// 以轴心对齐到目标点时的目标矩形（`dst_size` 为绘制宽高）。
     pub fn dest_rect(&self, anchor: Vec2, dst_size: Vec2) -> Rect {
-        Rect::new(
-            anchor.x - self.pivot.x * dst_size.x,
-            anchor.y - self.pivot.y * dst_size.y,
-            dst_size.x,
-            dst_size.y,
-        )
+        Rect::new(anchor.x - self.pivot.x * dst_size.x, anchor.y - self.pivot.y * dst_size.y, dst_size.x, dst_size.y)
     }
 }
 
@@ -64,16 +56,7 @@ pub struct SpriteSheet {
 
 impl SpriteSheet {
     pub fn grid(columns: u32, rows: u32, cell_w: u32, cell_h: u32) -> Self {
-        Self {
-            columns,
-            rows,
-            cell_w,
-            cell_h,
-            margin_x: 0,
-            margin_y: 0,
-            spacing_x: 0,
-            spacing_y: 0,
-        }
+        Self { columns, rows, cell_w, cell_h, margin_x: 0, margin_y: 0, spacing_x: 0, spacing_y: 0 }
     }
 
     pub fn cell_count(&self) -> u32 {
@@ -91,19 +74,13 @@ impl SpriteSheet {
         }
         let x = self.margin_x + col * (self.cell_w + self.spacing_x);
         let y = self.margin_y + row * (self.cell_h + self.spacing_y);
-        Ok(Sprite::new(Rect::new(
-            x as f32,
-            y as f32,
-            self.cell_w as f32,
-            self.cell_h as f32,
-        )))
+        Ok(Sprite::new(Rect::new(x as f32, y as f32, self.cell_w as f32, self.cell_h as f32)))
     }
 
     /// 按线性下标取精灵（行主序）。
     pub fn sprite_index(&self, index: u32) -> Result<Sprite, SparkError> {
         if self.columns == 0 {
-            return Err(SparkError::new(codes::image_sprite_grid_invalid())
-                .arg("reason", ErrorArg::String("zero_columns".into())));
+            return Err(SparkError::new(codes::image_sprite_grid_invalid()).arg("reason", ErrorArg::String("zero_columns".into())));
         }
         let col = index % self.columns;
         let row = index / self.columns;
@@ -126,12 +103,7 @@ impl SpriteSheet {
                 .arg("columns", ErrorArg::Unsigned(columns as u64))
                 .arg("rows", ErrorArg::Unsigned(rows as u64)));
         }
-        Ok(Self::grid(
-            columns,
-            rows,
-            image.width() / columns,
-            image.height() / rows,
-        ))
+        Ok(Self::grid(columns, rows, image.width() / columns, image.height() / rows))
     }
 }
 

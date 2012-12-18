@@ -25,9 +25,11 @@ pub fn blend_masked(a: &LocalPose, b: &LocalPose, weights: &[f32]) -> LocalPose 
         let w = weights.get(i).copied().unwrap_or(0.0).clamp(0.0, 1.0);
         locals.push(if w <= 0.0 {
             a.locals[i]
-        } else if w >= 1.0 {
+        }
+        else if w >= 1.0 {
             b.locals[i]
-        } else {
+        }
+        else {
             a.locals[i].lerp(b.locals[i], w)
         });
     }
@@ -40,18 +42,9 @@ pub fn blend_masked(a: &LocalPose, b: &LocalPose, weights: &[f32]) -> LocalPose 
 /// 加性混合：把 `layer` 相对 `rest` 的增量叠到 `base` 上。
 ///
 /// `weight` 钳到 `[0, 1]`。
-pub fn add_local_poses(
-    base: &LocalPose,
-    layer: &LocalPose,
-    rest: &LocalPose,
-    weight: f32,
-) -> LocalPose {
+pub fn add_local_poses(base: &LocalPose, layer: &LocalPose, rest: &LocalPose, weight: f32) -> LocalPose {
     let w = weight.clamp(0.0, 1.0);
-    let n = base
-        .locals
-        .len()
-        .min(layer.locals.len())
-        .min(rest.locals.len());
+    let n = base.locals.len().min(layer.locals.len()).min(rest.locals.len());
     let mut locals = Vec::with_capacity(base.locals.len());
     for i in 0..n {
         let b = base.locals[i];

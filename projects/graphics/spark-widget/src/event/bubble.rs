@@ -1,8 +1,6 @@
 //! 捕获 / 目标 / 冒泡路径。
 
-use crate::id::WidgetId;
-use crate::response::EventResponse;
-use crate::tree::WidgetTree;
+use crate::{id::WidgetId, response::EventResponse, tree::WidgetTree};
 
 /// 从 `target` 到根的祖先链（含自身，近→远）。
 pub fn bubble_path(tree: &WidgetTree, target: WidgetId) -> Vec<WidgetId> {
@@ -85,10 +83,7 @@ mod tests {
     fn bubble_path_lists_ancestors() {
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        let col = column()
-            .child(button_widget().text("x"))
-            .mount(&mut tree, root)
-            .unwrap();
+        let col = column().child(button_widget().text("x")).mount(&mut tree, root).unwrap();
         let btn = tree.node(col).unwrap().children[0];
         let path = bubble_path(&tree, btn);
         assert_eq!(path[0], btn);
@@ -100,19 +95,12 @@ mod tests {
     fn stop_halts_further_ancestors() {
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        let col = column()
-            .child(button_widget().text("x"))
-            .mount(&mut tree, root)
-            .unwrap();
+        let col = column().child(button_widget().text("x")).mount(&mut tree, root).unwrap();
         let btn = tree.node(col).unwrap().children[0];
         let mut seen = Vec::new();
         let resp = bubble_from(&tree, btn, |id| {
             seen.push(id);
-            if id == btn {
-                EventResponse::stop()
-            } else {
-                EventResponse::default()
-            }
+            if id == btn { EventResponse::stop() } else { EventResponse::default() }
         });
         assert!(resp.stop_propagation);
         assert_eq!(seen, vec![btn]);

@@ -4,8 +4,7 @@
 //! 按名增删组件经 [`ScriptComponentCatalog`] 解析为稳定 [`ComponentDescriptorId`]。
 //! 未知或尚无类型体的组件名必须报错，不得静默跳过。
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use spark_ecs::{Entity, World};
 
@@ -122,10 +121,7 @@ impl CommandApplyReport {
 }
 
 /// 将一批脚本命令应用到世界（使用内建组件目录）。
-pub fn apply_script_commands(
-    world: &mut World,
-    commands: &[ScriptCommand],
-) -> Result<CommandApplyReport, CommandApplyError> {
+pub fn apply_script_commands(world: &mut World, commands: &[ScriptCommand]) -> Result<CommandApplyReport, CommandApplyError> {
     apply_script_commands_with(world, commands, &ScriptComponentCatalog::with_builtins())
 }
 
@@ -139,16 +135,15 @@ pub fn apply_script_commands_with(
     for cmd in commands {
         match cmd {
             ScriptCommand::Spawn { archetype } => {
-                let e = world.spawn(ScriptArchetypeTag {
-                    name: Arc::clone(archetype),
-                });
+                let e = world.spawn(ScriptArchetypeTag { name: Arc::clone(archetype) });
                 report.spawned.push(e);
             }
             ScriptCommand::Despawn { entity } => {
                 let e = Entity::from_bits(*entity);
                 if world.despawn(e) {
                     report.despawned.push(e);
-                } else {
+                }
+                else {
                     report.failed_despawns += 1;
                 }
             }
@@ -158,22 +153,16 @@ pub fn apply_script_commands_with(
                     Some(id) if catalog.name_of(id) == Some(SCRIPT_MARKER_NAME) => {
                         if world.insert(e, ScriptMarker) {
                             report.added_components += 1;
-                        } else {
-                            return Err(CommandApplyError::EntityNotAlive {
-                                entity: *entity,
-                                component: Arc::clone(component),
-                            });
+                        }
+                        else {
+                            return Err(CommandApplyError::EntityNotAlive { entity: *entity, component: Arc::clone(component) });
                         }
                     }
                     Some(_) => {
-                        return Err(CommandApplyError::UnsupportedComponent {
-                            component: Arc::clone(component),
-                        });
+                        return Err(CommandApplyError::UnsupportedComponent { component: Arc::clone(component) });
                     }
                     None => {
-                        return Err(CommandApplyError::UnknownComponent {
-                            component: Arc::clone(component),
-                        });
+                        return Err(CommandApplyError::UnknownComponent { component: Arc::clone(component) });
                     }
                 }
             }
@@ -183,22 +172,16 @@ pub fn apply_script_commands_with(
                     Some(id) if catalog.name_of(id) == Some(SCRIPT_MARKER_NAME) => {
                         if world.remove::<ScriptMarker>(e).is_some() {
                             report.removed_components += 1;
-                        } else {
-                            return Err(CommandApplyError::EntityNotAlive {
-                                entity: *entity,
-                                component: Arc::clone(component),
-                            });
+                        }
+                        else {
+                            return Err(CommandApplyError::EntityNotAlive { entity: *entity, component: Arc::clone(component) });
                         }
                     }
                     Some(_) => {
-                        return Err(CommandApplyError::UnsupportedComponent {
-                            component: Arc::clone(component),
-                        });
+                        return Err(CommandApplyError::UnsupportedComponent { component: Arc::clone(component) });
                     }
                     None => {
-                        return Err(CommandApplyError::UnknownComponent {
-                            component: Arc::clone(component),
-                        });
+                        return Err(CommandApplyError::UnknownComponent { component: Arc::clone(component) });
                     }
                 }
             }
@@ -215,26 +198,11 @@ mod tests {
     #[test]
     fn spawn_and_despawn_apply() {
         let mut world = World::new();
-        let report = apply_script_commands(
-            &mut world,
-            &[ScriptCommand::Spawn {
-                archetype: Arc::from("rock"),
-            }],
-        )
-        .unwrap();
+        let report = apply_script_commands(&mut world, &[ScriptCommand::Spawn { archetype: Arc::from("rock") }]).unwrap();
         assert_eq!(report.spawned.len(), 1);
         let e = report.spawned[0];
-        assert_eq!(
-            world.get::<ScriptArchetypeTag>(e).map(|t| t.name.as_ref()),
-            Some("rock")
-        );
-        let report2 = apply_script_commands(
-            &mut world,
-            &[ScriptCommand::Despawn {
-                entity: e.to_bits(),
-            }],
-        )
-        .unwrap();
+        assert_eq!(world.get::<ScriptArchetypeTag>(e).map(|t| t.name.as_ref()), Some("rock"));
+        let report2 = apply_script_commands(&mut world, &[ScriptCommand::Despawn { entity: e.to_bits() }]).unwrap();
         assert_eq!(report2.despawned, vec![e]);
         assert!(!world.is_alive(e));
     }
@@ -242,14 +210,7 @@ mod tests {
     #[test]
     fn unknown_component_edits_fail() {
         let mut world = World::new();
-        let err = apply_script_commands(
-            &mut world,
-            &[ScriptCommand::AddComponent {
-                entity: 0,
-                component: Arc::from("Health"),
-            }],
-        )
-        .unwrap_err();
+        let err = apply_script_commands(&mut world, &[ScriptCommand::AddComponent { entity: 0, component: Arc::from("Health") }]).unwrap_err();
         assert!(matches!(
             err,
             CommandApplyError::UnknownComponent { ref component } if component.as_ref() == "Health"
@@ -259,21 +220,12 @@ mod tests {
     #[test]
     fn script_marker_add_and_remove() {
         let mut world = World::new();
-        let spawn = apply_script_commands(
-            &mut world,
-            &[ScriptCommand::Spawn {
-                archetype: Arc::from("unit"),
-            }],
-        )
-        .unwrap();
+        let spawn = apply_script_commands(&mut world, &[ScriptCommand::Spawn { archetype: Arc::from("unit") }]).unwrap();
         let e = spawn.spawned[0];
         let catalog = ScriptComponentCatalog::with_builtins();
         let added = apply_script_commands_with(
             &mut world,
-            &[ScriptCommand::AddComponent {
-                entity: e.to_bits(),
-                component: Arc::from(SCRIPT_MARKER_NAME),
-            }],
+            &[ScriptCommand::AddComponent { entity: e.to_bits(), component: Arc::from(SCRIPT_MARKER_NAME) }],
             &catalog,
         )
         .unwrap();
@@ -281,10 +233,7 @@ mod tests {
         assert!(world.get::<ScriptMarker>(e).is_some());
         let removed = apply_script_commands_with(
             &mut world,
-            &[ScriptCommand::RemoveComponent {
-                entity: e.to_bits(),
-                component: Arc::from(SCRIPT_MARKER_NAME),
-            }],
+            &[ScriptCommand::RemoveComponent { entity: e.to_bits(), component: Arc::from(SCRIPT_MARKER_NAME) }],
             &catalog,
         )
         .unwrap();

@@ -1,20 +1,20 @@
 {
-  "name": "ping-pong",
-  "private": true,
-  "description": "Spark Studio 验收：纯 Rust 乒乓",
-  "scripts": {
-    "studio": "spark studio",
-    "run": "spark run",
-    "play": "cargo run -p ping-pong",
-    "build": "cargo build -p ping-pong"
-  },
-  "dependencies": {
-    "@game-gpt/sparkle-engine": "workspace:*"
-  },
-  "spark": {
-    "kind": "rust",
-    "startupScene": "assets/scenes/main.scene",
-    "cargoManifest": "Cargo.toml",
-    "runTarget": "ping-pong"
-  }
+    "name": "ping-pong",
+    "private": true,
+    "description": "Spark Studio 验收：纯 Rust 乒乓",
+    "scripts": {
+        "studio": "spark studio",
+        "run": "spark run",
+        "play": "cargo run -p ping-pong",
+        "build": "cargo build -p ping-pong"
+    },
+    "dependencies": {
+        "@game-gpt/sparkle-engine": "workspace:*"
+    },
+    "spark": {
+        "kind": "rust",
+        "startupScene": "assets/scenes/main.scene",
+        "cargoManifest": "Cargo.toml",
+        "runTarget": "ping-pong"
+    }
 }

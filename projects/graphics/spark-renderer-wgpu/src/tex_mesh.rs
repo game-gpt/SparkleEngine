@@ -2,13 +2,12 @@
 //!
 //! 从 `game3d` 抽出，避免主文件继续膨胀。
 
-use std::cell::Cell;
-use std::collections::HashMap;
+use std::{cell::Cell, collections::HashMap};
 
 use bytemuck::{Pod, Zeroable};
 use spark_core::SparkError;
 use spark_renderer::{DrawList3d, MeshResidentKey, RgbaImage, TexMeshVertex, TextureId};
-use spark_shader::{create_builtin, BuiltinShader};
+use spark_shader::{BuiltinShader, create_builtin};
 use wgpu::util::DeviceExt;
 
 use crate::game3d::mat4_to_cols_pub;
@@ -78,9 +77,7 @@ impl TexMeshGpu {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: crate::dyn_ubo::binding_size(
-                            std::mem::size_of::<Uniforms3d>() as u64,
-                        ),
+                        min_binding_size: crate::dyn_ubo::binding_size(std::mem::size_of::<Uniforms3d>() as u64),
                     },
                     count: None,
                 },
@@ -102,8 +99,7 @@ impl TexMeshGpu {
                 },
             ],
         });
-        let uniform_stride =
-            crate::dyn_ubo::uniform_stride(device, std::mem::size_of::<Uniforms3d>() as u64);
+        let uniform_stride = crate::dyn_ubo::uniform_stride(device, std::mem::size_of::<Uniforms3d>() as u64);
         let uniform_slots = 512usize;
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("tex-mesh3d-uniform-ring"),
@@ -309,27 +305,14 @@ impl TexMeshGpu {
         })
     }
 
-    fn make_tex_bind(
-        &self,
-        device: &wgpu::Device,
-        view: &wgpu::TextureView,
-    ) -> wgpu::BindGroup {
+    fn make_tex_bind(&self, device: &wgpu::Device, view: &wgpu::TextureView) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("tex-mesh3d-bg"),
             layout: &self.bgl,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.object_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: self.object_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
             ],
         })
     }
@@ -349,73 +332,35 @@ impl TexMeshGpu {
         // 环缓冲换新后重建所有纹理 bind（引用旧 buffer 无效）。
         let keys: Vec<u32> = self.textures.keys().copied().collect();
         for id in keys {
-            let Some(tex) = self.textures.remove(&id) else {
+            let Some(tex) = self.textures.remove(&id)
+            else {
                 continue;
             };
             let view = tex.texture.create_view(&Default::default());
             let bind = self.make_tex_bind(device, &view);
-            self.textures.insert(
-                id,
-                GpuTexture {
-                    texture: tex.texture,
-                    bind,
-                },
-            );
+            self.textures.insert(id, GpuTexture { texture: tex.texture, bind });
         }
     }
 
-    pub fn ingest_uploads(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        uploads: &[(TextureId, RgbaImage)],
-    ) -> Result<(), SparkError> {
+    pub fn ingest_uploads(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, uploads: &[(TextureId, RgbaImage)]) -> Result<(), SparkError> {
         for (id, img) in uploads {
-            let texture = crate::mipmap::create_rgba_texture_with_mips(
-                device,
-                queue,
-                "mesh3d-albedo",
-                img.width,
-                img.height,
-                &img.rgba,
-            );
+            let texture = crate::mipmap::create_rgba_texture_with_mips(device, queue, "mesh3d-albedo", img.width, img.height, &img.rgba);
             let view = texture.create_view(&Default::default());
             let bind = self.make_tex_bind(device, &view);
-            self.textures.insert(
-                id.0,
-                GpuTexture {
-                    texture,
-                    bind,
-                },
-            );
+            self.textures.insert(id.0, GpuTexture { texture, bind });
         }
         Ok(())
     }
 
     fn to_gpu(verts: &[TexMeshVertex]) -> Vec<TexVertGpu> {
-        verts
-            .iter()
-            .map(|v| TexVertGpu {
-                pos: v.pos,
-                normal: v.normal,
-                uv: v.uv,
-                color: v.color,
-            })
-            .collect()
+        verts.iter().map(|v| TexVertGpu { pos: v.pos, normal: v.normal, uv: v.uv, color: v.color }).collect()
     }
 
     pub fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
-        let draw_n = list.tex_meshes.len()
-            + list.tex_meshes_xlu.len()
-            + list.tex_meshes_emissive.len();
+        let draw_n = list.tex_meshes.len() + list.tex_meshes_xlu.len() + list.tex_meshes_emissive.len();
         self.ensure_uniform_slots(device, draw_n);
         let mut uploads = 0usize;
-        for mesh in list
-            .tex_meshes
-            .iter()
-            .chain(list.tex_meshes_xlu.iter())
-            .chain(list.tex_meshes_emissive.iter())
-        {
+        for mesh in list.tex_meshes.iter().chain(list.tex_meshes_xlu.iter()).chain(list.tex_meshes_emissive.iter()) {
             if let Some(key) = mesh.resident {
                 if !Self::resident_stale(self.mesh_cache.get(&key.id.0), key, mesh.vertices.len()) {
                     continue;
@@ -429,23 +374,14 @@ impl TexMeshGpu {
         }
     }
 
-    fn resident_stale(
-        entry: Option<&ResidentTexMesh>,
-        key: MeshResidentKey,
-        vertex_count: usize,
-    ) -> bool {
+    fn resident_stale(entry: Option<&ResidentTexMesh>, key: MeshResidentKey, vertex_count: usize) -> bool {
         match entry {
             Some(e) => e.revision != key.revision || e.vertex_count as usize != vertex_count,
             None => vertex_count > 0,
         }
     }
 
-    fn ensure_resident(
-        &mut self,
-        device: &wgpu::Device,
-        key: MeshResidentKey,
-        vertices: &[TexMeshVertex],
-    ) {
+    fn ensure_resident(&mut self, device: &wgpu::Device, key: MeshResidentKey, vertices: &[TexMeshVertex]) {
         if let Some(e) = self.mesh_cache.get(&key.id.0) {
             if e.revision == key.revision && e.vertex_count as usize == vertices.len() {
                 return;
@@ -461,14 +397,7 @@ impl TexMeshGpu {
             contents: bytemuck::cast_slice(&gpu),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        self.mesh_cache.insert(
-            key.id.0,
-            ResidentTexMesh {
-                buffer,
-                vertex_count: gpu.len() as u32,
-                revision: key.revision,
-            },
-        );
+        self.mesh_cache.insert(key.id.0, ResidentTexMesh { buffer, vertex_count: gpu.len() as u32, revision: key.revision });
     }
 
     pub fn draw<'a>(
@@ -479,15 +408,7 @@ impl TexMeshGpu {
         lights_bind: &'a wgpu::BindGroup,
         shadow_bind: &'a wgpu::BindGroup,
     ) -> Result<(), SparkError> {
-        self.draw_cmds(
-            pass,
-            queue,
-            &list.tex_meshes,
-            &list.view_proj,
-            lights_bind,
-            Some(shadow_bind),
-            TexDrawKind::Opaque,
-        )
+        self.draw_cmds(pass, queue, &list.tex_meshes, &list.view_proj, lights_bind, Some(shadow_bind), TexDrawKind::Opaque)
     }
 
     /// Transparent pass：在不透明与 HUD 之间调用。
@@ -499,15 +420,7 @@ impl TexMeshGpu {
         lights_bind: &'a wgpu::BindGroup,
         shadow_bind: &'a wgpu::BindGroup,
     ) -> Result<(), SparkError> {
-        self.draw_cmds(
-            pass,
-            queue,
-            &list.tex_meshes_xlu,
-            &list.view_proj,
-            lights_bind,
-            Some(shadow_bind),
-            TexDrawKind::Xlu,
-        )
+        self.draw_cmds(pass, queue, &list.tex_meshes_xlu, &list.view_proj, lights_bind, Some(shadow_bind), TexDrawKind::Xlu)
     }
 
     /// Emissive pass：透明之后、HUD 之前。
@@ -518,15 +431,7 @@ impl TexMeshGpu {
         list: &DrawList3d,
         lights_bind: &'a wgpu::BindGroup,
     ) -> Result<(), SparkError> {
-        self.draw_cmds(
-            pass,
-            queue,
-            &list.tex_meshes_emissive,
-            &list.view_proj,
-            lights_bind,
-            None,
-            TexDrawKind::Emissive,
-        )
+        self.draw_cmds(pass, queue, &list.tex_meshes_emissive, &list.view_proj, lights_bind, None, TexDrawKind::Emissive)
     }
 
     fn draw_cmds<'a>(
@@ -560,11 +465,9 @@ impl TexMeshGpu {
                 continue;
             }
             let drawable = if let Some(key) = mesh.resident {
-                self.mesh_cache
-                    .get(&key.id.0)
-                    .map(|e| e.vertex_count > 0)
-                    .unwrap_or(false)
-            } else {
+                self.mesh_cache.get(&key.id.0).map(|e| e.vertex_count > 0).unwrap_or(false)
+            }
+            else {
                 !mesh.vertices.is_empty() && (mesh.vertices.len() as u64) <= self.transient_cap
             };
             if !drawable {
@@ -573,15 +476,8 @@ impl TexMeshGpu {
             if slot >= self.uniform_slots {
                 break;
             }
-            let uniforms = Uniforms3d {
-                view_proj: vp,
-                model: mat4_to_cols_pub(&mesh.model),
-            };
-            queue.write_buffer(
-                &self.uniform,
-                slot as u64 * self.uniform_stride,
-                bytemuck::bytes_of(&uniforms),
-            );
+            let uniforms = Uniforms3d { view_proj: vp, model: mat4_to_cols_pub(&mesh.model) };
+            queue.write_buffer(&self.uniform, slot as u64 * self.uniform_stride, bytemuck::bytes_of(&uniforms));
             draw_slots.push(((slot as u64 * self.uniform_stride) as u32, mi));
             slot += 1;
         }
@@ -589,13 +485,15 @@ impl TexMeshGpu {
 
         for (dyn_off, mi) in draw_slots {
             let mesh = &meshes[mi];
-            let Some(tex) = self.textures.get(&mesh.texture.0) else {
+            let Some(tex) = self.textures.get(&mesh.texture.0)
+            else {
                 continue;
             };
             pass.set_bind_group(0, &tex.bind, &[dyn_off]);
 
             if let Some(key) = mesh.resident {
-                let Some(entry) = self.mesh_cache.get(&key.id.0) else {
+                let Some(entry) = self.mesh_cache.get(&key.id.0)
+                else {
                     continue;
                 };
                 if entry.vertex_count == 0 {
@@ -604,7 +502,8 @@ impl TexMeshGpu {
                 let n = entry.vertex_count;
                 pass.set_vertex_buffer(0, entry.buffer.slice(..));
                 pass.draw(0..n, 0..1);
-            } else {
+            }
+            else {
                 let gpu = Self::to_gpu(&mesh.vertices);
                 if gpu.len() as u64 > self.transient_cap {
                     continue;

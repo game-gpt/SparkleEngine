@@ -1,7 +1,6 @@
 //! 类型化错误参数（禁止预先拼好的自然语言句子）。
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 /// 单个错误参数值。
 #[derive(Debug, Clone, PartialEq)]

@@ -1,7 +1,6 @@
 //! ViewModel 绑定：游戏状态 → Widget 树（不持 `&mut World`）。
 
-use crate::command::UiCommandQueue;
-use crate::tree::WidgetTree;
+use crate::{command::UiCommandQueue, tree::WidgetTree};
 
 /// 每帧在 layout 前同步声明式内容。
 pub trait UiViewModel: Send {
@@ -23,8 +22,7 @@ impl UiViewModel for NullViewModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::id::WidgetId;
-    use crate::widgets::label_widget;
+    use crate::{id::WidgetId, widgets::label_widget};
 
     struct LabelVm {
         text: String,
@@ -33,7 +31,8 @@ mod tests {
 
     impl UiViewModel for LabelVm {
         fn sync(&mut self, tree: &mut WidgetTree) {
-            let Some(id) = self.target else {
+            let Some(id) = self.target
+            else {
                 return;
             };
             if let Some(node) = tree.node_mut(id) {
@@ -46,18 +45,9 @@ mod tests {
     fn view_model_updates_label_text() {
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        let id = label_widget()
-            .text("old")
-            .mount(&mut tree, root)
-            .unwrap();
-        let mut vm = LabelVm {
-            text: "new".into(),
-            target: Some(id),
-        };
+        let id = label_widget().text("old").mount(&mut tree, root).unwrap();
+        let mut vm = LabelVm { text: "new".into(), target: Some(id) };
         vm.sync(&mut tree);
-        assert_eq!(
-            tree.node(id).unwrap().content.text.as_deref(),
-            Some("new")
-        );
+        assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("new"));
     }
 }

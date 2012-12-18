@@ -7,13 +7,10 @@ mod native_sig;
 
 use lower::lower_root_to_hir;
 
-use oak_core::{Builder, SourceText};
-use oak_core::errors::OakErrorKind;
+use oak_core::{Builder, SourceText, errors::OakErrorKind};
 use oak_valkyrie::{ValkyrieBuilder, ValkyrieLanguage, ValkyrieRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
-use spark_ir::{
-    emit_module_with_host, lower_module, HostBindTable, HostEmitMode,
-};
+use spark_ir::{HostBindTable, HostEmitMode, emit_module_with_host, lower_module};
 use spark_vm::Module;
 
 pub use native_sig::{NativeParam, TypeRef};
@@ -21,15 +18,9 @@ pub use native_sig::{NativeParam, TypeRef};
 #[derive(Debug)]
 pub enum ValkyrieScriptError {
     /// 解析失败。`args.reason` 为机器令牌（非用户 Locale 句子）。
-    Parse {
-        args: ErrorArgs,
-        span: Option<SourceSpan>,
-    },
+    Parse { args: ErrorArgs, span: Option<SourceSpan> },
     /// 编译失败。
-    Compile {
-        args: ErrorArgs,
-        span: Option<SourceSpan>,
-    },
+    Compile { args: ErrorArgs, span: Option<SourceSpan> },
 }
 
 impl ValkyrieScriptError {
@@ -44,10 +35,7 @@ impl ValkyrieScriptError {
     }
 
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
-        Self::Compile {
-            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
-            span: None,
-        }
+        Self::Compile { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())), span: None }
     }
 
     pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
@@ -86,18 +74,11 @@ pub fn compile(source: &str) -> Result<Module, ValkyrieScriptError> {
 }
 
 /// 带完整宿主绑定表的编译入口（稳定身份 + 槽位）。
-pub fn compile_with_binds(
-    source: &str,
-    hosts: &HostBindTable,
-) -> Result<Module, ValkyrieScriptError> {
+pub fn compile_with_binds(source: &str, hosts: &HostBindTable) -> Result<Module, ValkyrieScriptError> {
     let root = parse(source)?;
     let hir = lower_root_to_hir(&root, hosts).map_err(ValkyrieScriptError::compile_opaque)?;
     let mir = lower_module(&hir).map_err(ValkyrieScriptError::compile_opaque)?;
-    let mode = if hosts.is_empty() {
-        HostEmitMode::NoHost
-    } else {
-        HostEmitMode::Bound(hosts)
-    };
+    let mode = if hosts.is_empty() { HostEmitMode::NoHost } else { HostEmitMode::Bound(hosts) };
     emit_module_with_host(&mir, mode).map_err(ValkyrieScriptError::compile_opaque)
 }
 
@@ -110,10 +91,7 @@ pub fn parse(source: &str) -> Result<ValkyrieRoot, ValkyrieScriptError> {
     let out = builder.build(&text, &[], &mut session);
     match out.result {
         Ok(root) => Ok(root),
-        Err(e) => Err(ValkyrieScriptError::parse_failed(
-            out.diagnostics.len() as u64,
-            oak_offset_span(e.kind()),
-        )),
+        Err(e) => Err(ValkyrieScriptError::parse_failed(out.diagnostics.len() as u64, oak_offset_span(e.kind()))),
     }
 }
 
@@ -165,7 +143,8 @@ mod tests {
                 return a + b
             }
             return add(40, 2)
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -195,7 +174,8 @@ mod tests {
                 return 40 + 2
             }
             return 0
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -207,7 +187,8 @@ mod tests {
                 return 1
             }
             return 42
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -220,12 +201,7 @@ mod tests {
 
         let m = compile_with_binds(
             r#"register_block(1, "astracraft3:dirt", "泥土", "textures/dirt.png", 1, 1, 30, "none")"#,
-            &HostBindTable::from_ids([spark_ir::HostId::new(
-                "host",
-                "register_block",
-                1,
-            )])
-            .unwrap(),
+            &HostBindTable::from_ids([spark_ir::HostId::new("host", "register_block", 1)]).unwrap(),
         )
         .unwrap();
         let mut vm = Vm::new(m);

@@ -25,14 +25,11 @@ pub struct RgbaImage {
 
 impl RgbaImage {
     pub fn from_rgba8(width: u32, height: u32, rgba: Vec<u8>) -> Result<Self, SparkError> {
-        let need = (width as usize)
-            .checked_mul(height as usize)
-            .and_then(|n| n.checked_mul(4))
-            .ok_or_else(|| {
-                SparkError::new(codes::image_dimension_overflow())
-                    .arg("width", ErrorArg::Unsigned(width as u64))
-                    .arg("height", ErrorArg::Unsigned(height as u64))
-            })?;
+        let need = (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(4)).ok_or_else(|| {
+            SparkError::new(codes::image_dimension_overflow())
+                .arg("width", ErrorArg::Unsigned(width as u64))
+                .arg("height", ErrorArg::Unsigned(height as u64))
+        })?;
         if rgba.len() != need {
             return Err(SparkError::new(codes::image_rgba_length_mismatch())
                 .arg("expected", ErrorArg::Unsigned(need as u64))
@@ -43,10 +40,6 @@ impl RgbaImage {
                 .arg("width", ErrorArg::Unsigned(width as u64))
                 .arg("height", ErrorArg::Unsigned(height as u64)));
         }
-        Ok(Self {
-            width,
-            height,
-            rgba,
-        })
+        Ok(Self { width, height, rgba })
     }
 }

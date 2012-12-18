@@ -9,11 +9,7 @@ pub struct AnimatorState {
 
 impl AnimatorState {
     pub fn new(name: impl Into<String>, clip: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            clip: clip.into(),
-            speed: 1.0,
-        }
+        Self { name: name.into(), clip: clip.into(), speed: 1.0 }
     }
 
     pub fn with_speed(mut self, speed: f32) -> Self {

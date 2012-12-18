@@ -13,11 +13,7 @@ pub fn floor_mod(x: f32, size: f32) -> f32 {
         r += size;
     }
     // 处理 -0.0 与 size 边界浮点噪声。
-    if r >= size {
-        0.0
-    } else {
-        r
-    }
+    if r >= size { 0.0 } else { r }
 }
 
 /// 周期最短有符号差：`target - source` 折到 `(-size/2, size/2]`。
@@ -40,21 +36,9 @@ pub struct PeriodicAxes {
 }
 
 impl PeriodicAxes {
-    pub const NONE: Self = Self {
-        x: false,
-        y: false,
-        z: false,
-    };
-    pub const XZ: Self = Self {
-        x: true,
-        y: false,
-        z: true,
-    };
-    pub const XYZ: Self = Self {
-        x: true,
-        y: true,
-        z: true,
-    };
+    pub const NONE: Self = Self { x: false, y: false, z: false };
+    pub const XZ: Self = Self { x: true, y: false, z: true };
+    pub const XYZ: Self = Self { x: true, y: true, z: true };
 }
 
 /// 各轴周期长度（米或格）；未启用的轴忽略对应分量。
@@ -71,53 +55,25 @@ impl PeriodSize {
     }
 
     pub fn xz(sx: f32, sz: f32) -> Self {
-        Self {
-            x: sx,
-            y: 0.0,
-            z: sz,
-        }
+        Self { x: sx, y: 0.0, z: sz }
     }
 }
 
 /// 将位置规范到各启用轴的 `[0, size)`。
 pub fn normalize_position(p: Vec3, axes: PeriodicAxes, size: PeriodSize) -> Vec3 {
     Vec3::new(
-        if axes.x {
-            floor_mod(p.x, size.x)
-        } else {
-            p.x
-        },
-        if axes.y {
-            floor_mod(p.y, size.y)
-        } else {
-            p.y
-        },
-        if axes.z {
-            floor_mod(p.z, size.z)
-        } else {
-            p.z
-        },
+        if axes.x { floor_mod(p.x, size.x) } else { p.x },
+        if axes.y { floor_mod(p.y, size.y) } else { p.y },
+        if axes.z { floor_mod(p.z, size.z) } else { p.z },
     )
 }
 
 /// 周期最短位移向量（`target - source`）。
 pub fn shortest_delta(source: Vec3, target: Vec3, axes: PeriodicAxes, size: PeriodSize) -> Vec3 {
     Vec3::new(
-        if axes.x {
-            shortest_delta_1d(source.x, target.x, size.x)
-        } else {
-            target.x - source.x
-        },
-        if axes.y {
-            shortest_delta_1d(source.y, target.y, size.y)
-        } else {
-            target.y - source.y
-        },
-        if axes.z {
-            shortest_delta_1d(source.z, target.z, size.z)
-        } else {
-            target.z - source.z
-        },
+        if axes.x { shortest_delta_1d(source.x, target.x, size.x) } else { target.x - source.x },
+        if axes.y { shortest_delta_1d(source.y, target.y, size.y) } else { target.y - source.y },
+        if axes.z { shortest_delta_1d(source.z, target.z, size.z) } else { target.z - source.z },
     )
 }
 
@@ -147,11 +103,7 @@ mod tests {
 
     #[test]
     fn xz_normalize() {
-        let p = normalize_position(
-            Vec3::new(12.0, 3.0, -1.0),
-            PeriodicAxes::XZ,
-            PeriodSize::xz(10.0, 8.0),
-        );
+        let p = normalize_position(Vec3::new(12.0, 3.0, -1.0), PeriodicAxes::XZ, PeriodSize::xz(10.0, 8.0));
         assert!((p.x - 2.0).abs() < 1e-5);
         assert!((p.y - 3.0).abs() < 1e-5);
         assert!((p.z - 7.0).abs() < 1e-5);

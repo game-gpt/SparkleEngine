@@ -20,34 +20,27 @@ mod spkx;
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
 use spark_vm::{Module, VmError};
 
-pub use artifact::{
-    ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError, ARTIFACT_FORMAT_VERSION,
-};
-pub use codec::{ArtifactIoError, SPKO_MAGIC, SPKX_MAGIC};
+pub use artifact::{ARTIFACT_FORMAT_VERSION, ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError};
 pub use cache::ArtifactCache;
+pub use codec::{ArtifactIoError, SPKO_MAGIC, SPKX_MAGIC};
 pub use compiler::{CompiledPackage, ScriptCompiler};
 pub use dep_graph::{DepGraphError, PackageDepGraph, PackageNode};
 pub use diagnostic::{DiagnosticBatch, ScriptDiagnostic};
 pub use host_schema::{
-    compile_policy_from_request, CapabilityId, DeterminismClass, HostEffect, HostErrorModel,
-    HostFunction, HostFunctionId, HostPhase, HostSchema, SuspensionBehavior, ThreadAffinity,
+    CapabilityId, DeterminismClass, HostEffect, HostErrorModel, HostFunction, HostFunctionId, HostPhase, HostSchema, SuspensionBehavior,
+    ThreadAffinity, compile_policy_from_request,
 };
 pub use request::{
-    CompilationRequest, DebugInfoLevel, LanguageFrontend, LanguageProfile, LanguageProfileId,
-    OptimizationLevel, PackageId, SourceFile,
+    CompilationRequest, DebugInfoLevel, LanguageFrontend, LanguageProfile, LanguageProfileId, OptimizationLevel, PackageId, SourceFile,
 };
 pub use runtime::ScriptRuntime;
 pub use spark_ir::{
-    emit_module, emit_module_with_host, lower_module, BasicBlock, DeterminismKind, HirBinaryOp,
-    HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindEntry, HostBindTable,
-    HostCompilePolicy, HostEffectKind, HostEmitMode, HostId, HostPhaseKind, HostRef, MirFunction,
-    MirInst, MirModule, MirTerminator, MirValue, SymbolId, Ty,
+    BasicBlock, DeterminismKind, HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostBindEntry, HostBindTable,
+    HostCompilePolicy, HostEffectKind, HostEmitMode, HostId, HostPhaseKind, HostRef, MirFunction, MirInst, MirModule, MirTerminator, MirValue,
+    PackageId as IrPackageId, SymbolId, Ty, emit_module, emit_module_with_host, lower_module,
 };
-pub use spark_ir::PackageId as IrPackageId;
 pub use spark_script_valkyrie::{NativeParam, TypeRef};
-pub use spark_vm::{
-    reject_residual_call_native, verify_bytecode, verify_bytecode_with_host, BytecodeVerifyError,
-};
+pub use spark_vm::{BytecodeVerifyError, reject_residual_call_native, verify_bytecode, verify_bytecode_with_host};
 
 /// 脚本源语言（便利枚举；配置面请用 [`LanguageProfile`]）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -73,14 +66,8 @@ pub enum ScriptStage {
 /// 结构化脚本错误（码 + 参数；`Display` 只输出稳定码）。
 #[derive(Debug)]
 pub enum ScriptError {
-    Parse {
-        args: ErrorArgs,
-        span: Option<SourceSpan>,
-    },
-    Compile {
-        args: ErrorArgs,
-        span: Option<SourceSpan>,
-    },
+    Parse { args: ErrorArgs, span: Option<SourceSpan> },
+    Compile { args: ErrorArgs, span: Option<SourceSpan> },
     Vm(VmError),
 }
 
@@ -102,26 +89,18 @@ impl ScriptError {
     }
 
     pub fn parse_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
-        Self::Parse {
-            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
-            span: None,
-        }
+        Self::Parse { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())), span: None }
     }
 
     pub fn parse_at(reason: impl Into<std::sync::Arc<str>>, span: SourceSpan) -> Self {
         Self::Parse {
-            args: ErrorArgs::new()
-                .with("reason", ErrorArg::String(reason.into()))
-                .with("span", ErrorArg::Span(span)),
+            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())).with("span", ErrorArg::Span(span)),
             span: Some(span),
         }
     }
 
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
-        Self::Compile {
-            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
-            span: None,
-        }
+        Self::Compile { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())), span: None }
     }
 
     pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
@@ -179,12 +158,8 @@ impl From<VmError> for ScriptError {
 impl From<spark_script_valkyrie::ValkyrieScriptError> for ScriptError {
     fn from(e: spark_script_valkyrie::ValkyrieScriptError) -> Self {
         match e {
-            spark_script_valkyrie::ValkyrieScriptError::Parse { args, span } => {
-                ScriptError::Parse { args, span }
-            }
-            spark_script_valkyrie::ValkyrieScriptError::Compile { args, span } => {
-                ScriptError::Compile { args, span }
-            }
+            spark_script_valkyrie::ValkyrieScriptError::Parse { args, span } => ScriptError::Parse { args, span },
+            spark_script_valkyrie::ValkyrieScriptError::Compile { args, span } => ScriptError::Compile { args, span },
         }
     }
 }
@@ -192,12 +167,8 @@ impl From<spark_script_valkyrie::ValkyrieScriptError> for ScriptError {
 impl From<spark_script_lua::LuaScriptError> for ScriptError {
     fn from(e: spark_script_lua::LuaScriptError) -> Self {
         match e {
-            spark_script_lua::LuaScriptError::Parse { args } => {
-                ScriptError::Parse { args, span: None }
-            }
-            spark_script_lua::LuaScriptError::Compile { args } => {
-                ScriptError::Compile { args, span: None }
-            }
+            spark_script_lua::LuaScriptError::Parse { args } => ScriptError::Parse { args, span: None },
+            spark_script_lua::LuaScriptError::Compile { args } => ScriptError::Compile { args, span: None },
         }
     }
 }
@@ -205,22 +176,14 @@ impl From<spark_script_lua::LuaScriptError> for ScriptError {
 impl From<spark_script_ruby::RubyScriptError> for ScriptError {
     fn from(e: spark_script_ruby::RubyScriptError) -> Self {
         match e {
-            spark_script_ruby::RubyScriptError::Parse { args } => {
-                ScriptError::Parse { args, span: None }
-            }
-            spark_script_ruby::RubyScriptError::Compile { args } => {
-                ScriptError::Compile { args, span: None }
-            }
+            spark_script_ruby::RubyScriptError::Parse { args } => ScriptError::Parse { args, span: None },
+            spark_script_ruby::RubyScriptError::Compile { args } => ScriptError::Compile { args, span: None },
         }
     }
 }
 
 /// 仅编译为 [`Module`]（不建 VM；供前端单测）。
-pub fn compile_module(
-    language: ScriptLanguage,
-    source: &str,
-    hosts: &HostBindTable,
-) -> Result<Module, ScriptError> {
+pub fn compile_module(language: ScriptLanguage, source: &str, hosts: &HostBindTable) -> Result<Module, ScriptError> {
     match language {
         ScriptLanguage::Valkyrie => Ok(spark_script_valkyrie::compile_with_binds(source, hosts)?),
         ScriptLanguage::Lua => Ok(spark_script_lua::compile_with_binds(source, hosts)?),
@@ -233,7 +196,6 @@ pub fn list_micros(source: &str) -> Result<Vec<String>, ScriptError> {
     Ok(spark_script_valkyrie::list_micros(source)?)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,9 +203,7 @@ mod tests {
 
     fn eval_source(language: ScriptLanguage, source: &str) -> spark_gc::Value {
         let host = HostSchema::new(1);
-        let package = ScriptCompiler::new()
-            .compile_source(language, source, &host)
-            .unwrap();
+        let package = ScriptCompiler::new().compile_source(language, source, &host).unwrap();
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
         rt.call_on_load_std().unwrap()
     }
@@ -270,10 +230,7 @@ mod tests {
 
     #[test]
     fn ruby_method() {
-        let v = eval_source(
-            ScriptLanguage::Ruby,
-            "def add(a, b)\n  return a + b\nend\nreturn add(40, 2)\n",
-        );
+        let v = eval_source(ScriptLanguage::Ruby, "def add(a, b)\n  return a + b\nend\nreturn add(40, 2)\n");
         assert_eq!(v.as_number(), Some(42.0));
     }
 
@@ -293,9 +250,7 @@ mod tests {
             )
             .unwrap();
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
-        let v = rt
-            .call("add", &[spark_gc::Value::Number(40.0), spark_gc::Value::Number(2.0)], &mut StdHost)
-            .unwrap();
+        let v = rt.call("add", &[spark_gc::Value::Number(40.0), spark_gc::Value::Number(2.0)], &mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
     }
 
@@ -303,9 +258,7 @@ mod tests {
     fn host_schema_compile_and_call() {
         let mut host = HostSchema::new(1);
         host.insert(HostFunction::new(HostFunctionId::new("host", "ping", 1)));
-        let package = ScriptCompiler::new()
-            .compile_source(ScriptLanguage::Valkyrie, "return ping()", &host)
-            .unwrap();
+        let package = ScriptCompiler::new().compile_source(ScriptLanguage::Valkyrie, "return ping()", &host).unwrap();
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
         rt.vm.register_native("host.ping", |_ctx, _args| Ok(spark_gc::Value::Number(7.0)));
         let v = rt.call_on_load_std().unwrap();
@@ -322,13 +275,9 @@ mod tests {
                 ScriptLanguage::Ruby => "return ping(1)",
                 ScriptLanguage::Valkyrie => unreachable!(),
             };
-            let package = ScriptCompiler::new()
-                .compile_source(lang, source, &host)
-                .unwrap();
+            let package = ScriptCompiler::new().compile_source(lang, source, &host).unwrap();
             let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
-            rt.vm.register_native("host.ping", |_ctx, args| {
-                Ok(args.first().cloned().unwrap_or(spark_gc::Value::Null))
-            });
+            rt.vm.register_native("host.ping", |_ctx, args| Ok(args.first().cloned().unwrap_or(spark_gc::Value::Null)));
             let v = rt.call_on_load_std().unwrap();
             assert_eq!(v.as_number(), Some(1.0));
         }
@@ -336,17 +285,14 @@ mod tests {
 
     #[test]
     fn valkyrie_parse_error_propagates_span() {
-        let err = compile_module(ScriptLanguage::Valkyrie, "@@@", &HostBindTable::new())
-            .expect_err("bare attributes");
+        let err = compile_module(ScriptLanguage::Valkyrie, "@@@", &HostBindTable::new()).expect_err("bare attributes");
         assert_eq!(err.code(), "spark.script.parse");
     }
 
     #[test]
     fn compiler_produces_executable_image() {
         let host = HostSchema::new(1);
-        let package = ScriptCompiler::new()
-            .compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host)
-            .unwrap();
+        let package = ScriptCompiler::new().compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host).unwrap();
         assert!(package.image.module().functions.iter().any(|f| f.name == "on_load"));
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
         assert_eq!(rt.call_on_load_std().unwrap().as_number(), Some(3.0));
@@ -356,9 +302,7 @@ mod tests {
     fn runtime_host_slot_call_executes_registered_native() {
         let mut host = HostSchema::new(1);
         host.insert(HostFunction::new(HostFunctionId::new("host", "ping", 1)));
-        let package = ScriptCompiler::new()
-            .compile_source(ScriptLanguage::Valkyrie, "return ping()", &host)
-            .unwrap();
+        let package = ScriptCompiler::new().compile_source(ScriptLanguage::Valkyrie, "return ping()", &host).unwrap();
         let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
         rt.vm.register_native("host.ping", |_ctx, _args| Ok(spark_gc::Value::Number(9.0)));
         assert_eq!(rt.call_on_load_std().unwrap().as_number(), Some(9.0));

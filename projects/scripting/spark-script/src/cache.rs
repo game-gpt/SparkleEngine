@@ -1,11 +1,11 @@
 //! 编译制品内存缓存（按源码 / profile / 宿主 schema 指纹）。
 
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
-use crate::artifact::ARTIFACT_FORMAT_VERSION;
-use crate::compiler::CompiledPackage;
-use crate::request::CompilationRequest;
+use crate::{artifact::ARTIFACT_FORMAT_VERSION, compiler::CompiledPackage, request::CompilationRequest};
 
 /// 进程内编译缓存。键含源码哈希、语言 profile、宿主 schema、制品格式版本。
 #[derive(Debug, Default)]
@@ -40,13 +40,7 @@ impl ArtifactCache {
         let mut h = DefaultHasher::new();
         source.hash(&mut h);
         request.language.profile.id.hash(&mut h);
-        request
-            .language
-            .language_version
-            .as_ref()
-            .map(|v| v.as_ref())
-            .unwrap_or("")
-            .hash(&mut h);
+        request.language.language_version.as_ref().map(|v| v.as_ref()).unwrap_or("").hash(&mut h);
         request.host_schema.content_hash().hash(&mut h);
         request.host_schema.abi_version.hash(&mut h);
         request.optimization.hash(&mut h);
@@ -84,29 +78,21 @@ impl ArtifactCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host_schema::HostSchema;
-    use crate::request::CompilationRequest;
-    use crate::ScriptLanguage;
+    use crate::{ScriptLanguage, host_schema::HostSchema, request::CompilationRequest};
 
     #[test]
     fn same_request_same_key() {
         let host = HostSchema::new(1);
         let a = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host.clone());
         let b = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host);
-        assert_eq!(
-            ArtifactCache::key_for(&a, "return 1"),
-            ArtifactCache::key_for(&b, "return 1")
-        );
+        assert_eq!(ArtifactCache::key_for(&a, "return 1"), ArtifactCache::key_for(&b, "return 1"));
     }
 
     #[test]
     fn source_change_changes_key() {
         let host = HostSchema::new(1);
         let req = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host);
-        assert_ne!(
-            ArtifactCache::key_for(&req, "return 1"),
-            ArtifactCache::key_for(&req, "return 2")
-        );
+        assert_ne!(ArtifactCache::key_for(&req, "return 1"), ArtifactCache::key_for(&req, "return 2"));
     }
 
     #[test]
@@ -117,10 +103,7 @@ mod tests {
         let mut b = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host);
         a.optimization = OptimizationLevel::None;
         b.optimization = OptimizationLevel::Aggressive;
-        assert_ne!(
-            ArtifactCache::key_for(&a, "return 1"),
-            ArtifactCache::key_for(&b, "return 1")
-        );
+        assert_ne!(ArtifactCache::key_for(&a, "return 1"), ArtifactCache::key_for(&b, "return 1"));
     }
 
     #[test]
@@ -131,9 +114,6 @@ mod tests {
         let mut b = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host);
         a.determinism = DeterminismClass::Deterministic;
         b.determinism = DeterminismClass::Nondeterministic;
-        assert_ne!(
-            ArtifactCache::key_for(&a, "return 1"),
-            ArtifactCache::key_for(&b, "return 1")
-        );
+        assert_ne!(ArtifactCache::key_for(&a, "return 1"), ArtifactCache::key_for(&b, "return 1"));
     }
 }

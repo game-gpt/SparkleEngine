@@ -10,10 +10,7 @@ pub enum UiCommand {
     /// 自定义载荷（游戏侧解释）。
     Custom(u64),
     /// 拖放完成：从 `source` 放到 `target`。
-    Drop {
-        source: WidgetId,
-        target: WidgetId,
-    },
+    Drop { source: WidgetId, target: WidgetId },
 }
 
 #[derive(Debug, Default)]

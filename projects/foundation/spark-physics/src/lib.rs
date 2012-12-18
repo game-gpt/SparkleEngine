@@ -10,11 +10,10 @@ mod world;
 
 pub use body::{BodyId, BodyKind, Collider2, RigidBody2};
 pub use broadphase::{Broadphase, UniformGrid};
-pub use spark_geometry::{aabb_sweep, aabb_sweep_resolve, Aabb3, SweepHit, Vec3};
+pub use spark_geometry::{Aabb3, SweepHit, Vec3, aabb_sweep, aabb_sweep_resolve};
 pub use world::{Contact, PhysicsConfig, PhysicsWorld};
 
-use std::fmt;
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use spark_core::{ErrorArg, ErrorArgs, SparkError};
 
@@ -23,7 +22,9 @@ use spark_core::{ErrorArg, ErrorArgs, SparkError};
 pub enum PhysicsError {
     Spark(SparkError),
     /// `detail` 必须是机器令牌，不是自然语言。
-    Internal { detail: String },
+    Internal {
+        detail: String,
+    },
 }
 
 impl PhysicsError {
@@ -35,17 +36,13 @@ impl PhysicsError {
     }
 
     pub fn internal(detail: impl Into<String>) -> Self {
-        Self::Internal {
-            detail: detail.into(),
-        }
+        Self::Internal { detail: detail.into() }
     }
 
     pub fn args(&self) -> ErrorArgs {
         match self {
             Self::Spark(e) => e.args.clone(),
-            Self::Internal { detail } => {
-                ErrorArgs::new().with("reason", ErrorArg::String(Arc::from(detail.as_str())))
-            }
+            Self::Internal { detail } => ErrorArgs::new().with("reason", ErrorArg::String(Arc::from(detail.as_str()))),
         }
     }
 }

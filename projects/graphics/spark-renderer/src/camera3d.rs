@@ -14,14 +14,7 @@ pub struct Camera3d {
 
 impl Default for Camera3d {
     fn default() -> Self {
-        Self {
-            eye: Vec3::new(0.0, 1.6, 0.0),
-            yaw: 0.0,
-            pitch: 0.0,
-            fov_y_rad: 70f32.to_radians(),
-            near: 0.2,
-            far: 4_000.0,
-        }
+        Self { eye: Vec3::new(0.0, 1.6, 0.0), yaw: 0.0, pitch: 0.0, fov_y_rad: 70f32.to_radians(), near: 0.2, far: 4_000.0 }
     }
 }
 

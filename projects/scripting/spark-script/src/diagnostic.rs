@@ -1,9 +1,6 @@
 //! 编译诊断批次（统一模型入口）。
 
-use spark_diagnostics::{
-    Diagnostic, DiagnosticLabel, DiagnosticNote, ErrorArgs, ErrorCode, MessageKey, Severity,
-    SourceSpan,
-};
+use spark_diagnostics::{Diagnostic, DiagnosticLabel, DiagnosticNote, ErrorArgs, ErrorCode, MessageKey, Severity, SourceSpan};
 
 use crate::request::LanguageProfileId;
 
@@ -20,16 +17,9 @@ impl ScriptDiagnostic {
         let code = ErrorCode::parse(code);
         let mut diag = Diagnostic::error(code).with_args(args);
         if let Some(span) = primary {
-            diag.labels.push(DiagnosticLabel {
-                span,
-                message_key: None,
-            });
+            diag.labels.push(DiagnosticLabel { span, message_key: None });
         }
-        Self {
-            diagnostic: diag,
-            language_profile: None,
-            source_file: None,
-        }
+        Self { diagnostic: diag, language_profile: None, source_file: None }
     }
 
     pub fn with_profile(mut self, profile: LanguageProfileId) -> Self {
@@ -43,10 +33,7 @@ impl ScriptDiagnostic {
     }
 
     pub fn note(mut self, message_key: MessageKey, args: ErrorArgs) -> Self {
-        self.diagnostic.notes.push(DiagnosticNote {
-            message_key,
-            args,
-        });
+        self.diagnostic.notes.push(DiagnosticNote { message_key, args });
         self
     }
 
@@ -71,15 +58,10 @@ impl DiagnosticBatch {
     }
 
     pub fn has_errors(&self) -> bool {
-        self.items
-            .iter()
-            .any(|d| matches!(d.severity(), Severity::Error | Severity::Bug))
+        self.items.iter().any(|d| matches!(d.severity(), Severity::Error | Severity::Bug))
     }
 
     pub fn error_count(&self) -> usize {
-        self.items
-            .iter()
-            .filter(|d| matches!(d.severity(), Severity::Error | Severity::Bug))
-            .count()
+        self.items.iter().filter(|d| matches!(d.severity(), Severity::Error | Severity::Bug)).count()
     }
 }

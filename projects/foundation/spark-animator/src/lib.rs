@@ -23,16 +23,14 @@ pub use blend::{add_local_poses, blend_local_poses, blend_masked};
 pub use clip::{AnimationClip, AnimationFrame, LoopMode};
 pub use controller::{Animator, AnimatorController};
 pub use ecs::{
-    install_animator_system, install_player_system, tick_animators, tick_players, AnimationDelta,
-    AnimationPlayerComponent, AnimatorComponent, ClipLibrary,
+    AnimationDelta, AnimationPlayerComponent, AnimatorComponent, ClipLibrary, install_animator_system, install_player_system, tick_animators,
+    tick_players,
 };
 pub use parameter::ParameterValue;
 pub use player::AnimationPlayer;
-pub use pose::{
-    build_skin_palette, evaluate_pose, socket_world_matrix, socket_world_position, LocalPose,
-};
+pub use pose::{LocalPose, build_skin_palette, evaluate_pose, socket_world_matrix, socket_world_position};
 pub use sampler::{sample_clip, sample_frames, sample_skinned_clip, wrap_time};
-pub use skeleton::{Joint, Skeleton, Socket, MAX_JOINTS};
+pub use skeleton::{Joint, MAX_JOINTS, Skeleton, Socket};
 pub use sprite::SpriteFrame;
 pub use state::AnimatorState;
 pub use track::{AnimationTrack, JointTrack, QuatKey, SkinnedAnimationClip, Vec3Key};
@@ -57,16 +55,7 @@ mod tests {
         let clip = AnimationClip::single(
             "walk",
             1.0,
-            vec![
-                AnimationFrame {
-                    time: 0.0,
-                    value: sprite(0),
-                },
-                AnimationFrame {
-                    time: 0.5,
-                    value: sprite(1),
-                },
-            ],
+            vec![AnimationFrame { time: 0.0, value: sprite(0) }, AnimationFrame { time: 0.5, value: sprite(1) }],
         );
         assert_eq!(sample_clip(&clip, 0.2).unwrap().index, 0);
         assert_eq!(sample_clip(&clip, 0.5).unwrap().index, 1);
@@ -94,10 +83,7 @@ mod tests {
             .add_state(AnimatorState::new("idle", "idle"))
             .add_state(AnimatorState::new("run", "run"))
             .add_transition(
-                AnimatorTransition::new("idle", "run", 0.2).when(AnimatorCondition::BoolEquals {
-                    parameter: "moving".into(),
-                    value: true,
-                }),
+                AnimatorTransition::new("idle", "run", 0.2).when(AnimatorCondition::BoolEquals { parameter: "moving".into(), value: true }),
             )
             .set_parameter("moving", ParameterValue::Bool(false));
         let mut animator = Animator::<SpriteFrame>::new(controller);
@@ -119,26 +105,14 @@ mod tests {
     fn ecs_ticks_player_from_library() {
         let mut world = World::new();
         let mut library = ClipLibrary::new();
-        library.insert(AnimationClip::single(
-            "idle",
-            1.0,
-            vec![AnimationFrame {
-                time: 0.0,
-                value: sprite(3),
-            }],
-        ));
+        library.insert(AnimationClip::single("idle", 1.0, vec![AnimationFrame { time: 0.0, value: sprite(3) }]));
         world.resources.insert(library);
         world.resources.insert(AnimationDelta { dt: 0.25 });
-        let entity = world.spawn(AnimationPlayerComponent {
-            clip: "idle".into(),
-            player: AnimationPlayer::<SpriteFrame>::new(),
-        });
+        let entity = world.spawn(AnimationPlayerComponent { clip: "idle".into(), player: AnimationPlayer::<SpriteFrame>::new() });
         let mut schedule = Schedule::new();
         install_player_system::<SpriteFrame>(&mut schedule);
         schedule.run(&mut world);
-        let component = world
-            .get::<AnimationPlayerComponent<SpriteFrame>>(entity)
-            .unwrap();
+        let component = world.get::<AnimationPlayerComponent<SpriteFrame>>(entity).unwrap();
         assert!((component.player.time - 0.25).abs() < 1e-5);
     }
 
@@ -152,11 +126,7 @@ mod tests {
         for m in &palette {
             for i in 0..16 {
                 let expected = if i % 5 == 0 { 1.0 } else { 0.0 };
-                assert!(
-                    (m.cols[i] - expected).abs() < 1e-4,
-                    "palette not identity at {i}: {}",
-                    m.cols[i]
-                );
+                assert!((m.cols[i] - expected).abs() < 1e-4, "palette not identity at {i}: {}", m.cols[i]);
             }
         }
     }
@@ -182,14 +152,8 @@ mod tests {
                 joint: 0,
                 translations: vec![],
                 rotations: vec![
-                    QuatKey {
-                        time: 0.0,
-                        value: Quat::IDENTITY,
-                    },
-                    QuatKey {
-                        time: 1.0,
-                        value: Quat::from_axis_angle(Vec3::Y, std::f32::consts::FRAC_PI_2),
-                    },
+                    QuatKey { time: 0.0, value: Quat::IDENTITY },
+                    QuatKey { time: 1.0, value: Quat::from_axis_angle(Vec3::Y, std::f32::consts::FRAC_PI_2) },
                 ],
                 scales: vec![],
             }],

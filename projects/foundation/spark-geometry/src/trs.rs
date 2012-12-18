@@ -11,29 +11,14 @@ pub struct Trs {
 }
 
 impl Trs {
-    pub const IDENTITY: Self = Self {
-        translation: Vec3::ZERO,
-        rotation: Quat::IDENTITY,
-        scale: Vec3 {
-            x: 1.0,
-            y: 1.0,
-            z: 1.0,
-        },
-    };
+    pub const IDENTITY: Self = Self { translation: Vec3::ZERO, rotation: Quat::IDENTITY, scale: Vec3 { x: 1.0, y: 1.0, z: 1.0 } };
 
     pub fn new(translation: Vec3, rotation: Quat, scale: Vec3) -> Self {
-        Self {
-            translation,
-            rotation,
-            scale,
-        }
+        Self { translation, rotation, scale }
     }
 
     pub fn from_translation(t: Vec3) -> Self {
-        Self {
-            translation: t,
-            ..Self::IDENTITY
-        }
+        Self { translation: t, ..Self::IDENTITY }
     }
 
     pub fn to_mat4(self) -> Mat4 {

@@ -1,7 +1,6 @@
 //! 焦点与导航。
 
-use crate::id::WidgetId;
-use crate::tree::WidgetTree;
+use crate::{id::WidgetId, tree::WidgetTree};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -28,11 +27,7 @@ pub struct FocusPolicy {
 
 impl Default for FocusPolicy {
     fn default() -> Self {
-        Self {
-            focusable: false,
-            tab_index: 0,
-            neighbors: Neighbors::default(),
-        }
+        Self { focusable: false, tab_index: 0, neighbors: Neighbors::default() }
     }
 }
 
@@ -64,7 +59,8 @@ pub fn collect_focusable_in(tree: &WidgetTree, root: WidgetId) -> Vec<WidgetId> 
 }
 
 fn collect_focusable_rec(tree: &WidgetTree, id: WidgetId, out: &mut Vec<WidgetId>) {
-    let Some(node) = tree.node(id) else {
+    let Some(node) = tree.node(id)
+    else {
         return;
     };
     if !node.state.visible || node.state.disabled {
@@ -85,10 +81,7 @@ pub fn ensure_focus_in_trap(tree: &WidgetTree, focus: &mut FocusManager, trap_ro
         focus.focused = None;
         return;
     }
-    let inside = focus
-        .focused
-        .map(|id| is_descendant_or_self(tree, trap_root, id))
-        .unwrap_or(false);
+    let inside = focus.focused.map(|id| is_descendant_or_self(tree, trap_root, id)).unwrap_or(false);
     if !inside {
         focus.focused = Some(list[0]);
     }
@@ -159,12 +152,7 @@ pub fn focus_direction(tree: &WidgetTree, focus: &mut FocusManager, dir: Directi
     focus_direction_in(tree, focus, dir, None);
 }
 
-pub fn focus_direction_in(
-    tree: &WidgetTree,
-    focus: &mut FocusManager,
-    dir: Direction,
-    trap: Option<WidgetId>,
-) {
+pub fn focus_direction_in(tree: &WidgetTree, focus: &mut FocusManager, dir: Direction, trap: Option<WidgetId>) {
     let list = focusable_list(tree, trap);
     if list.is_empty() {
         return;
@@ -184,12 +172,7 @@ pub fn focus_direction_in(
                     Some(root) => is_descendant_or_self(tree, root, id),
                     None => true,
                 };
-                if allowed
-                    && tree
-                        .node(id)
-                        .map(|n| n.focusable && !n.state.disabled)
-                        .unwrap_or(false)
-                {
+                if allowed && tree.node(id).map(|n| n.focusable && !n.state.disabled).unwrap_or(false) {
                     focus.focused = Some(id);
                     return;
                 }
@@ -197,10 +180,12 @@ pub fn focus_direction_in(
         }
     }
 
-    let Some(current) = focus.focused.or_else(|| list.first().copied()) else {
+    let Some(current) = focus.focused.or_else(|| list.first().copied())
+    else {
         return;
     };
-    let Some(cur_rect) = tree.node(current).map(|n| n.computed.rect) else {
+    let Some(cur_rect) = tree.node(current).map(|n| n.computed.rect)
+    else {
         return;
     };
     let cur_c = cur_rect.center();
@@ -210,7 +195,8 @@ pub fn focus_direction_in(
         if *id == current {
             continue;
         }
-        let Some(rect) = tree.node(*id).map(|n| n.computed.rect) else {
+        let Some(rect) = tree.node(*id).map(|n| n.computed.rect)
+        else {
             continue;
         };
         let c = rect.center();
@@ -232,7 +218,8 @@ pub fn focus_direction_in(
     }
     if let Some((id, _)) = best {
         focus.focused = Some(id);
-    } else {
+    }
+    else {
         match dir {
             Direction::Down | Direction::Right => focus_next_in(tree, focus, trap),
             Direction::Up | Direction::Left => focus_previous_in(tree, focus, trap),
@@ -243,25 +230,20 @@ pub fn focus_direction_in(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::{LayoutSpec, Size};
-    use crate::widgets::{button_widget, column, modal_widget};
+    use crate::{
+        layout::{LayoutSpec, Size},
+        widgets::{button_widget, column, modal_widget},
+    };
 
     #[test]
     fn trap_cycles_only_inside_modal() {
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        let outside = button_widget()
-            .text("out")
-            .mount(&mut tree, root)
-            .unwrap();
+        let outside = button_widget().text("out").mount(&mut tree, root).unwrap();
         let modal = modal_widget()
             .child(
                 column()
-                    .layout(LayoutSpec {
-                        width: Size::Px(200.0),
-                        height: Size::Px(120.0),
-                        ..LayoutSpec::default()
-                    })
+                    .layout(LayoutSpec { width: Size::Px(200.0), height: Size::Px(120.0), ..LayoutSpec::default() })
                     .child(button_widget().text("a"))
                     .child(button_widget().text("b")),
             )
@@ -272,9 +254,7 @@ mod tests {
         assert_eq!(list.len(), 2);
         assert!(!list.contains(&outside));
 
-        let mut focus = FocusManager {
-            focused: Some(outside),
-        };
+        let mut focus = FocusManager { focused: Some(outside) };
         ensure_focus_in_trap(&tree, &mut focus, modal);
         assert_eq!(focus.focused, Some(list[0]));
 

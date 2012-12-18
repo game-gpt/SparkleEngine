@@ -20,12 +20,7 @@ pub struct FogGrid {
 impl FogGrid {
     pub fn new(width: u32, height: u32, cell_size: f32) -> Self {
         let n = (width as usize).saturating_mul(height as usize);
-        Self {
-            width,
-            height,
-            cell_size: cell_size.max(1e-3),
-            cells: vec![FogCell::Hidden; n],
-        }
+        Self { width, height, cell_size: cell_size.max(1e-3), cells: vec![FogCell::Hidden; n] }
     }
 
     fn idx(&self, cx: u32, cy: u32) -> Option<usize> {
@@ -36,9 +31,7 @@ impl FogGrid {
     }
 
     pub fn cell(&self, cx: u32, cy: u32) -> FogCell {
-        self.idx(cx, cy)
-            .map(|i| self.cells[i])
-            .unwrap_or(FogCell::Hidden)
+        self.idx(cx, cy).map(|i| self.cells[i]).unwrap_or(FogCell::Hidden)
     }
 
     pub fn is_visible(&self, cx: u32, cy: u32) -> bool {
@@ -68,7 +61,8 @@ impl FogGrid {
                     continue;
                 }
                 let (cx, cy) = (cx as u32, cy as u32);
-                let Some(i) = self.idx(cx, cy) else {
+                let Some(i) = self.idx(cx, cy)
+                else {
                     continue;
                 };
                 let wx = (cx as f32 + 0.5) * cs;

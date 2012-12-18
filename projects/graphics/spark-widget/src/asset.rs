@@ -17,12 +17,7 @@ pub struct UiImage {
 
 impl UiImage {
     pub fn new(asset: AssetId) -> Self {
-        Self {
-            asset,
-            uv: Rect::new(0.0, 0.0, 1.0, 1.0),
-            tint: Color::rgb(1.0, 1.0, 1.0),
-            preferred_size: None,
-        }
+        Self { asset, uv: Rect::new(0.0, 0.0, 1.0, 1.0), tint: Color::rgb(1.0, 1.0, 1.0), preferred_size: None }
     }
 
     pub fn with_uv(mut self, uv: Rect) -> Self {
@@ -74,13 +69,6 @@ pub struct MapTextureResolver {
 
 impl UiTextureResolver for MapTextureResolver {
     fn resolve(&mut self, asset: AssetId) -> Option<ResolvedTexture> {
-        if asset == self.asset {
-            Some(ResolvedTexture {
-                texture: self.texture,
-                size: self.size,
-            })
-        } else {
-            None
-        }
+        if asset == self.asset { Some(ResolvedTexture { texture: self.texture, size: self.size }) } else { None }
     }
 }

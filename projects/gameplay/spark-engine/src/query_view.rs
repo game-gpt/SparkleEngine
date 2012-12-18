@@ -5,8 +5,10 @@
 //!
 //! VM **不**持有 [`World`]。
 
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use spark_ecs::{Entity, World};
 
@@ -39,9 +41,7 @@ impl<'a> ScriptQueryView<'a> {
 
     /// 读取实体的脚本原型名（若有）。
     pub fn archetype_of(&self, entity: Entity) -> Option<&str> {
-        self.world
-            .get::<ScriptArchetypeTag>(entity)
-            .map(|t| t.name.as_ref())
+        self.world.get::<ScriptArchetypeTag>(entity).map(|t| t.name.as_ref())
     }
 
     /// 拍成可跨域共享的只读快照。
@@ -68,10 +68,7 @@ impl ScriptQuerySnapshot {
     pub fn from_view(view: &ScriptQueryView<'_>) -> Self {
         let mut by_archetype: HashMap<Arc<str>, Vec<u64>> = HashMap::new();
         view.world.for_each::<ScriptArchetypeTag>(|e, tag| {
-            by_archetype
-                .entry(Arc::clone(&tag.name))
-                .or_default()
-                .push(e.to_bits());
+            by_archetype.entry(Arc::clone(&tag.name)).or_default().push(e.to_bits());
         });
         Self { by_archetype }
     }
@@ -81,17 +78,12 @@ impl ScriptQuerySnapshot {
     }
 
     pub fn count(&self, archetype: &str) -> usize {
-        self.by_archetype
-            .get(archetype)
-            .map(|v| v.len())
-            .unwrap_or(0)
+        self.by_archetype.get(archetype).map(|v| v.len()).unwrap_or(0)
     }
 
     /// 按下标取实体位模式；越界返回 `None`。
     pub fn entity_at(&self, archetype: &str, index: usize) -> Option<u64> {
-        self.by_archetype
-            .get(archetype)
-            .and_then(|v| v.get(index).copied())
+        self.by_archetype.get(archetype).and_then(|v| v.get(index).copied())
     }
 
     pub fn archetypes(&self) -> impl Iterator<Item = &str> {
@@ -121,8 +113,7 @@ impl ScriptQuerySnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command_apply::apply_script_commands;
-    use crate::command_buffer::ScriptCommand;
+    use crate::{command_apply::apply_script_commands, command_buffer::ScriptCommand};
     use std::sync::Arc;
 
     #[test]
@@ -131,17 +122,12 @@ mod tests {
         apply_script_commands(
             &mut world,
             &[
-                ScriptCommand::Spawn {
-                    archetype: Arc::from("rock"),
-                },
-                ScriptCommand::Spawn {
-                    archetype: Arc::from("tree"),
-                },
-                ScriptCommand::Spawn {
-                    archetype: Arc::from("rock"),
-                },
+                ScriptCommand::Spawn { archetype: Arc::from("rock") },
+                ScriptCommand::Spawn { archetype: Arc::from("tree") },
+                ScriptCommand::Spawn { archetype: Arc::from("rock") },
             ],
-        ).unwrap();
+        )
+        .unwrap();
         let view = ScriptQueryView::new(&world);
         assert_eq!(view.entities_with_archetype("rock").len(), 2);
         assert_eq!(view.entities_with_archetype("tree").len(), 1);
@@ -153,15 +139,9 @@ mod tests {
         let mut world = World::new();
         apply_script_commands(
             &mut world,
-            &[
-                ScriptCommand::Spawn {
-                    archetype: Arc::from("rock"),
-                },
-                ScriptCommand::Spawn {
-                    archetype: Arc::from("rock"),
-                },
-            ],
-        ).unwrap();
+            &[ScriptCommand::Spawn { archetype: Arc::from("rock") }, ScriptCommand::Spawn { archetype: Arc::from("rock") }],
+        )
+        .unwrap();
         let snap = ScriptQuerySnapshot::from_world(&world);
         assert_eq!(snap.count("rock"), 2);
         assert_eq!(snap.count("missing"), 0);
@@ -174,15 +154,9 @@ mod tests {
         let mut world = World::new();
         apply_script_commands(
             &mut world,
-            &[
-                ScriptCommand::Spawn {
-                    archetype: Arc::from("rock"),
-                },
-                ScriptCommand::Spawn {
-                    archetype: Arc::from("tree"),
-                },
-            ],
-        ).unwrap();
+            &[ScriptCommand::Spawn { archetype: Arc::from("rock") }, ScriptCommand::Spawn { archetype: Arc::from("tree") }],
+        )
+        .unwrap();
         let full = ScriptQuerySnapshot::from_world(&world);
         let allow: HashSet<Arc<str>> = [Arc::from("rock")].into_iter().collect();
         let view = full.filtered_by_archetypes(&allow);

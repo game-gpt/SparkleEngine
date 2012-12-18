@@ -19,10 +19,7 @@ impl Ray3 {
     }
 
     pub fn normalized_dir(self) -> Self {
-        Self {
-            origin: self.origin,
-            dir: self.dir.normalized(),
-        }
+        Self { origin: self.origin, dir: self.dir.normalized() }
     }
 }
 
@@ -38,29 +35,13 @@ pub struct VoxelHit {
 pub fn ray_aabb(ray: Ray3, aabb: Aabb3) -> Option<f32> {
     let dir = ray.dir.normalized();
     if dir.length() < 1e-8 {
-        return if aabb.contains_point(ray.origin) {
-            Some(0.0)
-        } else {
-            None
-        };
+        return if aabb.contains_point(ray.origin) { Some(0.0) } else { None };
     }
 
     let inv = Vec3::new(
-        if dir.x.abs() < 1e-8 {
-            f32::INFINITY.copysign(dir.x)
-        } else {
-            1.0 / dir.x
-        },
-        if dir.y.abs() < 1e-8 {
-            f32::INFINITY.copysign(dir.y)
-        } else {
-            1.0 / dir.y
-        },
-        if dir.z.abs() < 1e-8 {
-            f32::INFINITY.copysign(dir.z)
-        } else {
-            1.0 / dir.z
-        },
+        if dir.x.abs() < 1e-8 { f32::INFINITY.copysign(dir.x) } else { 1.0 / dir.x },
+        if dir.y.abs() < 1e-8 { f32::INFINITY.copysign(dir.y) } else { 1.0 / dir.y },
+        if dir.z.abs() < 1e-8 { f32::INFINITY.copysign(dir.z) } else { 1.0 / dir.z },
     );
 
     let mut t1 = (aabb.min.x - ray.origin.x) * inv.x;
@@ -78,34 +59,20 @@ pub fn ray_aabb(ray: Ray3, aabb: Aabb3) -> Option<f32> {
     tmin = tmin.max(t1.min(t2));
     tmax = tmax.min(t1.max(t2));
 
-    if tmax >= tmin.max(0.0) {
-        Some(tmin.max(0.0))
-    } else {
-        None
-    }
+    if tmax >= tmin.max(0.0) { Some(tmin.max(0.0)) } else { None }
 }
 
 fn int_bound(s: f32, ds: f32) -> f32 {
     if ds.abs() < 1e-8 {
         return f32::INFINITY;
     }
-    if ds > 0.0 {
-        (s.ceil() - s) / ds
-    } else {
-        (s - s.floor()) / (-ds)
-    }
+    if ds > 0.0 { (s.ceil() - s) / ds } else { (s - s.floor()) / (-ds) }
 }
 
 /// 单位体素格 DDA。`solid(x,y,z)` 为真则命中。
 ///
 /// 无游戏语义：调用方自行解释实心判定（方块表、体积掩码等）。
-pub fn ray_voxel_dda(
-    origin: Vec3,
-    dir: Vec3,
-    max_dist: f32,
-    max_steps: u32,
-    mut solid: impl FnMut(i32, i32, i32) -> bool,
-) -> Option<VoxelHit> {
+pub fn ray_voxel_dda(origin: Vec3, dir: Vec3, max_dist: f32, max_steps: u32, mut solid: impl FnMut(i32, i32, i32) -> bool) -> Option<VoxelHit> {
     let dir = dir.normalized();
     if dir.length() < 1e-6 {
         return None;
@@ -119,21 +86,9 @@ pub fn ray_voxel_dda(
     let step_y = if dir.y > 0.0 { 1 } else { -1 };
     let step_z = if dir.z > 0.0 { 1 } else { -1 };
 
-    let t_delta_x = if dir.x.abs() < 1e-8 {
-        f32::INFINITY
-    } else {
-        (1.0 / dir.x).abs()
-    };
-    let t_delta_y = if dir.y.abs() < 1e-8 {
-        f32::INFINITY
-    } else {
-        (1.0 / dir.y).abs()
-    };
-    let t_delta_z = if dir.z.abs() < 1e-8 {
-        f32::INFINITY
-    } else {
-        (1.0 / dir.z).abs()
-    };
+    let t_delta_x = if dir.x.abs() < 1e-8 { f32::INFINITY } else { (1.0 / dir.x).abs() };
+    let t_delta_y = if dir.y.abs() < 1e-8 { f32::INFINITY } else { (1.0 / dir.y).abs() };
+    let t_delta_z = if dir.z.abs() < 1e-8 { f32::INFINITY } else { (1.0 / dir.z).abs() };
 
     let mut t_max_x = int_bound(origin.x, dir.x);
     let mut t_max_y = int_bound(origin.y, dir.y);
@@ -143,10 +98,7 @@ pub fn ray_voxel_dda(
 
     for _ in 0..max_steps {
         if solid(x, y, z) {
-            return Some(VoxelHit {
-                cell: [x, y, z],
-                prev,
-            });
+            return Some(VoxelHit { cell: [x, y, z], prev });
         }
         prev = [x, y, z];
         if t_max_x < t_max_y {
@@ -156,20 +108,23 @@ pub fn ray_voxel_dda(
                 }
                 x += step_x;
                 t_max_x += t_delta_x;
-            } else {
+            }
+            else {
                 if t_max_z > max_dist {
                     break;
                 }
                 z += step_z;
                 t_max_z += t_delta_z;
             }
-        } else if t_max_y < t_max_z {
+        }
+        else if t_max_y < t_max_z {
             if t_max_y > max_dist {
                 break;
             }
             y += step_y;
             t_max_y += t_delta_y;
-        } else {
+        }
+        else {
             if t_max_z > max_dist {
                 break;
             }

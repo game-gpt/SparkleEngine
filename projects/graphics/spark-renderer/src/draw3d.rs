@@ -5,9 +5,11 @@ use std::sync::Arc;
 use spark_core::{Color, SparkError};
 use spark_geometry::{Aabb3, Mat4, Vec3};
 
-use crate::draw::DrawList;
-use crate::frustum::{CullParams, Frustum};
-use crate::texture::{alloc_texture_id, RgbaImage, TextureId};
+use crate::{
+    draw::DrawList,
+    frustum::{CullParams, Frustum},
+    texture::{RgbaImage, TextureId, alloc_texture_id},
+};
 
 /// 驻留网格标识（跨帧稳定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,11 +37,7 @@ impl MeshVertex {
     }
 
     pub fn with_normal(x: f32, y: f32, z: f32, nx: f32, ny: f32, nz: f32, color: Color) -> Self {
-        Self {
-            pos: [x, y, z],
-            normal: [nx, ny, nz],
-            color: color.to_array(),
-        }
+        Self { pos: [x, y, z], normal: [nx, ny, nz], color: color.to_array() }
     }
 }
 
@@ -59,23 +57,8 @@ impl TexMeshVertex {
         Self::with_normal(x, y, z, 0.0, 1.0, 0.0, u, v, color)
     }
 
-    pub fn with_normal(
-        x: f32,
-        y: f32,
-        z: f32,
-        nx: f32,
-        ny: f32,
-        nz: f32,
-        u: f32,
-        v: f32,
-        color: Color,
-    ) -> Self {
-        Self {
-            pos: [x, y, z],
-            normal: [nx, ny, nz],
-            uv: [u, v],
-            color: color.to_array(),
-        }
+    pub fn with_normal(x: f32, y: f32, z: f32, nx: f32, ny: f32, nz: f32, u: f32, v: f32, color: Color) -> Self {
+        Self { pos: [x, y, z], normal: [nx, ny, nz], uv: [u, v], color: color.to_array() }
     }
 }
 
@@ -164,14 +147,7 @@ impl ShadowParams3d {
             // 盒半宽近似覆盖半径；略放大避免盒角被裁切。
             split_end[i] = extent * 1.35;
         }
-        Self {
-            enabled: true,
-            cascade_count: n as u32,
-            light_view_proj,
-            split_end,
-            bias: 0.0018,
-            strength: 0.58,
-        }
+        Self { enabled: true, cascade_count: n as u32, light_view_proj, split_end, bias: 0.0018, strength: 0.58 }
     }
 }
 
@@ -223,22 +199,8 @@ pub struct SkinnedVertex {
 }
 
 impl SkinnedVertex {
-    pub fn new(
-        pos: [f32; 3],
-        normal: [f32; 3],
-        uv: [f32; 2],
-        color: Color,
-        joints: [u32; 4],
-        weights: [f32; 4],
-    ) -> Self {
-        Self {
-            pos,
-            normal,
-            uv,
-            color: color.to_array(),
-            joints,
-            weights,
-        }
+    pub fn new(pos: [f32; 3], normal: [f32; 3], uv: [f32; 2], color: Color, joints: [u32; 4], weights: [f32; 4]) -> Self {
+        Self { pos, normal, uv, color: color.to_array(), joints, weights }
     }
 }
 
@@ -328,12 +290,7 @@ impl DrawList3d {
     }
 
     /// 分配稳定纹理 ID 并排队上传。请缓存返回的 ID，勿每帧为同一贴图重复分配。
-    pub fn create_texture(
-        &mut self,
-        width: u32,
-        height: u32,
-        rgba: Vec<u8>,
-    ) -> Result<TextureId, SparkError> {
+    pub fn create_texture(&mut self, width: u32, height: u32, rgba: Vec<u8>) -> Result<TextureId, SparkError> {
         let img = RgbaImage::from_rgba8(width, height, rgba)?;
         let id = alloc_texture_id();
         self.texture_uploads.push((id, img));
@@ -341,13 +298,7 @@ impl DrawList3d {
     }
 
     /// 用已有 ID 重新上传像素（热重载 / 图集更新）。
-    pub fn update_texture(
-        &mut self,
-        id: TextureId,
-        width: u32,
-        height: u32,
-        rgba: Vec<u8>,
-    ) -> Result<(), SparkError> {
+    pub fn update_texture(&mut self, id: TextureId, width: u32, height: u32, rgba: Vec<u8>) -> Result<(), SparkError> {
         let img = RgbaImage::from_rgba8(width, height, rgba)?;
         self.texture_uploads.push((id, img));
         Ok(())
@@ -367,13 +318,7 @@ impl DrawList3d {
         self.push_mesh(model, vertices, None, Some(local_aabb), true);
     }
 
-    pub fn mesh_resident(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        key: MeshResidentKey,
-        local_aabb: Option<Aabb3>,
-    ) {
+    pub fn mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_mesh(model, vertices, Some(key), local_aabb, true);
     }
 
@@ -394,13 +339,7 @@ impl DrawList3d {
         self.push_mesh_xlu(model, vertices, None, None);
     }
 
-    pub fn mesh_xlu_resident(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        key: MeshResidentKey,
-        local_aabb: Option<Aabb3>,
-    ) {
+    pub fn mesh_xlu_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_mesh_xlu(model, vertices, Some(key), local_aabb);
     }
 
@@ -409,13 +348,7 @@ impl DrawList3d {
         self.push_mesh_emissive(model, vertices, None, None);
     }
 
-    pub fn mesh_emissive_resident(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        key: MeshResidentKey,
-        local_aabb: Option<Aabb3>,
-    ) {
+    pub fn mesh_emissive_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_mesh_emissive(model, vertices, Some(key), local_aabb);
     }
 
@@ -424,13 +357,7 @@ impl DrawList3d {
         self.push_view_model_mesh(model, vertices, None, None);
     }
 
-    pub fn view_model_mesh_resident(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        key: MeshResidentKey,
-        local_aabb: Option<Aabb3>,
-    ) {
+    pub fn view_model_mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_view_model_mesh(model, vertices, Some(key), local_aabb);
     }
 
@@ -439,13 +366,7 @@ impl DrawList3d {
         self.push_sky_mesh(model, vertices, None, None);
     }
 
-    pub fn sky_mesh_resident(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        key: MeshResidentKey,
-        local_aabb: Option<Aabb3>,
-    ) {
+    pub fn sky_mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_sky_mesh(model, vertices, Some(key), local_aabb);
     }
 
@@ -454,13 +375,7 @@ impl DrawList3d {
         self.push_sky_atmosphere(model, vertices, None, None);
     }
 
-    pub fn sky_atmosphere_mesh_resident(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        key: MeshResidentKey,
-        local_aabb: Option<Aabb3>,
-    ) {
+    pub fn sky_atmosphere_mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_sky_atmosphere(model, vertices, Some(key), local_aabb);
     }
 
@@ -469,22 +384,11 @@ impl DrawList3d {
         self.push_sky_emissive(model, vertices, None, None);
     }
 
-    pub fn sky_emissive_mesh_resident(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        key: MeshResidentKey,
-        local_aabb: Option<Aabb3>,
-    ) {
+    pub fn sky_emissive_mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_sky_emissive(model, vertices, Some(key), local_aabb);
     }
 
-    pub fn tex_mesh(
-        &mut self,
-        model: Mat4,
-        texture: TextureId,
-        vertices: Arc<[TexMeshVertex]>,
-    ) {
+    pub fn tex_mesh(&mut self, model: Mat4, texture: TextureId, vertices: Arc<[TexMeshVertex]>) {
         self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Opaque, true);
     }
 
@@ -496,15 +400,7 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(
-            model,
-            texture,
-            vertices,
-            Some(key),
-            local_aabb,
-            TexPass::Opaque,
-            true,
-        );
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Opaque, true);
     }
 
     /// 不透明纹理网格，可显式关闭阴影投射（远距体素块）。
@@ -517,24 +413,11 @@ impl DrawList3d {
         local_aabb: Option<Aabb3>,
         casts_shadow: bool,
     ) {
-        self.push_tex_mesh(
-            model,
-            texture,
-            vertices,
-            Some(key),
-            local_aabb,
-            TexPass::Opaque,
-            casts_shadow,
-        );
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Opaque, casts_shadow);
     }
 
     /// 半透明纹理网格（Transparent pass：测深不写深）。
-    pub fn tex_mesh_xlu(
-        &mut self,
-        model: Mat4,
-        texture: TextureId,
-        vertices: Arc<[TexMeshVertex]>,
-    ) {
+    pub fn tex_mesh_xlu(&mut self, model: Mat4, texture: TextureId, vertices: Arc<[TexMeshVertex]>) {
         self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Xlu, false);
     }
 
@@ -546,33 +429,12 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(
-            model,
-            texture,
-            vertices,
-            Some(key),
-            local_aabb,
-            TexPass::Xlu,
-            false,
-        );
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Xlu, false);
     }
 
     /// 世界自发光纹理网格（Emissive pass：测深不写深、additive）。
-    pub fn tex_mesh_emissive(
-        &mut self,
-        model: Mat4,
-        texture: TextureId,
-        vertices: Arc<[TexMeshVertex]>,
-    ) {
-        self.push_tex_mesh(
-            model,
-            texture,
-            vertices,
-            None,
-            None,
-            TexPass::Emissive,
-            false,
-        );
+    pub fn tex_mesh_emissive(&mut self, model: Mat4, texture: TextureId, vertices: Arc<[TexMeshVertex]>) {
+        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Emissive, false);
     }
 
     pub fn tex_mesh_emissive_resident(
@@ -583,25 +445,11 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(
-            model,
-            texture,
-            vertices,
-            Some(key),
-            local_aabb,
-            TexPass::Emissive,
-            false,
-        );
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Emissive, false);
     }
 
     /// 不透明蒙皮网格（可选纹理；首切 palette ≤ [`MAX_SKIN_JOINTS`]）。
-    pub fn skinned_mesh(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[SkinnedVertex]>,
-        joint_palette: Arc<[Mat4]>,
-        texture: Option<TextureId>,
-    ) {
+    pub fn skinned_mesh(&mut self, model: Mat4, vertices: Arc<[SkinnedVertex]>, joint_palette: Arc<[Mat4]>, texture: Option<TextureId>) {
         self.push_skinned_mesh(model, vertices, joint_palette, texture, None, None);
     }
 
@@ -614,14 +462,7 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_skinned_mesh(
-            model,
-            vertices,
-            joint_palette,
-            texture,
-            Some(key),
-            local_aabb,
-        );
+        self.push_skinned_mesh(model, vertices, joint_palette, texture, Some(key), local_aabb);
     }
 
     fn push_mesh(
@@ -635,127 +476,49 @@ impl DrawList3d {
         if vertices.is_empty() {
             return;
         }
-        self.meshes.push(MeshCmd {
-            model,
-            vertices,
-            resident,
-            local_aabb,
-            casts_shadow,
-        });
+        self.meshes.push(MeshCmd { model, vertices, resident, local_aabb, casts_shadow });
     }
 
-    fn push_mesh_xlu(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        resident: Option<MeshResidentKey>,
-        local_aabb: Option<Aabb3>,
-    ) {
+    fn push_mesh_xlu(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, resident: Option<MeshResidentKey>, local_aabb: Option<Aabb3>) {
         if vertices.is_empty() {
             return;
         }
-        self.meshes_xlu.push(MeshCmd {
-            model,
-            vertices,
-            resident,
-            local_aabb,
-            casts_shadow: false,
-        });
+        self.meshes_xlu.push(MeshCmd { model, vertices, resident, local_aabb, casts_shadow: false });
     }
 
-    fn push_mesh_emissive(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        resident: Option<MeshResidentKey>,
-        local_aabb: Option<Aabb3>,
-    ) {
+    fn push_mesh_emissive(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, resident: Option<MeshResidentKey>, local_aabb: Option<Aabb3>) {
         if vertices.is_empty() {
             return;
         }
-        self.meshes_emissive.push(MeshCmd {
-            model,
-            vertices,
-            resident,
-            local_aabb,
-            casts_shadow: false,
-        });
+        self.meshes_emissive.push(MeshCmd { model, vertices, resident, local_aabb, casts_shadow: false });
     }
 
-    fn push_view_model_mesh(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        resident: Option<MeshResidentKey>,
-        local_aabb: Option<Aabb3>,
-    ) {
+    fn push_view_model_mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, resident: Option<MeshResidentKey>, local_aabb: Option<Aabb3>) {
         if vertices.is_empty() {
             return;
         }
-        self.view_model_meshes.push(MeshCmd {
-            model,
-            vertices,
-            resident,
-            local_aabb,
-            casts_shadow: false,
-        });
+        self.view_model_meshes.push(MeshCmd { model, vertices, resident, local_aabb, casts_shadow: false });
     }
 
-    fn push_sky_mesh(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        resident: Option<MeshResidentKey>,
-        local_aabb: Option<Aabb3>,
-    ) {
+    fn push_sky_mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, resident: Option<MeshResidentKey>, local_aabb: Option<Aabb3>) {
         if vertices.is_empty() {
             return;
         }
-        self.sky_meshes.push(MeshCmd {
-            model,
-            vertices,
-            resident,
-            local_aabb,
-            casts_shadow: false,
-        });
+        self.sky_meshes.push(MeshCmd { model, vertices, resident, local_aabb, casts_shadow: false });
     }
 
-    fn push_sky_atmosphere(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        resident: Option<MeshResidentKey>,
-        local_aabb: Option<Aabb3>,
-    ) {
+    fn push_sky_atmosphere(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, resident: Option<MeshResidentKey>, local_aabb: Option<Aabb3>) {
         if vertices.is_empty() {
             return;
         }
-        self.sky_atmosphere_meshes.push(MeshCmd {
-            model,
-            vertices,
-            resident,
-            local_aabb,
-            casts_shadow: false,
-        });
+        self.sky_atmosphere_meshes.push(MeshCmd { model, vertices, resident, local_aabb, casts_shadow: false });
     }
 
-    fn push_sky_emissive(
-        &mut self,
-        model: Mat4,
-        vertices: Arc<[MeshVertex]>,
-        resident: Option<MeshResidentKey>,
-        local_aabb: Option<Aabb3>,
-    ) {
+    fn push_sky_emissive(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, resident: Option<MeshResidentKey>, local_aabb: Option<Aabb3>) {
         if vertices.is_empty() {
             return;
         }
-        self.sky_emissive_meshes.push(MeshCmd {
-            model,
-            vertices,
-            resident,
-            local_aabb,
-            casts_shadow: false,
-        });
+        self.sky_emissive_meshes.push(MeshCmd { model, vertices, resident, local_aabb, casts_shadow: false });
     }
 
     fn push_tex_mesh(
@@ -799,19 +562,8 @@ impl DrawList3d {
         if vertices.is_empty() || joint_palette.is_empty() {
             return;
         }
-        let palette = if joint_palette.len() > MAX_SKIN_JOINTS {
-            Arc::from(&joint_palette[..MAX_SKIN_JOINTS])
-        } else {
-            joint_palette
-        };
-        self.skinned_meshes.push(SkinnedMeshCmd {
-            model,
-            vertices,
-            joint_palette: palette,
-            texture,
-            resident,
-            local_aabb,
-        });
+        let palette = if joint_palette.len() > MAX_SKIN_JOINTS { Arc::from(&joint_palette[..MAX_SKIN_JOINTS]) } else { joint_palette };
+        self.skinned_meshes.push(SkinnedMeshCmd { model, vertices, joint_palette: palette, texture, resident, local_aabb });
     }
 
     pub fn retain_visible(&mut self, cull: CullParams) {
@@ -827,18 +579,12 @@ impl DrawList3d {
             frustum.intersects_aabb(&world)
         };
         self.meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.meshes_xlu
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.meshes_emissive
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.tex_meshes
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.tex_meshes_xlu
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.tex_meshes_emissive
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.skinned_meshes
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.meshes_xlu.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.meshes_emissive.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes_xlu.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes_emissive.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.skinned_meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
     }
 
     pub fn retain_within_distance(&mut self, eye: Vec3, max_distance: f32) {
@@ -849,18 +595,12 @@ impl DrawList3d {
             dist <= max_d
         };
         self.meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.meshes_xlu
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.meshes_emissive
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.tex_meshes
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.tex_meshes_xlu
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.tex_meshes_emissive
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
-        self.skinned_meshes
-            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.meshes_xlu.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.meshes_emissive.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes_xlu.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes_emissive.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.skinned_meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
     }
 }
 

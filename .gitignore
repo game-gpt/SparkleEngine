@@ -1,4 +1,4 @@
-/target/
+# OS
 **/*.rs.bk
 .DS_Store
 Thumbs.db
@@ -7,16 +7,17 @@ tmp/
 # 模组编译映像缓存（按源码 / schema 指纹）
 **/.spark-cache/
 
-# 本机 path 覆盖，不入库
-.cargo/
-
 # IDE
 .idea/
+*.log
+*.txt
 
-# pnpm / node
-node_modules/
-**/dist/
-**/*.node
+# Rust
+.cargo/
+target/
 
-# pnpm / node
+# Node
 node_modules/
+dist/
+*.node
+*.wasm

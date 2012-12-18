@@ -11,8 +11,10 @@ use spark_core::{Color, Rect};
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
 
-use crate::collision::{fits, lock_piece};
-use crate::pieces::{cells, random_kind, rotate_cw};
+use crate::{
+    collision::{fits, lock_piece},
+    pieces::{cells, random_kind, rotate_cw},
+};
 
 const COLS: i32 = 10;
 const ROWS: i32 = 20;
@@ -71,12 +73,7 @@ impl TetrisApp {
     fn spawn(&mut self) {
         let kind = self.next;
         self.next = random_kind(&mut self.rng);
-        let active = Active {
-            kind,
-            rot: 0,
-            x: 3,
-            y: 0,
-        };
+        let active = Active { kind, rot: 0, x: 3, y: 0 };
         if !fits(&self.board, kind, active.rot, active.x, active.y) {
             self.game_over = true;
             self.active = None;
@@ -87,7 +84,8 @@ impl TetrisApp {
     }
 
     fn try_move(&mut self, dx: i32, dy: i32) -> bool {
-        let Some(a) = self.active.as_ref() else {
+        let Some(a) = self.active.as_ref()
+        else {
             return false;
         };
         let nx = a.x + dx;
@@ -97,13 +95,15 @@ impl TetrisApp {
             a.x = nx;
             a.y = ny;
             true
-        } else {
+        }
+        else {
             false
         }
     }
 
     fn try_rotate(&mut self) {
-        let Some(a) = self.active.as_ref() else {
+        let Some(a) = self.active.as_ref()
+        else {
             return;
         };
         let nrot = rotate_cw(a.rot);
@@ -128,7 +128,8 @@ impl TetrisApp {
     }
 
     fn lock_active(&mut self) {
-        let Some(a) = self.active.take() else {
+        let Some(a) = self.active.take()
+        else {
             return;
         };
         lock_piece(&mut self.board, a.kind, a.rot, a.x, a.y);
@@ -179,11 +180,7 @@ impl GameHost for TetrisApp {
         }
 
         let soft = frame.input.key_down(Key::Down);
-        let interval = if soft {
-            self.fall_interval * 0.12
-        } else {
-            self.fall_interval
-        };
+        let interval = if soft { self.fall_interval * 0.12 } else { self.fall_interval };
         self.fall_acc += frame.dt;
         while self.fall_acc >= interval {
             self.fall_acc -= interval;
@@ -196,17 +193,11 @@ impl GameHost for TetrisApp {
 
     fn draw(&mut self, draw: &mut DrawList) {
         draw.begin_world();
-        draw.fill_rect(
-            Rect::new(0.0, 0.0, 480.0, 720.0),
-            Color::rgb(0.04, 0.05, 0.08),
-        );
+        draw.fill_rect(Rect::new(0.0, 0.0, 480.0, 720.0), Color::rgb(0.04, 0.05, 0.08));
 
         let board_w = COLS as f32 * CELL;
         let board_h = ROWS as f32 * CELL;
-        draw.fill_rect(
-            Rect::new(ORIGIN_X - 4.0, ORIGIN_Y - 4.0, board_w + 8.0, board_h + 8.0),
-            Color::rgb(0.12, 0.14, 0.18),
-        );
+        draw.fill_rect(Rect::new(ORIGIN_X - 4.0, ORIGIN_Y - 4.0, board_w + 8.0, board_h + 8.0), Color::rgb(0.12, 0.14, 0.18));
 
         for y in 0..ROWS {
             for x in 0..COLS {
@@ -215,12 +206,7 @@ impl GameHost for TetrisApp {
                     continue;
                 }
                 draw.fill_rect(
-                    Rect::new(
-                        ORIGIN_X + x as f32 * CELL + 1.0,
-                        ORIGIN_Y + y as f32 * CELL + 1.0,
-                        CELL - 2.0,
-                        CELL - 2.0,
-                    ),
+                    Rect::new(ORIGIN_X + x as f32 * CELL + 1.0, ORIGIN_Y + y as f32 * CELL + 1.0, CELL - 2.0, CELL - 2.0),
                     piece_color(PieceKind(v)),
                 );
             }
@@ -234,12 +220,7 @@ impl GameHost for TetrisApp {
                     continue;
                 }
                 draw.fill_rect(
-                    Rect::new(
-                        ORIGIN_X + x as f32 * CELL + 1.0,
-                        ORIGIN_Y + y as f32 * CELL + 1.0,
-                        CELL - 2.0,
-                        CELL - 2.0,
-                    ),
+                    Rect::new(ORIGIN_X + x as f32 * CELL + 1.0, ORIGIN_Y + y as f32 * CELL + 1.0, CELL - 2.0, CELL - 2.0),
                     piece_color(a.kind),
                 );
             }
@@ -250,47 +231,17 @@ impl GameHost for TetrisApp {
         let ny0 = ORIGIN_Y + 40.0;
         draw.text(nx0, ORIGIN_Y, 18.0, Color::rgb(0.8, 0.85, 1.0), "NEXT");
         for (cx, cy) in cells(self.next, 0) {
-            draw.fill_rect(
-                Rect::new(nx0 + cx as f32 * 22.0, ny0 + cy as f32 * 22.0, 20.0, 20.0),
-                piece_color(self.next),
-            );
+            draw.fill_rect(Rect::new(nx0 + cx as f32 * 22.0, ny0 + cy as f32 * 22.0, 20.0, 20.0), piece_color(self.next));
         }
 
         draw.begin_hud();
-        draw.text(
-            nx0,
-            ny0 + 120.0,
-            20.0,
-            Color::rgb(1.0, 1.0, 1.0),
-            format!("Score {}", self.score),
-        );
-        draw.text(
-            nx0,
-            ny0 + 150.0,
-            18.0,
-            Color::rgb(0.85, 0.9, 1.0),
-            format!("Lines {}", self.lines),
-        );
-        draw.text(
-            24.0,
-            680.0,
-            14.0,
-            Color::rgba(1.0, 1.0, 1.0, 0.5),
-            "←/→ 移动 · ↑/X 旋转 · ↓ 软降 · Space 硬降 · R 重开 · Esc 退出",
-        );
+        draw.text(nx0, ny0 + 120.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", self.score));
+        draw.text(nx0, ny0 + 150.0, 18.0, Color::rgb(0.85, 0.9, 1.0), format!("Lines {}", self.lines));
+        draw.text(24.0, 680.0, 14.0, Color::rgba(1.0, 1.0, 1.0, 0.5), "←/→ 移动 · ↑/X 旋转 · ↓ 软降 · Space 硬降 · R 重开 · Esc 退出");
         if self.game_over {
-            draw.fill_rect(
-                Rect::new(60.0, 300.0, 360.0, 80.0),
-                Color::rgba(0.0, 0.0, 0.0, 0.7),
-            );
+            draw.fill_rect(Rect::new(60.0, 300.0, 360.0, 80.0), Color::rgba(0.0, 0.0, 0.0, 0.7));
             draw.text(120.0, 320.0, 28.0, Color::rgb(1.0, 0.4, 0.4), "GAME OVER");
-            draw.text(
-                130.0,
-                355.0,
-                16.0,
-                Color::rgb(1.0, 1.0, 1.0),
-                "按 R 重新开始",
-            );
+            draw.text(130.0, 355.0, 16.0, Color::rgb(1.0, 1.0, 1.0), "按 R 重新开始");
         }
     }
 

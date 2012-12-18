@@ -40,13 +40,7 @@ impl Live2dBackend for NullLive2dBackend {
     fn load(&mut self, path: &str) -> Result<Live2dModelId, SparkError> {
         let id = self.next;
         self.next = self.next.saturating_add(1);
-        self.models.insert(
-            id,
-            ModelStub {
-                path: path.into(),
-                params: std::collections::HashMap::new(),
-            },
-        );
+        self.models.insert(id, ModelStub { path: path.into(), params: std::collections::HashMap::new() });
         tracing::info!(event = "spark.live2d.model_loaded", path, model = id);
         Ok(Live2dModelId(id))
     }
@@ -77,12 +71,7 @@ impl Live2dBackend for NullLive2dBackend {
         Ok(())
     }
 
-    fn start_motion(
-        &mut self,
-        id: Live2dModelId,
-        group: &str,
-        index: i32,
-    ) -> Result<(), SparkError> {
+    fn start_motion(&mut self, id: Live2dModelId, group: &str, index: i32) -> Result<(), SparkError> {
         if !self.models.contains_key(&id.0) {
             return Err(invalid_model(id));
         }

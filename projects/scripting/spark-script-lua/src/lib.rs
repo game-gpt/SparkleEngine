@@ -11,9 +11,7 @@ use lower::lower_root_to_hir;
 use oak_core::{Builder, SourceText};
 use oak_lua::{LuaBuilder, LuaLanguage, LuaRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
-use spark_ir::{
-    emit_module_with_host, lower_module, HostBindTable, HostEmitMode,
-};
+use spark_ir::{HostBindTable, HostEmitMode, emit_module_with_host, lower_module};
 use spark_vm::Module;
 
 #[derive(Debug)]
@@ -32,9 +30,7 @@ impl LuaScriptError {
     }
 
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
-        Self::Compile {
-            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
-        }
+        Self::Compile { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())) }
     }
 
     /// 写入 `reason` 参数（机器令牌，非 Locale 句子）。
@@ -60,18 +56,11 @@ pub fn compile(source: &str) -> Result<Module, LuaScriptError> {
 }
 
 /// 带完整宿主绑定表的编译入口。
-pub fn compile_with_binds(
-    source: &str,
-    hosts: &HostBindTable,
-) -> Result<Module, LuaScriptError> {
+pub fn compile_with_binds(source: &str, hosts: &HostBindTable) -> Result<Module, LuaScriptError> {
     let root = parse(source)?;
     let hir = lower_root_to_hir(&root, hosts).map_err(LuaScriptError::compile_opaque)?;
     let mir = lower_module(&hir).map_err(LuaScriptError::compile_opaque)?;
-    let mode = if hosts.is_empty() {
-        HostEmitMode::NoHost
-    } else {
-        HostEmitMode::Bound(hosts)
-    };
+    let mode = if hosts.is_empty() { HostEmitMode::NoHost } else { HostEmitMode::Bound(hosts) };
     emit_module_with_host(&mir, mode).map_err(LuaScriptError::compile_opaque)
 }
 
@@ -98,10 +87,7 @@ mod tests {
         // table 构造不在 IR 子集；必须明确失败，必须明确失败。
         let err = compile("return {a=1}").unwrap_err();
         let msg = format!("{err:?}");
-        assert!(
-            msg.contains("ir_unsupported") || msg.contains("unsupported") || msg.contains("reason"),
-            "{msg}"
-        );
+        assert!(msg.contains("ir_unsupported") || msg.contains("unsupported") || msg.contains("reason"), "{msg}");
     }
 
     #[test]
@@ -115,9 +101,7 @@ mod tests {
     #[test]
     fn arithmetic_via_ir_has_no_call_native() {
         let m = compile("return 40 + 2").unwrap();
-        assert!(m.functions.iter().all(|f| {
-            !f.code.iter().any(|&b| b == Op::CallNative as u8 || b == Op::CallHost as u8)
-        }));
+        assert!(m.functions.iter().all(|f| { !f.code.iter().any(|&b| b == Op::CallNative as u8 || b == Op::CallHost as u8) }));
     }
 
     #[test]
@@ -130,7 +114,8 @@ mod tests {
             else
                 return 0
             end
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -149,7 +134,8 @@ mod tests {
             else
                 return 1
             end
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
@@ -162,7 +148,8 @@ mod tests {
                 n = n + 2
             end
             return n
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
@@ -177,7 +164,8 @@ mod tests {
                 n = n + 1
             until n >= 3
             return n
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(3.0));
@@ -196,7 +184,8 @@ mod tests {
                 return 42
             end
             return 0
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
@@ -210,12 +199,10 @@ mod tests {
                 return n * 2
             end
             return double(21)
-            "#)
+            "#,
+        )
         .unwrap();
-        assert!(
-            m.functions.iter().any(|f| f.name == "double"),
-            "expected IR function proto"
-        );
+        assert!(m.functions.iter().any(|f| f.name == "double"), "expected IR function proto");
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
@@ -230,7 +217,8 @@ mod tests {
                 n = n + 1
             end
             return n
-            "#)
+            "#,
+        )
         .unwrap();
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
@@ -240,15 +228,8 @@ mod tests {
     #[test]
     fn host_call_via_ir() {
         use spark_gc::Value;
-        let m = compile_with_binds(
-            "return ping(7)",
-            &HostBindTable::from_ids([spark_ir::HostId::new("host", "ping", 1)]).unwrap(),
-        )
-        .unwrap();
-        assert!(m
-            .functions
-            .iter()
-            .any(|f| f.code.iter().any(|&b| b == Op::CallHost as u8)));
+        let m = compile_with_binds("return ping(7)", &HostBindTable::from_ids([spark_ir::HostId::new("host", "ping", 1)]).unwrap()).unwrap();
+        assert!(m.functions.iter().any(|f| f.code.iter().any(|&b| b == Op::CallHost as u8)));
         let mut vm = Vm::new(m);
         vm.prepare_host_slots(["host.ping"]);
         vm.register_native("host.ping", |_ctx, args| {

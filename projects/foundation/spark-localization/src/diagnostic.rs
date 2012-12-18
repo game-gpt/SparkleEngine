@@ -1,10 +1,8 @@
 //! 消息求值诊断。
 
-use std::fmt;
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
-use crate::locale::LocaleId;
-use crate::message::MessageRef;
+use crate::{locale::LocaleId, message::MessageRef};
 
 /// 单次格式化可能附带的诊断类别。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

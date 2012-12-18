@@ -21,10 +21,7 @@ pub struct UniformGrid {
 
 impl UniformGrid {
     pub fn new(cell_size: f32) -> Self {
-        Self {
-            cell: cell_size.max(1.0),
-            cells: HashMap::new(),
-        }
+        Self { cell: cell_size.max(1.0), cells: HashMap::new() }
     }
 }
 

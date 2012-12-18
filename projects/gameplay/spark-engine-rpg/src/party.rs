@@ -24,12 +24,7 @@ impl Party {
     pub fn add(&mut self, key: impl Into<String>) -> ActorId {
         let id = ActorId(self.next);
         self.next = self.next.saturating_add(1);
-        self.members.push(PartyMember {
-            id,
-            key: key.into(),
-            stats: StatSheet::default(),
-            in_battle: true,
-        });
+        self.members.push(PartyMember { id, key: key.into(), stats: StatSheet::default(), in_battle: true });
         id
     }
 

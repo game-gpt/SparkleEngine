@@ -2,8 +2,10 @@
 
 use std::sync::Arc;
 
-use crate::diagnostic::DiagnosticFlags;
-use crate::locale::{LocaleId, TextDirection};
+use crate::{
+    diagnostic::DiagnosticFlags,
+    locale::{LocaleId, TextDirection},
+};
 
 /// 纯文本本地化结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,35 +18,14 @@ pub struct LocalizedText {
 }
 
 impl LocalizedText {
-    pub fn plain(
-        text: impl Into<Arc<str>>,
-        resolved_locale: LocaleId,
-        direction: TextDirection,
-        generation: u64,
-    ) -> Self {
-        Self {
-            text: text.into(),
-            resolved_locale,
-            direction,
-            generation,
-            diagnostics: DiagnosticFlags::empty(),
-        }
+    pub fn plain(text: impl Into<Arc<str>>, resolved_locale: LocaleId, direction: TextDirection, generation: u64) -> Self {
+        Self { text: text.into(), resolved_locale, direction, generation, diagnostics: DiagnosticFlags::empty() }
     }
 
     /// 开发期缺键占位；发行路径应优先 fallback，而不是直接调用此构造。
-    pub fn missing_placeholder(
-        message_key: &str,
-        resolved_locale: LocaleId,
-        generation: u64,
-    ) -> Self {
+    pub fn missing_placeholder(message_key: &str, resolved_locale: LocaleId, generation: u64) -> Self {
         let text: Arc<str> = Arc::from(format!("⟦missing:{message_key}⟧"));
-        Self {
-            text,
-            resolved_locale,
-            direction: TextDirection::Ltr,
-            generation,
-            diagnostics: DiagnosticFlags::MISSING,
-        }
+        Self { text, resolved_locale, direction: TextDirection::Ltr, generation, diagnostics: DiagnosticFlags::MISSING }
     }
 }
 

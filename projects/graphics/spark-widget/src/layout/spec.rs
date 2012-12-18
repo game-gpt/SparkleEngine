@@ -71,34 +71,19 @@ impl Default for LayoutSpec {
 
 impl LayoutSpec {
     pub fn vertical() -> Self {
-        Self {
-            kind: Layout::Flex,
-            direction: FlexDirection::Column,
-            ..Self::default()
-        }
+        Self { kind: Layout::Flex, direction: FlexDirection::Column, ..Self::default() }
     }
 
     pub fn horizontal() -> Self {
-        Self {
-            kind: Layout::Flex,
-            direction: FlexDirection::Row,
-            ..Self::default()
-        }
+        Self { kind: Layout::Flex, direction: FlexDirection::Row, ..Self::default() }
     }
 
     pub fn overlay() -> Self {
-        Self {
-            kind: Layout::Overlay,
-            ..Self::default()
-        }
+        Self { kind: Layout::Overlay, ..Self::default() }
     }
 
     pub fn grid(columns: u32) -> Self {
-        Self {
-            kind: Layout::Grid,
-            columns: columns.max(1),
-            ..Self::default()
-        }
+        Self { kind: Layout::Grid, columns: columns.max(1), ..Self::default() }
     }
 
     pub fn with_gap(mut self, gap: f32) -> Self {
@@ -132,21 +117,11 @@ pub struct Insets {
 
 impl Insets {
     pub const fn all(v: f32) -> Self {
-        Self {
-            left: v,
-            top: v,
-            right: v,
-            bottom: v,
-        }
+        Self { left: v, top: v, right: v, bottom: v }
     }
 
     pub const fn symmetric(horizontal: f32, vertical: f32) -> Self {
-        Self {
-            left: horizontal,
-            top: vertical,
-            right: horizontal,
-            bottom: vertical,
-        }
+        Self { left: horizontal, top: vertical, right: horizontal, bottom: vertical }
     }
 
     pub fn horizontal(self) -> f32 {

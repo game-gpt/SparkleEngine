@@ -2,9 +2,11 @@
 
 use spark_core::{Rect, Vec2};
 
-use crate::circle::Circle;
-use crate::line::{LineSegment, Ray};
-use crate::Vec2Ext;
+use crate::{
+    Vec2Ext,
+    circle::Circle,
+    line::{LineSegment, Ray},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClosestPoint {
@@ -55,9 +57,11 @@ pub fn ray_circle(ray: Ray, c: Circle) -> Option<f32> {
     let t1 = (-b + s) / (2.0 * a);
     if t0 >= 0.0 {
         Some(t0)
-    } else if t1 >= 0.0 {
+    }
+    else if t1 >= 0.0 {
         Some(t1)
-    } else {
+    }
+    else {
         None
     }
 }

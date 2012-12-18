@@ -7,10 +7,8 @@ use std::collections::HashMap;
 use bytemuck::{Pod, Zeroable};
 use spark_core::SparkError;
 use spark_geometry::Mat4;
-use spark_renderer::{
-    DrawList3d, MeshResidentKey, SkinnedMeshCmd, SkinnedVertex, MAX_SKIN_JOINTS,
-};
-use spark_shader::{create_builtin, BuiltinShader};
+use spark_renderer::{DrawList3d, MAX_SKIN_JOINTS, MeshResidentKey, SkinnedMeshCmd, SkinnedVertex};
+use spark_shader::{BuiltinShader, create_builtin};
 use wgpu::util::DeviceExt;
 
 use crate::game3d::mat4_to_cols_pub;
@@ -58,22 +56,14 @@ pub struct SkinnedMeshGpu {
 }
 
 impl SkinnedMeshGpu {
-    pub fn new(
-        device: &wgpu::Device,
-        format: wgpu::TextureFormat,
-        lights_bgl: &wgpu::BindGroupLayout,
-    ) -> Self {
+    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, lights_bgl: &wgpu::BindGroupLayout) -> Self {
         let shader = create_builtin(device, BuiltinShader::SkinnedMesh3d);
         let object_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("skinned-object-bgl"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
+                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                 count: None,
             }],
         });
@@ -82,11 +72,7 @@ impl SkinnedMeshGpu {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
+                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                 count: None,
             }],
         });
@@ -105,18 +91,12 @@ impl SkinnedMeshGpu {
         let object_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("skinned-object-bg"),
             layout: &object_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: object_uniform.as_entire_binding(),
-            }],
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: object_uniform.as_entire_binding() }],
         });
         let joints_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("skinned-joints-bg"),
             layout: &joints_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: joints_uniform.as_entire_binding(),
-            }],
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: joints_uniform.as_entire_binding() }],
         });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("skinned-mesh3d-pl"),
@@ -176,16 +156,7 @@ impl SkinnedMeshGpu {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        Self {
-            pipeline,
-            object_bind,
-            object_uniform,
-            joints_bind,
-            joints_uniform,
-            transient_vbo,
-            transient_cap,
-            mesh_cache: HashMap::new(),
-        }
+        Self { pipeline, object_bind, object_uniform, joints_bind, joints_uniform, transient_vbo, transient_cap, mesh_cache: HashMap::new() }
     }
 
     pub fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
@@ -193,12 +164,11 @@ impl SkinnedMeshGpu {
         for cmd in &list.skinned_meshes {
             if let Some(key) = cmd.resident {
                 if let Some(entry) = self.mesh_cache.get(&key.id.0) {
-                    if entry.revision == key.revision
-                        && entry.vertex_count as usize == cmd.vertices.len()
-                    {
+                    if entry.revision == key.revision && entry.vertex_count as usize == cmd.vertices.len() {
                         continue;
                     }
-                } else if cmd.vertices.is_empty() {
+                }
+                else if cmd.vertices.is_empty() {
                     continue;
                 }
                 if uploads >= crate::RESIDENT_UPLOADS_PER_FRAME {
@@ -210,12 +180,7 @@ impl SkinnedMeshGpu {
         }
     }
 
-    fn ensure_resident(
-        &mut self,
-        device: &wgpu::Device,
-        key: MeshResidentKey,
-        vertices: &[SkinnedVertex],
-    ) {
+    fn ensure_resident(&mut self, device: &wgpu::Device, key: MeshResidentKey, vertices: &[SkinnedVertex]) {
         if let Some(entry) = self.mesh_cache.get(&key.id.0) {
             if entry.revision == key.revision && entry.vertex_count as usize == vertices.len() {
                 return;
@@ -231,21 +196,10 @@ impl SkinnedMeshGpu {
             contents: bytemuck::cast_slice(&gpu),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        self.mesh_cache.insert(
-            key.id.0,
-            ResidentSkinned {
-                buffer,
-                vertex_count: gpu.len() as u32,
-                revision: key.revision,
-            },
-        );
+        self.mesh_cache.insert(key.id.0, ResidentSkinned { buffer, vertex_count: gpu.len() as u32, revision: key.revision });
     }
 
-    fn ensure_transient_cap(
-        &mut self,
-        device: &wgpu::Device,
-        need: u64,
-    ) -> Result<(), SparkError> {
+    fn ensure_transient_cap(&mut self, device: &wgpu::Device, need: u64) -> Result<(), SparkError> {
         if need <= self.transient_cap {
             return Ok(());
         }
@@ -294,16 +248,9 @@ impl SkinnedMeshGpu {
         cmd: &SkinnedMeshCmd,
         view_proj: &Mat4,
     ) -> Result<(), SparkError> {
-        let uniforms = Uniforms3d {
-            view_proj: mat4_to_cols_pub(view_proj),
-            model: mat4_to_cols_pub(&cmd.model),
-        };
+        let uniforms = Uniforms3d { view_proj: mat4_to_cols_pub(view_proj), model: mat4_to_cols_pub(&cmd.model) };
         queue.write_buffer(&self.object_uniform, 0, bytemuck::bytes_of(&uniforms));
-        queue.write_buffer(
-            &self.joints_uniform,
-            0,
-            bytemuck::bytes_of(&pack_palette(&cmd.joint_palette)),
-        );
+        queue.write_buffer(&self.joints_uniform, 0, bytemuck::bytes_of(&pack_palette(&cmd.joint_palette)));
 
         if let Some(key) = cmd.resident {
             if let Some(entry) = self.mesh_cache.get(&key.id.0) {
@@ -330,14 +277,7 @@ impl SkinnedMeshGpu {
 fn pack_verts(vertices: &[SkinnedVertex]) -> Vec<SkinnedVertGpu> {
     vertices
         .iter()
-        .map(|v| SkinnedVertGpu {
-            pos: v.pos,
-            normal: v.normal,
-            uv: v.uv,
-            color: v.color,
-            joints: v.joints,
-            weights: v.weights,
-        })
+        .map(|v| SkinnedVertGpu { pos: v.pos, normal: v.normal, uv: v.uv, color: v.color, joints: v.joints, weights: v.weights })
         .collect()
 }
 
@@ -345,12 +285,7 @@ fn pack_palette(palette: &[Mat4]) -> JointPaletteGpu {
     let mut joints = [[[0.0f32; 4]; 4]; MAX_SKIN_JOINTS];
     // 缺省为单位阵，避免未绑定关节把顶点拉到原点。
     for slot in joints.iter_mut() {
-        *slot = [
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ];
+        *slot = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]];
     }
     let n = palette.len().min(MAX_SKIN_JOINTS);
     for i in 0..n {

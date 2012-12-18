@@ -40,8 +40,7 @@ impl RtsEngine {
 
     /// 固定步：推进指令并刷新迷雾（由当前玩家单位揭示）。
     pub fn tick(&mut self, dt: f32, local_player: PlayerId) {
-        self.commands
-            .dispatch(dt, &mut self.roster, local_player);
+        self.commands.dispatch(dt, &mut self.roster, local_player);
         self.fog.clear_visible();
         for u in self.roster.iter() {
             if u.owner == local_player && u.alive {
@@ -75,8 +74,7 @@ mod tests {
         let b = rts.roster.spawn(p, UnitPose::at(10.0, 10.0), 4.0);
         rts.box_select(Vec2::new(0.0, 0.0), Vec2::new(5.0, 5.0), Some(p));
         assert_eq!(rts.selection.ids(), &[a]);
-        rts.commands
-            .issue(a, Command::MoveTo { target: Vec2::new(8.0, 2.0), speed: 4.0 });
+        rts.commands.issue(a, Command::MoveTo { target: Vec2::new(8.0, 2.0), speed: 4.0 });
         rts.tick(1.0, p);
         let u = rts.roster.get(a).unwrap();
         assert!((u.pose.pos.x - 6.0).abs() < 1e-3);

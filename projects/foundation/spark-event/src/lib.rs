@@ -3,8 +3,10 @@
 //! 每种事件类型各自一条双缓冲队列；帧边界调用 [`EventBus::update_all`]。
 //! **不**定义游戏事件枚举。
 
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+};
 
 /// 单一事件类型的双缓冲队列。
 #[derive(Debug)]
@@ -21,10 +23,7 @@ impl<E> Default for Events<E> {
 
 impl<E> Events<E> {
     pub fn new() -> Self {
-        Self {
-            writing: Vec::new(),
-            reading: Vec::new(),
-        }
+        Self { writing: Vec::new(), reading: Vec::new() }
     }
 
     pub fn send(&mut self, event: E) {
@@ -114,15 +113,8 @@ impl EventBus {
 
     fn ensure<E: Send + Sync + 'static>(&mut self) -> &mut Events<E> {
         let id = TypeId::of::<E>();
-        self.queues
-            .entry(id)
-            .or_insert_with(|| Box::new(Events::<E>::new()));
-        self.queues
-            .get_mut(&id)
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut::<Events<E>>()
-            .expect("事件队列类型")
+        self.queues.entry(id).or_insert_with(|| Box::new(Events::<E>::new()));
+        self.queues.get_mut(&id).unwrap().as_any_mut().downcast_mut::<Events<E>>().expect("事件队列类型")
     }
 
     pub fn send<E: Send + Sync + 'static>(&mut self, event: E) {
@@ -130,9 +122,7 @@ impl EventBus {
     }
 
     pub fn events<E: Send + Sync + 'static>(&self) -> Option<&Events<E>> {
-        self.queues
-            .get(&TypeId::of::<E>())
-            .and_then(|q| q.as_any().downcast_ref::<Events<E>>())
+        self.queues.get(&TypeId::of::<E>()).and_then(|q| q.as_any().downcast_ref::<Events<E>>())
     }
 
     pub fn events_mut<E: Send + Sync + 'static>(&mut self) -> &mut Events<E> {

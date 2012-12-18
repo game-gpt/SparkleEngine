@@ -20,25 +20,19 @@ mod vec_ext;
 
 pub use aabb3::Aabb3;
 pub use circle::Circle;
-pub use collide::{
-    aabb_aabb, circle_aabb, circle_circle, point_in_aabb, point_in_circle, ray_circle,
-    segment_segment, ClosestPoint,
-};
+pub use collide::{ClosestPoint, aabb_aabb, circle_aabb, circle_circle, point_in_aabb, point_in_circle, ray_circle, segment_segment};
 pub use line::{LineSegment, Ray};
 pub use mat4::Mat4;
-pub use periodic::{
-    floor_mod, normalize_position, periodic_distance, shortest_delta, shortest_delta_1d,
-    PeriodSize, PeriodicAxes,
-};
+pub use periodic::{PeriodSize, PeriodicAxes, floor_mod, normalize_position, periodic_distance, shortest_delta, shortest_delta_1d};
 pub use polygon::Polygon;
 pub use quat::Quat;
-pub use ray3::{ray_aabb, ray_voxel, ray_voxel_dda, Ray3, VoxelHit};
+pub use ray3::{Ray3, VoxelHit, ray_aabb, ray_voxel, ray_voxel_dda};
 pub use spark_core::{Rect, Vec2};
-pub use sweep3::{aabb_sweep, aabb_sweep_resolve, SweepHit};
+pub use sweep3::{SweepHit, aabb_sweep, aabb_sweep_resolve};
 pub use transform::Transform2;
 pub use trs::Trs;
-pub use vec3::Vec3;
 pub use vec_ext::Vec2Ext;
+pub use vec3::Vec3;
 
 #[cfg(test)]
 mod tests_3d {
@@ -53,14 +47,7 @@ mod tests_3d {
 
     #[test]
     fn voxel_dda_finds_solid() {
-        let hit = ray_voxel_dda(
-            Vec3::new(0.5, 0.5, 0.5),
-            Vec3::X,
-            10.0,
-            64,
-            |x, _y, _z| x == 3,
-        )
-        .unwrap();
+        let hit = ray_voxel_dda(Vec3::new(0.5, 0.5, 0.5), Vec3::X, 10.0, 64, |x, _y, _z| x == 3).unwrap();
         assert_eq!(hit.cell, [3, 0, 0]);
         assert_eq!(hit.prev, [2, 0, 0]);
     }
@@ -93,20 +80,12 @@ mod tests_3d {
 
     #[test]
     fn mat4_inverse_roundtrip_trs() {
-        let m = Mat4::from_trs(
-            Vec3::new(1.0, 2.0, 3.0),
-            Quat::from_axis_angle(Vec3::Y, 0.7),
-            Vec3::new(2.0, 0.5, 1.5),
-        );
+        let m = Mat4::from_trs(Vec3::new(1.0, 2.0, 3.0), Quat::from_axis_angle(Vec3::Y, 0.7), Vec3::new(2.0, 0.5, 1.5));
         let inv = m.try_inverse().expect("invertible");
         let i = m.mul(inv);
         for idx in 0..16 {
             let expected = if idx % 5 == 0 { 1.0 } else { 0.0 };
-            assert!(
-                (i.cols[idx] - expected).abs() < 1e-4,
-                "idx {idx}: {}",
-                i.cols[idx]
-            );
+            assert!((i.cols[idx] - expected).abs() < 1e-4, "idx {idx}: {}", i.cols[idx]);
         }
     }
 }

@@ -1,8 +1,6 @@
 //! TextField / TextArea 编辑操作。
 
-use crate::id::WidgetId;
-use crate::node::WidgetKind;
-use crate::tree::WidgetTree;
+use crate::{id::WidgetId, node::WidgetKind, tree::WidgetTree};
 
 /// 文本编辑动作。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,18 +28,17 @@ pub fn apply_text_input(
     actions: &[TextEditAction],
     mut clipboard: Option<&mut dyn crate::text::Clipboard>,
 ) -> bool {
-    let Some(id) = focused else {
+    let Some(id) = focused
+    else {
         return false;
     };
-    let is_field = tree
-        .node(id)
-        .map(|n| matches!(n.kind, WidgetKind::TextField | WidgetKind::TextArea))
-        .unwrap_or(false);
+    let is_field = tree.node(id).map(|n| matches!(n.kind, WidgetKind::TextField | WidgetKind::TextArea)).unwrap_or(false);
     if !is_field {
         return false;
     }
 
-    let Some(node) = tree.node_mut(id) else {
+    let Some(node) = tree.node_mut(id)
+    else {
         return false;
     };
     let text = node.content.text.get_or_insert_with(String::new);
@@ -202,10 +199,7 @@ fn selected_slice<'a>(text: &'a str, cursor: usize, anchor: Option<usize>) -> Op
 }
 
 fn byte_index(text: &str, char_index: usize) -> usize {
-    text.char_indices()
-        .nth(char_index)
-        .map(|(i, _)| i)
-        .unwrap_or(text.len())
+    text.char_indices().nth(char_index).map(|(i, _)| i).unwrap_or(text.len())
 }
 
 fn insert_at(text: &mut String, cursor: usize, typed: &str) {
@@ -232,7 +226,8 @@ fn remove_char_at(text: &mut String, cursor: usize) {
 }
 
 fn delete_range(text: &mut String, cursor: &mut usize, anchor: &mut Option<usize>) {
-    let Some(a) = *anchor else {
+    let Some(a) = *anchor
+    else {
         return;
     };
     let (lo, hi) = if a <= *cursor { (a, *cursor) } else { (*cursor, a) };
@@ -252,28 +247,13 @@ mod tests {
     fn insert_and_backspace_at_cursor() {
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        let id = text_field_widget()
-            .text("ab")
-            .mount(&mut tree, root)
-            .unwrap();
+        let id = text_field_widget().text("ab").mount(&mut tree, root).unwrap();
         if let Some(n) = tree.node_mut(id) {
             n.content.cursor = 2;
         }
-        assert!(apply_text_input(
-            &mut tree,
-            Some(id),
-            "c",
-            &[],
-            None,
-        ));
+        assert!(apply_text_input(&mut tree, Some(id), "c", &[], None,));
         assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("abc"));
-        assert!(apply_text_input(
-            &mut tree,
-            Some(id),
-            "",
-            &[TextEditAction::Backspace],
-            None,
-        ));
+        assert!(apply_text_input(&mut tree, Some(id), "", &[TextEditAction::Backspace], None,));
         assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("ab"));
     }
 
@@ -281,10 +261,7 @@ mod tests {
     fn selection_delete_replaces_range() {
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        let id = text_field_widget()
-            .text("hello")
-            .mount(&mut tree, root)
-            .unwrap();
+        let id = text_field_widget().text("hello").mount(&mut tree, root).unwrap();
         if let Some(n) = tree.node_mut(id) {
             n.content.sel_anchor = Some(1);
             n.content.cursor = 4;
@@ -299,42 +276,21 @@ mod tests {
 
         let mut tree = WidgetTree::new();
         let root = tree.root();
-        let id = text_field_widget()
-            .text("abcd")
-            .mount(&mut tree, root)
-            .unwrap();
+        let id = text_field_widget().text("abcd").mount(&mut tree, root).unwrap();
         if let Some(n) = tree.node_mut(id) {
             n.content.sel_anchor = Some(1);
             n.content.cursor = 3;
         }
         let mut clip = MemoryClipboard::new();
-        assert!(!apply_text_input(
-            &mut tree,
-            Some(id),
-            "",
-            &[TextEditAction::Copy],
-            Some(&mut clip),
-        ));
+        assert!(!apply_text_input(&mut tree, Some(id), "", &[TextEditAction::Copy], Some(&mut clip),));
         assert_eq!(clip.get_text().as_deref(), Some("bc"));
-        assert!(apply_text_input(
-            &mut tree,
-            Some(id),
-            "",
-            &[TextEditAction::Cut],
-            Some(&mut clip),
-        ));
+        assert!(apply_text_input(&mut tree, Some(id), "", &[TextEditAction::Cut], Some(&mut clip),));
         assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("ad"));
         if let Some(n) = tree.node_mut(id) {
             n.content.cursor = 1;
             n.content.sel_anchor = None;
         }
-        assert!(apply_text_input(
-            &mut tree,
-            Some(id),
-            "",
-            &[TextEditAction::Paste],
-            Some(&mut clip),
-        ));
+        assert!(apply_text_input(&mut tree, Some(id), "", &[TextEditAction::Paste], Some(&mut clip),));
         assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("abcd"));
     }
 }

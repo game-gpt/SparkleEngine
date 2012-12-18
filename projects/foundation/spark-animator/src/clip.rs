@@ -21,27 +21,12 @@ pub struct AnimationClip<T> {
 
 impl<T> AnimationClip<T> {
     pub fn new(name: impl Into<String>, duration: f32) -> Self {
-        Self {
-            name: name.into(),
-            duration,
-            tracks: Vec::new(),
-        }
+        Self { name: name.into(), duration, tracks: Vec::new() }
     }
 
     /// 单轨道剪辑。帧时间应由小到大。
-    pub fn single(
-        name: impl Into<String>,
-        duration: f32,
-        frames: Vec<AnimationFrame<T>>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            duration,
-            tracks: vec![AnimationTrack {
-                name: "main".into(),
-                frames,
-            }],
-        }
+    pub fn single(name: impl Into<String>, duration: f32, frames: Vec<AnimationFrame<T>>) -> Self {
+        Self { name: name.into(), duration, tracks: vec![AnimationTrack { name: "main".into(), frames }] }
     }
 }
 

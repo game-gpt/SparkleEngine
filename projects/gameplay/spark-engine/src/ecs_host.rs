@@ -6,8 +6,10 @@ use spark_ecs::{Schedule, World};
 use spark_input::Input;
 use spark_renderer::{Camera2d, DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d};
 
-use crate::render2d::{RenderFrame2d, RenderSchedule2d};
-use crate::render3d::{RenderFrame3d, RenderSchedule3d};
+use crate::{
+    render2d::{RenderFrame2d, RenderSchedule2d},
+    render3d::{RenderFrame3d, RenderSchedule3d},
+};
 
 /// 每帧写入 `World` 资源的帧快照（不含生命周期引用）。
 #[derive(Debug, Clone)]
@@ -43,21 +45,12 @@ pub struct DrawBuffer3d {
 }
 
 fn insert_frame_snapshot(world: &mut World, frame: &FrameCtx<'_>) {
-    let snap = FrameSnapshot {
-        dt: frame.dt,
-        screen_w: frame.screen_w,
-        screen_h: frame.screen_h,
-        input: frame.input.clone(),
-    };
+    let snap = FrameSnapshot { dt: frame.dt, screen_w: frame.screen_w, screen_h: frame.screen_h, input: frame.input.clone() };
     world.resources.insert(snap);
 }
 
 fn exit_requested(world: &World, host_exit: bool) -> bool {
-    host_exit
-        || world
-            .resources
-            .get::<AppExit>()
-            .is_some_and(|e| e.requested)
+    host_exit || world.resources.get::<AppExit>().is_some_and(|e| e.requested)
 }
 
 /// ECS 驱动的 2D 宿主。
@@ -77,14 +70,7 @@ pub struct EcsHost2d {
 
 impl EcsHost2d {
     pub fn new(world: World, schedule: Schedule) -> Self {
-        Self {
-            world,
-            schedule,
-            renderer: RenderSchedule2d::new(),
-            draw_schedule: Schedule::new(),
-            exit: false,
-            draw_fallback: None,
-        }
+        Self { world, schedule, renderer: RenderSchedule2d::new(), draw_schedule: Schedule::new(), exit: false, draw_fallback: None }
     }
 
     pub fn with_renderer(mut self, renderer: RenderSchedule2d) -> Self {
@@ -97,10 +83,7 @@ impl EcsHost2d {
         self
     }
 
-    pub fn with_draw_fallback(
-        mut self,
-        f: impl FnMut(&mut World, &mut DrawList) + Send + 'static,
-    ) -> Self {
+    pub fn with_draw_fallback(mut self, f: impl FnMut(&mut World, &mut DrawList) + Send + 'static) -> Self {
         self.draw_fallback = Some(Box::new(f));
         self
     }
@@ -131,24 +114,13 @@ impl GameHost for EcsHost2d {
             draw.set_camera(cam);
         }
         if !self.renderer.is_empty() {
-            let (screen_w, screen_h) = self
-                .world
-                .resources
-                .get::<FrameSnapshot>()
-                .map(|s| (s.screen_w, s.screen_h))
-                .unwrap_or((0.0, 0.0));
-            let frame = RenderFrame2d {
-                screen_w,
-                screen_h,
-                clear: draw.clear,
-            };
+            let (screen_w, screen_h) = self.world.resources.get::<FrameSnapshot>().map(|s| (s.screen_w, s.screen_h)).unwrap_or((0.0, 0.0));
+            let frame = RenderFrame2d { screen_w, screen_h, clear: draw.clear };
             self.renderer.draw(&mut self.world, &frame, draw);
             return;
         }
         if !self.draw_schedule.is_empty() {
-            self.world.resources.insert(DrawScratch2d {
-                clear: draw.clear,
-            });
+            self.world.resources.insert(DrawScratch2d { clear: draw.clear });
             self.draw_schedule.run(&mut self.world);
             if let Some(buf) = self.world.resources.get_mut::<DrawBuffer2d>() {
                 if let Some(list) = buf.list.take() {
@@ -188,14 +160,7 @@ pub struct EcsHost3d {
 
 impl EcsHost3d {
     pub fn new(world: World, schedule: Schedule) -> Self {
-        Self {
-            world,
-            schedule,
-            renderer: RenderSchedule3d::new(),
-            exit: false,
-            grab_cursor: true,
-            draw_fallback: None,
-        }
+        Self { world, schedule, renderer: RenderSchedule3d::new(), exit: false, grab_cursor: true, draw_fallback: None }
     }
 
     pub fn with_renderer(mut self, renderer: RenderSchedule3d) -> Self {
@@ -203,10 +168,7 @@ impl EcsHost3d {
         self
     }
 
-    pub fn with_draw_fallback(
-        mut self,
-        f: impl FnMut(&World, &mut DrawList3d) + Send + 'static,
-    ) -> Self {
+    pub fn with_draw_fallback(mut self, f: impl FnMut(&World, &mut DrawList3d) + Send + 'static) -> Self {
         self.draw_fallback = Some(Box::new(f));
         self
     }
@@ -234,17 +196,8 @@ impl GameHost3d for EcsHost3d {
             }
         }
         if !self.renderer.is_empty() {
-            let (screen_w, screen_h) = self
-                .world
-                .resources
-                .get::<FrameSnapshot>()
-                .map(|s| (s.screen_w, s.screen_h))
-                .unwrap_or((0.0, 0.0));
-            let frame = RenderFrame3d {
-                screen_w,
-                screen_h,
-                clear: draw.clear,
-            };
+            let (screen_w, screen_h) = self.world.resources.get::<FrameSnapshot>().map(|s| (s.screen_w, s.screen_h)).unwrap_or((0.0, 0.0));
+            let frame = RenderFrame3d { screen_w, screen_h, clear: draw.clear };
             self.renderer.draw(&mut self.world, &frame, draw);
             return;
         }
@@ -271,13 +224,7 @@ mod tests {
     use spark_renderer::{Mat4, WindowConfig};
 
     fn frame_ctx(input: &Input) -> FrameCtx<'_> {
-        FrameCtx {
-            input,
-            dt: 1.0 / 60.0,
-            screen_w: 1280.0,
-            screen_h: 720.0,
-            timing: Default::default(),
-        }
+        FrameCtx { input, dt: 1.0 / 60.0, screen_w: 1280.0, screen_h: 720.0, timing: Default::default() }
     }
 
     #[test]
@@ -290,8 +237,7 @@ mod tests {
             w.resources.get_mut::<DrawBuffer2d>().unwrap().list = Some(list);
         });
         // 仿真 schedule 空；绘制走 draw_schedule
-        let mut host =
-            EcsHost2d::new(world, Schedule::new()).with_draw_schedule(schedule);
+        let mut host = EcsHost2d::new(world, Schedule::new()).with_draw_schedule(schedule);
         let input = Input::default();
         host.update(&frame_ctx(&input));
         let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));

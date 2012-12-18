@@ -2,9 +2,11 @@
 
 use spark_core::{Rect, Vec2};
 
-use crate::id::WidgetId;
-use crate::layout::{Layout, LayoutSpec, Size};
-use crate::tree::WidgetTree;
+use crate::{
+    id::WidgetId,
+    layout::{Layout, LayoutSpec, Size},
+    tree::WidgetTree,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OverlayLayer {
@@ -35,13 +37,7 @@ pub struct OverlayManager {
 
 impl OverlayManager {
     pub fn push(&mut self, id: WidgetId, layer: OverlayLayer) {
-        self.push_entry(OverlayEntry {
-            id,
-            layer,
-            anchor: None,
-            dismiss_on_outside: matches!(layer, OverlayLayer::Popup),
-            ttl: None,
-        });
+        self.push_entry(OverlayEntry { id, layer, anchor: None, dismiss_on_outside: matches!(layer, OverlayLayer::Popup), ttl: None });
     }
 
     pub fn push_entry(&mut self, entry: OverlayEntry) {
@@ -60,7 +56,8 @@ impl OverlayManager {
             if e.layer == layer {
                 removed.push(e.id);
                 false
-            } else {
+            }
+            else {
                 true
             }
         });
@@ -81,11 +78,7 @@ impl OverlayManager {
     }
 
     pub fn top_modal(&self) -> Option<WidgetId> {
-        self.entries
-            .iter()
-            .rev()
-            .find(|e| e.layer == OverlayLayer::Modal)
-            .map(|e| e.id)
+        self.entries.iter().rev().find(|e| e.layer == OverlayLayer::Modal).map(|e| e.id)
     }
 
     /// 弹出并返回最顶层条目。
@@ -118,16 +111,15 @@ impl OverlayManager {
     pub fn position_anchored(&self, tree: &mut WidgetTree, screen: Vec2) {
         let snapshot: Vec<_> = self.entries.iter().cloned().collect();
         for entry in snapshot {
-            let Some(anchor_id) = entry.anchor else {
+            let Some(anchor_id) = entry.anchor
+            else {
                 continue;
             };
-            let Some(anchor) = tree.node(anchor_id).map(|n| n.computed.rect) else {
+            let Some(anchor) = tree.node(anchor_id).map(|n| n.computed.rect)
+            else {
                 continue;
             };
-            let desired = tree
-                .node(entry.id)
-                .map(|n| n.computed.desired)
-                .unwrap_or(crate::layout::Size2::new(160.0, 40.0));
+            let desired = tree.node(entry.id).map(|n| n.computed.desired).unwrap_or(crate::layout::Size2::new(160.0, 40.0));
             let w = desired.width.max(1.0);
             let h = desired.height.max(1.0);
             let mut x = anchor.x;

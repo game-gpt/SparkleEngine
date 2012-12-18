@@ -2,8 +2,10 @@
 
 use std::marker::PhantomData;
 
-use crate::clip::{AnimationClip, LoopMode};
-use crate::sampler::sample_clip;
+use crate::{
+    clip::{AnimationClip, LoopMode},
+    sampler::sample_clip,
+};
 
 /// 一个剪辑的播放时钟。`T` 只标记这段剪辑的采样值类型。
 #[derive(Debug, Clone)]
@@ -18,14 +20,7 @@ pub struct AnimationPlayer<T> {
 
 impl<T> Default for AnimationPlayer<T> {
     fn default() -> Self {
-        Self {
-            time: 0.0,
-            speed: 1.0,
-            loop_mode: LoopMode::Repeat,
-            playing: true,
-            finished: false,
-            _sample: PhantomData,
-        }
+        Self { time: 0.0, speed: 1.0, loop_mode: LoopMode::Repeat, playing: true, finished: false, _sample: PhantomData }
     }
 }
 
@@ -35,10 +30,7 @@ impl<T> AnimationPlayer<T> {
     }
 
     pub fn with_loop(mode: LoopMode) -> Self {
-        Self {
-            loop_mode: mode,
-            ..Self::default()
-        }
+        Self { loop_mode: mode, ..Self::default() }
     }
 
     pub fn play(&mut self) {
@@ -83,7 +75,8 @@ impl<T> AnimationPlayer<T> {
                 if self.time >= duration {
                     self.time = duration;
                     self.finished = true;
-                } else if self.time < 0.0 {
+                }
+                else if self.time < 0.0 {
                     self.time = 0.0;
                 }
             }

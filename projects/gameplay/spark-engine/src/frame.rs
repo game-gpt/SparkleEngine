@@ -37,19 +37,11 @@ impl Default for FrameLoopConfig {
 
 impl FrameLoopConfig {
     pub fn variable() -> Self {
-        Self {
-            step: StepMode::Variable,
-            time_scale: 1.0,
-            paused: false,
-        }
+        Self { step: StepMode::Variable, time_scale: 1.0, paused: false }
     }
 
     pub fn fixed(dt: f32, max_substeps: u32) -> Self {
-        Self {
-            step: StepMode::Fixed { dt, max_substeps },
-            time_scale: 1.0,
-            paused: false,
-        }
+        Self { step: StepMode::Fixed { dt, max_substeps }, time_scale: 1.0, paused: false }
     }
 }
 
@@ -115,10 +107,7 @@ pub struct LoopedHost2d<H> {
 
 impl<H: GameHost> LoopedHost2d<H> {
     pub fn new(inner: H, config: FrameLoopConfig) -> Self {
-        Self {
-            inner,
-            loop_: FrameLoop::new(&config),
-        }
+        Self { inner, loop_: FrameLoop::new(&config) }
     }
 
     pub fn frame_loop(&self) -> &FrameLoop {
@@ -152,10 +141,7 @@ pub struct LoopedHost3d<H> {
 
 impl<H: GameHost3d> LoopedHost3d<H> {
     pub fn new(inner: H, config: FrameLoopConfig) -> Self {
-        Self {
-            inner,
-            loop_: FrameLoop::new(&config),
-        }
+        Self { inner, loop_: FrameLoop::new(&config) }
     }
 }
 

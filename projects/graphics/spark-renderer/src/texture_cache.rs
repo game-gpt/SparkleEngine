@@ -6,8 +6,7 @@ use std::collections::HashMap;
 
 use spark_core::SparkError;
 
-use crate::draw::DrawList;
-use crate::texture::TextureId;
+use crate::{draw::DrawList, texture::TextureId};
 
 /// 纹理句柄缓存。键由游戏决定，例如路径或图集名。
 #[derive(Debug, Default, Clone)]
@@ -68,19 +67,13 @@ mod tests {
             *calls += 1;
             Ok((1, 1, vec![255, 0, 0, 255]))
         };
-        let a = cache
-            .get_or_upload(&mut draw, "icon", || load(&mut calls))
-            .unwrap();
-        let b = cache
-            .get_or_upload(&mut draw, "icon", || load(&mut calls))
-            .unwrap();
+        let a = cache.get_or_upload(&mut draw, "icon", || load(&mut calls)).unwrap();
+        let b = cache.get_or_upload(&mut draw, "icon", || load(&mut calls)).unwrap();
         assert_eq!(a, b);
         assert_eq!(calls, 1);
         assert_eq!(draw.texture_uploads.len(), 1);
         cache.invalidate("icon");
-        let _ = cache
-            .get_or_upload(&mut draw, "icon", || load(&mut calls))
-            .unwrap();
+        let _ = cache.get_or_upload(&mut draw, "icon", || load(&mut calls)).unwrap();
         assert_eq!(calls, 2);
     }
 }

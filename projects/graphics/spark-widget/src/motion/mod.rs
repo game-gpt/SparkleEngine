@@ -10,9 +10,11 @@ pub use transition::{StyleProperty, Transition};
 
 use std::collections::HashMap;
 
-use crate::id::WidgetId;
-use crate::node::{WidgetKind, WidgetNode};
-use crate::tree::WidgetTree;
+use crate::{
+    id::WidgetId,
+    node::{WidgetKind, WidgetNode},
+    tree::WidgetTree,
+};
 
 #[derive(Debug, Clone, Copy)]
 struct Track {
@@ -52,22 +54,8 @@ struct WidgetMotion {
 impl Default for WidgetMotion {
     fn default() -> Self {
         Self {
-            opacity: Track {
-                from: 1.0,
-                to: 1.0,
-                elapsed: 0.0,
-                duration: 0.001,
-                easing: Easing::EaseOut,
-                value: 1.0,
-            },
-            scale: Track {
-                from: 1.0,
-                to: 1.0,
-                elapsed: 0.0,
-                duration: 0.001,
-                easing: Easing::EaseOut,
-                value: 1.0,
-            },
+            opacity: Track { from: 1.0, to: 1.0, elapsed: 0.0, duration: 0.001, easing: Easing::EaseOut, value: 1.0 },
+            scale: Track { from: 1.0, to: 1.0, elapsed: 0.0, duration: 0.001, easing: Easing::EaseOut, value: 1.0 },
         }
     }
 }
@@ -81,10 +69,7 @@ pub struct MotionSample {
 
 impl Default for MotionSample {
     fn default() -> Self {
-        Self {
-            opacity: 1.0,
-            scale: 1.0,
-        }
+        Self { opacity: 1.0, scale: 1.0 }
     }
 }
 
@@ -105,16 +90,8 @@ impl MotionManager {
     pub fn new() -> Self {
         Self {
             widgets: HashMap::new(),
-            opacity_transition: Transition {
-                property: StyleProperty::Opacity,
-                duration: 0.12,
-                easing: Easing::EaseOut,
-            },
-            scale_transition: Transition {
-                property: StyleProperty::Scale,
-                duration: 0.09,
-                easing: Easing::EaseOut,
-            },
+            opacity_transition: Transition { property: StyleProperty::Opacity, duration: 0.12, easing: Easing::EaseOut },
+            scale_transition: Transition { property: StyleProperty::Scale, duration: 0.09, easing: Easing::EaseOut },
         }
     }
 
@@ -122,7 +99,8 @@ impl MotionManager {
     pub fn sync_and_tick(&mut self, tree: &WidgetTree, dt: f32) {
         let ids = tree.ids();
         for id in ids {
-            let Some(node) = tree.node(id) else {
+            let Some(node) = tree.node(id)
+            else {
                 continue;
             };
             if !should_animate(node) {
@@ -130,16 +108,8 @@ impl MotionManager {
             }
             let (opacity, scale) = targets_for(node);
             let entry = self.widgets.entry(id).or_default();
-            entry.opacity.set_target(
-                opacity,
-                self.opacity_transition.duration,
-                self.opacity_transition.easing,
-            );
-            entry.scale.set_target(
-                scale,
-                self.scale_transition.duration,
-                self.scale_transition.easing,
-            );
+            entry.opacity.set_target(opacity, self.opacity_transition.duration, self.opacity_transition.easing);
+            entry.scale.set_target(scale, self.scale_transition.duration, self.scale_transition.easing);
             entry.opacity.tick(dt);
             entry.scale.tick(dt);
         }
@@ -154,13 +124,7 @@ impl MotionManager {
     }
 
     pub fn sample(&self, id: WidgetId) -> MotionSample {
-        self.widgets
-            .get(&id)
-            .map(|m| MotionSample {
-                opacity: m.opacity.value,
-                scale: m.scale.value,
-            })
-            .unwrap_or_default()
+        self.widgets.get(&id).map(|m| MotionSample { opacity: m.opacity.value, scale: m.scale.value }).unwrap_or_default()
     }
 }
 
@@ -189,7 +153,8 @@ fn targets_for(node: &WidgetNode) -> (f32, f32) {
     if node.state.pressed {
         opacity = 0.92;
         scale = 0.97;
-    } else if node.state.hovered {
+    }
+    else if node.state.hovered {
         opacity = 1.0;
         scale = 1.03;
     }
@@ -202,19 +167,17 @@ fn targets_for(node: &WidgetNode) -> (f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{WidgetKind, WidgetStateFlags};
-    use crate::tree::WidgetTree;
+    use crate::{
+        node::{WidgetKind, WidgetStateFlags},
+        tree::WidgetTree,
+    };
 
     #[test]
     fn hover_raises_scale_over_time() {
         let mut tree = WidgetTree::new();
         let id = tree.mount(tree.root(), WidgetKind::Button).unwrap();
         if let Some(node) = tree.node_mut(id) {
-            node.state = WidgetStateFlags {
-                hovered: true,
-                visible: true,
-                ..WidgetStateFlags::default()
-            };
+            node.state = WidgetStateFlags { hovered: true, visible: true, ..WidgetStateFlags::default() };
         }
         let mut motion = MotionManager::new();
         motion.sync_and_tick(&tree, 0.0);

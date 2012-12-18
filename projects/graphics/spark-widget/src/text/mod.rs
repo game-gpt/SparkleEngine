@@ -4,7 +4,7 @@ mod clipboard;
 mod edit;
 
 pub use clipboard::{Clipboard, MemoryClipboard};
-pub use edit::{apply_text_input, TextEditAction};
+pub use edit::{TextEditAction, apply_text_input};
 
 use spark_core::{Color, Vec2};
 use spark_font::GlyphCache;
@@ -19,11 +19,7 @@ pub struct TextStyle {
 
 impl Default for TextStyle {
     fn default() -> Self {
-        Self {
-            size: 16.0,
-            color: Color::rgb(0.92, 0.94, 0.96),
-            line_height: 1.25,
-        }
+        Self { size: 16.0, color: Color::rgb(0.92, 0.94, 0.96), line_height: 1.25 }
     }
 }
 
@@ -74,11 +70,7 @@ impl TextMeasurer for FontMeasurer {
         let px = style.size.max(1.0);
         if max_width.is_none() {
             let w = self.cache.measure(text, px);
-            return TextLayout {
-                size: Vec2::new(w, px * style.line_height),
-                baseline: px,
-                line_count: 1,
-            };
+            return TextLayout { size: Vec2::new(w, px * style.line_height), baseline: px, line_count: 1 };
         }
         // 简单按字符折行（后续接完整 shaping）。
         let max_w = max_width.unwrap().max(0.0);
@@ -86,16 +78,13 @@ impl TextMeasurer for FontMeasurer {
         let mut max_line = 0.0_f32;
         let mut lines = 1_usize;
         for ch in text.chars() {
-            let adv = self
-                .cache
-                .glyph(ch, px)
-                .map(|g| g.advance)
-                .unwrap_or(px * 0.5);
+            let adv = self.cache.glyph(ch, px).map(|g| g.advance).unwrap_or(px * 0.5);
             if line_w + adv > max_w && line_w > 0.0 {
                 max_line = max_line.max(line_w);
                 line_w = adv;
                 lines += 1;
-            } else {
+            }
+            else {
                 line_w += adv;
             }
         }
@@ -128,11 +117,7 @@ fn measure_estimate(text: &str, style: &TextStyle, max_width: Option<f32>) -> Te
         }
     }
     let w = text.chars().count() as f32 * char_w;
-    TextLayout {
-        size: Vec2::new(w, style.size * style.line_height),
-        baseline: style.size,
-        line_count: 1,
-    }
+    TextLayout { size: Vec2::new(w, style.size * style.line_height), baseline: style.size, line_count: 1 }
 }
 
 #[cfg(test)]
@@ -141,10 +126,7 @@ mod tests {
 
     #[test]
     fn estimate_wraps_when_max_width_set() {
-        let style = TextStyle {
-            size: 10.0,
-            ..TextStyle::default()
-        };
+        let style = TextStyle { size: 10.0, ..TextStyle::default() };
         let layout = measure_plain("abcdefghij", &style, Some(30.0));
         assert!(layout.line_count >= 2);
     }

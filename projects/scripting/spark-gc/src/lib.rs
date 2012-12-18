@@ -3,8 +3,7 @@
 //! 不变式：所有堆对象经 [`GcHandle`] 引用；根由宿主在 [`Heap::collect`] 前登记。
 //! 栈值 [`Value`] 含非堆变体（数字、实体 ID、函数下标），GC 只追踪 [`Value::Handle`]。
 
-use std::collections::HashMap;
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 /// 堆对象句柄（分代可后续扩展；当前为槽位索引）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,7 +16,10 @@ pub enum GcObject {
     Array(Vec<Value>),
     Table(HashMap<String, Value>),
     /// 闭包：模块内函数下标 + 已捕获上值。
-    Closure { func: u32, upvalues: Vec<Value> },
+    Closure {
+        func: u32,
+        upvalues: Vec<Value>,
+    },
 }
 
 /// 运行时值（栈与槽共用）。
@@ -125,13 +127,7 @@ pub struct Heap {
 
 impl Heap {
     pub fn new() -> Self {
-        Self {
-            slots: Vec::new(),
-            free: Vec::new(),
-            allocs_since_gc: 0,
-            gc_threshold: 256,
-            total_allocs: 0,
-        }
+        Self { slots: Vec::new(), free: Vec::new(), allocs_since_gc: 0, gc_threshold: 256, total_allocs: 0 }
     }
 
     pub fn alloc(&mut self, obj: GcObject) -> GcHandle {
@@ -145,28 +141,16 @@ impl Heap {
             return GcHandle(idx);
         }
         let idx = self.slots.len() as u32;
-        self.slots.push(Slot {
-            obj,
-            marked: false,
-            live: true,
-        });
+        self.slots.push(Slot { obj, marked: false, live: true });
         GcHandle(idx)
     }
 
     pub fn get(&self, h: GcHandle) -> Result<&GcObject, GcError> {
-        self.slots
-            .get(h.0 as usize)
-            .filter(|s| s.live)
-            .map(|s| &s.obj)
-            .ok_or(GcError::BadHandle(h))
+        self.slots.get(h.0 as usize).filter(|s| s.live).map(|s| &s.obj).ok_or(GcError::BadHandle(h))
     }
 
     pub fn get_mut(&mut self, h: GcHandle) -> Result<&mut GcObject, GcError> {
-        self.slots
-            .get_mut(h.0 as usize)
-            .filter(|s| s.live)
-            .map(|s| &mut s.obj)
-            .ok_or(GcError::BadHandle(h))
+        self.slots.get_mut(h.0 as usize).filter(|s| s.live).map(|s| &mut s.obj).ok_or(GcError::BadHandle(h))
     }
 
     pub fn alloc_string(&mut self, s: impl Into<String>) -> Value {
@@ -185,7 +169,8 @@ impl Heap {
             }
         }
         while let Some(h) = stack.pop() {
-            let Some(slot) = self.slots.get_mut(h.0 as usize) else {
+            let Some(slot) = self.slots.get_mut(h.0 as usize)
+            else {
                 continue;
             };
             if !slot.live || slot.marked {
@@ -225,7 +210,8 @@ impl Heap {
             }
             if slot.marked {
                 slot.marked = false;
-            } else {
+            }
+            else {
                 slot.live = false;
                 slot.obj = GcObject::String(String::new());
                 self.free.push(i as u32);

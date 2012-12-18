@@ -5,14 +5,15 @@ use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
 use spark_widget::{Insets, UiCommand, UiFrame, UiRuntime};
 
-use crate::play::PlaySession;
-use crate::project::{ProjectInfo, list_asset_entries};
-use crate::shell;
-use crate::state::{
-    BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_PAUSE, CMD_PLAY,
-    CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE,
-    CMD_TOOL_ROTATE, CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab, EditorState, PlayMode, Tool,
-    default_selected, parse_select_cmd,
+use crate::{
+    play::PlaySession,
+    project::{ProjectInfo, list_asset_entries},
+    shell,
+    state::{
+        BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME,
+        CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE, CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab,
+        EditorState, PlayMode, Tool, default_selected, parse_select_cmd,
+    },
 };
 
 pub struct StudioApp {
@@ -31,27 +32,9 @@ impl StudioApp {
         let assets = list_asset_entries(&project.root);
         let mut state = EditorState::default();
         state.selected = default_selected(project.kind);
-        let inferred = if project.kind_inferred {
-            "（推断）"
-        } else {
-            ""
-        };
-        state.status = format!(
-            "已打开 {} · kind={}{}",
-            project.name,
-            project.kind.as_str(),
-            inferred
-        );
-        Self {
-            ui: UiRuntime::new(),
-            project,
-            assets,
-            state,
-            play: None,
-            exit: false,
-            mounted: false,
-            dirty_ui: true,
-        }
+        let inferred = if project.kind_inferred { "（推断）" } else { "" };
+        state.status = format!("已打开 {} · kind={}{}", project.name, project.kind.as_str(), inferred);
+        Self { ui: UiRuntime::new(), project, assets, state, play: None, exit: false, mounted: false, dirty_ui: true }
     }
 
     /// `--play`：跳过编辑器，直接进入对局。
@@ -72,8 +55,7 @@ impl StudioApp {
     }
 
     fn remount(&mut self) {
-        self.ui
-            .mount_scene(shell::build_shell(&self.project, &self.state, &self.assets));
+        self.ui.mount_scene(shell::build_shell(&self.project, &self.state, &self.assets));
         self.mounted = true;
         self.dirty_ui = false;
     }
@@ -173,7 +155,8 @@ impl StudioApp {
                     if let Some(eid) = parse_select_cmd(id) {
                         self.state.selected = eid;
                         self.dirty_ui = true;
-                    } else {
+                    }
+                    else {
                         self.state.status = format!("命令 {id}");
                         self.dirty_ui = true;
                     }

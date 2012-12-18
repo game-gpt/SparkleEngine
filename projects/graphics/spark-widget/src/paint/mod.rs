@@ -3,21 +3,17 @@
 use spark_core::{Color, Rect, Vec2};
 use spark_renderer::DrawList;
 
-use crate::asset::UiTextureResolver;
-use crate::motion::{MotionManager, MotionSample};
-use crate::node::{WidgetKind, WidgetNode};
-use crate::style::{ComputedStyle, Theme};
-use crate::text::{self, TextStyle};
-use crate::tree::WidgetTree;
+use crate::{
+    asset::UiTextureResolver,
+    motion::{MotionManager, MotionSample},
+    node::{WidgetKind, WidgetNode},
+    style::{ComputedStyle, Theme},
+    text::{self, TextStyle},
+    tree::WidgetTree,
+};
 
 /// 遍历树并写入绘制命令。
-pub fn paint_tree(
-    tree: &WidgetTree,
-    theme: &Theme,
-    motion: &MotionManager,
-    textures: &mut dyn UiTextureResolver,
-    draw: &mut DrawList,
-) {
+pub fn paint_tree(tree: &WidgetTree, theme: &Theme, motion: &MotionManager, textures: &mut dyn UiTextureResolver, draw: &mut DrawList) {
     draw.begin_hud();
     paint_node(tree, theme, motion, textures, draw, tree.root());
 }
@@ -30,7 +26,8 @@ fn paint_node(
     draw: &mut DrawList,
     id: crate::id::WidgetId,
 ) {
-    let Some(node) = tree.node(id) else {
+    let Some(node) = tree.node(id)
+    else {
         return;
     };
     if !node.state.visible {
@@ -72,10 +69,7 @@ fn paint_scrollbar(draw: &mut DrawList, theme: &Theme, node: &WidgetNode) {
     let max_offset = (scroll.content_size.y - scroll.viewport_size.y).max(1.0);
     let t = (scroll.offset.y / max_offset).clamp(0.0, 1.0);
     let thumb_y = track.y + (track_h - thumb_h) * t;
-    draw.fill_rect(
-        Rect::new(track.x + track.w - bar_w, thumb_y, bar_w, thumb_h),
-        with_alpha(theme.colors.border, 0.9),
-    );
+    draw.fill_rect(Rect::new(track.x + track.w - bar_w, thumb_y, bar_w, thumb_h), with_alpha(theme.colors.border, 0.9));
 }
 
 fn paint_widget(
@@ -130,18 +124,14 @@ fn scaled_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(cx - w * 0.5, cy - h * 0.5, w, h)
 }
 
-fn paint_image(
-    draw: &mut DrawList,
-    textures: &mut dyn UiTextureResolver,
-    node: &WidgetNode,
-    style: &ComputedStyle,
-    rect: Rect,
-) {
+fn paint_image(draw: &mut DrawList, textures: &mut dyn UiTextureResolver, node: &WidgetNode, style: &ComputedStyle, rect: Rect) {
     fill_if_opaque(draw, rect, style);
-    let Some(image) = node.content.image.as_ref() else {
+    let Some(image) = node.content.image.as_ref()
+    else {
         return;
     };
-    let Some(resolved) = textures.resolve(image.asset) else {
+    let Some(resolved) = textures.resolve(image.asset)
+    else {
         return;
     };
     let tint = with_alpha(image.tint, style.opacity);
@@ -149,7 +139,8 @@ fn paint_image(
 }
 
 fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, _theme: &Theme) {
-    let Some(text) = node.content.text.as_deref() else {
+    let Some(text) = node.content.text.as_deref()
+    else {
         return;
     };
     let size = style.font_size;
@@ -158,60 +149,30 @@ fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, _t
     draw.text(rect.x, rect.y + 2.0, size, color, text);
 }
 
-fn paint_button(
-    draw: &mut DrawList,
-    node: &WidgetNode,
-    style: &ComputedStyle,
-    _theme: &Theme,
-    rect: Rect,
-) {
+fn paint_button(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, _theme: &Theme, rect: Rect) {
     fill_if_opaque(draw, rect, style);
     if node.state.focused {
         stroke_rect(draw, rect, with_alpha(style.border, style.opacity), 2.0);
     }
     if let Some(text) = node.content.text.as_deref() {
         let size = style.font_size;
-        let measured = text::measure_plain(
-            text,
-            &TextStyle {
-                size,
-                color: style.foreground,
-                ..TextStyle::default()
-            },
-            Some(rect.w),
-        );
+        let measured = text::measure_plain(text, &TextStyle { size, color: style.foreground, ..TextStyle::default() }, Some(rect.w));
         let x = rect.x + ((rect.w - measured.size.x) * 0.5).max(0.0);
         let y = rect.y + ((rect.h - measured.size.y) * 0.5).max(0.0);
-        draw.text(
-            x,
-            y,
-            size,
-            with_alpha(style.foreground, style.opacity),
-            text,
-        );
+        draw.text(x, y, size, with_alpha(style.foreground, style.opacity), text);
     }
 }
 
 fn paint_checkbox(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
     let box_size = 18.0;
     let rect = node.computed.content_rect;
-    let box_rect = Rect::new(
-        rect.x,
-        rect.y + ((rect.h - box_size) * 0.5).max(0.0),
-        box_size,
-        box_size,
-    );
+    let box_rect = Rect::new(rect.x, rect.y + ((rect.h - box_size) * 0.5).max(0.0), box_size, box_size);
     draw.fill_rect(box_rect, with_alpha(theme.colors.background, style.opacity));
     stroke_rect(draw, box_rect, with_alpha(style.border, style.opacity), 1.0);
     if node.content.checked || node.state.checked {
         let inset = 4.0;
         draw.fill_rect(
-            Rect::new(
-                box_rect.x + inset,
-                box_rect.y + inset,
-                box_size - inset * 2.0,
-                box_size - inset * 2.0,
-            ),
+            Rect::new(box_rect.x + inset, box_rect.y + inset, box_size - inset * 2.0, box_size - inset * 2.0),
             with_alpha(style.accent, style.opacity),
         );
     }
@@ -226,12 +187,7 @@ fn paint_checkbox(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle,
         );
     }
     if node.state.focused {
-        stroke_rect(
-            draw,
-            node.computed.rect,
-            with_alpha(style.border, style.opacity),
-            2.0,
-        );
+        stroke_rect(draw, node.computed.rect, with_alpha(style.border, style.opacity), 2.0);
     }
 }
 
@@ -250,28 +206,15 @@ fn paint_slider(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, t
     let t = value_t(&node.content);
     let fill_w = (track.w * t).max(0.0);
     if fill_w > 0.0 {
-        draw.fill_rect(
-            Rect::new(track.x, track.y, fill_w, track.h),
-            with_alpha(style.accent, style.opacity),
-        );
+        draw.fill_rect(Rect::new(track.x, track.y, fill_w, track.h), with_alpha(style.accent, style.opacity));
     }
 
     let thumb = 14.0;
     let thumb_x = track.x + fill_w - thumb * 0.5;
-    let thumb_rect = Rect::new(
-        thumb_x.clamp(track.x, track.x + track.w - thumb),
-        track_y + track_h * 0.5 - thumb * 0.5,
-        thumb,
-        thumb,
-    );
+    let thumb_rect = Rect::new(thumb_x.clamp(track.x, track.x + track.w - thumb), track_y + track_h * 0.5 - thumb * 0.5, thumb, thumb);
     draw.fill_rect(thumb_rect, with_alpha(style.foreground, style.opacity));
     if node.state.focused {
-        stroke_rect(
-            draw,
-            node.computed.rect,
-            with_alpha(style.border, style.opacity),
-            2.0,
-        );
+        stroke_rect(draw, node.computed.rect, with_alpha(style.border, style.opacity), 2.0);
     }
 }
 
@@ -281,21 +224,13 @@ fn paint_progress(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle,
     let t = value_t(&node.content);
     let fill_w = (rect.w * t).max(0.0);
     if fill_w > 0.0 {
-        draw.fill_rect(
-            Rect::new(rect.x, rect.y, fill_w, rect.h),
-            with_alpha(style.accent, style.opacity),
-        );
+        draw.fill_rect(Rect::new(rect.x, rect.y, fill_w, rect.h), with_alpha(style.accent, style.opacity));
     }
 }
 
 fn paint_text_field(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
     fill_if_opaque(draw, node.computed.rect, style);
-    stroke_rect(
-        draw,
-        node.computed.rect,
-        with_alpha(style.border, style.opacity),
-        1.0,
-    );
+    stroke_rect(draw, node.computed.rect, with_alpha(style.border, style.opacity), 1.0);
     let text = node.content.text.as_deref().unwrap_or("");
     let composition = node.content.composition.as_str();
     let size = theme.typography.body_size;
@@ -311,72 +246,38 @@ fn paint_text_field(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyl
             let (lo, hi) = if a < cursor { (a, cursor) } else { (cursor, a) };
             let x0 = text_x + lo as f32 * char_w;
             let x1 = text_x + hi as f32 * char_w;
-            draw.fill_rect(
-                Rect::new(x0, text_y, (x1 - x0).max(1.0), size),
-                with_alpha(theme.colors.accent, style.opacity * 0.35),
-            );
+            draw.fill_rect(Rect::new(x0, text_y, (x1 - x0).max(1.0), size), with_alpha(theme.colors.accent, style.opacity * 0.35));
         }
     }
 
     let before: String = text.chars().take(cursor).collect();
     let after: String = text.chars().skip(cursor).collect();
-    draw.text(
-        text_x,
-        text_y,
-        size,
-        with_alpha(style.foreground, style.opacity),
-        &before,
-    );
+    draw.text(text_x, text_y, size, with_alpha(style.foreground, style.opacity), &before);
     let mut x = text_x + before.chars().count() as f32 * char_w;
     if !composition.is_empty() {
         let comp_w = composition.chars().count() as f32 * char_w;
-        draw.text(
-            x,
-            text_y,
-            size,
-            with_alpha(theme.colors.accent, style.opacity),
-            composition,
-        );
-        draw.fill_rect(
-            Rect::new(x, text_y + size - 2.0, comp_w.max(1.0), 2.0),
-            with_alpha(theme.colors.accent, style.opacity),
-        );
+        draw.text(x, text_y, size, with_alpha(theme.colors.accent, style.opacity), composition);
+        draw.fill_rect(Rect::new(x, text_y + size - 2.0, comp_w.max(1.0), 2.0), with_alpha(theme.colors.accent, style.opacity));
         x += comp_w;
     }
     if !after.is_empty() {
-        draw.text(
-            x,
-            text_y,
-            size,
-            with_alpha(style.foreground, style.opacity),
-            &after,
-        );
+        draw.text(x, text_y, size, with_alpha(style.foreground, style.opacity), &after);
     }
 
     if node.state.focused {
-        stroke_rect(
-            draw,
-            node.computed.rect,
-            with_alpha(theme.colors.accent, style.opacity),
-            2.0,
-        );
+        stroke_rect(draw, node.computed.rect, with_alpha(theme.colors.accent, style.opacity), 2.0);
         let caret_x = if composition.is_empty() {
             text_x + cursor as f32 * char_w
-        } else {
+        }
+        else {
             text_x + (before.chars().count() + composition.chars().count()) as f32 * char_w
         };
-        draw.fill_rect(
-            Rect::new(caret_x, text_y, 1.5, size),
-            with_alpha(theme.colors.accent, style.opacity),
-        );
+        draw.fill_rect(Rect::new(caret_x, text_y, 1.5, size), with_alpha(theme.colors.accent, style.opacity));
     }
 }
 
 fn paint_separator(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle) {
-    draw.fill_rect(
-        node.computed.rect,
-        with_alpha(style.background, style.opacity),
-    );
+    draw.fill_rect(node.computed.rect, with_alpha(style.background, style.opacity));
 }
 
 fn fill_if_opaque(draw: &mut DrawList, rect: Rect, style: &ComputedStyle) {
@@ -400,9 +301,7 @@ fn with_alpha(mut color: Color, opacity: f32) -> Color {
 }
 
 fn value_t(content: &crate::node::WidgetContent) -> f32 {
-    let span = (content.value_max - content.value_min)
-        .abs()
-        .max(f32::EPSILON);
+    let span = (content.value_max - content.value_min).abs().max(f32::EPSILON);
     ((content.value - content.value_min) / span).clamp(0.0, 1.0)
 }
 
@@ -421,10 +320,11 @@ impl<'a> PaintContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::UiMetrics;
-    use crate::layout::{LayoutSpec, Size, run_layout};
-    use crate::text::EstimateMeasurer;
-    use crate::widgets::{button_widget, checkbox_widget, column, label_widget, slider_widget};
+    use crate::{
+        layout::{LayoutSpec, Size, UiMetrics, run_layout},
+        text::EstimateMeasurer,
+        widgets::{button_widget, checkbox_widget, column, label_widget, slider_widget},
+    };
 
     #[test]
     fn paint_emits_commands_for_label_and_button() {
@@ -432,27 +332,12 @@ mod tests {
         let root = tree.root();
         column()
             .child(label_widget().text("Hello"))
-            .child(
-                button_widget()
-                    .text("OK")
-                    .layout(LayoutSpec::default().with_height(Size::Px(36.0))),
-            )
+            .child(button_widget().text("OK").layout(LayoutSpec::default().with_height(Size::Px(36.0))))
             .child(checkbox_widget().text("On").checked(true))
-            .child(
-                slider_widget().value(0.5).layout(
-                    LayoutSpec::default()
-                        .with_height(Size::Px(24.0))
-                        .with_width(Size::Px(120.0)),
-                ),
-            )
+            .child(slider_widget().value(0.5).layout(LayoutSpec::default().with_height(Size::Px(24.0)).with_width(Size::Px(120.0))))
             .mount(&mut tree, root)
             .unwrap();
-        run_layout(
-            &mut tree,
-            Vec2::new(320.0, 240.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut tree, Vec2::new(320.0, 240.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
         let theme = Theme::default();
         let motion = crate::motion::MotionManager::new();
@@ -470,8 +355,10 @@ mod tests {
 
     #[test]
     fn paint_image_emits_tex_quad() {
-        use crate::asset::{MapTextureResolver, UiImage};
-        use crate::widgets::image_widget;
+        use crate::{
+            asset::{MapTextureResolver, UiImage},
+            widgets::image_widget,
+        };
         use spark_asset::AssetId;
         use spark_renderer::TextureId;
 
@@ -479,37 +366,18 @@ mod tests {
         let root = tree.root();
         let asset = AssetId(7);
         image_widget()
-            .image(
-                UiImage::new(asset)
-                    .with_preferred_size(Vec2::new(48.0, 48.0)),
-            )
-            .layout(LayoutSpec {
-                width: Size::Px(48.0),
-                height: Size::Px(48.0),
-                ..LayoutSpec::default()
-            })
+            .image(UiImage::new(asset).with_preferred_size(Vec2::new(48.0, 48.0)))
+            .layout(LayoutSpec { width: Size::Px(48.0), height: Size::Px(48.0), ..LayoutSpec::default() })
             .mount(&mut tree, root)
             .unwrap();
-        run_layout(
-            &mut tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
-        let mut textures = MapTextureResolver {
-            asset,
-            texture: TextureId(99),
-            size: Vec2::new(48.0, 48.0),
-        };
+        let mut textures = MapTextureResolver { asset, texture: TextureId(99), size: Vec2::new(48.0, 48.0) };
         let theme = Theme::default();
         let motion = crate::motion::MotionManager::new();
         let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
         paint_tree(&tree, &theme, &motion, &mut textures, &mut draw);
-        assert!(
-            !draw.hud_tex_quads.is_empty(),
-            "image should emit hud tex quads"
-        );
+        assert!(!draw.hud_tex_quads.is_empty(), "image should emit hud tex quads");
         assert_eq!(draw.hud_tex_quads[0].texture, TextureId(99));
     }
 }

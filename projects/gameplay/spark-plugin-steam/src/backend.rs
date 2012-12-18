@@ -52,11 +52,7 @@ impl Default for NullSteamBackend {
 
 impl NullSteamBackend {
     pub fn new(app_id: u32, user_name: impl Into<String>) -> Self {
-        Self {
-            app_id,
-            user_name: user_name.into(),
-            ..Self::default()
-        }
+        Self { app_id, user_name: user_name.into(), ..Self::default() }
     }
 }
 

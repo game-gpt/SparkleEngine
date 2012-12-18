@@ -2,8 +2,7 @@
 
 use spark_core::Rect;
 
-use crate::id::WidgetId;
-use crate::tree::WidgetTree;
+use crate::{id::WidgetId, tree::WidgetTree};
 
 #[derive(Debug, Clone)]
 pub struct LayoutDump {
@@ -33,11 +32,7 @@ pub struct UiInspector {
 
 impl UiInspector {
     pub fn new() -> Self {
-        Self {
-            highlight: None,
-            traces: Vec::new(),
-            max_traces: 128,
-        }
+        Self { highlight: None, traces: Vec::new(), max_traces: 128 }
     }
 
     pub fn tree<'a>(&self, runtime_tree: &'a WidgetTree) -> &'a WidgetTree {
@@ -70,11 +65,7 @@ impl UiInspector {
         if self.max_traces == 0 {
             return;
         }
-        self.traces.push(UiEventTrace {
-            kind,
-            target,
-            detail: detail.into(),
-        });
+        self.traces.push(UiEventTrace { kind, target, detail: detail.into() });
         if self.traces.len() > self.max_traces {
             let overflow = self.traces.len() - self.max_traces;
             self.traces.drain(0..overflow);

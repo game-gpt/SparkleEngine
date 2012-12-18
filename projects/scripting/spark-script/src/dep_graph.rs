@@ -3,8 +3,10 @@
 //! 节点是 [`PackageId`]；边是「A 依赖 B」→ 链接时 B 须先于 A。
 //! 本模块不解析源码 `import`，由编译会话填入显式依赖。
 
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    sync::Arc,
+};
 
 use crate::request::PackageId;
 
@@ -101,11 +103,7 @@ impl PackageDepGraph {
                 *indegree.get_mut(&node_key).expect("indegree") += 1;
             }
         }
-        let mut queue: VecDeque<Arc<str>> = indegree
-            .iter()
-            .filter(|(_, d)| **d == 0)
-            .map(|(k, _)| Arc::clone(k))
-            .collect();
+        let mut queue: VecDeque<Arc<str>> = indegree.iter().filter(|(_, d)| **d == 0).map(|(k, _)| Arc::clone(k)).collect();
         queue.make_contiguous().sort();
         let mut order = Vec::with_capacity(self.nodes.len());
         while let Some(k) = queue.pop_front() {
@@ -117,34 +115,24 @@ impl PackageDepGraph {
                 let d = indegree.get_mut(&n).expect("indegree");
                 *d -= 1;
                 if *d == 0 {
-                    let pos = queue
-                        .binary_search_by(|x| x.as_ref().cmp(n.as_ref()))
-                        .unwrap_err();
+                    let pos = queue.binary_search_by(|x| x.as_ref().cmp(n.as_ref())).unwrap_err();
                     queue.insert(pos, n);
                 }
             }
         }
         if order.len() != self.nodes.len() {
-            return Err(DepGraphError::Cycle {
-                path: find_cycle(&adj, &self.nodes),
-            });
+            return Err(DepGraphError::Cycle { path: find_cycle(&adj, &self.nodes) });
         }
         Ok(order)
     }
 }
 
-fn find_cycle(
-    adj: &HashMap<Arc<str>, Vec<Arc<str>>>,
-    nodes: &HashMap<Arc<str>, PackageNode>,
-) -> Vec<PackageId> {
+fn find_cycle(adj: &HashMap<Arc<str>, Vec<Arc<str>>>, nodes: &HashMap<Arc<str>, PackageNode>) -> Vec<PackageId> {
     let mut visiting = HashSet::new();
     let mut path_keys = Vec::new();
     for start in nodes.keys() {
         if dfs_cycle(start, adj, &mut visiting, &mut path_keys) {
-            return path_keys
-                .into_iter()
-                .filter_map(|k| nodes.get(&k).map(|n| n.id.clone()))
-                .collect();
+            return path_keys.into_iter().filter_map(|k| nodes.get(&k).map(|n| n.id.clone())).collect();
         }
         path_keys.clear();
         visiting.clear();
@@ -152,12 +140,7 @@ fn find_cycle(
     nodes.values().take(1).map(|n| n.id.clone()).collect()
 }
 
-fn dfs_cycle(
-    node: &Arc<str>,
-    adj: &HashMap<Arc<str>, Vec<Arc<str>>>,
-    visiting: &mut HashSet<Arc<str>>,
-    path: &mut Vec<Arc<str>>,
-) -> bool {
+fn dfs_cycle(node: &Arc<str>, adj: &HashMap<Arc<str>, Vec<Arc<str>>>, visiting: &mut HashSet<Arc<str>>, path: &mut Vec<Arc<str>>) -> bool {
     if !visiting.insert(Arc::clone(node)) {
         path.push(Arc::clone(node));
         return true;
@@ -184,18 +167,9 @@ mod tests {
     #[test]
     fn topo_libs_before_entry() {
         let mut g = PackageDepGraph::new();
-        g.insert(PackageNode {
-            id: pkg("entry"),
-            depends_on: vec![pkg("lib_a"), pkg("lib_b")],
-        });
-        g.insert(PackageNode {
-            id: pkg("lib_a"),
-            depends_on: vec![pkg("lib_b")],
-        });
-        g.insert(PackageNode {
-            id: pkg("lib_b"),
-            depends_on: vec![],
-        });
+        g.insert(PackageNode { id: pkg("entry"), depends_on: vec![pkg("lib_a"), pkg("lib_b")] });
+        g.insert(PackageNode { id: pkg("lib_a"), depends_on: vec![pkg("lib_b")] });
+        g.insert(PackageNode { id: pkg("lib_b"), depends_on: vec![] });
         let order = g.topo_order().unwrap();
         let names: Vec<&str> = order.iter().map(|p| p.name.as_ref()).collect();
         assert_eq!(names, vec!["lib_b", "lib_a", "entry"]);
@@ -204,27 +178,15 @@ mod tests {
     #[test]
     fn cycle_is_rejected() {
         let mut g = PackageDepGraph::new();
-        g.insert(PackageNode {
-            id: pkg("a"),
-            depends_on: vec![pkg("b")],
-        });
-        g.insert(PackageNode {
-            id: pkg("b"),
-            depends_on: vec![pkg("a")],
-        });
+        g.insert(PackageNode { id: pkg("a"), depends_on: vec![pkg("b")] });
+        g.insert(PackageNode { id: pkg("b"), depends_on: vec![pkg("a")] });
         assert!(matches!(g.topo_order(), Err(DepGraphError::Cycle { .. })));
     }
 
     #[test]
     fn unknown_dep_is_rejected() {
         let mut g = PackageDepGraph::new();
-        g.insert(PackageNode {
-            id: pkg("a"),
-            depends_on: vec![pkg("missing")],
-        });
-        assert!(matches!(
-            g.topo_order(),
-            Err(DepGraphError::UnknownPackage { .. })
-        ));
+        g.insert(PackageNode { id: pkg("a"), depends_on: vec![pkg("missing")] });
+        assert!(matches!(g.topo_order(), Err(DepGraphError::UnknownPackage { .. })));
     }
 }

@@ -27,12 +27,7 @@ pub struct StgEngine {
 
 impl StgEngine {
     pub fn new(mods_root: impl Into<PathBuf>, bullet_cap: usize) -> Self {
-        Self {
-            engine: SparkEngine::new(mods_root),
-            bullets: BulletPool::with_capacity(bullet_cap),
-            clock: StageClock::default(),
-            graze: 0,
-        }
+        Self { engine: SparkEngine::new(mods_root), bullets: BulletPool::with_capacity(bullet_cap), clock: StageClock::default(), graze: 0 }
     }
 
     /// 推进关卡时间与弹幕；`player` / `player_r` 用于擦弹与命中检测。
@@ -41,22 +36,14 @@ impl StgEngine {
         self.clock.advance(dt);
         self.bullets.integrate(dt);
         let mut hit = false;
-        let player_hurt = Circle {
-            center: player,
-            radius: player_r,
-        };
-        let graze_c = Circle {
-            center: player,
-            radius: graze_r.max(player_r),
-        };
+        let player_hurt = Circle { center: player, radius: player_r };
+        let graze_c = Circle { center: player, radius: graze_r.max(player_r) };
         for b in self.bullets.iter_alive() {
-            let bc = Circle {
-                center: b.pos,
-                radius: b.radius,
-            };
+            let bc = Circle { center: b.pos, radius: b.radius };
             if collide_circles(player_hurt, bc) {
                 hit = true;
-            } else if collide_circles(graze_c, bc) {
+            }
+            else if collide_circles(graze_c, bc) {
                 self.graze = self.graze.saturating_add(1);
             }
         }
@@ -77,11 +64,7 @@ mod tests {
     fn fan_and_hit() {
         let mut stg = StgEngine::new(".", 256);
         let em = Emitter {
-            pattern: EmitPattern::Fan {
-                count: 5,
-                spread_rad: std::f32::consts::FRAC_PI_2,
-                speed: 100.0,
-            },
+            pattern: EmitPattern::Fan { count: 5, spread_rad: std::f32::consts::FRAC_PI_2, speed: 100.0 },
             bullet_radius: 2.0,
             layer: 0,
         };

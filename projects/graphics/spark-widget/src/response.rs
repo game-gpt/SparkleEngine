@@ -15,30 +15,15 @@ pub struct EventResponse {
 
 impl EventResponse {
     pub fn handled() -> Self {
-        Self {
-            handled: true,
-            stop_propagation: false,
-            prevent_default: false,
-            commands: Vec::new(),
-        }
+        Self { handled: true, stop_propagation: false, prevent_default: false, commands: Vec::new() }
     }
 
     pub fn stop() -> Self {
-        Self {
-            handled: true,
-            stop_propagation: true,
-            prevent_default: false,
-            commands: Vec::new(),
-        }
+        Self { handled: true, stop_propagation: true, prevent_default: false, commands: Vec::new() }
     }
 
     pub fn with_command(command: UiCommand) -> Self {
-        Self {
-            handled: true,
-            stop_propagation: false,
-            prevent_default: false,
-            commands: vec![command],
-        }
+        Self { handled: true, stop_propagation: false, prevent_default: false, commands: vec![command] }
     }
 
     pub fn merge(&mut self, other: EventResponse) {

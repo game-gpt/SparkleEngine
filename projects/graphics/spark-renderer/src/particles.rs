@@ -20,15 +20,7 @@ pub struct Particle2d {
 
 impl Particle2d {
     pub fn new(pos: Vec2, vel: Vec2, life: f32, color: Color, size: f32) -> Self {
-        Self {
-            pos,
-            vel,
-            life,
-            max_life: life.max(0.0),
-            color,
-            size,
-            drag: 0.0,
-        }
+        Self { pos, vel, life, max_life: life.max(0.0), color, size, drag: 0.0 }
     }
 }
 
@@ -41,10 +33,7 @@ pub struct ParticlePool2d {
 
 impl ParticlePool2d {
     pub fn with_capacity(cap: usize) -> Self {
-        Self {
-            cap: cap.max(1),
-            particles: Vec::new(),
-        }
+        Self { cap: cap.max(1), particles: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -64,11 +53,7 @@ impl ParticlePool2d {
             self.particles.push(particle);
             return;
         }
-        if let Some(slot) = self
-            .particles
-            .iter_mut()
-            .min_by(|a, b| a.life.partial_cmp(&b.life).unwrap_or(std::cmp::Ordering::Equal))
-        {
+        if let Some(slot) = self.particles.iter_mut().min_by(|a, b| a.life.partial_cmp(&b.life).unwrap_or(std::cmp::Ordering::Equal)) {
             *slot = particle;
         }
     }
@@ -98,10 +83,7 @@ impl ParticlePool2d {
             let mut color = p.color;
             color.a *= t;
             let s = p.size.max(0.0);
-            draw.fill_rect(
-                Rect::new(p.pos.x - s * 0.5, p.pos.y - s * 0.5, s, s),
-                color,
-            );
+            draw.fill_rect(Rect::new(p.pos.x - s * 0.5, p.pos.y - s * 0.5, s, s), color);
         }
     }
 }
@@ -113,24 +95,12 @@ mod tests {
     #[test]
     fn tick_moves_and_expires() {
         let mut pool = ParticlePool2d::with_capacity(1);
-        pool.spawn(Particle2d::new(
-            Vec2::ZERO,
-            Vec2::new(10.0, 0.0),
-            0.5,
-            Color::rgb(1.0, 1.0, 1.0),
-            2.0,
-        ));
+        pool.spawn(Particle2d::new(Vec2::ZERO, Vec2::new(10.0, 0.0), 0.5, Color::rgb(1.0, 1.0, 1.0), 2.0));
         pool.tick(0.1);
         assert!((pool.particles[0].pos.x - 1.0).abs() < 1e-4);
         pool.tick(1.0);
         assert!(pool.is_empty());
-        pool.spawn(Particle2d::new(
-            Vec2::new(3.0, 0.0),
-            Vec2::ZERO,
-            1.0,
-            Color::rgb(1.0, 0.0, 0.0),
-            4.0,
-        ));
+        pool.spawn(Particle2d::new(Vec2::new(3.0, 0.0), Vec2::ZERO, 1.0, Color::rgb(1.0, 0.0, 0.0), 4.0));
         assert_eq!(pool.len(), 1);
         assert!((pool.particles[0].pos.x - 3.0).abs() < 1e-4);
     }

@@ -7,11 +7,13 @@ mod event;
 
 pub use event::{EventId, LogEvent};
 
-use std::fmt::Write as _;
-use std::fs::{File, OpenOptions};
-use std::io::Write as IoWrite;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::{
+    fmt::Write as _,
+    fs::{File, OpenOptions},
+    io::Write as IoWrite,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+};
 
 /// 日志级别（数值越大越严重）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -50,12 +52,7 @@ pub trait LogSink: Send + Sync {
 }
 
 fn format_line(record: &Record) -> String {
-    format!(
-        "[{}] [{}] {}",
-        record.level.as_str(),
-        record.target,
-        record.message
-    )
+    format!("[{}] [{}] {}", record.level.as_str(), record.target, record.message)
 }
 
 /// 默认 stderr sink。
@@ -84,14 +81,8 @@ impl FileSink {
                 std::fs::create_dir_all(parent)?;
             }
         }
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
-        Ok(Self {
-            file: Mutex::new(file),
-            path,
-        })
+        let file = OpenOptions::new().create(true).append(true).open(&path)?;
+        Ok(Self { file: Mutex::new(file), path })
     }
 
     pub fn path(&self) -> &Path {
@@ -120,17 +111,11 @@ pub struct MemorySink {
 
 impl MemorySink {
     pub fn new(capacity: usize) -> Self {
-        Self {
-            inner: Mutex::new(Vec::new()),
-            capacity: capacity.max(1),
-        }
+        Self { inner: Mutex::new(Vec::new()), capacity: capacity.max(1) }
     }
 
     pub fn snapshot(&self) -> Vec<Record> {
-        self.inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 }
 
@@ -161,11 +146,7 @@ impl Logger {
         if event.level < self.min_level {
             return;
         }
-        let record = Record {
-            level: event.level,
-            target: event.target,
-            message: event.code_line(),
-        };
+        let record = Record { level: event.level, target: event.target, message: event.code_line() };
         for sink in self.sinks.iter() {
             sink.log(&record);
         }
@@ -176,11 +157,7 @@ impl Logger {
         if level < self.min_level {
             return;
         }
-        let record = Record {
-            level,
-            target,
-            message: message.into(),
-        };
+        let record = Record { level, target, message: message.into() };
         for sink in self.sinks.iter() {
             sink.log(&record);
         }
@@ -242,15 +219,8 @@ impl LoggerBuilder {
     }
 
     pub fn build(self) -> Logger {
-        let sinks = if self.sinks.is_empty() {
-            vec![Arc::new(StderrSink) as Arc<dyn LogSink>]
-        } else {
-            self.sinks
-        };
-        Logger {
-            min_level: self.min_level.unwrap_or(Level::Info),
-            sinks: Arc::new(sinks),
-        }
+        let sinks = if self.sinks.is_empty() { vec![Arc::new(StderrSink) as Arc<dyn LogSink>] } else { self.sinks };
+        Logger { min_level: self.min_level.unwrap_or(Level::Info), sinks: Arc::new(sinks) }
     }
 }
 
@@ -285,15 +255,14 @@ pub fn install_std(file: Option<&Path>, min_level: Level) -> bool {
         std::panic::set_hook(Box::new(move |info| {
             let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
                 (*s).to_string()
-            } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            }
+            else if let Some(s) = info.payload().downcast_ref::<String>() {
                 s.clone()
-            } else {
+            }
+            else {
                 "Box<Any>".into()
             };
-            let loc = info
-                .location()
-                .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
-                .unwrap_or_else(|| "?".into());
+            let loc = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column())).unwrap_or_else(|| "?".into());
             global().emit(
                 LogEvent::new(Level::Error, "panic", "spark.runtime.panic")
                     .field("payload", spark_diagnostics::ErrorArg::String(std::sync::Arc::from(msg)))
@@ -432,10 +401,7 @@ mod tests {
     #[test]
     fn memory_sink_filters_by_level() {
         let mem = Arc::new(MemorySink::new(16));
-        let logger = Logger::builder()
-            .min_level(Level::Warn)
-            .sink(mem.clone())
-            .build();
+        let logger = Logger::builder().min_level(Level::Warn).sink(mem.clone()).build();
         logger.info("t", "skip");
         logger.warn("t", "keep");
         let snap = mem.snapshot();
@@ -446,8 +412,7 @@ mod tests {
 
     #[test]
     fn structured_event_code_line() {
-        let ev = LogEvent::new(Level::Error, "media", "spark.media.open_failed")
-            .field("io_kind", ErrorArg::String(Arc::from("not_found")));
+        let ev = LogEvent::new(Level::Error, "media", "spark.media.open_failed").field("io_kind", ErrorArg::String(Arc::from("not_found")));
         let line = ev.code_line();
         assert!(line.contains("event=spark.media.open_failed"));
         assert!(line.contains("io_kind=not_found"));
@@ -460,11 +425,7 @@ mod tests {
         let path = dir.join("t.log");
         let _ = std::fs::remove_file(&path);
         let sink = FileSink::open(&path).expect("open");
-        sink.log(&Record {
-            level: Level::Info,
-            target: "test",
-            message: "hello".into(),
-        });
+        sink.log(&Record { level: Level::Info, target: "test", message: "hello".into() });
         let text = std::fs::read_to_string(&path).expect("read");
         assert!(text.contains("hello"));
     }

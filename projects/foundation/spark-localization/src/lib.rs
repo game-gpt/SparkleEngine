@@ -27,30 +27,20 @@ mod render;
 mod snapshot;
 mod text;
 
-pub use asset::{
-    LocaleLoadError, MemoryLocaleLoader, load_bundle_from_manifest, load_document_json,
-    prepare_snapshot,
-};
+pub use asset::{LocaleLoadError, MemoryLocaleLoader, load_bundle_from_manifest, load_document_json, prepare_snapshot};
 pub use bundle::{CompiledMessage, LocalizationBundle};
 pub use check::{CheckIssue, CheckIssueKind, CheckReport, check_document, check_locale_set};
 pub use compile::{CompileError, CompileOptions, CompileOutput, compile_document, compile_documents};
-pub use coverage::{
-    CoverageEntry, CoverageReport, CoverageStatus, coverage_against, coverage_set, fallback_key,
-};
+pub use coverage::{CoverageEntry, CoverageReport, CoverageStatus, coverage_against, coverage_set, fallback_key};
 pub use diagnostic::{DiagnosticFlags, DiagnosticRecord, MessageDiagnostic};
-pub use document::{
-    ArgumentFormat, LocalizationDocument, MessageDefinition, MessageName, MessageNode, SelectKind,
-};
+pub use document::{ArgumentFormat, LocalizationDocument, MessageDefinition, MessageName, MessageNode, SelectKind};
 pub use document_von::{DocumentVonError, document_from_von_str};
 pub use json::{JsonError, document_from_json_slice, document_from_json_str};
-pub use locale::{
-    LocaleId, LocaleParseError, LocaleRequest, TextDirection, build_fallback_chain, negotiate,
-};
+pub use locale::{LocaleId, LocaleParseError, LocaleRequest, TextDirection, build_fallback_chain, negotiate};
 pub use manifest::{LocaleEntry, LocalizationManifest, NamespaceOwner};
 pub use manifest_von::{ManifestVonError, manifest_from_von_str};
 pub use message::{
-    AttributeId, MessageArgs, MessageDateTime, MessageDecimal, MessageDuration, MessageId,
-    MessageRef, MessageValue, NamespaceId,
+    AttributeId, MessageArgs, MessageDateTime, MessageDecimal, MessageDuration, MessageId, MessageRef, MessageValue, NamespaceId,
 };
 pub use pseudo::{PseudoKind, generate_pseudo};
 pub use render::{message_args_from_error_args, render_diagnostic, render_error};

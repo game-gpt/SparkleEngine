@@ -1,19 +1,15 @@
 //! ListView 可见行范围与行同步。
 
-use crate::id::WidgetId;
-use crate::layout::{Layout, LayoutSpec, Size};
-use crate::node::WidgetKind;
-use crate::tree::WidgetTree;
-use crate::widgets::WidgetBuilder;
+use crate::{
+    id::WidgetId,
+    layout::{Layout, LayoutSpec, Size},
+    node::WidgetKind,
+    tree::WidgetTree,
+    widgets::WidgetBuilder,
+};
 
 /// 计算垂直列表在当前滚动偏移下应实例化的行区间 `[start, end)`。
-pub fn visible_row_range(
-    scroll_offset_y: f32,
-    viewport_height: f32,
-    row_height: f32,
-    item_count: usize,
-    overscan: usize,
-) -> (usize, usize) {
+pub fn visible_row_range(scroll_offset_y: f32, viewport_height: f32, row_height: f32, item_count: usize, overscan: usize) -> (usize, usize) {
     if item_count == 0 || row_height <= f32::EPSILON || viewport_height <= 0.0 {
         return (0, 0);
     }
@@ -48,24 +44,13 @@ where
         return None;
     }
     let scroll = tree.node(list_id).map(|n| n.scroll.clone())?;
-    let (start, end) = visible_row_range(
-        scroll.offset.y,
-        scroll.viewport_size.y.max(1.0),
-        row_height,
-        item_count,
-        overscan,
-    );
+    let (start, end) = visible_row_range(scroll.offset.y, scroll.viewport_size.y.max(1.0), row_height, item_count, overscan);
 
     tree.clear_children(list_id);
     let total_h = content_height(item_count, row_height);
     let panel = tree.mount(list_id, WidgetKind::Container)?;
     if let Some(node) = tree.node_mut(panel) {
-        node.layout = LayoutSpec {
-            kind: Layout::Absolute,
-            width: Size::Fill,
-            height: Size::Px(total_h.max(1.0)),
-            ..LayoutSpec::default()
-        };
+        node.layout = LayoutSpec { kind: Layout::Absolute, width: Size::Fill, height: Size::Px(total_h.max(1.0)), ..LayoutSpec::default() };
     }
 
     for index in start..end {
@@ -93,10 +78,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::UiMetrics;
-    use crate::layout::{LayoutSpec, Size, run_layout};
-    use crate::text::EstimateMeasurer;
-    use crate::widgets::{label_widget, list_view};
+    use crate::{
+        layout::{LayoutSpec, Size, UiMetrics, run_layout},
+        text::EstimateMeasurer,
+        widgets::{label_widget, list_view},
+    };
     use spark_core::Vec2;
 
     #[test]
@@ -116,24 +102,12 @@ mod tests {
         let mut tree = WidgetTree::new();
         let root = tree.root();
         let list = list_view()
-            .layout(LayoutSpec {
-                width: Size::Px(100.0),
-                height: Size::Px(80.0),
-                ..LayoutSpec::vertical()
-            })
+            .layout(LayoutSpec { width: Size::Px(100.0), height: Size::Px(80.0), ..LayoutSpec::vertical() })
             .mount(&mut tree, root)
             .unwrap();
 
-        run_layout(
-            &mut tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
-        let range = sync_visible_rows(&mut tree, list, 100, 20.0, 1, |i| {
-            label_widget().text(format!("row-{i}"))
-        })
-        .unwrap();
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+        let range = sync_visible_rows(&mut tree, list, 100, 20.0, 1, |i| label_widget().text(format!("row-{i}"))).unwrap();
         assert_eq!(range, (0, 6)); // viewport 80 → ~4+1 rows + overscan 1 → 0..6
 
         let panel = tree.node(list).unwrap().children[0];
@@ -142,16 +116,8 @@ mod tests {
         if let Some(node) = tree.node_mut(list) {
             node.scroll.offset.y = 200.0;
         }
-        run_layout(
-            &mut tree,
-            Vec2::new(200.0, 200.0),
-            UiMetrics::new(1.0),
-            &mut EstimateMeasurer,
-        );
-        let range = sync_visible_rows(&mut tree, list, 100, 20.0, 0, |i| {
-            label_widget().text(format!("row-{i}"))
-        })
-        .unwrap();
+        run_layout(&mut tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+        let range = sync_visible_rows(&mut tree, list, 100, 20.0, 0, |i| label_widget().text(format!("row-{i}"))).unwrap();
         assert_eq!(range.0, 10);
         assert!(range.1 > range.0);
         assert!(tree.node(panel).is_none() || tree.node(list).unwrap().children.len() == 1);

@@ -6,12 +6,11 @@ use std::sync::Arc;
 
 use spark_vm::verify_bytecode_with_host;
 
-use crate::artifact::{ExecutableImage, ARTIFACT_FORMAT_VERSION};
-use crate::codec::{
-    read_language, read_module, write_language, write_module, ArtifactIoError, Reader, Writer,
-    SPKX_MAGIC,
+use crate::{
+    artifact::{ARTIFACT_FORMAT_VERSION, ExecutableImage},
+    codec::{ArtifactIoError, Reader, SPKX_MAGIC, Writer, read_language, read_module, write_language, write_module},
+    request::PackageId,
 };
-use crate::request::PackageId;
 
 impl ExecutableImage {
     /// 编码为 `.spkx` 字节（不含运行状态）。
@@ -42,9 +41,7 @@ impl ExecutableImage {
         }
         let format_version = r.u32()?;
         if format_version != ARTIFACT_FORMAT_VERSION {
-            return Err(ArtifactIoError::UnsupportedFormat {
-                version: format_version,
-            });
+            return Err(ArtifactIoError::UnsupportedFormat { version: format_version });
         }
         let host_abi_version = r.u32()?;
         let host_schema_hash = r.u64()?;
@@ -87,21 +84,19 @@ impl ExecutableImage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artifact::{LinkedProgram, SparkObject};
-    use crate::codec::SPKX_MAGIC;
-    use crate::host_schema::{HostFunction, HostFunctionId, HostSchema};
-    use crate::request::{LanguageProfile, PackageId};
-    use crate::ScriptLanguage;
+    use crate::{
+        ScriptLanguage,
+        artifact::{LinkedProgram, SparkObject},
+        codec::SPKX_MAGIC,
+        host_schema::{HostFunction, HostFunctionId, HostSchema},
+        request::{LanguageProfile, PackageId},
+    };
     use spark_script_valkyrie::NativeParam;
     use spark_vm::{FuncProto, Module, Op};
 
     fn schema_with_print() -> HostSchema {
         let mut schema = HostSchema::new(1);
-        schema.insert(
-            HostFunction::new(HostFunctionId::new("host", "print", 1))
-                .param(NativeParam::new("msg", "String"))
-                .returns("Null"),
-        );
+        schema.insert(HostFunction::new(HostFunctionId::new("host", "print", 1)).param(NativeParam::new("msg", "String")).returns("Null"));
         schema
     }
 
@@ -116,11 +111,7 @@ mod tests {
             PackageId::new("demo", "1"),
             LanguageProfile::default_for(ScriptLanguage::Valkyrie),
             &host,
-            Module {
-                functions: vec![f],
-                entry: 0,
-                native_names: vec!["print".into()],
-            },
+            Module { functions: vec![f], entry: 0, native_names: vec!["print".into()] },
         )
         .unwrap();
         let linked = LinkedProgram::link_single(obj, &host).unwrap();
@@ -137,14 +128,8 @@ mod tests {
         assert_eq!(loaded.host_slot_count, image.host_slot_count);
         assert_eq!(loaded.package.name.as_ref(), "demo");
         assert_eq!(loaded.module().entry, image.module().entry);
-        assert_eq!(
-            loaded.module().functions[0].code,
-            image.module().functions[0].code
-        );
-        assert_eq!(
-            loaded.module().functions[0].consts[0].as_number(),
-            Some(42.0)
-        );
+        assert_eq!(loaded.module().functions[0].code, image.module().functions[0].code);
+        assert_eq!(loaded.module().functions[0].consts[0].as_number(), Some(42.0));
     }
 
     #[test]

@@ -23,9 +23,7 @@ pub struct Inventory {
 
 impl Inventory {
     pub fn with_slots(n: usize) -> Self {
-        Self {
-            slots: vec![None; n.max(1)],
-        }
+        Self { slots: vec![None; n.max(1)] }
     }
 
     pub fn slots(&self) -> &[Option<ItemStack>] {
@@ -33,12 +31,7 @@ impl Inventory {
     }
 
     pub fn count(&self, id: &str) -> u32 {
-        self.slots
-            .iter()
-            .filter_map(|s| s.as_ref())
-            .filter(|s| s.id == id)
-            .map(|s| s.count)
-            .sum()
+        self.slots.iter().filter_map(|s| s.as_ref()).filter(|s| s.id == id).map(|s| s.count).sum()
     }
 
     pub fn add(&mut self, id: impl Into<String>, count: u32) -> Result<(), SparkError> {
@@ -84,7 +77,8 @@ impl Inventory {
                 if stack.count <= left {
                     left -= stack.count;
                     *slot = None;
-                } else {
+                }
+                else {
                     stack.count -= left;
                     left = 0;
                 }

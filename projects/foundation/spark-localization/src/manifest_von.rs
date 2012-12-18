@@ -5,9 +5,11 @@
 
 use std::sync::Arc;
 
-use crate::locale::{LocaleId, LocaleParseError};
-use crate::manifest::{LocaleEntry, LocalizationManifest, NamespaceOwner};
-use crate::message::NamespaceId;
+use crate::{
+    locale::{LocaleId, LocaleParseError},
+    manifest::{LocaleEntry, LocalizationManifest, NamespaceOwner},
+    message::NamespaceId,
+};
 
 /// VON 清单解析错误。
 #[derive(Debug)]
@@ -40,17 +42,13 @@ impl ManifestVonError {
         use spark_core::{ErrorArg, ErrorArgs};
         match self {
             Self::Locale(e) => e.args(),
-            Self::MissingAssign { line } => {
-                ErrorArgs::new().with("line", ErrorArg::Unsigned(*line as u64))
+            Self::MissingAssign { line } => ErrorArgs::new().with("line", ErrorArg::Unsigned(*line as u64)),
+            Self::UnknownField { field, line } => {
+                ErrorArgs::new().with("field", ErrorArg::String(Arc::from(field.as_str()))).with("line", ErrorArg::Unsigned(*line as u64))
             }
-            Self::UnknownField { field, line } => ErrorArgs::new()
-                .with("field", ErrorArg::String(Arc::from(field.as_str())))
-                .with("line", ErrorArg::Unsigned(*line as u64)),
-            Self::NamespaceArity
-            | Self::MissingProductDefault
-            | Self::ExpectedString
-            | Self::ExpectedInteger
-            | Self::ExpectedArray => ErrorArgs::new(),
+            Self::NamespaceArity | Self::MissingProductDefault | Self::ExpectedString | Self::ExpectedInteger | Self::ExpectedArray => {
+                ErrorArgs::new()
+            }
         }
     }
 }
@@ -99,7 +97,8 @@ pub fn manifest_from_von_str(text: &str) -> Result<LocalizationManifest, Manifes
         if line.is_empty() {
             continue;
         }
-        let Some((key, value)) = split_assign(line) else {
+        let Some((key, value)) = split_assign(line)
+        else {
             return Err(ManifestVonError::MissingAssign { line: line_no + 1 });
         };
         match key {
@@ -111,18 +110,10 @@ pub fn manifest_from_von_str(text: &str) -> Result<LocalizationManifest, Manifes
                 format_version = Some(parse_u32(value)?);
             }
             "locales" => {
-                locales = parse_string_array(value)?
-                    .into_iter()
-                    .map(|s| LocaleId::parse(&s))
-                    .collect::<Result<Vec<_>, _>>()?;
+                locales = parse_string_array(value)?.into_iter().map(|s| LocaleId::parse(&s)).collect::<Result<Vec<_>, _>>()?;
             }
             "bundled" => {
-                bundled = Some(
-                    parse_string_array(value)?
-                        .into_iter()
-                        .map(|s| LocaleId::parse(&s))
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+                bundled = Some(parse_string_array(value)?.into_iter().map(|s| LocaleId::parse(&s)).collect::<Result<Vec<_>, _>>()?);
             }
             "namespace" => {
                 // namespace = ["astracraft", "AstraCraft", false]
@@ -137,16 +128,12 @@ pub fn manifest_from_von_str(text: &str) -> Result<LocalizationManifest, Manifes
                 shard_files = parse_string_array(value)?;
             }
             other => {
-                return Err(ManifestVonError::UnknownField {
-                    field: other.to_string(),
-                    line: line_no + 1,
-                });
+                return Err(ManifestVonError::UnknownField { field: other.to_string(), line: line_no + 1 });
             }
         }
     }
 
-    let product_default =
-        product_default.ok_or(ManifestVonError::MissingProductDefault)?;
+    let product_default = product_default.ok_or(ManifestVonError::MissingProductDefault)?;
 
     let mut manifest = LocalizationManifest::new(product_default.clone());
     if let Some(v) = cldr_version {
@@ -159,35 +146,18 @@ pub fn manifest_from_von_str(text: &str) -> Result<LocalizationManifest, Manifes
     let bundled_set = bundled.unwrap_or_else(|| locales.clone());
     for locale in locales {
         let is_bundled = bundled_set.iter().any(|b| b == &locale);
-        manifest.locales.push(LocaleEntry {
-            locale,
-            fallback: vec![],
-            bundled: is_bundled,
-            font_hint: None,
-        });
+        manifest.locales.push(LocaleEntry { locale, fallback: vec![], bundled: is_bundled, font_hint: None });
     }
     if manifest.locales.is_empty() {
-        manifest.locales.push(LocaleEntry {
-            locale: product_default,
-            fallback: vec![],
-            bundled: true,
-            font_hint: None,
-        });
+        manifest.locales.push(LocaleEntry { locale: product_default, fallback: vec![], bundled: true, font_hint: None });
     }
 
     for (ns, owner, allow) in namespaces {
-        manifest.namespaces.push(NamespaceOwner {
-            namespace: NamespaceId::new(ns),
-            owner: Arc::from(owner),
-            allow_override: allow,
-        });
+        manifest.namespaces.push(NamespaceOwner { namespace: NamespaceId::new(ns), owner: Arc::from(owner), allow_override: allow });
     }
 
     if !shard_files.is_empty() {
-        manifest.shards.insert(
-            manifest.product_default.clone(),
-            shard_files.into_iter().map(Arc::from).collect(),
-        );
+        manifest.shards.insert(manifest.product_default.clone(), shard_files.into_iter().map(Arc::from).collect());
     }
 
     Ok(manifest)
@@ -230,34 +200,22 @@ pub(crate) fn split_assign(line: &str) -> Option<(&str, &str)> {
     let idx = line.find('=')?;
     let key = line[..idx].trim();
     let value = line[idx + 1..].trim();
-    if key.is_empty() {
-        None
-    } else {
-        Some((key, value))
-    }
+    if key.is_empty() { None } else { Some((key, value)) }
 }
 
 pub(crate) fn parse_string(value: &str) -> Result<String, ManifestVonError> {
     let value = value.trim();
-    if (value.starts_with('"') && value.ends_with('"'))
-        || (value.starts_with('\'') && value.ends_with('\''))
-    {
+    if (value.starts_with('"') && value.ends_with('"')) || (value.starts_with('\'') && value.ends_with('\'')) {
         return Ok(value[1..value.len() - 1].to_string());
     }
-    if value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-    {
+    if value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')) {
         return Ok(value.to_string());
     }
     Err(ManifestVonError::ExpectedString)
 }
 
 fn parse_u32(value: &str) -> Result<u32, ManifestVonError> {
-    value
-        .trim()
-        .parse()
-        .map_err(|_| ManifestVonError::ExpectedInteger)
+    value.trim().parse().map_err(|_| ManifestVonError::ExpectedInteger)
 }
 
 fn parse_string_array(value: &str) -> Result<Vec<String>, ManifestVonError> {

@@ -1,6 +1,6 @@
 //! 运动 AABB 扫掠（连续碰撞原语，无游戏材质）。
 
-use crate::{ray_aabb, Aabb3, Ray3, Vec3};
+use crate::{Aabb3, Ray3, Vec3, ray_aabb};
 
 /// 扫掠命中：`toi ∈ [0, 1]` 为位移比例。
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -14,21 +14,11 @@ pub struct SweepHit {
 /// Minkowski：以动盒中心为射线原点，对扩大后的障碍 AABB 做 `ray_aabb`。
 pub fn aabb_sweep(moving: Aabb3, delta: Vec3, obstacle: Aabb3) -> Option<SweepHit> {
     let ext = moving.extents();
-    let expanded = Aabb3 {
-        min: obstacle.min - ext,
-        max: obstacle.max + ext,
-    };
+    let expanded = Aabb3 { min: obstacle.min - ext, max: obstacle.max + ext };
     let origin = moving.center();
 
     if delta.length() < 1e-8 {
-        return if moving.intersects(obstacle) {
-            Some(SweepHit {
-                toi: 0.0,
-                normal: separation_normal(moving, obstacle),
-            })
-        } else {
-            None
-        };
+        return if moving.intersects(obstacle) { Some(SweepHit { toi: 0.0, normal: separation_normal(moving, obstacle) }) } else { None };
     }
 
     // `ray_aabb` 内部单位化方向，返回世界距离。
@@ -44,12 +34,7 @@ pub fn aabb_sweep(moving: Aabb3, delta: Vec3, obstacle: Aabb3) -> Option<SweepHi
 }
 
 /// 将动盒沿 `delta` 推进到扫掠命中前（留 `skin` 世界单位余量）。
-pub fn aabb_sweep_resolve(
-    moving: Aabb3,
-    delta: Vec3,
-    obstacle: Aabb3,
-    skin: f32,
-) -> (Aabb3, Option<SweepHit>) {
+pub fn aabb_sweep_resolve(moving: Aabb3, delta: Vec3, obstacle: Aabb3, skin: f32) -> (Aabb3, Option<SweepHit>) {
     let ext = moving.extents();
     match aabb_sweep(moving, delta, obstacle) {
         None => {
@@ -75,9 +60,11 @@ fn separation_normal(a: Aabb3, b: Aabb3) -> Vec3 {
     let az = d.z.abs();
     if ax >= ay && ax >= az {
         Vec3::new(d.x.signum(), 0.0, 0.0)
-    } else if ay >= az {
+    }
+    else if ay >= az {
         Vec3::new(0.0, d.y.signum(), 0.0)
-    } else {
+    }
+    else {
         Vec3::new(0.0, 0.0, d.z.signum())
     }
 }
@@ -91,9 +78,5 @@ fn closest_face_normal(p: Vec3, box_: Aabb3) -> Vec3 {
         ((p.z - box_.min.z).abs(), Vec3::new(0.0, 0.0, -1.0)),
         ((p.z - box_.max.z).abs(), Vec3::new(0.0, 0.0, 1.0)),
     ];
-    candidates
-        .into_iter()
-        .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(_, n)| n)
-        .unwrap_or(Vec3::Y)
+    candidates.into_iter().min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)).map(|(_, n)| n).unwrap_or(Vec3::Y)
 }

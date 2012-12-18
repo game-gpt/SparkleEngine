@@ -1,7 +1,7 @@
 //! 简易全屏 bloom：场景 RT → 提取 → 可分模糊 → 合成到交换链。
 
 use bytemuck::{Pod, Zeroable};
-use spark_shader::{create_builtin, BuiltinShader};
+use spark_shader::{BuiltinShader, create_builtin};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -73,11 +73,7 @@ impl BloomGpu {
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                     count: None,
                 },
             ],
@@ -114,11 +110,7 @@ impl BloomGpu {
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                     count: None,
                 },
             ],
@@ -138,21 +130,12 @@ impl BloomGpu {
         let extract_pl = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("bloom-extract"),
             layout: Some(&filter_pl),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: Default::default(),
-                buffers: &[],
-            },
+            vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_main"), compilation_options: Default::default(), buffers: &[] },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_extract"),
                 compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -163,21 +146,12 @@ impl BloomGpu {
         let blur_pl = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("bloom-blur"),
             layout: Some(&filter_pl),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: Default::default(),
-                buffers: &[],
-            },
+            vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_main"), compilation_options: Default::default(), buffers: &[] },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_blur"),
                 compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -198,11 +172,7 @@ impl BloomGpu {
                 module: &comp_shader,
                 entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -268,11 +238,13 @@ impl BloomGpu {
     }
 
     fn rebuild_composite_bind(&mut self, device: &wgpu::Device) {
-        let Some(scene) = self.scene.as_ref() else {
+        let Some(scene) = self.scene.as_ref()
+        else {
             self.composite_bind = None;
             return;
         };
-        let Some(a) = self.bloom_a.as_ref() else {
+        let Some(a) = self.bloom_a.as_ref()
+        else {
             self.composite_bind = None;
             return;
         };
@@ -280,22 +252,10 @@ impl BloomGpu {
             label: Some("bloom-comp-bg"),
             layout: &self.composite_bgl,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&scene.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&a.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: self.comp_uniform.as_entire_binding(),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene.view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&a.view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                wgpu::BindGroupEntry { binding: 3, resource: self.comp_uniform.as_entire_binding() },
             ],
         }));
     }
@@ -303,11 +263,7 @@ impl BloomGpu {
     fn make_rt(&self, device: &wgpu::Device, w: u32, h: u32, label: &str) -> Rt {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
-            size: wgpu::Extent3d {
-                width: w,
-                height: h,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -320,25 +276,12 @@ impl BloomGpu {
             label: Some(&format!("{label}-bg")),
             layout: &self.filter_bgl,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.blur_uniform.as_entire_binding(),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                wgpu::BindGroupEntry { binding: 2, resource: self.blur_uniform.as_entire_binding() },
             ],
         });
-        Rt {
-            texture,
-            view,
-            bind,
-        }
+        Rt { texture, view, bind }
     }
 
     pub fn scene_view(&self) -> Option<&wgpu::TextureView> {
@@ -346,23 +289,21 @@ impl BloomGpu {
     }
 
     /// 从场景色提取模糊并合成到 `dst`（通常为交换链）。
-    pub fn apply(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        queue: &wgpu::Queue,
-        dst: &wgpu::TextureView,
-        strength: f32,
-    ) {
-        let Some(scene) = self.scene.as_ref() else {
+    pub fn apply(&self, encoder: &mut wgpu::CommandEncoder, queue: &wgpu::Queue, dst: &wgpu::TextureView, strength: f32) {
+        let Some(scene) = self.scene.as_ref()
+        else {
             return;
         };
-        let Some(a) = self.bloom_a.as_ref() else {
+        let Some(a) = self.bloom_a.as_ref()
+        else {
             return;
         };
-        let Some(b) = self.bloom_b.as_ref() else {
+        let Some(b) = self.bloom_b.as_ref()
+        else {
             return;
         };
-        let Some(comp_bind) = self.composite_bind.as_ref() else {
+        let Some(comp_bind) = self.composite_bind.as_ref()
+        else {
             return;
         };
 
@@ -373,10 +314,7 @@ impl BloomGpu {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &a.view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
@@ -388,25 +326,14 @@ impl BloomGpu {
         }
 
         // Blur H: A → B
-        queue.write_buffer(
-            &self.blur_uniform,
-            0,
-            bytemuck::bytes_of(&BlurUniforms {
-                direction: [1.0, 0.0],
-                strength,
-                _pad: 0.0,
-            }),
-        );
+        queue.write_buffer(&self.blur_uniform, 0, bytemuck::bytes_of(&BlurUniforms { direction: [1.0, 0.0], strength, _pad: 0.0 }));
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("bloom-blur-h"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &b.view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
@@ -418,25 +345,14 @@ impl BloomGpu {
         }
 
         // Blur V: B → A
-        queue.write_buffer(
-            &self.blur_uniform,
-            0,
-            bytemuck::bytes_of(&BlurUniforms {
-                direction: [0.0, 1.0],
-                strength,
-                _pad: 0.0,
-            }),
-        );
+        queue.write_buffer(&self.blur_uniform, 0, bytemuck::bytes_of(&BlurUniforms { direction: [0.0, 1.0], strength, _pad: 0.0 }));
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("bloom-blur-v"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &a.view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
@@ -447,24 +363,14 @@ impl BloomGpu {
             pass.draw(0..3, 0..1);
         }
 
-        queue.write_buffer(
-            &self.comp_uniform,
-            0,
-            bytemuck::bytes_of(&CompUniforms {
-                strength: strength.clamp(0.0, 2.0),
-                _pad: [0.0; 3],
-            }),
-        );
+        queue.write_buffer(&self.comp_uniform, 0, bytemuck::bytes_of(&CompUniforms { strength: strength.clamp(0.0, 2.0), _pad: [0.0; 3] }));
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("bloom-composite"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: dst,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: None,

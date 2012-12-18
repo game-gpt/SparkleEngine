@@ -115,7 +115,8 @@ impl SnakeApp {
             self.score += 1;
             self.step = (0.12 - self.score as f32 * 0.002).max(0.05);
             self.place_food();
-        } else {
+        }
+        else {
             self.body.pop();
         }
     }
@@ -136,13 +137,17 @@ impl GameHost for SnakeApp {
 
         let want = if frame.input.key_pressed(Key::Up) || frame.input.key_pressed(Key::W) {
             Some(Dir::Up)
-        } else if frame.input.key_pressed(Key::Down) || frame.input.key_pressed(Key::S) {
+        }
+        else if frame.input.key_pressed(Key::Down) || frame.input.key_pressed(Key::S) {
             Some(Dir::Down)
-        } else if frame.input.key_pressed(Key::Left) || frame.input.key_pressed(Key::A) {
+        }
+        else if frame.input.key_pressed(Key::Left) || frame.input.key_pressed(Key::A) {
             Some(Dir::Left)
-        } else if frame.input.key_pressed(Key::Right) || frame.input.key_pressed(Key::D) {
+        }
+        else if frame.input.key_pressed(Key::Right) || frame.input.key_pressed(Key::D) {
             Some(Dir::Right)
-        } else {
+        }
+        else {
             None
         };
         if let Some(d) = want {
@@ -166,78 +171,26 @@ impl GameHost for SnakeApp {
         let h = PAD * 2.0 + ROWS as f32 * CELL + 40.0;
         draw.begin_world();
         draw.fill_rect(Rect::new(0.0, 0.0, w, h), Color::rgb(0.06, 0.08, 0.07));
-        draw.fill_rect(
-            Rect::new(
-                PAD - 2.0,
-                PAD - 2.0,
-                COLS as f32 * CELL + 4.0,
-                ROWS as f32 * CELL + 4.0,
-            ),
-            Color::rgb(0.1, 0.14, 0.12),
-        );
+        draw.fill_rect(Rect::new(PAD - 2.0, PAD - 2.0, COLS as f32 * CELL + 4.0, ROWS as f32 * CELL + 4.0), Color::rgb(0.1, 0.14, 0.12));
 
         let (fx, fy) = self.food;
         draw.fill_rect(
-            Rect::new(
-                PAD + fx as f32 * CELL + 2.0,
-                PAD + fy as f32 * CELL + 2.0,
-                CELL - 4.0,
-                CELL - 4.0,
-            ),
+            Rect::new(PAD + fx as f32 * CELL + 2.0, PAD + fy as f32 * CELL + 2.0, CELL - 4.0, CELL - 4.0),
             Color::rgb(0.95, 0.35, 0.3),
         );
 
         for (i, &(x, y)) in self.body.iter().enumerate() {
-            let c = if i == 0 {
-                Color::rgb(0.35, 0.95, 0.45)
-            } else {
-                Color::rgb(0.25, 0.7, 0.35)
-            };
-            draw.fill_rect(
-                Rect::new(
-                    PAD + x as f32 * CELL + 1.0,
-                    PAD + y as f32 * CELL + 1.0,
-                    CELL - 2.0,
-                    CELL - 2.0,
-                ),
-                c,
-            );
+            let c = if i == 0 { Color::rgb(0.35, 0.95, 0.45) } else { Color::rgb(0.25, 0.7, 0.35) };
+            draw.fill_rect(Rect::new(PAD + x as f32 * CELL + 1.0, PAD + y as f32 * CELL + 1.0, CELL - 2.0, CELL - 2.0), c);
         }
 
         draw.begin_hud();
-        draw.text(
-            PAD,
-            PAD + ROWS as f32 * CELL + 10.0,
-            20.0,
-            Color::rgb(1.0, 1.0, 1.0),
-            format!("Score {}", self.score),
-        );
-        draw.text(
-            PAD + 140.0,
-            PAD + ROWS as f32 * CELL + 12.0,
-            14.0,
-            Color::rgba(1.0, 1.0, 1.0, 0.55),
-            "方向键/WASD · R 重开 · Esc 退出",
-        );
+        draw.text(PAD, PAD + ROWS as f32 * CELL + 10.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", self.score));
+        draw.text(PAD + 140.0, PAD + ROWS as f32 * CELL + 12.0, 14.0, Color::rgba(1.0, 1.0, 1.0, 0.55), "方向键/WASD · R 重开 · Esc 退出");
         if self.dead {
-            draw.fill_rect(
-                Rect::new(PAD + 40.0, PAD + 160.0, 400.0, 80.0),
-                Color::rgba(0.0, 0.0, 0.0, 0.7),
-            );
-            draw.text(
-                PAD + 140.0,
-                PAD + 180.0,
-                28.0,
-                Color::rgb(1.0, 0.45, 0.4),
-                "GAME OVER",
-            );
-            draw.text(
-                PAD + 150.0,
-                PAD + 215.0,
-                16.0,
-                Color::rgb(1.0, 1.0, 1.0),
-                "按 R 重新开始",
-            );
+            draw.fill_rect(Rect::new(PAD + 40.0, PAD + 160.0, 400.0, 80.0), Color::rgba(0.0, 0.0, 0.0, 0.7));
+            draw.text(PAD + 140.0, PAD + 180.0, 28.0, Color::rgb(1.0, 0.45, 0.4), "GAME OVER");
+            draw.text(PAD + 150.0, PAD + 215.0, 16.0, Color::rgb(1.0, 1.0, 1.0), "按 R 重新开始");
         }
     }
 

@@ -1,22 +1,27 @@
 {
-  "name": "spark-engine",
-  "private": true,
-  "description": "Spark Engine workspace. Product face is `@game-gpt/sparkle-engine` (CLI spark + N-API + Wasm).",
-  "packageManager": "pnpm@9.15.4",
-  "engines": {
-    "node": ">=18"
-  },
-  "scripts": {
-    "build:napi": "node scripts/build/napi.mjs --release",
-    "build:ts": "pnpm --filter @game-gpt/sparkle-engine run build",
-    "build:wasm": "pnpm --filter @game-gpt/sparkle-engine-unknown-wasm32 run build:wasm",
-    "build": "pnpm run build:ts && pnpm run build:napi",
-    "typecheck": "pnpm --filter @game-gpt/sparkle-engine run typecheck"
-  },
-  "license": "Apache-2.0",
-  "devDependencies": {
-    "@game-gpt/sparkle-engine": "workspace:*",
-    "@types/node": "^22.10.0",
-    "typescript": "^5.7.0"
-  }
+    "name": "spark-engine",
+    "private": true,
+    "description": "Spark Engine workspace. Product face is `@game-gpt/sparkle-engine` (CLI spark + N-API + Wasm).",
+    "packageManager": "pnpm@9.15.4",
+    "engines": {
+        "node": ">=18"
+    },
+    "scripts": {
+        "build:napi": "node scripts/build/napi.mjs --release",
+        "build:ts": "pnpm --filter @game-gpt/sparkle-engine run build",
+        "build:wasm": "pnpm --filter @game-gpt/sparkle-engine-unknown-wasm32 run build:wasm",
+        "build": "pnpm run build:ts && pnpm run build:napi",
+        "typecheck": "pnpm --filter @game-gpt/sparkle-engine run typecheck",
+        "fmt": "node scripts/format.mjs",
+        "fmt:check": "node scripts/format.mjs --check",
+        "check": "biome check .",
+        "lint": "biome lint ."
+    },
+    "license": "Apache-2.0",
+    "devDependencies": {
+        "@biomejs/biome": "2.5.14",
+        "@game-gpt/sparkle-engine": "workspace:*",
+        "@types/node": "^22.10.0",
+        "typescript": "^5.7.0"
+    }
 }

@@ -15,19 +15,14 @@ pub enum PlaySession {
 
 impl PlaySession {
     pub fn start(project: &ProjectInfo) -> Result<Self, String> {
-        let target = project
-            .run_target
-            .as_deref()
-            .unwrap_or(project.name.as_str());
+        let target = project.run_target.as_deref().unwrap_or(project.name.as_str());
         match target {
             "ping-pong" => Ok(Self::PingPong(PingPongGame::new())),
             "tetris" => Ok(Self::Tetris(TetrisApp::new())),
             "snake" => Ok(Self::Snake(SnakeApp::new())),
             other => match project.kind {
                 ProjectKind::Valkyrie if other == project.name => Ok(Self::Snake(SnakeApp::new())),
-                _ => Err(format!(
-                    "尚不支持 Play 目标 `{other}`（已知：ping-pong / tetris / snake）"
-                )),
+                _ => Err(format!("尚不支持 Play 目标 `{other}`（已知：ping-pong / tetris / snake）")),
             },
         }
     }

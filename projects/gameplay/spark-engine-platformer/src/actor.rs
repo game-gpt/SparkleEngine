@@ -3,8 +3,10 @@
 use spark_core::{Rect, Vec2};
 use spark_geometry::aabb_aabb;
 
-use crate::world::{SolidKind, TileWorld};
-use crate::PlatformerConfig;
+use crate::{
+    PlatformerConfig,
+    world::{SolidKind, TileWorld},
+};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ControllerInput {
@@ -25,14 +27,7 @@ pub struct ActorBody {
 
 impl ActorBody {
     pub fn new(pos: Vec2, size: Vec2) -> Self {
-        Self {
-            pos,
-            size,
-            vel: Vec2::ZERO,
-            on_ground: false,
-            coyote: 0.0,
-            jump_buf: 0.0,
-        }
+        Self { pos, size, vel: Vec2::ZERO, on_ground: false, coyote: 0.0, jump_buf: 0.0 }
     }
 
     pub fn aabb(&self) -> Rect {
@@ -43,25 +38,21 @@ impl ActorBody {
         self.aabb().center()
     }
 
-    pub fn integrate(
-        &mut self,
-        dt: f32,
-        input: ControllerInput,
-        cfg: &PlatformerConfig,
-        world: &TileWorld,
-    ) {
+    pub fn integrate(&mut self, dt: f32, input: ControllerInput, cfg: &PlatformerConfig, world: &TileWorld) {
         let dt = dt.max(0.0);
         self.vel.x = input.move_x.clamp(-1.0, 1.0) * cfg.move_speed;
         self.vel.y -= cfg.gravity * dt;
 
         if input.jump_pressed {
             self.jump_buf = cfg.jump_buffer;
-        } else {
+        }
+        else {
             self.jump_buf = (self.jump_buf - dt).max(0.0);
         }
         if self.on_ground {
             self.coyote = cfg.coyote_time;
-        } else {
+        }
+        else {
             self.coyote = (self.coyote - dt).max(0.0);
         }
         if self.jump_buf > 0.0 && self.coyote > 0.0 {
@@ -93,7 +84,8 @@ impl ActorBody {
             }
             if self.vel.x > 0.0 {
                 self.pos.x = s.rect.x - self.size.x;
-            } else if self.vel.x < 0.0 {
+            }
+            else if self.vel.x < 0.0 {
                 self.pos.x = s.rect.x + s.rect.w;
             }
             self.vel.x = 0.0;
@@ -112,7 +104,8 @@ impl ActorBody {
                     if self.vel.y < 0.0 {
                         self.pos.y = s.rect.y + s.rect.h;
                         self.on_ground = true;
-                    } else if self.vel.y > 0.0 {
+                    }
+                    else if self.vel.y > 0.0 {
                         self.pos.y = s.rect.y - self.size.y;
                     }
                     self.vel.y = 0.0;

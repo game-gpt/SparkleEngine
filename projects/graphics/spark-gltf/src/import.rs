@@ -1,15 +1,16 @@
 //! 导入入口与错误类型。
 
-use std::fmt;
-use std::path::Path;
+use std::{fmt, path::Path};
 
 use spark_animator::{Skeleton, SkinnedAnimationClip};
 use spark_core::Color;
 use spark_geometry::{Aabb3, Vec3};
 use spark_renderer::SkinnedVertex;
 
-use crate::mesh::import_meshes;
-use crate::skin::{import_animations, import_skeleton, remap_mesh_joints};
+use crate::{
+    mesh::import_meshes,
+    skin::{import_animations, import_skeleton, remap_mesh_joints},
+};
 
 /// glTF 导入错误。`Display` 只输出稳定码。
 #[derive(Debug)]
@@ -21,9 +22,7 @@ pub enum GltfError {
 
 impl GltfError {
     pub fn invalid(detail: impl Into<String>) -> Self {
-        Self::Invalid {
-            detail: detail.into(),
-        }
+        Self::Invalid { detail: detail.into() }
     }
 
     pub fn code(&self) -> &'static str {
@@ -42,10 +41,7 @@ impl GltfError {
                 // `detail` 必须是机器令牌（如 `missing_bin_chunk`），不是自然语言。
                 ErrorArgs::new().with("reason", ErrorArg::String(Arc::from(detail.as_str())))
             }
-            Self::Io(e) => ErrorArgs::new().with(
-                "kind",
-                ErrorArg::String(Arc::from(io_kind_token(e.kind()))),
-            ),
+            Self::Io(e) => ErrorArgs::new().with("kind", ErrorArg::String(Arc::from(io_kind_token(e.kind())))),
             Self::Gltf(_) => ErrorArgs::new(),
         }
     }
@@ -123,37 +119,22 @@ pub fn import_path(path: impl AsRef<Path>) -> Result<GltfAsset, GltfError> {
     import_doc(&gltf, blob, base)
 }
 
-fn import_doc(
-    gltf: &gltf::Gltf,
-    blob: Option<&[u8]>,
-    base: Option<&Path>,
-) -> Result<GltfAsset, GltfError> {
+fn import_doc(gltf: &gltf::Gltf, blob: Option<&[u8]>, base: Option<&Path>) -> Result<GltfAsset, GltfError> {
     let buffers = load_buffers(gltf, blob, base)?;
     let skin = import_skeleton(gltf, &buffers)?;
-    let clips = if let Some(sk) = skin.as_ref() {
-        import_animations(gltf, &buffers, sk)?
-    } else {
-        Vec::new()
-    };
+    let clips = if let Some(sk) = skin.as_ref() { import_animations(gltf, &buffers, sk)? } else { Vec::new() };
     let mut meshes = import_meshes(gltf, &buffers)?;
     let skeleton = if let Some(sk) = skin {
         remap_mesh_joints(&mut meshes, &sk.skin_to_out);
         Some(sk.skeleton)
-    } else {
+    }
+    else {
         None
     };
-    Ok(GltfAsset {
-        skeleton,
-        clips,
-        meshes,
-    })
+    Ok(GltfAsset { skeleton, clips, meshes })
 }
 
-fn load_buffers(
-    gltf: &gltf::Gltf,
-    blob: Option<&[u8]>,
-    base: Option<&Path>,
-) -> Result<Vec<Vec<u8>>, GltfError> {
+fn load_buffers(gltf: &gltf::Gltf, blob: Option<&[u8]>, base: Option<&Path>) -> Result<Vec<Vec<u8>>, GltfError> {
     let mut out = Vec::with_capacity(gltf.buffers().len());
     for buffer in gltf.buffers() {
         match buffer.source() {
@@ -163,15 +144,11 @@ fn load_buffers(
             }
             gltf::buffer::Source::Uri(uri) => {
                 if let Some(data) = uri.strip_prefix("data:") {
-                    let b64 = data
-                        .split(',')
-                        .nth(1)
-                        .ok_or_else(|| GltfError::invalid("invalid_data_uri"))?;
+                    let b64 = data.split(',').nth(1).ok_or_else(|| GltfError::invalid("invalid_data_uri"))?;
                     out.push(decode_base64(b64)?);
-                } else {
-                    let base = base.ok_or_else(|| {
-                        GltfError::invalid("external_buffer_needs_path")
-                    })?;
+                }
+                else {
+                    let base = base.ok_or_else(|| GltfError::invalid("external_buffer_needs_path"))?;
                     let path = base.join(uri);
                     out.push(std::fs::read(path)?);
                 }
@@ -201,7 +178,8 @@ fn decode_base64(s: &str) -> Result<Vec<u8>, GltfError> {
         if c == b'=' || c.is_ascii_whitespace() {
             continue;
         }
-        let Some(v) = val(c) else {
+        let Some(v) = val(c)
+        else {
             return Err(GltfError::invalid("invalid_base64_char"));
         };
         buf[n] = v;
@@ -215,10 +193,12 @@ fn decode_base64(s: &str) -> Result<Vec<u8>, GltfError> {
     }
     if n == 2 {
         out.push((buf[0] << 2) | (buf[1] >> 4));
-    } else if n == 3 {
+    }
+    else if n == 3 {
         out.push((buf[0] << 2) | (buf[1] >> 4));
         out.push((buf[1] << 4) | (buf[2] >> 2));
-    } else if n == 1 {
+    }
+    else if n == 1 {
         return Err(GltfError::invalid("invalid_base64_length"));
     }
     Ok(out)
@@ -240,9 +220,5 @@ pub(crate) fn aabb_from_positions(positions: &[[f32; 3]]) -> Aabb3 {
         max.y = max.y.max(p[1]);
         max.z = max.z.max(p[2]);
     }
-    if positions.is_empty() {
-        Aabb3::from_min_max(Vec3::ZERO, Vec3::ZERO)
-    } else {
-        Aabb3::from_min_max(min, max)
-    }
+    if positions.is_empty() { Aabb3::from_min_max(Vec3::ZERO, Vec3::ZERO) } else { Aabb3::from_min_max(min, max) }
 }

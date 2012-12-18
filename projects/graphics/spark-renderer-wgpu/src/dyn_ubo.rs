@@ -46,11 +46,7 @@ mod tests {
         Some((device, queue))
     }
 
-    fn make_dyn_bg(
-        device: &wgpu::Device,
-        buffer: &wgpu::Buffer,
-        element: u64,
-    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+    fn make_dyn_bg(device: &wgpu::Device, buffer: &wgpu::Buffer, element: u64) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("dyn-ubo-bgl"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -69,11 +65,7 @@ mod tests {
             layout: &bgl,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer,
-                    offset: 0,
-                    size: binding_size(element),
-                }),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding { buffer, offset: 0, size: binding_size(element) }),
             }],
         });
         (bgl, bg)
@@ -81,7 +73,8 @@ mod tests {
 
     #[test]
     fn dynamic_offset_bind_group_submits() {
-        let Some((device, queue)) = test_device() else {
+        let Some((device, queue)) = test_device()
+        else {
             eprintln!("skip: no wgpu adapter");
             return;
         };
@@ -96,11 +89,7 @@ mod tests {
         let (_bgl, bg) = make_dyn_bg(&device, &buffer, element);
         let tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("dyn-ubo-rt"),
-            size: wgpu::Extent3d {
-                width: 4,
-                height: 4,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width: 4, height: 4, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -109,29 +98,17 @@ mod tests {
             view_formats: &[],
         });
         let view = tex.create_view(&Default::default());
-        let ubo = DummyUbo {
-            model: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
-        };
+        let ubo = DummyUbo { model: [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]] };
         queue.write_buffer(&buffer, stride, bytemuck::bytes_of(&ubo));
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("dyn-ubo-enc"),
-        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("dyn-ubo-enc") });
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("dyn-ubo-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
@@ -146,7 +123,8 @@ mod tests {
 
     #[test]
     fn empty_dynamic_offsets_are_rejected() {
-        let Some((device, queue)) = test_device() else {
+        let Some((device, queue)) = test_device()
+        else {
             eprintln!("skip: no wgpu adapter");
             return;
         };
@@ -161,11 +139,7 @@ mod tests {
         let (_bgl, bg) = make_dyn_bg(&device, &buffer, element);
         let tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("dyn-ubo-rt-bad"),
-            size: wgpu::Extent3d {
-                width: 4,
-                height: 4,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width: 4, height: 4, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -176,19 +150,14 @@ mod tests {
         let view = tex.create_view(&Default::default());
 
         let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("dyn-ubo-bad-enc"),
-        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("dyn-ubo-bad-enc") });
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("dyn-ubo-bad-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
@@ -199,9 +168,6 @@ mod tests {
         }
         queue.submit(Some(encoder.finish()));
         let err = pollster::block_on(scope.pop());
-        assert!(
-            err.is_some(),
-            "expected validation error for empty dynamic offsets"
-        );
+        assert!(err.is_some(), "expected validation error for empty dynamic offsets");
     }
 }

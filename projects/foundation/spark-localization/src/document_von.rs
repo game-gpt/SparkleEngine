@@ -11,9 +11,11 @@
 
 use std::sync::Arc;
 
-use crate::document::{LocalizationDocument, MessageDefinition};
-use crate::locale::{LocaleId, LocaleParseError};
-use crate::manifest_von::{parse_string, split_assign, strip_line_comment, ManifestVonError};
+use crate::{
+    document::{LocalizationDocument, MessageDefinition},
+    locale::{LocaleId, LocaleParseError},
+    manifest_von::{ManifestVonError, parse_string, split_assign, strip_line_comment},
+};
 
 /// VON 语言包解析错误。
 #[derive(Debug)]
@@ -44,12 +46,10 @@ impl DocumentVonError {
             Self::Manifest(e) => e.args(),
             Self::Locale(e) => e.args(),
             Self::MissingLocale | Self::MissingNamespace => ErrorArgs::new(),
-            Self::MissingAssign { line } => {
-                ErrorArgs::new().with("line", ErrorArg::Unsigned(*line as u64))
+            Self::MissingAssign { line } => ErrorArgs::new().with("line", ErrorArg::Unsigned(*line as u64)),
+            Self::UnknownField { field, line } => {
+                ErrorArgs::new().with("field", ErrorArg::String(Arc::from(field.as_str()))).with("line", ErrorArg::Unsigned(*line as u64))
             }
-            Self::UnknownField { field, line } => ErrorArgs::new()
-                .with("field", ErrorArg::String(Arc::from(field.as_str())))
-                .with("line", ErrorArg::Unsigned(*line as u64)),
         }
     }
 }
@@ -94,15 +94,13 @@ pub fn document_from_von_str(text: &str) -> Result<LocalizationDocument, Documen
         if line.is_empty() {
             continue;
         }
-        let Some((key, value)) = split_assign(line) else {
+        let Some((key, value)) = split_assign(line)
+        else {
             return Err(DocumentVonError::MissingAssign { line: line_no + 1 });
         };
         if let Some(name) = key.strip_prefix("message.") {
             if name.is_empty() {
-                return Err(DocumentVonError::UnknownField {
-                    field: key.to_string(),
-                    line: line_no + 1,
-                });
+                return Err(DocumentVonError::UnknownField { field: key.to_string(), line: line_no + 1 });
             }
             messages.push((name.to_string(), parse_string(value)?));
             continue;
@@ -111,10 +109,7 @@ pub fn document_from_von_str(text: &str) -> Result<LocalizationDocument, Documen
             "locale" => locale = Some(LocaleId::parse(&parse_string(value)?)?),
             "namespace" => namespace = Some(parse_string(value)?),
             other => {
-                return Err(DocumentVonError::UnknownField {
-                    field: other.to_string(),
-                    line: line_no + 1,
-                });
+                return Err(DocumentVonError::UnknownField { field: other.to_string(), line: line_no + 1 });
             }
         }
     }
@@ -150,9 +145,6 @@ message.hello = "你好，{name}"
             doc.messages.get(&crate::document::MessageName::new("menu.quit")),
             Some(MessageDefinition::Text(t)) if t.as_ref() == "退出"
         ));
-        assert!(matches!(
-            doc.messages.get(&crate::document::MessageName::new("hello")),
-            Some(MessageDefinition::Pattern(_))
-        ));
+        assert!(matches!(doc.messages.get(&crate::document::MessageName::new("hello")), Some(MessageDefinition::Pattern(_))));
     }
 }

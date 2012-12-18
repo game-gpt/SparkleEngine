@@ -3,17 +3,13 @@
 //! [`ScriptDomain`] 持有已验证映像的运行时、宿主 schema 指纹、生命周期导出与预算。
 //! **不**拥有 ECS [`spark_ecs`] 世界；结构变更须经后续命令缓冲在同步点提交。
 
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use spark_gc::Value;
 use spark_script::{ExecutableImage, HostPhase, HostSchema, ScriptRuntime};
 use spark_vm::HostHooks;
 
-use crate::command_buffer::ScriptCommandBuffer;
-use crate::event_inbox::ScriptEventInbox;
-use crate::EngineError;
+use crate::{EngineError, command_buffer::ScriptCommandBuffer, event_inbox::ScriptEventInbox};
 
 /// 每领域每帧（或每次回调）的资源预算。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,12 +22,7 @@ pub struct ScriptBudget {
 
 impl Default for ScriptBudget {
     fn default() -> Self {
-        Self {
-            instruction_limit: 5_000_000,
-            host_call_limit: 100_000,
-            allocation_limit: 1_000_000,
-            call_depth_limit: 256,
-        }
+        Self { instruction_limit: 5_000_000, host_call_limit: 100_000, allocation_limit: 1_000_000, call_depth_limit: 256 }
     }
 }
 
@@ -90,43 +81,23 @@ impl ScriptDomain {
     }
 
     /// 调用命名导出（生命周期或普通函数）。
-    pub fn call(
-        &mut self,
-        name: &str,
-        args: &[Value],
-        host: &mut dyn HostHooks,
-    ) -> Result<Value, EngineError> {
+    pub fn call(&mut self, name: &str, args: &[Value], host: &mut dyn HostHooks) -> Result<Value, EngineError> {
         self.call_in_phase(name, args, HostPhase::Any, host)
     }
 
     /// 在指定 [`HostPhase`] 下调用导出（调度器须先在 [`EngineShared`] 写入阶段与访问策略）。
-    pub fn call_in_phase(
-        &mut self,
-        name: &str,
-        args: &[Value],
-        phase: HostPhase,
-        host: &mut dyn HostHooks,
-    ) -> Result<Value, EngineError> {
+    pub fn call_in_phase(&mut self, name: &str, args: &[Value], phase: HostPhase, host: &mut dyn HostHooks) -> Result<Value, EngineError> {
         if !self.enabled {
-            return Err(EngineError::ScriptDomainDisabled {
-                mod_id: self.mod_id.to_string(),
-            });
+            return Err(EngineError::ScriptDomainDisabled { mod_id: self.mod_id.to_string() });
         }
         // 阶段门禁由引擎在 `EngineShared.active_phase` + 内置原生 `gate` 强制；
         // 此处保留参数供调用方审计与未来 VM 级槽位检查。
         let _ = phase;
-        self.runtime
-            .call(name, args, host)
-            .map_err(EngineError::Script)
+        self.runtime.call(name, args, host).map_err(EngineError::Script)
     }
 
     /// 若存在则调用生命周期导出；不存在则返回 `None`。
-    pub fn call_lifecycle(
-        &mut self,
-        name: &str,
-        args: &[Value],
-        host: &mut dyn HostHooks,
-    ) -> Result<Option<Value>, EngineError> {
+    pub fn call_lifecycle(&mut self, name: &str, args: &[Value], host: &mut dyn HostHooks) -> Result<Option<Value>, EngineError> {
         if !self.has_lifecycle(name) {
             return Ok(None);
         }
@@ -149,22 +120,13 @@ impl ScriptDomain {
     }
 
     /// 派发 inbox 中全部事件到 `on_event`（若导出）或同名导出函数。
-    pub fn dispatch_events(
-        &mut self,
-        host: &mut dyn HostHooks,
-    ) -> Result<(), EngineError> {
+    pub fn dispatch_events(&mut self, host: &mut dyn HostHooks) -> Result<(), EngineError> {
         let events = self.drain_events();
         for ev in events {
             if self.has_lifecycle("on_event") {
                 let _ = self.call("on_event", &ev.args, host)?;
-            } else if self
-                .runtime
-                .vm
-                .module
-                .functions
-                .iter()
-                .any(|f| f.name == ev.name.as_ref())
-            {
+            }
+            else if self.runtime.vm.module.functions.iter().any(|f| f.name == ev.name.as_ref()) {
                 let _ = self.call(ev.name.as_ref(), &ev.args, host)?;
             }
         }
@@ -175,9 +137,7 @@ impl ScriptDomain {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use spark_script::{
-        HostFunction, HostFunctionId, ScriptCompiler, ScriptLanguage,
-    };
+    use spark_script::{HostFunction, HostFunctionId, ScriptCompiler, ScriptLanguage};
     use spark_vm::StdHost;
 
     #[test]
@@ -191,48 +151,23 @@ mod tests {
             return 0
             "#;
         let mut compiler = ScriptCompiler::new();
-        let package = compiler
-            .compile_source(ScriptLanguage::Valkyrie, source, &host)
-            .unwrap();
-        assert!(package
-            .image
-            .lifecycle_exports
-            .iter()
-            .any(|n| n.as_ref() == "on_start"));
-        let mut domain =
-            ScriptDomain::from_image("test.mod", &package.image, &host, ScriptBudget::default())
-                .unwrap();
+        let package = compiler.compile_source(ScriptLanguage::Valkyrie, source, &host).unwrap();
+        assert!(package.image.lifecycle_exports.iter().any(|n| n.as_ref() == "on_start"));
+        let mut domain = ScriptDomain::from_image("test.mod", &package.image, &host, ScriptBudget::default()).unwrap();
         let mut hooks = StdHost;
-        let v = domain
-            .call_lifecycle("on_start", &[], &mut hooks)
-            .unwrap()
-            .unwrap();
+        let v = domain.call_lifecycle("on_start", &[], &mut hooks).unwrap().unwrap();
         assert_eq!(v.as_number(), Some(42.0));
-        assert!(domain
-            .call_lifecycle("on_unload", &[], &mut hooks)
-            .unwrap()
-            .is_none());
-        assert_eq!(
-            domain.runtime.vm.step_limit,
-            ScriptBudget::default().instruction_limit
-        );
+        assert!(domain.call_lifecycle("on_unload", &[], &mut hooks).unwrap().is_none());
+        assert_eq!(domain.runtime.vm.step_limit, ScriptBudget::default().instruction_limit);
     }
 
     #[test]
     fn custom_budget_sets_vm_limits() {
         let host = HostSchema::new(1);
         let mut compiler = ScriptCompiler::new();
-        let package = compiler
-            .compile_source(ScriptLanguage::Valkyrie, "return 1", &host)
-            .unwrap();
-        let budget = ScriptBudget {
-            instruction_limit: 1234,
-            host_call_limit: 56,
-            allocation_limit: 78,
-            call_depth_limit: 9,
-        };
-        let domain =
-            ScriptDomain::from_image("budget.mod", &package.image, &host, budget).unwrap();
+        let package = compiler.compile_source(ScriptLanguage::Valkyrie, "return 1", &host).unwrap();
+        let budget = ScriptBudget { instruction_limit: 1234, host_call_limit: 56, allocation_limit: 78, call_depth_limit: 9 };
+        let domain = ScriptDomain::from_image("budget.mod", &package.image, &host, budget).unwrap();
         assert_eq!(domain.runtime.vm.step_limit, 1234);
         assert_eq!(domain.runtime.vm.host_call_limit, 56);
         assert_eq!(domain.runtime.vm.allocation_limit, 78);
@@ -243,12 +178,8 @@ mod tests {
     fn domain_command_buffer_drains() {
         let host = HostSchema::new(1);
         let mut compiler = ScriptCompiler::new();
-        let package = compiler
-            .compile_source(ScriptLanguage::Valkyrie, "return 1", &host)
-            .unwrap();
-        let mut domain =
-            ScriptDomain::from_image("buf.mod", &package.image, &host, ScriptBudget::default())
-                .unwrap();
+        let package = compiler.compile_source(ScriptLanguage::Valkyrie, "return 1", &host).unwrap();
+        let mut domain = ScriptDomain::from_image("buf.mod", &package.image, &host, ScriptBudget::default()).unwrap();
         domain.command_buffer.borrow_mut().spawn("rock");
         let cmds = domain.drain_commands();
         assert_eq!(cmds.len(), 1);
@@ -265,12 +196,8 @@ mod tests {
             "#;
         let host = HostSchema::new(1);
         let mut compiler = ScriptCompiler::new();
-        let package = compiler
-            .compile_source(ScriptLanguage::Valkyrie, source, &host)
-            .unwrap();
-        let mut domain =
-            ScriptDomain::from_image("ev.mod", &package.image, &host, ScriptBudget::default())
-                .unwrap();
+        let package = compiler.compile_source(ScriptLanguage::Valkyrie, source, &host).unwrap();
+        let mut domain = ScriptDomain::from_image("ev.mod", &package.image, &host, ScriptBudget::default()).unwrap();
         domain.enqueue_event("ping", vec![]);
         let mut hooks = StdHost;
         domain.dispatch_events(&mut hooks).unwrap();

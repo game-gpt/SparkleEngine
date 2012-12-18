@@ -18,25 +18,11 @@ pub enum PaddleSide {
 
 impl Paddle {
     pub fn left(court_h: f32) -> Self {
-        Self {
-            x: 24.0,
-            y: court_h * 0.5 - 40.0,
-            w: 14.0,
-            h: 80.0,
-            speed: 420.0,
-            side: PaddleSide::Left,
-        }
+        Self { x: 24.0, y: court_h * 0.5 - 40.0, w: 14.0, h: 80.0, speed: 420.0, side: PaddleSide::Left }
     }
 
     pub fn right(court_w: f32, court_h: f32) -> Self {
-        Self {
-            x: court_w - 38.0,
-            y: court_h * 0.5 - 40.0,
-            w: 14.0,
-            h: 80.0,
-            speed: 420.0,
-            side: PaddleSide::Right,
-        }
+        Self { x: court_w - 38.0, y: court_h * 0.5 - 40.0, w: 14.0, h: 80.0, speed: 420.0, side: PaddleSide::Right }
     }
 
     pub fn clamp_y(&mut self, court_h: f32) {

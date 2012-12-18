@@ -15,20 +15,13 @@ pub struct UiMetrics {
 
 impl Default for UiMetrics {
     fn default() -> Self {
-        Self {
-            dpi_scale: 1.0,
-            ui_scale: 1.0,
-            safe_area: Insets::default(),
-        }
+        Self { dpi_scale: 1.0, ui_scale: 1.0, safe_area: Insets::default() }
     }
 }
 
 impl UiMetrics {
     pub fn new(dpi_scale: f32) -> Self {
-        Self {
-            dpi_scale: dpi_scale.max(0.01),
-            ..Self::default()
-        }
+        Self { dpi_scale: dpi_scale.max(0.01), ..Self::default() }
     }
 
     /// 文本与固有控件尺寸使用的综合缩放。

@@ -1,13 +1,13 @@
 //! 基于 mtime 轮询的热重载监视。
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::time::SystemTime;
+use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
-use crate::cache::AssetCache;
-use crate::handle::AssetKey;
-use crate::loader::{AssetLoader, BytesLoader, ReloadEvent};
-use crate::AssetError;
+use crate::{
+    AssetError,
+    cache::AssetCache,
+    handle::AssetKey,
+    loader::{AssetLoader, BytesLoader, ReloadEvent},
+};
 
 #[derive(Debug, Clone)]
 struct WatchEntry {
@@ -53,16 +53,10 @@ impl HotReloadWatch {
     }
 
     /// 扫描 mtime；有变化则重载缓存。返回本轮事件（带真实路径）。
-    pub fn poll(
-        &mut self,
-        cache: &mut AssetCache,
-        loader: &dyn AssetLoader,
-    ) -> Result<Vec<ReloadEvent>, AssetError> {
+    pub fn poll(&mut self, cache: &mut AssetCache, loader: &dyn AssetLoader) -> Result<Vec<ReloadEvent>, AssetError> {
         let mut changed = Vec::new();
         for (key, entry) in self.watched.iter_mut() {
-            let new_mtime = std::fs::metadata(&entry.path)
-                .ok()
-                .and_then(|m| m.modified().ok());
+            let new_mtime = std::fs::metadata(&entry.path).ok().and_then(|m| m.modified().ok());
             let did_change = match (entry.mtime, new_mtime) {
                 (Some(old), Some(new)) => new > old,
                 (None, Some(_)) => true,
@@ -94,11 +88,8 @@ impl HotReloadWatch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::loader::BytesLoader;
-    use crate::AssetCache;
-    use std::io::Write;
-    use std::thread;
-    use std::time::Duration;
+    use crate::{AssetCache, loader::BytesLoader};
+    use std::{io::Write, thread, time::Duration};
 
     #[test]
     fn hot_reload_watch_polls_mtime() {

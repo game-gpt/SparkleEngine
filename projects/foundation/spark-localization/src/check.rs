@@ -1,11 +1,15 @@
 //! 构建期文档检查：重复键、参数一致性、选择分支与循环引用。
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    sync::Arc,
+};
 
-use crate::document::{LocalizationDocument, MessageDefinition, MessageName, MessageNode, SelectKind};
-use crate::locale::LocaleId;
-use crate::message::NamespaceId;
+use crate::{
+    document::{LocalizationDocument, MessageDefinition, MessageName, MessageNode, SelectKind},
+    locale::LocaleId,
+    message::NamespaceId,
+};
 
 /// 检查发现问题。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,11 +86,7 @@ pub fn check_locale_set(baseline: &LocalizationDocument, others: &[LocalizationD
                 namespace: doc.namespace.clone(),
                 locale: Some(doc.locale.clone()),
                 message: None,
-                token: Some(Arc::from(format!(
-                    "{}!={}",
-                    doc.namespace.as_str(),
-                    baseline.namespace.as_str()
-                ))),
+                token: Some(Arc::from(format!("{}!={}", doc.namespace.as_str(), baseline.namespace.as_str()))),
             });
             continue;
         }
@@ -121,11 +121,7 @@ pub fn check_locale_set(baseline: &LocalizationDocument, others: &[LocalizationD
                         namespace: doc.namespace.clone(),
                         locale: Some(doc.locale.clone()),
                         message: Some(message.clone()),
-                        token: Some(Arc::from(format!(
-                            "{}!={}",
-                            join_names(expected),
-                            join_names(actual)
-                        ))),
+                        token: Some(Arc::from(format!("{}!={}", join_names(expected), join_names(actual)))),
                     });
                 }
             }
@@ -143,12 +139,7 @@ fn is_empty_definition(def: &MessageDefinition) -> bool {
     }
 }
 
-fn check_select_cases(
-    doc: &LocalizationDocument,
-    name: &MessageName,
-    def: &MessageDefinition,
-    report: &mut CheckReport,
-) {
+fn check_select_cases(doc: &LocalizationDocument, name: &MessageName, def: &MessageDefinition, report: &mut CheckReport) {
     match def {
         MessageDefinition::Select { kind, cases, .. } => {
             require_other_case(doc, name, *kind, cases, report);
@@ -167,12 +158,7 @@ fn check_select_cases(
     }
 }
 
-fn walk_select_in_nodes(
-    doc: &LocalizationDocument,
-    name: &MessageName,
-    node: &MessageNode,
-    report: &mut CheckReport,
-) {
+fn walk_select_in_nodes(doc: &LocalizationDocument, name: &MessageName, node: &MessageNode, report: &mut CheckReport) {
     if let MessageNode::Select { kind, cases, .. } = node {
         require_other_case(doc, name, *kind, cases, report);
         for nodes in cases.values() {
@@ -190,9 +176,7 @@ fn require_other_case(
     cases: &BTreeMap<Arc<str>, Vec<MessageNode>>,
     report: &mut CheckReport,
 ) {
-    if matches!(kind, SelectKind::Cardinal | SelectKind::Ordinal | SelectKind::Select)
-        && !cases.contains_key("other")
-    {
+    if matches!(kind, SelectKind::Cardinal | SelectKind::Ordinal | SelectKind::Select) && !cases.contains_key("other") {
         report.issues.push(CheckIssue {
             kind: CheckIssueKind::MissingSelectCase,
             namespace: doc.namespace.clone(),
@@ -260,19 +244,11 @@ fn walk_refs(
 }
 
 fn join_stack(stack: &[MessageName]) -> String {
-    stack
-        .iter()
-        .map(MessageName::as_str)
-        .collect::<Vec<_>>()
-        .join("->")
+    stack.iter().map(MessageName::as_str).collect::<Vec<_>>().join("->")
 }
 
 fn join_names(names: &BTreeSet<Arc<str>>) -> String {
-    names
-        .iter()
-        .map(|s| s.as_ref())
-        .collect::<Vec<_>>()
-        .join(",")
+    names.iter().map(|s| s.as_ref()).collect::<Vec<_>>().join(",")
 }
 
 fn collect_arg_schemas(doc: &LocalizationDocument) -> BTreeMap<MessageName, BTreeSet<Arc<str>>> {
@@ -289,9 +265,7 @@ fn collect_args_from_def(def: &MessageDefinition, args: &mut BTreeSet<Arc<str>>)
     match def {
         MessageDefinition::Text(_) => {}
         MessageDefinition::Pattern(nodes) => collect_args_from_nodes(nodes, args),
-        MessageDefinition::Select {
-            argument, cases, ..
-        } => {
+        MessageDefinition::Select { argument, cases, .. } => {
             args.insert(argument.clone());
             for nodes in cases.values() {
                 collect_args_from_nodes(nodes, args);
@@ -306,9 +280,7 @@ fn collect_args_from_nodes(nodes: &[MessageNode], args: &mut BTreeSet<Arc<str>>)
             MessageNode::Argument { name, .. } => {
                 args.insert(name.clone());
             }
-            MessageNode::Select {
-                argument, cases, ..
-            } => {
+            MessageNode::Select { argument, cases, .. } => {
                 args.insert(argument.clone());
                 for child in cases.values() {
                     collect_args_from_nodes(child, args);
@@ -322,33 +294,20 @@ fn collect_args_from_nodes(nodes: &[MessageNode], args: &mut BTreeSet<Arc<str>>)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::{MessageDefinition, MessageNode, SelectKind};
-    use crate::locale::LocaleId;
+    use crate::{
+        document::{MessageDefinition, MessageNode, SelectKind},
+        locale::LocaleId,
+    };
     use std::sync::Arc;
 
     #[test]
     fn detects_missing_other_case() {
         let mut doc = LocalizationDocument::new(LocaleId::parse("en").unwrap(), "game");
         let mut cases = BTreeMap::new();
-        cases.insert(
-            Arc::from("one"),
-            vec![MessageNode::Text(Arc::from("one item"))],
-        );
-        doc.insert(
-            "item_count",
-            MessageDefinition::Select {
-                argument: Arc::from("count"),
-                kind: SelectKind::Cardinal,
-                cases,
-            },
-        );
+        cases.insert(Arc::from("one"), vec![MessageNode::Text(Arc::from("one item"))]);
+        doc.insert("item_count", MessageDefinition::Select { argument: Arc::from("count"), kind: SelectKind::Cardinal, cases });
         let report = check_document(&doc);
-        assert!(
-            report
-                .issues
-                .iter()
-                .any(|i| i.kind == CheckIssueKind::MissingSelectCase)
-        );
+        assert!(report.issues.iter().any(|i| i.kind == CheckIssueKind::MissingSelectCase));
     }
 
     #[test]
@@ -367,11 +326,7 @@ mod tests {
         let mut zh = LocalizationDocument::new(LocaleId::parse("zh-Hans-CN").unwrap(), "other");
         zh.insert("a", MessageDefinition::Text(Arc::from("甲")));
         let report = check_locale_set(&en, &[zh]);
-        let issue = report
-            .issues
-            .iter()
-            .find(|i| i.kind == CheckIssueKind::NamespaceMismatch)
-            .expect("namespace mismatch");
+        let issue = report.issues.iter().find(|i| i.kind == CheckIssueKind::NamespaceMismatch).expect("namespace mismatch");
         let token = issue.token.as_deref().unwrap_or("");
         assert!(token.contains("!="));
         assert!(!token.contains(' '));

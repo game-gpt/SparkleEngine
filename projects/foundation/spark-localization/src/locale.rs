@@ -1,7 +1,6 @@
 //! BCP 47 Locale 标识与确定性协商。
 
-use std::fmt;
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 /// 书写方向。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -36,9 +35,7 @@ pub enum LocaleParseError {
 
 impl LocaleParseError {
     pub fn invalid(detail: impl Into<String>) -> Self {
-        Self::Invalid {
-            detail: detail.into(),
-        }
+        Self::Invalid { detail: detail.into() }
     }
 
     pub fn code(&self) -> &'static str {
@@ -53,9 +50,7 @@ impl LocaleParseError {
         use std::sync::Arc;
         match self {
             Self::Empty => ErrorArgs::new(),
-            Self::Invalid { detail } => {
-                ErrorArgs::new().with("reason", ErrorArg::String(Arc::from(detail.as_str())))
-            }
+            Self::Invalid { detail } => ErrorArgs::new().with("reason", ErrorArg::String(Arc::from(detail.as_str()))),
         }
     }
 }
@@ -133,9 +128,11 @@ impl LocaleId {
                             first.make_ascii_uppercase();
                         }
                         script = Some(s);
-                    } else if is_region(raw) {
+                    }
+                    else if is_region(raw) {
                         region = Some(normalize_region(raw));
-                    } else {
+                    }
+                    else {
                         // 变体等：协商链会去掉，解析时忽略后续。
                         break;
                     }
@@ -143,7 +140,8 @@ impl LocaleId {
                 2 => {
                     if region.is_none() && is_region(raw) {
                         region = Some(normalize_region(raw));
-                    } else {
+                    }
+                    else {
                         break;
                     }
                 }
@@ -165,12 +163,7 @@ impl LocaleId {
             tag.push('-');
             tag.push_str(region);
         }
-        Self {
-            language: Arc::from(language),
-            script: script.map(Arc::from),
-            region: region.map(Arc::from),
-            tag: Arc::from(tag),
-        }
+        Self { language: Arc::from(language), script: script.map(Arc::from), region: region.map(Arc::from), tag: Arc::from(tag) }
     }
 
     pub fn as_str(&self) -> &str {
@@ -218,39 +211,25 @@ impl LocaleId {
         }
 
         if let Some(script) = self.script.as_ref() {
-            push_unique(
-                &mut out,
-                Self::from_parts(self.language.to_string(), Some(script.to_string()), None),
-            );
+            push_unique(&mut out, Self::from_parts(self.language.to_string(), Some(script.to_string()), None));
         }
 
         if let Some(region) = self.region.as_ref() {
-            push_unique(
-                &mut out,
-                Self::from_parts(self.language.to_string(), None, Some(region.to_string())),
-            );
+            push_unique(&mut out, Self::from_parts(self.language.to_string(), None, Some(region.to_string())));
         }
 
-        push_unique(
-            &mut out,
-            Self::from_parts(self.language.to_string(), None, None),
-        );
+        push_unique(&mut out, Self::from_parts(self.language.to_string(), None, None));
 
         out
     }
 }
 
 fn is_region(raw: &str) -> bool {
-    (raw.len() == 2 && raw.chars().all(|c| c.is_ascii_alphabetic()))
-        || (raw.len() == 3 && raw.chars().all(|c| c.is_ascii_digit()))
+    (raw.len() == 2 && raw.chars().all(|c| c.is_ascii_alphabetic())) || (raw.len() == 3 && raw.chars().all(|c| c.is_ascii_digit()))
 }
 
 fn normalize_region(raw: &str) -> String {
-    if raw.chars().all(|c| c.is_ascii_alphabetic()) {
-        raw.to_ascii_uppercase()
-    } else {
-        raw.to_string()
-    }
+    if raw.chars().all(|c| c.is_ascii_alphabetic()) { raw.to_ascii_uppercase() } else { raw.to_string() }
 }
 
 /// 用户偏好与产品回退配置。
@@ -270,11 +249,7 @@ impl LocaleRequest {
 ///
 /// 对每个偏好按 [`LocaleId::fallback_candidates`] 展开，再追加请求级 fallback、
 /// `product_default` 与引擎根回退。返回第一个命中 `available` 的 Locale。
-pub fn negotiate(
-    request: &LocaleRequest,
-    available: &[LocaleId],
-    product_default: &LocaleId,
-) -> LocaleId {
+pub fn negotiate(request: &LocaleRequest, available: &[LocaleId], product_default: &LocaleId) -> LocaleId {
     let mut chain: Vec<LocaleId> = Vec::new();
     let push_unique = |list: &mut Vec<LocaleId>, locale: LocaleId| {
         if !list.iter().any(|existing| existing == &locale) {
@@ -311,15 +286,10 @@ pub fn negotiate(
 }
 
 /// 展开完整 fallback 链（已协商 Locale → 产品默认 → 根），供快照持有。
-pub fn build_fallback_chain(
-    resolved: &LocaleId,
-    product_default: &LocaleId,
-    available: &[LocaleId],
-) -> Arc<[LocaleId]> {
+pub fn build_fallback_chain(resolved: &LocaleId, product_default: &LocaleId, available: &[LocaleId]) -> Arc<[LocaleId]> {
     let mut chain: Vec<LocaleId> = Vec::new();
     let push_if_available = |list: &mut Vec<LocaleId>, locale: LocaleId| {
-        if available.iter().any(|item| item == &locale) && !list.iter().any(|existing| existing == &locale)
-        {
+        if available.iter().any(|item| item == &locale) && !list.iter().any(|existing| existing == &locale) {
             list.push(locale);
         }
     };
@@ -335,7 +305,8 @@ pub fn build_fallback_chain(
     if chain.is_empty() {
         if let Some(first) = available.first() {
             chain.push(first.clone());
-        } else {
+        }
+        else {
             chain.push(resolved.clone());
         }
     }

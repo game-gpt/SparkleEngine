@@ -1,8 +1,10 @@
 //! 加载器。
 
-use std::fmt;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use spark_core::{ErrorArg, ErrorArgs};
 
@@ -12,24 +14,16 @@ use crate::handle::AssetKey;
 #[derive(Debug)]
 pub enum LoadError {
     NotFound { key: Arc<str> },
-    Io {
-        key: Arc<str>,
-        cause: std::io::Error,
-    },
+    Io { key: Arc<str>, cause: std::io::Error },
 }
 
 impl LoadError {
     pub fn not_found(key: impl AsRef<str>) -> Self {
-        Self::NotFound {
-            key: Arc::from(key.as_ref()),
-        }
+        Self::NotFound { key: Arc::from(key.as_ref()) }
     }
 
     pub fn io(key: impl AsRef<str>, cause: std::io::Error) -> Self {
-        Self::Io {
-            key: Arc::from(key.as_ref()),
-            cause,
-        }
+        Self::Io { key: Arc::from(key.as_ref()), cause }
     }
 
     pub fn code(&self) -> &'static str {
@@ -41,15 +35,10 @@ impl LoadError {
 
     pub fn args(&self) -> ErrorArgs {
         match self {
-            Self::NotFound { key } => {
-                ErrorArgs::new().with("key", ErrorArg::AssetKey(Arc::clone(key)))
-            }
+            Self::NotFound { key } => ErrorArgs::new().with("key", ErrorArg::AssetKey(Arc::clone(key))),
             Self::Io { key, cause } => ErrorArgs::new()
                 .with("key", ErrorArg::AssetKey(Arc::clone(key)))
-                .with(
-                    "kind",
-                    ErrorArg::String(Arc::from(io_kind_token(cause.kind()))),
-                ),
+                .with("kind", ErrorArg::String(Arc::from(io_kind_token(cause.kind())))),
         }
     }
 }
@@ -120,9 +109,6 @@ pub struct ReloadEvent {
 
 impl ReloadEvent {
     pub fn new(key: impl Into<AssetKey>, path: impl AsRef<Path>) -> Self {
-        Self {
-            key: key.into(),
-            path: path.as_ref().to_path_buf(),
-        }
+        Self { key: key.into(), path: path.as_ref().to_path_buf() }
     }
 }

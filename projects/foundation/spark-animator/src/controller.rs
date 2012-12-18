@@ -1,12 +1,13 @@
 //! 根据参数和过渡决定当前播哪一段。不绘制。
 
-use std::collections::HashMap;
-use std::marker::PhantomData;
+use std::{collections::HashMap, marker::PhantomData};
 
-use crate::parameter::ParameterValue;
-use crate::player::AnimationPlayer;
-use crate::state::AnimatorState;
-use crate::transition::{AnimatorCondition, AnimatorTransition};
+use crate::{
+    parameter::ParameterValue,
+    player::AnimationPlayer,
+    state::AnimatorState,
+    transition::{AnimatorCondition, AnimatorTransition},
+};
 
 /// 状态、过渡和参数的描述。采样值类型不在这里。
 #[derive(Debug, Clone, Default)]
@@ -19,10 +20,7 @@ pub struct AnimatorController {
 
 impl AnimatorController {
     pub fn new(default_state: impl Into<String>) -> Self {
-        Self {
-            default_state: default_state.into(),
-            ..Self::default()
-        }
+        Self { default_state: default_state.into(), ..Self::default() }
     }
 
     pub fn add_state(&mut self, state: AnimatorState) -> &mut Self {
@@ -72,13 +70,7 @@ impl<T> Animator<T> {
         let speed = controller.state(&current).map(|state| state.speed).unwrap_or(1.0);
         let mut player = AnimationPlayer::new();
         player.speed = speed;
-        Self {
-            controller,
-            player,
-            current,
-            transition: None,
-            _sample: PhantomData,
-        }
+        Self { controller, player, current, transition: None, _sample: PhantomData }
     }
 
     pub fn current_state(&self) -> &str {
@@ -97,32 +89,20 @@ impl<T> Animator<T> {
     pub fn transition_weight(&self) -> f32 {
         self.transition
             .as_ref()
-            .map(|transition| {
-                if transition.duration <= 1e-8 {
-                    1.0
-                } else {
-                    (transition.elapsed / transition.duration).clamp(0.0, 1.0)
-                }
-            })
+            .map(|transition| if transition.duration <= 1e-8 { 1.0 } else { (transition.elapsed / transition.duration).clamp(0.0, 1.0) })
             .unwrap_or(0.0)
     }
 
     pub fn set_bool(&mut self, name: impl Into<String>, value: bool) {
-        self.controller
-            .parameters
-            .insert(name.into(), ParameterValue::Bool(value));
+        self.controller.parameters.insert(name.into(), ParameterValue::Bool(value));
     }
 
     pub fn set_float(&mut self, name: impl Into<String>, value: f32) {
-        self.controller
-            .parameters
-            .insert(name.into(), ParameterValue::Float(value));
+        self.controller.parameters.insert(name.into(), ParameterValue::Float(value));
     }
 
     pub fn set_trigger(&mut self, name: impl Into<String>) {
-        self.controller
-            .parameters
-            .insert(name.into(), ParameterValue::Trigger(true));
+        self.controller.parameters.insert(name.into(), ParameterValue::Trigger(true));
     }
 
     /// 推进播放，并在条件满足时开始或完成过渡。
@@ -137,44 +117,30 @@ impl<T> Animator<T> {
                 self.transition = None;
                 self.enter(&to);
             }
-        } else if let Some(index) = self.find_transition() {
+        }
+        else if let Some(index) = self.find_transition() {
             let to = self.controller.transitions[index].to.clone();
             let duration = self.controller.transitions[index].duration;
             self.consume_triggers(index);
             if duration <= 1e-8 {
                 self.enter(&to);
-            } else {
-                self.transition = Some(ActiveTransition {
-                    to,
-                    elapsed: dt,
-                    duration,
-                });
-                if self
-                    .transition
-                    .as_ref()
-                    .is_some_and(|transition| transition.elapsed >= transition.duration)
-                {
+            }
+            else {
+                self.transition = Some(ActiveTransition { to, elapsed: dt, duration });
+                if self.transition.as_ref().is_some_and(|transition| transition.elapsed >= transition.duration) {
                     let to = self.transition.take().unwrap().to;
                     self.enter(&to);
                 }
             }
         }
-        let clip_name = self
-            .controller
-            .state(&self.current)
-            .map(|state| state.clip.clone())
-            .unwrap_or_default();
+        let clip_name = self.controller.state(&self.current).map(|state| state.clip.clone()).unwrap_or_default();
         let duration = durations.get(&clip_name).copied().unwrap_or(0.0);
         self.player.tick(dt, duration);
     }
 
     fn enter(&mut self, state_name: &str) {
         self.current = state_name.to_string();
-        let speed = self
-            .controller
-            .state(state_name)
-            .map(|state| state.speed)
-            .unwrap_or(1.0);
+        let speed = self.controller.state(state_name).map(|state| state.speed).unwrap_or(1.0);
         self.player.reset();
         self.player.speed = speed;
         self.player.play();
@@ -182,11 +148,7 @@ impl<T> Animator<T> {
 
     fn find_transition(&self) -> Option<usize> {
         self.controller.transitions.iter().position(|transition| {
-            transition.from == self.current
-                && transition
-                    .conditions
-                    .iter()
-                    .all(|condition| self.condition_met(condition))
+            transition.from == self.current && transition.conditions.iter().all(|condition| self.condition_met(condition))
         })
     }
 
@@ -205,10 +167,7 @@ impl<T> Animator<T> {
                 )
             }
             AnimatorCondition::Trigger { parameter } => {
-                matches!(
-                    self.controller.parameters.get(parameter),
-                    Some(ParameterValue::Trigger(true))
-                )
+                matches!(self.controller.parameters.get(parameter), Some(ParameterValue::Trigger(true)))
             }
         }
     }
@@ -223,9 +182,7 @@ impl<T> Animator<T> {
             })
             .collect();
         for name in names {
-            self.controller
-                .parameters
-                .insert(name, ParameterValue::Trigger(false));
+            self.controller.parameters.insert(name, ParameterValue::Trigger(false));
         }
     }
 }

@@ -1,22 +1,19 @@
 //! 编译后的运行时语言包（逻辑类型，磁盘扩展名由资产管线决定）。
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::document::{MessageDefinition, MessageName, MessageNode, SelectKind};
-use crate::locale::LocaleId;
-use crate::message::NamespaceId;
+use crate::{
+    document::{MessageDefinition, MessageName, MessageNode, SelectKind},
+    locale::LocaleId,
+    message::NamespaceId,
+};
 
 /// 单条已编译消息（作者糖已展开）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompiledMessage {
     Text(Arc<str>),
     Pattern(Arc<[MessageNode]>),
-    Select {
-        argument: Arc<str>,
-        kind: SelectKind,
-        cases: BTreeMap<Arc<str>, Arc<[MessageNode]>>,
-    },
+    Select { argument: Arc<str>, kind: SelectKind, cases: BTreeMap<Arc<str>, Arc<[MessageNode]>> },
 }
 
 impl CompiledMessage {
@@ -27,36 +24,20 @@ impl CompiledMessage {
                 match MessageDefinition::from_template_sugar(text) {
                     MessageDefinition::Text(t) => Self::Text(t),
                     MessageDefinition::Pattern(nodes) => Self::Pattern(Arc::from(nodes)),
-                    MessageDefinition::Select {
-                        argument,
-                        kind,
-                        cases,
-                    } => Self::from_select(argument, kind, &cases),
+                    MessageDefinition::Select { argument, kind, cases } => Self::from_select(argument, kind, &cases),
                 }
             }
             MessageDefinition::Pattern(nodes) => Self::Pattern(Arc::from(nodes.as_slice())),
-            MessageDefinition::Select {
-                argument,
-                kind,
-                cases,
-            } => Self::from_select(argument.clone(), *kind, cases),
+            MessageDefinition::Select { argument, kind, cases } => Self::from_select(argument.clone(), *kind, cases),
         }
     }
 
-    fn from_select(
-        argument: Arc<str>,
-        kind: SelectKind,
-        cases: &BTreeMap<Arc<str>, Vec<MessageNode>>,
-    ) -> Self {
+    fn from_select(argument: Arc<str>, kind: SelectKind, cases: &BTreeMap<Arc<str>, Vec<MessageNode>>) -> Self {
         let mut compiled = BTreeMap::new();
         for (key, nodes) in cases {
             compiled.insert(key.clone(), Arc::from(nodes.as_slice()));
         }
-        Self::Select {
-            argument,
-            kind,
-            cases: compiled,
-        }
+        Self::Select { argument, kind, cases: compiled }
     }
 }
 
@@ -81,11 +62,7 @@ impl LocalizationBundle {
     pub const FORMAT_VERSION: u32 = 1;
 
     pub fn new() -> Self {
-        Self {
-            format_version: Self::FORMAT_VERSION,
-            content_hash: 0,
-            messages: BTreeMap::new(),
-        }
+        Self { format_version: Self::FORMAT_VERSION, content_hash: 0, messages: BTreeMap::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -96,48 +73,17 @@ impl LocalizationBundle {
         self.messages.is_empty()
     }
 
-    pub fn insert(
-        &mut self,
-        namespace: NamespaceId,
-        message: MessageName,
-        locale: LocaleId,
-        compiled: CompiledMessage,
-    ) {
-        self.messages.insert(
-            BundleKey {
-                namespace,
-                message,
-                locale,
-            },
-            compiled,
-        );
+    pub fn insert(&mut self, namespace: NamespaceId, message: MessageName, locale: LocaleId, compiled: CompiledMessage) {
+        self.messages.insert(BundleKey { namespace, message, locale }, compiled);
         self.rehash();
     }
 
-    pub fn get(
-        &self,
-        namespace: &NamespaceId,
-        message: &MessageName,
-        locale: &LocaleId,
-    ) -> Option<&CompiledMessage> {
-        self.messages.get(&BundleKey {
-            namespace: namespace.clone(),
-            message: message.clone(),
-            locale: locale.clone(),
-        })
+    pub fn get(&self, namespace: &NamespaceId, message: &MessageName, locale: &LocaleId) -> Option<&CompiledMessage> {
+        self.messages.get(&BundleKey { namespace: namespace.clone(), message: message.clone(), locale: locale.clone() })
     }
 
-    pub fn get_named(
-        &self,
-        namespace: &str,
-        message: &str,
-        locale: &LocaleId,
-    ) -> Option<&CompiledMessage> {
-        self.get(
-            &NamespaceId::new(namespace),
-            &MessageName::new(message),
-            locale,
-        )
+    pub fn get_named(&self, namespace: &str, message: &str, locale: &LocaleId) -> Option<&CompiledMessage> {
+        self.get(&NamespaceId::new(namespace), &MessageName::new(message), locale)
     }
 
     pub fn locales(&self) -> Vec<LocaleId> {
@@ -148,12 +94,7 @@ impl LocalizationBundle {
         set.into_keys().collect()
     }
 
-    pub fn contains(
-        &self,
-        namespace: &NamespaceId,
-        message: &MessageName,
-        locale: &LocaleId,
-    ) -> bool {
+    pub fn contains(&self, namespace: &NamespaceId, message: &MessageName, locale: &LocaleId) -> bool {
         self.get(namespace, message, locale).is_some()
     }
 

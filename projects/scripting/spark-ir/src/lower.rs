@@ -1,8 +1,8 @@
 //! HIR → MIR 降低。
 
-use crate::hir::{HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp};
-use crate::mir::{
-    BasicBlock, HostRef, IrEffect, MirFunction, MirInst, MirModule, MirTerminator, MirValue,
+use crate::{
+    hir::{HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp},
+    mir::{BasicBlock, HostRef, IrEffect, MirFunction, MirInst, MirModule, MirTerminator, MirValue},
 };
 
 /// 将 HIR 模块降低为显式控制流 MIR。
@@ -11,11 +11,7 @@ pub fn lower_module(module: &HirModule) -> Result<MirModule, String> {
     for func in &module.functions {
         functions.push(lower_function(func)?);
     }
-    Ok(MirModule {
-        package: module.package.clone(),
-        name: module.name.clone(),
-        functions,
-    })
+    Ok(MirModule { package: module.package.clone(), name: module.name.clone(), functions })
 }
 
 fn lower_function(func: &HirFunction) -> Result<MirFunction, String> {
@@ -27,18 +23,8 @@ fn lower_function(func: &HirFunction) -> Result<MirFunction, String> {
         local_tys.push(ty.clone());
     }
 
-    let mut cx = LowerCx {
-        next_value: 0,
-        blocks: Vec::new(),
-        current: 0,
-        effects: Vec::new(),
-        loop_exits: Vec::new(),
-    };
-    cx.blocks.push(BasicBlock {
-        id: 0,
-        insts: Vec::new(),
-        terminator: MirTerminator::Unreachable,
-    });
+    let mut cx = LowerCx { next_value: 0, blocks: Vec::new(), current: 0, effects: Vec::new(), loop_exits: Vec::new() };
+    cx.blocks.push(BasicBlock { id: 0, insts: Vec::new(), terminator: MirTerminator::Unreachable });
 
     let mut saw_return = false;
     for stmt in &func.body {
@@ -46,18 +32,12 @@ fn lower_function(func: &HirFunction) -> Result<MirFunction, String> {
             saw_return = true;
         }
         lower_stmt(&mut cx, stmt)?;
-        if matches!(
-            cx.blocks[cx.current].terminator,
-            MirTerminator::Return { .. }
-        ) {
+        if matches!(cx.blocks[cx.current].terminator, MirTerminator::Return { .. }) {
             // 后续语句不可达；若还有语句则开新块承接（简化：直接停）。
             break;
         }
     }
-    if matches!(
-        cx.blocks[cx.current].terminator,
-        MirTerminator::Unreachable
-    ) {
+    if matches!(cx.blocks[cx.current].terminator, MirTerminator::Unreachable) {
         if !saw_return {
             let v = cx.alloc();
             cx.emit(MirInst::ConstNull { dst: v });
@@ -65,13 +45,7 @@ fn lower_function(func: &HirFunction) -> Result<MirFunction, String> {
         }
     }
 
-    Ok(MirFunction {
-        name: func.name.clone(),
-        arity: func.params.len() as u8,
-        local_tys,
-        blocks: cx.blocks,
-        effects: cx.effects,
-    })
+    Ok(MirFunction { name: func.name.clone(), arity: func.params.len() as u8, local_tys, blocks: cx.blocks, effects: cx.effects })
 }
 
 struct LowerCx {
@@ -100,11 +74,7 @@ impl LowerCx {
 
     fn new_block(&mut self) -> u32 {
         let id = self.blocks.len() as u32;
-        self.blocks.push(BasicBlock {
-            id,
-            insts: Vec::new(),
-            terminator: MirTerminator::Unreachable,
-        });
+        self.blocks.push(BasicBlock { id, insts: Vec::new(), terminator: MirTerminator::Unreachable });
         id
     }
 
@@ -119,10 +89,7 @@ impl LowerCx {
     }
 
     fn term_is_open(&self) -> bool {
-        matches!(
-            self.blocks[self.current].terminator,
-            MirTerminator::Unreachable
-        )
+        matches!(self.blocks[self.current].terminator, MirTerminator::Unreachable)
     }
 }
 
@@ -137,10 +104,7 @@ fn lower_stmt(cx: &mut LowerCx, stmt: &HirStmt) -> Result<(), String> {
         }
         HirStmt::AssignLocal { index, value, .. } => {
             let src = lower_expr(cx, value)?;
-            cx.emit(MirInst::StoreLocal {
-                index: *index,
-                src,
-            });
+            cx.emit(MirInst::StoreLocal { index: *index, src });
             Ok(())
         }
         HirStmt::Return { value, .. } => {
@@ -155,21 +119,12 @@ fn lower_stmt(cx: &mut LowerCx, stmt: &HirStmt) -> Result<(), String> {
             cx.set_term(MirTerminator::Return { value: v });
             Ok(())
         }
-        HirStmt::If {
-            cond,
-            then_body,
-            else_body,
-            ..
-        } => {
+        HirStmt::If { cond, then_body, else_body, .. } => {
             let c = lower_expr(cx, cond)?;
             let then_id = cx.new_block();
             let else_id = cx.new_block();
             let join_id = cx.new_block();
-            cx.set_term(MirTerminator::Branch {
-                cond: c,
-                then_target: then_id,
-                else_target: else_id,
-            });
+            cx.set_term(MirTerminator::Branch { cond: c, then_target: then_id, else_target: else_id });
             cx.switch(then_id);
             for s in then_body {
                 lower_stmt(cx, s)?;
@@ -194,11 +149,7 @@ fn lower_stmt(cx: &mut LowerCx, stmt: &HirStmt) -> Result<(), String> {
             cx.set_term(MirTerminator::Jump { target: header });
             cx.switch(header);
             let c = lower_expr(cx, cond)?;
-            cx.set_term(MirTerminator::Branch {
-                cond: c,
-                then_target: body_id,
-                else_target: exit,
-            });
+            cx.set_term(MirTerminator::Branch { cond: c, then_target: body_id, else_target: exit });
             cx.switch(body_id);
             cx.loop_exits.push(exit);
             for s in body {
@@ -212,7 +163,8 @@ fn lower_stmt(cx: &mut LowerCx, stmt: &HirStmt) -> Result<(), String> {
             Ok(())
         }
         HirStmt::Break { .. } => {
-            let Some(&exit) = cx.loop_exits.last() else {
+            let Some(&exit) = cx.loop_exits.last()
+            else {
                 return Err("break_outside_loop".into());
             };
             cx.set_term(MirTerminator::Jump { target: exit });
@@ -230,80 +182,48 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
         }
         HirExpr::LiteralBool { value, .. } => {
             let dst = cx.alloc();
-            cx.emit(MirInst::ConstBool {
-                dst,
-                value: *value,
-            });
+            cx.emit(MirInst::ConstBool { dst, value: *value });
             Ok(dst)
         }
         HirExpr::LiteralNumber { value, .. } => {
             let dst = cx.alloc();
-            cx.emit(MirInst::ConstNumber {
-                dst,
-                value: *value,
-            });
+            cx.emit(MirInst::ConstNumber { dst, value: *value });
             Ok(dst)
         }
         HirExpr::LiteralString { value, .. } => {
             let dst = cx.alloc();
-            cx.emit(MirInst::ConstString {
-                dst,
-                value: value.clone(),
-            });
+            cx.emit(MirInst::ConstString { dst, value: value.clone() });
             Ok(dst)
         }
         HirExpr::Local { index, .. } => {
             let dst = cx.alloc();
-            cx.emit(MirInst::LoadLocal {
-                dst,
-                index: *index,
-            });
+            cx.emit(MirInst::LoadLocal { dst, index: *index });
             Ok(dst)
         }
         HirExpr::FuncRef { func_index, .. } => {
             let dst = cx.alloc();
-            cx.emit(MirInst::ConstFunc {
-                dst,
-                func_index: *func_index,
-            });
+            cx.emit(MirInst::ConstFunc { dst, func_index: *func_index });
             Ok(dst)
         }
         HirExpr::Binary { op, lhs, rhs, .. } => {
             let l = lower_expr(cx, lhs)?;
             let r = lower_expr(cx, rhs)?;
             let dst = cx.alloc();
-            cx.emit(MirInst::Binary {
-                dst,
-                op: *op,
-                lhs: l,
-                rhs: r,
-            });
+            cx.emit(MirInst::Binary { dst, op: *op, lhs: l, rhs: r });
             Ok(dst)
         }
         HirExpr::Unary { op, expr, .. } => {
             let src = lower_expr(cx, expr)?;
             let dst = cx.alloc();
-            cx.emit(MirInst::Unary {
-                dst,
-                op: *op,
-                src,
-            });
+            cx.emit(MirInst::Unary { dst, op: *op, src });
             Ok(dst)
         }
         HirExpr::ToBool { expr, .. } => {
             let src = lower_expr(cx, expr)?;
             let dst = cx.alloc();
-            cx.emit(MirInst::Unary {
-                dst,
-                op: HirUnaryOp::Not,
-                src,
-            });
+            cx.emit(MirInst::Unary { dst, op: HirUnaryOp::Not, src });
             let dst2 = cx.alloc();
-            cx.emit(MirInst::Unary {
-                dst: dst2,
-                op: HirUnaryOp::Not,
-                src: dst,
-            });
+            cx.emit(MirInst::Unary { dst: dst2, op: HirUnaryOp::Not, src: dst });
             Ok(dst2)
         }
         HirExpr::Print { value, .. } => {
@@ -311,12 +231,7 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
             cx.emit(MirInst::Print { src });
             Ok(src)
         }
-        HirExpr::HostCall {
-            host,
-            args,
-            effects,
-            ..
-        } => {
+        HirExpr::HostCall { host, args, effects, .. } => {
             cx.note_effect(IrEffect::HostCall);
             for e in effects {
                 cx.note_effect(IrEffect::from_host(*e));
@@ -326,11 +241,7 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
                 argv.push(lower_expr(cx, a)?);
             }
             let dst = cx.alloc();
-            cx.emit(MirInst::HostCall {
-                dst: Some(dst),
-                host_slot_or_name: HostRef::Id(host.clone()),
-                args: argv,
-            });
+            cx.emit(MirInst::HostCall { dst: Some(dst), host_slot_or_name: HostRef::Id(host.clone()), args: argv });
             Ok(dst)
         }
         HirExpr::Call { callee, args, .. } => {
@@ -340,49 +251,28 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
                 argv.push(lower_expr(cx, a)?);
             }
             let dst = cx.alloc();
-            cx.emit(MirInst::Call {
-                dst: Some(dst),
-                func,
-                args: argv,
-            });
+            cx.emit(MirInst::Call { dst: Some(dst), func, args: argv });
             Ok(dst)
         }
-        HirExpr::If {
-            cond,
-            then_branch,
-            else_branch,
-            ..
-        } => {
+        HirExpr::If { cond, then_branch, else_branch, .. } => {
             let c = lower_expr(cx, cond)?;
             let then_id = cx.new_block();
             let else_id = cx.new_block();
             let join_id = cx.new_block();
             let result = cx.alloc();
-            cx.set_term(MirTerminator::Branch {
-                cond: c,
-                then_target: then_id,
-                else_target: else_id,
-            });
+            cx.set_term(MirTerminator::Branch { cond: c, then_target: then_id, else_target: else_id });
             cx.switch(then_id);
             let tv = lower_expr(cx, then_branch)?;
-            cx.emit(MirInst::Move {
-                dst: result,
-                src: tv,
-            });
+            cx.emit(MirInst::Move { dst: result, src: tv });
             cx.set_term(MirTerminator::Jump { target: join_id });
             cx.switch(else_id);
             let ev = lower_expr(cx, else_branch)?;
-            cx.emit(MirInst::Move {
-                dst: result,
-                src: ev,
-            });
+            cx.emit(MirInst::Move { dst: result, src: ev });
             cx.set_term(MirTerminator::Jump { target: join_id });
             cx.switch(join_id);
             Ok(result)
         }
-        HirExpr::Block {
-            stmts, result, ..
-        } => {
+        HirExpr::Block { stmts, result, .. } => {
             for s in stmts {
                 lower_stmt(cx, s)?;
                 if !cx.term_is_open() {

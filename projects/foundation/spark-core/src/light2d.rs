@@ -53,12 +53,7 @@ pub struct LightFalloff {
 
 impl Default for LightFalloff {
     fn default() -> Self {
-        Self {
-            open: 0.085,
-            blocked: 0.38,
-            bump: 0.008,
-            cutoff: 0.06,
-        }
+        Self { open: 0.085, blocked: 0.38, bump: 0.008, cutoff: 0.06 }
     }
 }
 
@@ -78,14 +73,7 @@ impl LightGrid2d {
         let w = w.max(0);
         let h = h.max(0);
         let n = (w as usize).saturating_mul(h as usize);
-        Self {
-            origin_x,
-            origin_y,
-            w,
-            h,
-            floor,
-            cells: vec![floor; n],
-        }
+        Self { origin_x, origin_y, w, h, floor, cells: vec![floor; n] }
     }
 
     pub fn width(&self) -> i32 {
@@ -105,7 +93,8 @@ impl LightGrid2d {
 
     /// 只在更亮时写入。越界返回 false。
     pub fn set_max(&mut self, x: i32, y: i32, value: LightRgb) -> bool {
-        let Some(i) = self.index(x, y) else {
+        let Some(i) = self.index(x, y)
+        else {
             return false;
         };
         let (next, changed) = self.cells[i].max_channel(value, 0.0);
@@ -156,11 +145,7 @@ impl LightGrid2d {
                 }
                 let nx = x + dx;
                 let ny = y + dy;
-                let fall = if blocked(nx, ny) {
-                    falloff.blocked
-                } else {
-                    falloff.open
-                };
+                let fall = if blocked(nx, ny) { falloff.blocked } else { falloff.open };
                 let next = LightRgb::new(cur.r - fall, cur.g - fall, cur.b - fall);
                 let ni = (nly * self.w + nlx) as usize;
                 let (raised, changed) = self.cells[ni].max_channel(next, falloff.bump);
@@ -197,15 +182,7 @@ mod tests {
 
         let mut spread = LightGrid2d::filled(0, 0, 2, 2, LightRgb::new(0.0, 0.0, 0.0));
         spread.set_max(0, 0, LightRgb::new(1.0, 0.0, 0.0));
-        spread.propagate(
-            LightFalloff {
-                open: 0.1,
-                blocked: 0.45,
-                bump: 0.001,
-                cutoff: 0.05,
-            },
-            |x, y| x == 1 && y == 0,
-        );
+        spread.propagate(LightFalloff { open: 0.1, blocked: 0.45, bump: 0.001, cutoff: 0.05 }, |x, y| x == 1 && y == 0);
         assert!(spread.get(0, 1).r > spread.get(1, 0).r);
         assert!(spread.get(0, 1).r > 0.8);
     }

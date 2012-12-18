@@ -6,11 +6,13 @@ mod tabs;
 pub use list::{content_height, sync_visible_rows, visible_row_range};
 pub use tabs::{handle_tab_click, sync_tabs, tab_view};
 
-use crate::id::WidgetId;
-use crate::layout::{FlexDirection, LayoutSpec, Size};
-use crate::node::{WidgetContent, WidgetKind};
-use crate::style::Style;
-use crate::tree::WidgetTree;
+use crate::{
+    id::WidgetId,
+    layout::{FlexDirection, LayoutSpec, Size},
+    node::{WidgetContent, WidgetKind},
+    style::Style,
+    tree::WidgetTree,
+};
 
 /// 轻量 builder：往树里挂节点。
 #[derive(Debug, Clone)]
@@ -142,10 +144,7 @@ pub fn column() -> WidgetBuilder {
 }
 
 pub fn row() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec {
-        direction: FlexDirection::Row,
-        ..LayoutSpec::horizontal()
-    })
+    WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec { direction: FlexDirection::Row, ..LayoutSpec::horizontal() })
 }
 
 pub fn panel() -> WidgetBuilder {
@@ -157,11 +156,7 @@ pub fn label_widget() -> WidgetBuilder {
 }
 
 pub fn image_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Image).layout(LayoutSpec {
-        width: Size::Px(32.0),
-        height: Size::Px(32.0),
-        ..LayoutSpec::default()
-    })
+    WidgetBuilder::new(WidgetKind::Image).layout(LayoutSpec { width: Size::Px(32.0), height: Size::Px(32.0), ..LayoutSpec::default() })
 }
 
 pub fn button_widget() -> WidgetBuilder {
@@ -169,63 +164,35 @@ pub fn button_widget() -> WidgetBuilder {
 }
 
 pub fn checkbox_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Checkbox).layout(LayoutSpec {
-        height: Size::Px(24.0),
-        ..LayoutSpec::horizontal()
-    })
+    WidgetBuilder::new(WidgetKind::Checkbox).layout(LayoutSpec { height: Size::Px(24.0), ..LayoutSpec::horizontal() })
 }
 
 pub fn toggle_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Toggle).layout(LayoutSpec {
-        height: Size::Px(24.0),
-        ..LayoutSpec::horizontal()
-    })
+    WidgetBuilder::new(WidgetKind::Toggle).layout(LayoutSpec { height: Size::Px(24.0), ..LayoutSpec::horizontal() })
 }
 
 pub fn radio_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Radio).layout(LayoutSpec {
-        height: Size::Px(24.0),
-        ..LayoutSpec::horizontal()
-    })
+    WidgetBuilder::new(WidgetKind::Radio).layout(LayoutSpec { height: Size::Px(24.0), ..LayoutSpec::horizontal() })
 }
 
 pub fn slider_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Slider).layout(LayoutSpec {
-        width: Size::Fill,
-        height: Size::Px(24.0),
-        ..LayoutSpec::horizontal()
-    })
+    WidgetBuilder::new(WidgetKind::Slider).layout(LayoutSpec { width: Size::Fill, height: Size::Px(24.0), ..LayoutSpec::horizontal() })
 }
 
 pub fn progress_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::ProgressBar).layout(LayoutSpec {
-        width: Size::Fill,
-        height: Size::Px(12.0),
-        ..LayoutSpec::horizontal()
-    })
+    WidgetBuilder::new(WidgetKind::ProgressBar).layout(LayoutSpec { width: Size::Fill, height: Size::Px(12.0), ..LayoutSpec::horizontal() })
 }
 
 pub fn text_field_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::TextField).layout(LayoutSpec {
-        width: Size::Fill,
-        height: Size::Px(32.0),
-        ..LayoutSpec::horizontal()
-    })
+    WidgetBuilder::new(WidgetKind::TextField).layout(LayoutSpec { width: Size::Fill, height: Size::Px(32.0), ..LayoutSpec::horizontal() })
 }
 
 pub fn separator_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Separator).layout(LayoutSpec {
-        width: Size::Fill,
-        height: Size::Px(1.0),
-        ..LayoutSpec::default()
-    })
+    WidgetBuilder::new(WidgetKind::Separator).layout(LayoutSpec { width: Size::Fill, height: Size::Px(1.0), ..LayoutSpec::default() })
 }
 
 pub fn spacer_widget() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Spacer).layout(LayoutSpec {
-        flex_grow: 1.0,
-        ..LayoutSpec::default()
-    })
+    WidgetBuilder::new(WidgetKind::Spacer).layout(LayoutSpec { flex_grow: 1.0, ..LayoutSpec::default() })
 }
 
 pub fn grid(columns: u32) -> WidgetBuilder {
@@ -233,20 +200,12 @@ pub fn grid(columns: u32) -> WidgetBuilder {
 }
 
 pub fn scroll_view() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::ScrollView).layout(LayoutSpec {
-        width: Size::Fill,
-        height: Size::Fill,
-        ..LayoutSpec::vertical()
-    })
+    WidgetBuilder::new(WidgetKind::ScrollView).layout(LayoutSpec { width: Size::Fill, height: Size::Fill, ..LayoutSpec::vertical() })
 }
 
 /// 虚拟列表容器：底层是 `ScrollView`，行实例化由调用方按 [`visible_row_range`] 同步。
 pub fn list_view() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::ListView).layout(LayoutSpec {
-        width: Size::Fill,
-        height: Size::Fill,
-        ..LayoutSpec::vertical()
-    })
+    WidgetBuilder::new(WidgetKind::ListView).layout(LayoutSpec { width: Size::Fill, height: Size::Fill, ..LayoutSpec::vertical() })
 }
 
 pub fn modal_widget() -> WidgetBuilder {
@@ -292,12 +251,10 @@ pub fn overlay_root() -> WidgetBuilder {
 
 /// HUD 场景根：默认 `UiLayer::Hud`，全屏 overlay 布局。
 pub fn hud_root() -> WidgetBuilder {
-    WidgetBuilder::new(WidgetKind::Container)
-        .layer(crate::runtime::UiLayer::Hud)
-        .layout(LayoutSpec {
-            width: Size::Fill,
-            height: Size::Fill,
-            kind: crate::layout::Layout::Overlay,
-            ..LayoutSpec::default()
-        })
+    WidgetBuilder::new(WidgetKind::Container).layer(crate::runtime::UiLayer::Hud).layout(LayoutSpec {
+        width: Size::Fill,
+        height: Size::Fill,
+        kind: crate::layout::Layout::Overlay,
+        ..LayoutSpec::default()
+    })
 }

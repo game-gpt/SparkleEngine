@@ -12,12 +12,7 @@ pub struct Quat {
 }
 
 impl Quat {
-    pub const IDENTITY: Self = Self {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0,
-        w: 1.0,
-    };
+    pub const IDENTITY: Self = Self { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
 
     pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self { x, y, z, w }
@@ -26,12 +21,7 @@ impl Quat {
     pub fn from_axis_angle(axis: Vec3, rad: f32) -> Self {
         let axis = axis.normalized();
         let (s, c) = (rad * 0.5).sin_cos();
-        Self {
-            x: axis.x * s,
-            y: axis.y * s,
-            z: axis.z * s,
-            w: c,
-        }
+        Self { x: axis.x * s, y: axis.y * s, z: axis.z * s, w: c }
     }
 
     /// 最短弧旋转：把单位向量 `from` 转到 `to`。
@@ -53,13 +43,7 @@ impl Quat {
         let axis = a.cross(b);
         let s = ((1.0 + dot) * 2.0).sqrt();
         let inv_s = 1.0 / s;
-        Self {
-            x: axis.x * inv_s,
-            y: axis.y * inv_s,
-            z: axis.z * inv_s,
-            w: s * 0.5,
-        }
-        .normalized()
+        Self { x: axis.x * inv_s, y: axis.y * inv_s, z: axis.z * inv_s, w: s * 0.5 }.normalized()
     }
 
     /// YXZ 欧拉角（弧度）：先 yaw(Y)，再 pitch(X)，再 roll(Z)。
@@ -76,25 +60,11 @@ impl Quat {
 
     pub fn normalized(self) -> Self {
         let len = self.length();
-        if len <= 1e-8 {
-            Self::IDENTITY
-        } else {
-            Self {
-                x: self.x / len,
-                y: self.y / len,
-                z: self.z / len,
-                w: self.w / len,
-            }
-        }
+        if len <= 1e-8 { Self::IDENTITY } else { Self { x: self.x / len, y: self.y / len, z: self.z / len, w: self.w / len } }
     }
 
     pub fn conjugate(self) -> Self {
-        Self {
-            x: -self.x,
-            y: -self.y,
-            z: -self.z,
-            w: self.w,
-        }
+        Self { x: -self.x, y: -self.y, z: -self.z, w: self.w }
     }
 
     pub fn dot(self, o: Self) -> f32 {
@@ -125,20 +95,10 @@ impl Quat {
     pub fn nlerp(self, other: Self, t: f32) -> Self {
         let mut b = other;
         if self.dot(b) < 0.0 {
-            b = Self {
-                x: -b.x,
-                y: -b.y,
-                z: -b.z,
-                w: -b.w,
-            };
+            b = Self { x: -b.x, y: -b.y, z: -b.z, w: -b.w };
         }
-        Self {
-            x: self.x + (b.x - self.x) * t,
-            y: self.y + (b.y - self.y) * t,
-            z: self.z + (b.z - self.z) * t,
-            w: self.w + (b.w - self.w) * t,
-        }
-        .normalized()
+        Self { x: self.x + (b.x - self.x) * t, y: self.y + (b.y - self.y) * t, z: self.z + (b.z - self.z) * t, w: self.w + (b.w - self.w) * t }
+            .normalized()
     }
 
     /// 球面线性插值（短弧）。
@@ -147,12 +107,7 @@ impl Quat {
         let mut b = other.normalized();
         let mut dot = a.dot(b);
         if dot < 0.0 {
-            b = Self {
-                x: -b.x,
-                y: -b.y,
-                z: -b.z,
-                w: -b.w,
-            };
+            b = Self { x: -b.x, y: -b.y, z: -b.z, w: -b.w };
             dot = -dot;
         }
         if dot > 0.9995 {
@@ -162,13 +117,7 @@ impl Quat {
         let sin_theta = theta.sin();
         let w1 = ((1.0 - t) * theta).sin() / sin_theta;
         let w2 = (t * theta).sin() / sin_theta;
-        Self {
-            x: a.x * w1 + b.x * w2,
-            y: a.y * w1 + b.y * w2,
-            z: a.z * w1 + b.z * w2,
-            w: a.w * w1 + b.w * w2,
-        }
-        .normalized()
+        Self { x: a.x * w1 + b.x * w2, y: a.y * w1 + b.y * w2, z: a.z * w1 + b.z * w2, w: a.w * w1 + b.w * w2 }.normalized()
     }
 
     pub fn to_mat4(self) -> Mat4 {
