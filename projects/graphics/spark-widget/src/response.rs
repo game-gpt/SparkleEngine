@@ -22,6 +22,10 @@ impl EventResponse {
         Self { handled: true, stop_propagation: true, prevent_default: false, commands: Vec::new() }
     }
 
+    pub fn prevent() -> Self {
+        Self { handled: true, stop_propagation: false, prevent_default: true, commands: Vec::new() }
+    }
+
     pub fn with_command(command: UiCommand) -> Self {
         Self { handled: true, stop_propagation: false, prevent_default: false, commands: vec![command] }
     }

@@ -60,6 +60,10 @@ pub struct WidgetContent {
     pub composition: String,
     /// Image 控件的资源句柄。
     pub image: Option<crate::asset::UiImage>,
+    /// 点击在本节点停止继续冒泡（capture / target / bubble 任一阶段命中即停）。
+    pub stop_click_propagation: bool,
+    /// 点击时跳过 router 默认行为（勾选切换、滑条、`click_command` 等）。
+    pub prevent_click_default: bool,
 }
 
 impl Default for WidgetContent {
@@ -77,6 +81,8 @@ impl Default for WidgetContent {
             sel_anchor: None,
             composition: String::new(),
             image: None,
+            stop_click_propagation: false,
+            prevent_click_default: false,
         }
     }
 }

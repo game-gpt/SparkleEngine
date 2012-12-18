@@ -309,20 +309,74 @@ fn sync_composition(runtime: &mut UiRuntime, input: &Input) {
 }
 
 fn handle_click(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
-    // 冒泡路径：默认行为只在目标节点执行，之后沿祖先记录轨迹（后续接监听器时可 stop/prevent）。
-    let path = crate::event::bubble_path(&runtime.tree, id);
-    let Some(&target) = path.first()
-    else {
-        return;
-    };
+    use crate::response::EventResponse;
 
-    apply_click_default(runtime, target, pos);
+    let mut response = EventResponse::default();
 
-    for &ancestor in path.iter().skip(1) {
-        runtime.inspector.push_trace("bubble", Some(ancestor), format!("click-from={}", target.raw()));
+    for wid in crate::event::capture_path(&runtime.tree, id) {
+        let phase_resp = click_phase_response(&runtime.tree, wid);
+        runtime.inspector.push_trace("capture", Some(wid), format!("click-target={}", id.raw()));
+        response.merge(phase_resp);
+        if response.stop_propagation {
+            flush_event_commands(runtime, &mut response);
+            return;
+        }
     }
 
-    let _ = ClickEvent { position: pos, target: Some(target) };
+    {
+        let phase_resp = click_phase_response(&runtime.tree, id);
+        runtime.inspector.push_trace("target", Some(id), format!("pos=({:.1},{:.1})", pos.x, pos.y));
+        response.merge(phase_resp);
+    }
+
+    if !response.prevent_default {
+        apply_click_default(runtime, id, pos);
+    }
+
+    flush_event_commands(runtime, &mut response);
+    if response.stop_propagation {
+        let _ = ClickEvent { position: pos, target: Some(id) };
+        return;
+    }
+
+    if let Some(parent) = runtime.tree.node(id).and_then(|n| n.parent) {
+        for wid in crate::event::bubble_path(&runtime.tree, parent) {
+            let phase_resp = click_phase_response(&runtime.tree, wid);
+            runtime.inspector.push_trace("bubble", Some(wid), format!("click-from={}", id.raw()));
+            response.merge(phase_resp);
+            if response.stop_propagation {
+                break;
+            }
+        }
+    }
+
+    flush_event_commands(runtime, &mut response);
+    let _ = ClickEvent { position: pos, target: Some(id) };
+}
+
+fn click_phase_response(tree: &WidgetTree, id: WidgetId) -> crate::response::EventResponse {
+    use crate::response::EventResponse;
+
+    let Some(node) = tree.node(id)
+    else {
+        return EventResponse::default();
+    };
+    let mut resp = EventResponse::default();
+    if node.content.prevent_click_default {
+        resp.prevent_default = true;
+        resp.handled = true;
+    }
+    if node.content.stop_click_propagation {
+        resp.stop_propagation = true;
+        resp.handled = true;
+    }
+    resp
+}
+
+fn flush_event_commands(runtime: &mut UiRuntime, response: &mut crate::response::EventResponse) {
+    for command in response.commands.drain(..) {
+        runtime.commands.push(command);
+    }
 }
 
 fn apply_click_default(runtime: &mut UiRuntime, id: WidgetId, pos: Vec2) {
@@ -1029,5 +1083,69 @@ mod tests {
         let f = frame(&input, 200.0, 200.0);
         runtime.dispatch_input(&f);
         assert_eq!(runtime.focus.focused, Some(first));
+    }
+
+    #[test]
+    fn prevent_click_default_skips_checkbox_toggle() {
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        let id = checkbox_widget()
+            .text("X")
+            .prevent_click_default(true)
+            .layout(LayoutSpec { width: Size::Px(120.0), height: Size::Px(28.0), ..LayoutSpec::default() })
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+        let center = runtime.tree.node(id).unwrap().computed.rect.center();
+
+        let mut input = Input::default();
+        input.on_cursor(center.x, center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        input.begin_frame();
+        input.on_cursor(center.x, center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+
+        assert!(!runtime.tree.node(id).unwrap().content.checked);
+        assert!(runtime.inspector.traces().iter().any(|e| e.kind == "target"));
+    }
+
+    #[test]
+    fn stop_click_propagation_halts_bubble_trace() {
+        let mut runtime = UiRuntime::new();
+        let root = runtime.tree.root();
+        let col = column()
+            .child(
+                button_widget()
+                    .text("Go")
+                    .stop_click_propagation(true)
+                    .on_click(UiCommand::Custom(3))
+                    .layout(LayoutSpec { width: Size::Px(80.0), height: Size::Px(40.0), ..LayoutSpec::default() }),
+            )
+            .mount(&mut runtime.tree, root)
+            .unwrap();
+        run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+        let btn = runtime.tree.node(col).unwrap().children[0];
+        let center = runtime.tree.node(btn).unwrap().computed.rect.center();
+
+        let mut input = Input::default();
+        input.on_cursor(center.x, center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.begin_frame(&f);
+        runtime.dispatch_input(&f);
+        input.begin_frame();
+        input.on_cursor(center.x, center.y);
+        input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+        let f = frame(&input, 200.0, 200.0);
+        runtime.dispatch_input(&f);
+
+        assert!(matches!(runtime.drain_commands().next(), Some(UiCommand::Custom(3))));
+        assert!(!runtime.inspector.traces().iter().any(|e| e.kind == "bubble"));
+        assert!(runtime.inspector.traces().iter().any(|e| e.kind == "capture" || e.kind == "target"));
     }
 }

@@ -102,6 +102,16 @@ impl WidgetBuilder {
         self
     }
 
+    pub fn stop_click_propagation(mut self, stop: bool) -> Self {
+        self.content.stop_click_propagation = stop;
+        self
+    }
+
+    pub fn prevent_click_default(mut self, prevent: bool) -> Self {
+        self.content.prevent_click_default = prevent;
+        self
+    }
+
     pub fn layer(mut self, layer: crate::runtime::UiLayer) -> Self {
         self.layer = Some(layer);
         self
