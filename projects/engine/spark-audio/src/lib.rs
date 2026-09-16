@@ -1,12 +1,18 @@
-//! 音频框架：输出设备 + 程序化短音。
+//! 音频框架：输出设备 + 程序化短音 + Symphonia 文件解码（经 `spark-media`）。
 //!
-//! **不**包含曲库或玩法语义；游戏自行映射事件到 `Tone`。
+//! **不**包含曲库或玩法语义；游戏自行映射事件到 `Tone` / 资源路径。
 
 use std::f32::consts::PI;
+use std::path::Path;
 use std::time::Duration;
 
+use rodio::buffer::SamplesBuffer;
 use rodio::source::Source;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
+use spark_core::SparkError;
+
+/// 重新导出：游戏可预解码后缓存。
+pub use spark_media::{AudioDecoder, PcmAudio};
 
 /// 一段短音描述（Hz / 毫秒 / 音量 0..=1）。
 #[derive(Debug, Clone, Copy)]
@@ -78,9 +84,33 @@ impl AudioBus {
         sink.set_volume(vol);
         let src = SineWave::new(tone.freq_hz, tone.duration_ms);
         sink.append(src);
-        // 脱离本帧生命周期；播完后 Sink drop 停声
         // 不变式：detach 后 rodio 在后台线程持有样本直到结束
         sink.detach();
+    }
+
+    /// 用 Symphonia（`spark-media`）解码文件并播放。
+    pub fn play_file(&self, path: impl AsRef<Path>) -> Result<(), SparkError> {
+        let pcm = AudioDecoder::decode_path(path, None)?;
+        self.play_pcm(&pcm)
+    }
+
+    /// 播放已解码 PCM。
+    pub fn play_pcm(&self, pcm: &PcmAudio) -> Result<(), SparkError> {
+        if self.is_muted() {
+            return Ok(());
+        }
+        let Some(handle) = self.handle.as_ref() else {
+            return Ok(());
+        };
+        let sink = Sink::try_new(handle)
+            .map_err(|e| SparkError::Message(format!("创建音频 Sink 失败：{e}")))?;
+        if pcm.samples.is_empty() {
+            return Ok(());
+        }
+        let buf = SamplesBuffer::new(pcm.channels, pcm.sample_rate, pcm.samples.clone());
+        sink.append(buf);
+        sink.detach();
+        Ok(())
     }
 }
 
@@ -115,7 +145,6 @@ impl Iterator for SineWave {
         self.samples_left -= 1;
         let sample = (self.t * self.freq * 2.0 * PI).sin() * 0.25;
         self.t += 1.0 / self.sample_rate as f32;
-        // 末端淡出，避免咔哒
         let fade = if self.samples_left < 256 {
             self.samples_left as f32 / 256.0
         } else {
