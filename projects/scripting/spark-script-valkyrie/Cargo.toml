@@ -12,6 +12,5 @@ publish = false
 
 [dependencies]
 spark-vm = { workspace = true }
-oak-core = { workspace = true }
-oak-valkyrie = { workspace = true }
+spark-gc = { workspace = true }
 thiserror = { workspace = true }

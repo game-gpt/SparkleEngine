@@ -1,15 +1,19 @@
-//! Oaks `oak-valkyrie` 解析 → `spark-vm` 字节码。
+//! Valkyrie 风格子集 → `spark-vm` 字节码。
 //!
-//! 语法以 Valkyrie 为准（`micro` / `let` / 表达式）。游戏绑定经原生函数表注入。
+//! 上游 `oak-valkyrie` Builder 对表达式语句（含 EOF）还原仍不稳定，故本前端用手写
+//! 递归下降覆盖 `micro` / `let` / 调用 / 控制流，与 `spark-script-ruby` 同策略。
+//! 游戏绑定经原生函数表注入。
 
+mod ast;
 mod compile;
+mod parse;
 
-use oak_core::{Builder, SourceText};
-use oak_valkyrie::{ValkyrieBuilder, ValkyrieLanguage, ValkyrieRoot, ast::StatementNode};
 use spark_vm::Module;
 use thiserror::Error;
 
+pub use ast::ValkyrieRoot;
 pub use compile::compile_root;
+pub use parse::parse as parse_source;
 
 #[derive(Debug, Error)]
 pub enum ValkyrieScriptError {
@@ -27,27 +31,7 @@ pub fn compile(source: &str, natives: &[&str]) -> Result<Module, ValkyrieScriptE
 
 /// 解析为 AST 根。
 pub fn parse(source: &str) -> Result<ValkyrieRoot, ValkyrieScriptError> {
-    // 允许 legacy `fn` 别名；ECS/Widget 扩展留给后续绑定层开启。
-    let language = ValkyrieLanguage {
-        allow_legacy_function: true,
-        ..ValkyrieLanguage::default()
-    };
-    let builder = ValkyrieBuilder::new(&language);
-    let text = SourceText::new(source);
-    let mut session = oak_core::ParseSession::<ValkyrieLanguage>::default();
-    let out = builder.build(&text, &[], &mut session);
-    match out.result {
-        Ok(root) => Ok(root),
-        Err(e) => {
-            let mut msg = e.to_string();
-            if !out.diagnostics.is_empty() {
-                let soft: Vec<String> = out.diagnostics.iter().map(|d| format!("{d:?}")).collect();
-                msg.push_str("; ");
-                msg.push_str(&soft.join("; "));
-            }
-            Err(ValkyrieScriptError::Parse(msg))
-        }
-    }
+    parse_source(source).map_err(ValkyrieScriptError::Parse)
 }
 
 /// 调试：列出根上 `micro` 名。
@@ -57,7 +41,7 @@ pub fn list_micros(source: &str) -> Result<Vec<String>, ValkyrieScriptError> {
         .items
         .iter()
         .filter_map(|i| match i {
-            StatementNode::Micro(m) => Some(m.name.name.clone()),
+            ast::Item::Micro(m) => Some(m.name.clone()),
             _ => None,
         })
         .collect())
@@ -91,5 +75,26 @@ mod tests {
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn native_register_block() {
+        use spark_gc::Value;
+
+        let m = compile(
+            r#"register_block(1, "astracraft3:dirt", "泥土", "textures/dirt.png", 1, 1, 30, "none")"#,
+            &["register_block"],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        let called = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        let c2 = called.clone();
+        vm.register_native("register_block", move |_ctx, args: Vec<Value>| {
+            assert_eq!(args.len(), 8);
+            c2.set(c2.get() + 1);
+            Ok(Value::Null)
+        });
+        let _ = vm.run(&mut StdHost).unwrap();
+        assert_eq!(called.get(), 1);
     }
 }
