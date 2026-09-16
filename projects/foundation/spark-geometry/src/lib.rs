@@ -63,4 +63,12 @@ mod tests_3d {
         assert!((b.min.x - 10.0).abs() < 1e-5);
         assert!((b.max.x - 11.0).abs() < 1e-5);
     }
+
+    #[test]
+    fn sweep_hits_wall() {
+        let moving = Aabb3::from_center_extents(Vec3::new(0.0, 0.5, 0.0), Vec3::new(0.4, 0.4, 0.4));
+        let wall = Aabb3::from_min_max(Vec3::new(2.0, 0.0, -1.0), Vec3::new(3.0, 2.0, 1.0));
+        let hit = aabb_sweep(moving, Vec3::new(5.0, 0.0, 0.0), wall).unwrap();
+        assert!(hit.toi > 0.0 && hit.toi < 1.0);
+    }
 }
