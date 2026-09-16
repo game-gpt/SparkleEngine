@@ -1,0 +1,14 @@
+[package]
+name = "spark-circuit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 导体图框架：节点、通道与可达查询（无游戏语义）"
+keywords = ["spark", "circuit", "graph"]
+categories = ["game-development", "data-structures"]
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }

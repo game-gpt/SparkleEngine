@@ -1,0 +1,16 @@
+[package]
+name = "spark-asset"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 资源框架：句柄、缓存、加载器与热重载钩子（无游戏格式）"
+keywords = ["spark", "asset", "cache"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

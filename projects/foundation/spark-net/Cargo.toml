@@ -1,0 +1,16 @@
+[package]
+name = "spark-net"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 网络框架：传输、包序号与客户端预测/权威步进（无游戏消息枚举）"
+keywords = ["spark", "net", "multiplayer"]
+categories = ["game-development", "network-programming"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
