@@ -1,0 +1,15 @@
+[package]
+name = "spark-audio"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 音频：混音与程序化短音框架（无曲库）"
+keywords = ["spark", "audio"]
+categories = ["game-development", "multimedia"]
+publish = false
+
+[dependencies]
+rodio = { version = "0.20", default-features = true }
+tracing = { workspace = true }
