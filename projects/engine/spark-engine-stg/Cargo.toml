@@ -1,0 +1,18 @@
+[package]
+name = "spark-engine-stg"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark STG 特异化引擎：弹幕池、发射器、判定与关卡时钟（无具体弹幕表）"
+keywords = ["spark", "engine", "stg", "danmaku"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-engine = { workspace = true }
+spark-geometry = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

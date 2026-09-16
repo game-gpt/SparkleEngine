@@ -1,0 +1,16 @@
+[package]
+name = "spark-engine-rpg"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark RPG 特异化引擎：队伍、背包、属性表、任务簿与回合序（无职业/技能表）"
+keywords = ["spark", "engine", "rpg"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-engine = { workspace = true }
+tracing = { workspace = true }

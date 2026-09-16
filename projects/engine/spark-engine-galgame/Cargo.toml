@@ -1,0 +1,17 @@
+[package]
+name = "spark-engine-galgame"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark Galgame/AVG 特异化引擎：对白、选项、旗标、图层槽；默认整合 Live2D 脚本插件"
+keywords = ["spark", "engine", "galgame", "visual-novel", "live2d"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-engine = { workspace = true }
+spark-plugin-live2d = { workspace = true }
+tracing = { workspace = true }
