@@ -1,0 +1,76 @@
+//! 可被 JS / 测试共用的宿主门面。
+
+use spark_asset::{AssetCache, AssetKey, BytesLoader};
+use spark_core::Vec2;
+use spark_geometry::Vec2Ext;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EngineInfo {
+    pub name: &'static str,
+    pub version: &'static str,
+    pub npm_package: &'static str,
+}
+
+impl Default for EngineInfo {
+    fn default() -> Self {
+        Self {
+            name: "Spark Engine",
+            version: env!("CARGO_PKG_VERSION"),
+            npm_package: crate::NPM_PACKAGE_NAME,
+        }
+    }
+}
+
+/// JS 友好的同步 API 子集（无窗口 / 无 ECS 世界权威）。
+#[derive(Debug, Default)]
+pub struct SparkJsHost {
+    pub assets: AssetCache,
+}
+
+impl SparkJsHost {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn info(&self) -> EngineInfo {
+        EngineInfo::default()
+    }
+
+    /// 向量长度（演示几何桥接）。
+    pub fn vec2_length(&self, x: f64, y: f64) -> f64 {
+        Vec2::new(x as f32, y as f32).length() as f64
+    }
+
+    /// 从目录加载字节资源，返回缓存 id。
+    pub fn load_bytes(
+        &mut self,
+        root: &str,
+        key: &str,
+    ) -> Result<u32, String> {
+        let loader = BytesLoader::new(root);
+        let id = self
+            .assets
+            .load(AssetKey::new(key), &loader)
+            .map_err(|e| e.to_string())?;
+        Ok(id.0)
+    }
+
+    pub fn asset_len(&self, id: u32) -> Option<usize> {
+        self.assets
+            .bytes(spark_asset::AssetId(id))
+            .map(|b| b.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn info_and_geometry() {
+        let host = SparkJsHost::new();
+        let info = host.info();
+        assert_eq!(info.npm_package, "spark-engine");
+        assert!((host.vec2_length(3.0, 4.0) - 5.0).abs() < 1e-5);
+    }
+}

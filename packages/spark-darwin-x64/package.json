@@ -1,0 +1,12 @@
+{
+  "name": "spark-darwin-x64",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spark Engine native N-API addon (darwin-x64)",
+  "license": "Apache-2.0",
+  "os": ["darwin"],
+  "cpu": ["x64"],
+  "main": "spark.darwin-x64.node",
+  "files": ["spark.darwin-x64.node", "README.md"],
+  "preferUnplugged": true
+}

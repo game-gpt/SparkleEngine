@@ -1,0 +1,12 @@
+{
+  "name": "spark-linux-arm64",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spark Engine native N-API addon (linux-arm64)",
+  "license": "Apache-2.0",
+  "os": ["linux"],
+  "cpu": ["arm64"],
+  "main": "spark.linux-arm64-gnu.node",
+  "files": ["spark.linux-arm64-gnu.node", "README.md"],
+  "preferUnplugged": true
+}

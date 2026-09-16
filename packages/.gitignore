@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.node
+*.wasm
+*.wasm.js
+.DS_Store

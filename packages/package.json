@@ -1,0 +1,23 @@
+{
+  "name": "spark-npm-workspace",
+  "private": true,
+  "description": "Spark Engine npm 工作区：TS 元包 + Wasm；原生平台包为二进制袋，不进 workspaces（避免 npm 对 os/cpu 误装）",
+  "workspaces": [
+    "spark-engine",
+    "spark-unknown-wasm32"
+  ],
+  "scripts": {
+    "build": "npm run build -w spark-engine && npm run build -w spark-unknown-wasm32",
+    "typecheck": "npm run typecheck -w spark-engine",
+    "napi:build": "node ../scripts/build/napi.mjs",
+    "napi:build:release": "node ../scripts/build/napi.mjs --release"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.10.0"
+  }
+}
