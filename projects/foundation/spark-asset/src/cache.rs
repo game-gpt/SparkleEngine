@@ -124,6 +124,10 @@ impl AssetCache {
         std::mem::take(&mut self.reloads)
     }
 
+    pub fn reload_count(&self) -> usize {
+        self.reloads.len()
+    }
+
     pub fn remove(&mut self, key: &AssetKey) -> bool {
         let Some(id) = self.by_key.remove(key) else {
             return false;
