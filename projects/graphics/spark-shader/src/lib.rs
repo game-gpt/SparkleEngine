@@ -12,6 +12,8 @@ pub enum BuiltinShader {
     SolidQuad,
     /// 图集采样文字 / 精灵（R 通道作 alpha）。
     TexturedGlyph,
+    /// 透视空间顶点色三角网格。
+    SolidMesh3d,
 }
 
 impl BuiltinShader {
@@ -19,6 +21,7 @@ impl BuiltinShader {
         match self {
             Self::SolidQuad => "spark-shader/solid-quad",
             Self::TexturedGlyph => "spark-shader/textured-glyph",
+            Self::SolidMesh3d => "spark-shader/solid-mesh3d",
         }
     }
 
@@ -26,6 +29,7 @@ impl BuiltinShader {
         match self {
             Self::SolidQuad => include_str!("shaders/quad.wgsl"),
             Self::TexturedGlyph => include_str!("shaders/text.wgsl"),
+            Self::SolidMesh3d => include_str!("shaders/mesh3d.wgsl"),
         }
     }
 

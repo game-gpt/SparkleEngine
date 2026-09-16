@@ -82,6 +82,8 @@ pub fn key(physical: PhysicalKey) -> Option<Key> {
         KeyCode::F10 => Key::F10,
         KeyCode::F11 => Key::F11,
         KeyCode::F12 => Key::F12,
+        KeyCode::ShiftLeft => Key::LShift,
+        KeyCode::ShiftRight => Key::RShift,
         _ => return None,
     })
 }

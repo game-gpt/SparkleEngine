@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 2D 渲染抽象：绘制列表、帧上下文与游戏宿主契约"
+description = "Spark 渲染抽象：2D/3D 绘制列表、帧上下文与游戏宿主契约"
 keywords = ["spark", "render", "draw-list"]
 categories = ["game-development", "rendering"]
 publish = false
@@ -13,3 +13,4 @@ publish = false
 [dependencies]
 spark-core = { workspace = true }
 spark-input = { workspace = true }
+spark-geometry = { workspace = true }
