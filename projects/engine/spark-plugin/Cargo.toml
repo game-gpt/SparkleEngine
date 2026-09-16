@@ -1,0 +1,17 @@
+[package]
+name = "spark-plugin"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 脚本插件机制：向 spark-vm 注册原生能力（Rust 侧请直接 path 依赖 crate）"
+keywords = ["spark", "plugin", "script", "vm"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-gc = { workspace = true }
+spark-vm = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
