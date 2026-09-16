@@ -1,7 +1,5 @@
 //! Spark 基础类型。不含游戏玩法概念。
 
-#![forbid(unsafe_code)]
-
 use thiserror::Error;
 
 /// 二维向量（逻辑 / 呈现共用基础表示）。
@@ -24,4 +22,6 @@ impl Vec2 {
 pub enum SparkError {
     #[error("尚未实现：{0}")]
     NotImplemented(&'static str),
+    #[error("{0}")]
+    Message(String),
 }
