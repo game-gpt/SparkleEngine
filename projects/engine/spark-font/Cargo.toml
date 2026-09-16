@@ -1,0 +1,16 @@
+[package]
+name = "spark-font"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 字体装载、字形栅格化与图集缓存"
+keywords = ["spark", "font", "glyph", "atlas"]
+categories = ["game-development", "rendering"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+fontdue = { workspace = true }
+tracing = { workspace = true }
