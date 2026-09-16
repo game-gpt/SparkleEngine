@@ -2,7 +2,7 @@
 //!
 //! | 前端 | Crate | 解析 |
 //! |------|-------|------|
-//! | Valkyrie | `spark-script-valkyrie` | Oaks `oak-valkyrie` |
+//! | Valkyrie | `spark-script-valkyrie` | 手写子集（Oaks Builder 暂不稳） |
 //! | Lua | `spark-script-lua` | Oaks `oak-lua` |
 //! | Ruby（RPG Maker / RGSS 子集） | `spark-script-ruby` | 自研子集（上游 Builder 未就绪） |
 //!
