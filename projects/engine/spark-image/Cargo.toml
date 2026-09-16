@@ -1,0 +1,17 @@
+[package]
+name = "spark-image"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 像素图装载、精灵裁切与九宫格拉伸"
+keywords = ["spark", "image", "sprite", "nine-slice"]
+categories = ["game-development", "graphics"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+image = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
