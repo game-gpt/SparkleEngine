@@ -1,6 +1,7 @@
 //! Spark GC：标记–清扫堆，供 `spark-vm` / `spark-script` 使用。
 //!
 //! 不变式：所有堆对象经 [`GcHandle`] 引用；根由宿主在 [`Heap::collect`] 前登记。
+//! 栈值 [`Value`] 含非堆变体（数字、实体 ID、函数下标），GC 只追踪 [`Value::Handle`]。
 
 use std::collections::HashMap;
 
@@ -16,16 +17,23 @@ pub enum GcObject {
     String(String),
     Array(Vec<Value>),
     Table(HashMap<String, Value>),
-    /// 闭包：函数常量池下标 + 已捕获上值。
+    /// 闭包：模块内函数下标 + 已捕获上值。
     Closure { func: u32, upvalues: Vec<Value> },
 }
 
 /// 运行时值（栈与槽共用）。
+///
+/// - [`Value::Entity`]：不透明实体 ID，供脚本经原生调用桥接 ECS，**不**依赖 `spark-ecs`。
+/// - [`Value::Func`]：模块内函数下标，供栈式调用与 JIT 特化识别。
 #[derive(Debug, Clone)]
 pub enum Value {
     Null,
     Bool(bool),
     Number(f64),
+    /// 不透明实体 ID（与 `spark-ecs::Entity` 数值对应，由宿主约定）。
+    Entity(u64),
+    /// 模块函数下标。
+    Func(u32),
     Handle(GcHandle),
 }
 
@@ -34,6 +42,22 @@ impl Value {
         match self {
             Self::Number(n) => Some(*n),
             Self::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
+            Self::Entity(id) => Some(*id as f64),
+            _ => None,
+        }
+    }
+
+    pub fn as_entity(&self) -> Option<u64> {
+        match self {
+            Self::Entity(id) => Some(*id),
+            Self::Number(n) if n.is_finite() && *n >= 0.0 && n.fract() == 0.0 => Some(*n as u64),
+            _ => None,
+        }
+    }
+
+    pub fn as_func(&self) -> Option<u32> {
+        match self {
+            Self::Func(i) => Some(*i),
             _ => None,
         }
     }
@@ -43,7 +67,7 @@ impl Value {
             Self::Null => false,
             Self::Bool(b) => *b,
             Self::Number(n) => *n != 0.0 && !n.is_nan(),
-            Self::Handle(_) => true,
+            Self::Entity(_) | Self::Func(_) | Self::Handle(_) => true,
         }
     }
 
@@ -52,6 +76,8 @@ impl Value {
             Self::Null => "null",
             Self::Bool(_) => "bool",
             Self::Number(_) => "number",
+            Self::Entity(_) => "entity",
+            Self::Func(_) => "function",
             Self::Handle(_) => "object",
         }
     }
@@ -182,7 +208,6 @@ impl Heap {
                 slot.marked = false;
             } else {
                 slot.live = false;
-                // 释放内容
                 slot.obj = GcObject::String(String::new());
                 self.free.push(i as u32);
             }
@@ -213,5 +238,14 @@ mod tests {
         assert_eq!(heap.live_count(), 2);
         heap.collect(&[keep]);
         assert_eq!(heap.live_count(), 1);
+    }
+
+    #[test]
+    fn entity_and_func_are_not_heap() {
+        let e = Value::Entity(7);
+        let f = Value::Func(3);
+        assert_eq!(e.as_entity(), Some(7));
+        assert_eq!(f.as_func(), Some(3));
+        assert!(e.truthy());
     }
 }

@@ -1,0 +1,15 @@
+[package]
+name = "spark-script-ruby"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 脚本前端：RPG Maker 风格 Ruby 子集 → spark-vm 字节码"
+keywords = ["spark", "script", "ruby", "rgss"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-vm = { workspace = true }
+thiserror = { workspace = true }
