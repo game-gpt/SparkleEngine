@@ -2990,7 +2990,9 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "spark-core",
+ "spark-ecs",
  "spark-gc",
+ "spark-input",
  "spark-jit",
  "spark-plugin",
  "spark-renderer",

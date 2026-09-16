@@ -40,3 +40,12 @@ pub fn run_game_3d_with<H: GameHost3d + 'static>(
     let wrapped = LoopedHost3d::new(host, loop_config);
     spark_renderer_wgpu::run_window_3d(config, wrapped)
 }
+
+/// 以 [`crate::EcsHost3d`] 运行 3D 游戏（固定/可变帧循环可配）。
+pub fn run_ecs_game_3d(
+    config: WindowConfig,
+    host: crate::EcsHost3d,
+    loop_config: FrameLoopConfig,
+) -> Result<(), SparkError> {
+    run_game_3d_with(config, host, loop_config)
+}
