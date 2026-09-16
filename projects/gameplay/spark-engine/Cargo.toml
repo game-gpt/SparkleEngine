@@ -5,8 +5,8 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 引擎壳：VM 之上的模组加载、钩子、数据表与资源挂载"
-keywords = ["spark", "engine", "mod"]
+description = "Spark 引擎壳：帧主循环编排、模组加载、钩子与数据表"
+keywords = ["spark", "engine", "mod", "frame-loop"]
 categories = ["game-development"]
 publish = false
 
@@ -17,6 +17,9 @@ spark-vm = { workspace = true }
 spark-jit = { workspace = true }
 spark-script = { workspace = true }
 spark-plugin = { workspace = true }
+spark-time = { workspace = true }
+spark-renderer = { workspace = true }
+spark-renderer-wgpu = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 thiserror = { workspace = true }
