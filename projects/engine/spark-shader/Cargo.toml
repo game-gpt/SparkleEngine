@@ -1,0 +1,15 @@
+[package]
+name = "spark-shader"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 着色器源码、内建管线与 ShaderModule 装载"
+keywords = ["spark", "wgpu", "shader", "wgsl"]
+categories = ["game-development", "rendering"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+wgpu = { workspace = true }
