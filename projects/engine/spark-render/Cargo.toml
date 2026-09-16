@@ -1,0 +1,22 @@
+[package]
+name = "spark-render"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 2D 渲染与窗口壳（wgpu）"
+keywords = ["spark", "wgpu", "render"]
+categories = ["game-development", "rendering"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-input = { workspace = true }
+spark-shader = { workspace = true }
+wgpu = { workspace = true }
+winit = { workspace = true }
+pollster = { workspace = true }
+tracing = { workspace = true }
+bytemuck = { workspace = true }
+fontdue = { workspace = true }
