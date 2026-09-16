@@ -147,6 +147,75 @@ impl CircuitGraph {
         Ok(mask[to as usize])
     }
 
+    /// 按通道计算连通分量。返回与节点数等长的分量 id（从 0 递增，孤立点各成一分量）。
+    ///
+    /// 空图返回空向量。`dirty` 标记不会自动清除，由调用方决定何时重算。
+    pub fn connected_components(&self, channel: Channel) -> Vec<u32> {
+        let n = self.node_count as usize;
+        if n == 0 {
+            return Vec::new();
+        }
+        let empty: Vec<Vec<NodeId>> = Vec::new();
+        let adj = self.channel_adj(channel).unwrap_or(&empty);
+        let mut comp = vec![u32::MAX; n];
+        let mut next = 0u32;
+        let mut stack = Vec::new();
+        for start in 0..n {
+            if comp[start] != u32::MAX {
+                continue;
+            }
+            let cid = next;
+            next += 1;
+            comp[start] = cid;
+            stack.clear();
+            stack.push(start as NodeId);
+            while let Some(cur) = stack.pop() {
+                let Some(neis) = adj.get(cur as usize) else {
+                    continue;
+                };
+                for &n in neis {
+                    let i = n as usize;
+                    if comp[i] == u32::MAX {
+                        comp[i] = cid;
+                        stack.push(n);
+                    }
+                }
+            }
+        }
+        comp
+    }
+
+    /// 将 [`connected_components`] 结果收成「分量 → 节点列表」。
+    pub fn component_lists(&self, channel: Channel) -> Vec<Vec<NodeId>> {
+        let labels = self.connected_components(channel);
+        if labels.is_empty() {
+            return Vec::new();
+        }
+        let count = labels.iter().copied().max().unwrap_or(0) as usize + 1;
+        let mut lists = vec![Vec::new(); count];
+        for (i, &cid) in labels.iter().enumerate() {
+            lists[cid as usize].push(i as NodeId);
+        }
+        lists
+    }
+
+    /// `a` 与 `b` 是否在同一连通分量（同通道）。
+    pub fn same_component(
+        &self,
+        a: NodeId,
+        b: NodeId,
+        channel: Channel,
+    ) -> Result<bool, CircuitError> {
+        if a >= self.node_count {
+            return Err(CircuitError::UnknownNode(a));
+        }
+        if b >= self.node_count {
+            return Err(CircuitError::UnknownNode(b));
+        }
+        let labels = self.connected_components(channel);
+        Ok(labels[a as usize] == labels[b as usize])
+    }
+
     fn bfs(&self, sources: &[NodeId], channel: Channel) -> Vec<bool> {
         let n = self.node_count as usize;
         let mut seen = vec![false; n];
@@ -216,5 +285,22 @@ mod tests {
         assert!(mask[a as usize]);
         assert!(mask[b as usize]);
         assert!(mask[c as usize]);
+    }
+
+    #[test]
+    fn connected_components_split_on_cut() {
+        let mut g = CircuitGraph::new();
+        let a = g.add_node();
+        let b = g.add_node();
+        let c = g.add_node();
+        g.link(a, b, Channel::CONTROL).unwrap();
+        g.link(b, c, Channel::CONTROL).unwrap();
+        assert_eq!(g.connected_components(Channel::CONTROL).iter().max(), Some(&0));
+        assert!(g.same_component(a, c, Channel::CONTROL).unwrap());
+
+        g.unlink(b, c, Channel::CONTROL).unwrap();
+        let lists = g.component_lists(Channel::CONTROL);
+        assert_eq!(lists.len(), 2);
+        assert!(!g.same_component(a, c, Channel::CONTROL).unwrap());
     }
 }
