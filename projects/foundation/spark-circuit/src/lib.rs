@@ -4,4 +4,4 @@
 
 mod graph;
 
-pub use graph::{Channel, CircuitError, CircuitGraph, NodeId};
+pub use graph::{Channel, CircuitError, CircuitGraph, NodeId, PowerBudget};
