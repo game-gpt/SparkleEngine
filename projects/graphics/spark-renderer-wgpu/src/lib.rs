@@ -2,6 +2,7 @@
 //!
 //! 抽象类型（`DrawList` / `GameHost` / `FrameCtx` / `WindowConfig`）在 `spark-renderer`。
 //! **帧主循环编排在 `spark-engine`**；本 crate 只泵 winit 事件并提交 GPU。
+//! 3D 路径支持 `MeshResidentKey` 网格驻留，避免每帧重传未变顶点。
 //! **winit 止于此 crate**：游戏只看见 `spark-renderer` / `spark-input` 类型。
 
 mod game3d;
@@ -10,8 +11,9 @@ mod winit_map;
 pub use game3d::run_window_3d;
 pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
-    ButtonState, Camera3d, DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d, Input, Key,
-    Mat4, MeshCmd, MeshVertex, MouseBtn, QuadCmd, TextCmd, Vec3, WindowConfig,
+    Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost,
+    GameHost3d, Input, Key, Mat4, MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd,
+    TextCmd, Vec3, WindowConfig,
 };
 
 use std::sync::Arc;
