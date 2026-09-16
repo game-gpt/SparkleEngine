@@ -1,0 +1,16 @@
+[package]
+name = "spark-vm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 字节码虚拟机"
+keywords = ["spark", "vm"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-gc = { workspace = true }
+thiserror = { workspace = true }
