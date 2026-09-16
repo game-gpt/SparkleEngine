@@ -1,0 +1,159 @@
+//! 模组脚本可用的内置原生 API。
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use spark_gc::{GcObject, Value};
+use spark_script::ScriptEngine;
+use spark_vm::{NativeCtx, VmError};
+
+use crate::registry::RegValue;
+use crate::vfs::ModVfs;
+use crate::EngineShared;
+
+/// 编译期声明的原生名（须与 [`install_builtins`] 一致）。
+pub const ENGINE_NATIVES: &[&str] = &[
+    "log",
+    "register_hook",
+    "registry_set",
+    "registry_get",
+    "mod_id",
+    "asset_path",
+];
+
+/// 文档用标记类型。
+pub struct BuiltinApi;
+
+/// 向脚本 VM 安装引擎原生函数。
+pub fn install_builtins(
+    eng: &mut ScriptEngine,
+    shared: &Rc<RefCell<EngineShared>>,
+    mod_id: &str,
+    vfs: &ModVfs,
+) {
+    let shared_log = Rc::clone(shared);
+    eng.vm.register_native("log", move |ctx, args| {
+        let msg = args
+            .first()
+            .map(|v| value_to_string(ctx, v))
+            .transpose()?
+            .unwrap_or_else(|| "null".into());
+        tracing::info!(target: "spark_mod", "{msg}");
+        shared_log.borrow_mut().logs.push(msg);
+        Ok(Value::Null)
+    });
+
+    let shared_hook = Rc::clone(shared);
+    let mid = mod_id.to_string();
+    eng.vm.register_native("register_hook", move |ctx, args| {
+        if args.len() < 2 {
+            return Err(VmError::Message(
+                "register_hook(hook, function_name)".into(),
+            ));
+        }
+        let hook = value_to_string(ctx, &args[0])?;
+        let func = value_to_string(ctx, &args[1])?;
+        shared_hook
+            .borrow_mut()
+            .hooks
+            .register(hook, mid.clone(), func);
+        Ok(Value::Null)
+    });
+
+    let shared_set = Rc::clone(shared);
+    eng.vm.register_native("registry_set", move |ctx, args| {
+        if args.len() < 3 {
+            return Err(VmError::Message(
+                "registry_set(namespace, key, value)".into(),
+            ));
+        }
+        let ns = value_to_string(ctx, &args[0])?;
+        let key = value_to_string(ctx, &args[1])?;
+        let val = value_to_reg(ctx, &args[2])?;
+        shared_set.borrow_mut().registry.set(ns, key, val);
+        Ok(Value::Null)
+    });
+
+    let shared_get = Rc::clone(shared);
+    eng.vm.register_native("registry_get", move |ctx, args| {
+        if args.len() < 2 {
+            return Err(VmError::Message("registry_get(namespace, key)".into()));
+        }
+        let ns = value_to_string(ctx, &args[0])?;
+        let key = value_to_string(ctx, &args[1])?;
+        let v = shared_get
+            .borrow()
+            .registry
+            .get(&ns, &key)
+            .cloned()
+            .unwrap_or(RegValue::Null);
+        Ok(reg_to_value(ctx, &v))
+    });
+
+    let mid = mod_id.to_string();
+    eng.vm.register_native("mod_id", move |ctx, _args| {
+        Ok(ctx.heap.alloc_string(mid.clone()))
+    });
+
+    let vfs = vfs.clone();
+    eng.vm.register_native("asset_path", move |ctx, args| {
+        let rel = match args.first() {
+            Some(v) => value_to_string(ctx, v)?,
+            None => String::new(),
+        };
+        let path = vfs
+            .resolve(&rel)
+            .map_err(|e| VmError::Message(e.to_string()))?;
+        Ok(ctx.heap.alloc_string(path.to_string_lossy().into_owned()))
+    });
+}
+
+fn value_to_string(ctx: &NativeCtx<'_>, v: &Value) -> Result<String, VmError> {
+    match v {
+        Value::Null => Ok(String::new()),
+        Value::Bool(b) => Ok(b.to_string()),
+        Value::Number(n) => {
+            if *n == n.trunc() && n.abs() < 1e15 {
+                Ok(format!("{}", *n as i64))
+            } else {
+                Ok(n.to_string())
+            }
+        }
+        Value::Entity(id) => Ok(id.to_string()),
+        Value::Func(i) => Ok(format!("fn:{i}")),
+        Value::Handle(h) => match ctx.heap.get(*h) {
+            Ok(GcObject::String(s)) => Ok(s.clone()),
+            Ok(_) => Ok(format!("<object {}>", h.0)),
+            Err(_) => Err(VmError::Message("悬空字符串句柄".into())),
+        },
+    }
+}
+
+fn value_to_reg(ctx: &NativeCtx<'_>, v: &Value) -> Result<RegValue, VmError> {
+    Ok(match v {
+        Value::Null => RegValue::Null,
+        Value::Bool(b) => RegValue::Bool(*b),
+        Value::Number(n) => RegValue::Number(*n),
+        Value::Entity(e) => RegValue::Entity(*e),
+        Value::Func(_) => {
+            return Err(VmError::Message("registry 不能存函数".into()));
+        }
+        Value::Handle(h) => match ctx.heap.get(*h) {
+            Ok(GcObject::String(s)) => RegValue::String(s.clone()),
+            Ok(_) => {
+                return Err(VmError::Message("registry 仅支持字符串对象句柄".into()));
+            }
+            Err(_) => return Err(VmError::Message("悬空句柄".into())),
+        },
+    })
+}
+
+fn reg_to_value(ctx: &mut NativeCtx<'_>, v: &RegValue) -> Value {
+    match v {
+        RegValue::Null => Value::Null,
+        RegValue::Bool(b) => Value::Bool(*b),
+        RegValue::Number(n) => Value::Number(*n),
+        RegValue::Entity(e) => Value::Entity(*e),
+        RegValue::String(s) => ctx.heap.alloc_string(s.clone()),
+    }
+}
