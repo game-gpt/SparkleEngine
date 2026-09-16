@@ -1,6 +1,6 @@
 //! 字体装载、字形栅格化与 CPU 侧图集。
 //!
-//! 本 crate **不**碰 GPU：`spark-render` 只消费 `GlyphCache` 的图集字节与 UV，自行上传纹理。
+//! 本 crate **不**碰 GPU：`spark-renderer-wgpu` 只消费 `GlyphCache` 的图集字节与 UV，自行上传纹理。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

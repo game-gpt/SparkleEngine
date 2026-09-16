@@ -1,6 +1,6 @@
 //! 键鼠输入状态：引擎自有键码，**不**把窗口后端（如 winit）漏给游戏。
 //!
-//! 后端适配放在 `spark-render` / 将来的 `spark-app`；本 crate 只认 `Key` / `MouseBtn`。
+//! 后端适配放在 `spark-renderer-wgpu` / 将来的 `spark-app`；本 crate 只认 `Key` / `MouseBtn`。
 
 use std::collections::HashSet;
 

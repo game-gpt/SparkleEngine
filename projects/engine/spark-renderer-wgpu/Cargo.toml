@@ -1,11 +1,11 @@
 [package]
-name = "spark-render"
+name = "spark-renderer-wgpu"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 2D 渲染与窗口壳（wgpu）"
+description = "Spark 2D 渲染 wgpu 后端（窗口壳与批绘制）"
 keywords = ["spark", "wgpu", "render"]
 categories = ["game-development", "rendering"]
 publish = false
@@ -15,6 +15,7 @@ spark-core = { workspace = true }
 spark-input = { workspace = true }
 spark-shader = { workspace = true }
 spark-font = { workspace = true }
+spark-renderer = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 pollster = { workspace = true }

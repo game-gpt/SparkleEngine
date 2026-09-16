@@ -1,16 +1,15 @@
 [package]
-name = "spark-widget"
+name = "spark-renderer"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 立即模式 Widget 系统（重点是系统，不是控件库集合）"
-keywords = ["spark", "widget"]
-categories = ["game-development", "gui"]
+description = "Spark 2D 渲染抽象：绘制列表、帧上下文与游戏宿主契约"
+keywords = ["spark", "render", "draw-list"]
+categories = ["game-development", "rendering"]
 publish = false
 
 [dependencies]
 spark-core = { workspace = true }
 spark-input = { workspace = true }
-spark-renderer = { workspace = true }
