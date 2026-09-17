@@ -40,7 +40,7 @@ pub enum LocaleParseError {
 ///
 /// 内部按小写 language、首字母大写 script、大写 region 存储；
 /// 显示用 [`LocaleId::as_str`] 输出规范标签（如 `zh-Hans-CN`）。
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocaleId {
     language: Arc<str>,
     script: Option<Arc<str>>,
