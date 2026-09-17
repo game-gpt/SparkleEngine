@@ -30,6 +30,7 @@ spark-physics = { path = "projects/foundation/spark-physics" }
 spark-circuit = { path = "projects/foundation/spark-circuit" }
 spark-net = { path = "projects/foundation/spark-net" }
 spark-asset = { path = "projects/foundation/spark-asset" }
+spark-localization = { path = "projects/foundation/spark-localization" }
 spark-debugger = { path = "projects/foundation/spark-debugger" }
 spark-shader = { path = "projects/graphics/spark-shader" }
 spark-font = { path = "projects/graphics/spark-font" }

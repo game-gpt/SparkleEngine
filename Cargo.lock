@@ -3072,6 +3072,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "spark-localization"
+version = "0.1.0"
+dependencies = [
+ "spark-core",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "spark-logger"
 version = "0.1.0"
 
