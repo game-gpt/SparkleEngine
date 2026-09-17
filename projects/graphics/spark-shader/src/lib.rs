@@ -26,6 +26,8 @@ pub enum BuiltinShader {
     Bloom,
     /// 全屏 bloom 合成。
     BloomComposite,
+    /// 视线方向大气穹顶（SkyPass；消费 `FrameLights`）。
+    SkyAtmosphere3d,
 }
 
 impl BuiltinShader {
@@ -40,6 +42,7 @@ impl BuiltinShader {
             Self::SkinnedMesh3d => "spark-shader/skinned-mesh3d",
             Self::Bloom => "spark-shader/bloom",
             Self::BloomComposite => "spark-shader/bloom-composite",
+            Self::SkyAtmosphere3d => "spark-shader/sky-atmosphere3d",
         }
     }
 
@@ -54,6 +57,7 @@ impl BuiltinShader {
             Self::SkinnedMesh3d => include_str!("shaders/mesh3d_skinned.wgsl"),
             Self::Bloom => include_str!("shaders/bloom.wgsl"),
             Self::BloomComposite => include_str!("shaders/bloom_composite.wgsl"),
+            Self::SkyAtmosphere3d => include_str!("shaders/sky_atmosphere.wgsl"),
         }
     }
 
@@ -122,6 +126,7 @@ mod tests {
             BuiltinShader::SkinnedMesh3d,
             BuiltinShader::Bloom,
             BuiltinShader::BloomComposite,
+            BuiltinShader::SkyAtmosphere3d,
         ] {
             validate_source(&s.into()).unwrap();
             assert!(s.wgsl().contains("vs_main"));

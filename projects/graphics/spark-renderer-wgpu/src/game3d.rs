@@ -114,6 +114,8 @@ struct GpuState3d {
     mesh_pipeline: wgpu::RenderPipeline,
     /// 天空 / 天体：不写深度，Always，无光照。
     sky_pipeline: wgpu::RenderPipeline,
+    /// 大气穹顶：不写深度，Always，消费 FrameLights。
+    sky_atmosphere_pipeline: wgpu::RenderPipeline,
     /// 天空加性发光：不写深度，Always，additive。
     sky_emissive_pipeline: wgpu::RenderPipeline,
     solid_pipeline: wgpu::RenderPipeline,
@@ -199,6 +201,7 @@ impl GpuState3d {
 
         let mesh_shader = create_builtin(&device, BuiltinShader::SolidMesh3d);
         let lit_mesh_shader = create_builtin(&device, BuiltinShader::LitSolidMesh3d);
+        let sky_atm_shader = create_builtin(&device, BuiltinShader::SkyAtmosphere3d);
         let solid_shader = create_builtin(&device, BuiltinShader::SolidQuad);
         let glyph_shader = create_builtin(&device, BuiltinShader::TexturedGlyph);
 
@@ -324,6 +327,49 @@ impl GpuState3d {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &mesh_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let sky_atmosphere_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("mesh3d-sky-atmosphere"),
+            layout: Some(&mesh_pl),
+            vertex: wgpu::VertexState {
+                module: &sky_atm_shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<MeshVertGpu>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![
+                        0 => Float32x3,
+                        1 => Float32x3,
+                        2 => Float32x4
+                    ],
+                })],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &sky_atm_shader,
                 entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
@@ -629,6 +675,7 @@ impl GpuState3d {
             depth_tex,
             mesh_pipeline,
             sky_pipeline,
+            sky_atmosphere_pipeline,
             sky_emissive_pipeline,
             solid_pipeline,
             glyph_pipeline,
@@ -900,8 +947,9 @@ impl GpuState3d {
 
         // 渲染通道开始前完成驻留上传，避免与 pass 借用冲突。
         for mesh in list
-            .sky_meshes
+            .sky_atmosphere_meshes
             .iter()
+            .chain(list.sky_meshes.iter())
             .chain(list.sky_emissive_meshes.iter())
             .chain(list.meshes.iter())
         {
@@ -937,8 +985,11 @@ impl GpuState3d {
                 label: Some("frame3d"),
             });
 
-        // SkyPass：先画天空/天体，再加性光晕；不写深度；随后清深度再画不透明世界。
-        if !list.sky_meshes.is_empty() || !list.sky_emissive_meshes.is_empty() {
+        // SkyPass：大气穹顶 → 顶点色天体 → 加性光晕；不写深度；随后清深度再画不透明世界。
+        let has_sky = !list.sky_atmosphere_meshes.is_empty()
+            || !list.sky_meshes.is_empty()
+            || !list.sky_emissive_meshes.is_empty();
+        if has_sky {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -965,6 +1016,12 @@ impl GpuState3d {
                 }),
                 ..Default::default()
             });
+            if !list.sky_atmosphere_meshes.is_empty() {
+                pass.set_pipeline(&self.sky_atmosphere_pipeline);
+                pass.set_bind_group(0, &self.mesh_bind, &[]);
+                pass.set_bind_group(1, &self.lights_bind, &[]);
+                self.draw_mesh_cmds(&mut pass, &list.sky_atmosphere_meshes, &list.sky_view_proj);
+            }
             if !list.sky_meshes.is_empty() {
                 pass.set_pipeline(&self.sky_pipeline);
                 pass.set_bind_group(0, &self.mesh_bind, &[]);
@@ -978,7 +1035,7 @@ impl GpuState3d {
         }
 
         {
-            let color_load = if list.sky_meshes.is_empty() && list.sky_emissive_meshes.is_empty() {
+            let color_load = if !has_sky {
                 wgpu::LoadOp::Clear(wgpu::Color {
                     r: list.clear.r as f64,
                     g: list.clear.g as f64,

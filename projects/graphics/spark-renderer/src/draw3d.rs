@@ -188,17 +188,19 @@ impl SkinnedMeshCmd {
 
 /// 一帧 3D 绘制 + HUD。
 ///
-/// 提交顺序由后端保证：`sky_meshes` → `sky_emissive_meshes`（additive）→ 清深度 →
-/// Opaque → Transparent → Emissive（世界加性）→ bloom → HUD。
+/// 提交顺序由后端保证：`sky_atmosphere_meshes` → `sky_meshes` → `sky_emissive_meshes`
+/// （additive）→ 清深度 → Opaque → Transparent → Emissive（世界加性）→ bloom → HUD。
 #[derive(Debug)]
 pub struct DrawList3d {
     pub clear: Color,
     pub view_proj: Mat4,
     /// 天空 / 天体专用 VP（通常为去平移的 `Camera3d::sky_view_proj`）。
     pub sky_view_proj: Mat4,
-    /// 不透明前向光照（天空 pass 不消费）。
+    /// 不透明前向光照；大气穹顶片段着色器亦消费 `sun_dir`。
     pub lights: FrameLights3d,
-    /// SkyPass：无深度写入；在清深度前绘制。
+    /// SkyPass 大气穹顶：视线方向散射（`SkyAtmosphere3d`）。
+    pub sky_atmosphere_meshes: Vec<MeshCmd>,
+    /// SkyPass：顶点色穹顶 / 天体（无深度写入）。
     pub sky_meshes: Vec<MeshCmd>,
     /// Sky 加性发光（方日光晕等）；测深 Always、不写深、additive。
     pub sky_emissive_meshes: Vec<MeshCmd>,
@@ -224,6 +226,7 @@ impl DrawList3d {
             view_proj,
             sky_view_proj: view_proj,
             lights: FrameLights3d::default(),
+            sky_atmosphere_meshes: Vec::new(),
             sky_meshes: Vec::new(),
             sky_emissive_meshes: Vec::new(),
             meshes: Vec::new(),
@@ -300,6 +303,21 @@ impl DrawList3d {
         local_aabb: Option<Aabb3>,
     ) {
         self.push_sky_mesh(model, vertices, Some(key), local_aabb);
+    }
+
+    /// 大气穹顶（视线散射）；顶点色作 tint。
+    pub fn sky_atmosphere_mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {
+        self.push_sky_atmosphere(model, vertices, None, None);
+    }
+
+    pub fn sky_atmosphere_mesh_resident(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_sky_atmosphere(model, vertices, Some(key), local_aabb);
     }
 
     /// 天空加性发光（方日光晕等）。
@@ -438,6 +456,24 @@ impl DrawList3d {
             return;
         }
         self.sky_meshes.push(MeshCmd {
+            model,
+            vertices,
+            resident,
+            local_aabb,
+        });
+    }
+
+    fn push_sky_atmosphere(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        resident: Option<MeshResidentKey>,
+        local_aabb: Option<Aabb3>,
+    ) {
+        if vertices.is_empty() {
+            return;
+        }
+        self.sky_atmosphere_meshes.push(MeshCmd {
             model,
             vertices,
             resident,
