@@ -17,7 +17,15 @@ impl Mat4 {
             0.0, 0.0, 0.0, 1.0,
         ],
     };
+}
 
+impl Default for Mat4 {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
+impl Mat4 {
     pub fn from_cols(cols: [f32; 16]) -> Self {
         Self { cols }
     }
@@ -55,6 +63,18 @@ impl Mat4 {
                 c, 0.0, -s, 0.0, //
                 0.0, 1.0, 0.0, 0.0, //
                 s, 0.0, c, 0.0, //
+                0.0, 0.0, 0.0, 1.0,
+            ],
+        }
+    }
+
+    pub fn rotation_x(rad: f32) -> Self {
+        let (s, c) = rad.sin_cos();
+        Self {
+            cols: [
+                1.0, 0.0, 0.0, 0.0, //
+                0.0, c, s, 0.0, //
+                0.0, -s, c, 0.0, //
                 0.0, 0.0, 0.0, 1.0,
             ],
         }

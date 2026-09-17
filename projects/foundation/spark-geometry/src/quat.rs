@@ -34,6 +34,34 @@ impl Quat {
         }
     }
 
+    /// 最短弧旋转：把单位向量 `from` 转到 `to`。
+    pub fn rotation_between(from: Vec3, to: Vec3) -> Self {
+        let a = from.normalized();
+        let b = to.normalized();
+        let dot = a.dot(b).clamp(-1.0, 1.0);
+        if dot > 0.999999 {
+            return Self::IDENTITY;
+        }
+        if dot < -0.999999 {
+            // 反向：绕与 a 垂直的轴转 π
+            let mut axis = Vec3::X.cross(a);
+            if axis.length() < 1e-6 {
+                axis = Vec3::Y.cross(a);
+            }
+            return Self::from_axis_angle(axis.normalized(), std::f32::consts::PI);
+        }
+        let axis = a.cross(b);
+        let s = ((1.0 + dot) * 2.0).sqrt();
+        let inv_s = 1.0 / s;
+        Self {
+            x: axis.x * inv_s,
+            y: axis.y * inv_s,
+            z: axis.z * inv_s,
+            w: s * 0.5,
+        }
+        .normalized()
+    }
+
     /// YXZ 欧拉角（弧度）：先 yaw(Y)，再 pitch(X)，再 roll(Z)。
     pub fn from_euler_yxz(yaw: f32, pitch: f32, roll: f32) -> Self {
         let qy = Self::from_axis_angle(Vec3::Y, yaw);
@@ -217,5 +245,13 @@ mod tests {
         let b = Quat::from_axis_angle(Vec3::Y, std::f32::consts::FRAC_PI_2);
         let m = a.slerp(b, 0.5);
         assert!((m.length() - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn rotation_between_maps_axis() {
+        let q = Quat::rotation_between(Vec3::X, Vec3::Y);
+        let v = q.rotate_vec3(Vec3::X);
+        assert!(v.x.abs() < 1e-4);
+        assert!((v.y - 1.0).abs() < 1e-4);
     }
 }
