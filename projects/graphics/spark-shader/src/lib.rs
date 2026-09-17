@@ -14,9 +14,9 @@ pub enum BuiltinShader {
     TexturedGlyph,
     /// 透视空间顶点色三角网格（无光照；天空用）。
     SolidMesh3d,
-    /// 透视空间顶点色三角网格（方向光 + 雾；不透明世界）。
+    /// 透视空间顶点色三角网格（方向光 + 雾 + ACES；不透明世界）。
     LitSolidMesh3d,
-    /// 透视空间 RGBA 纹理三角网格（方向光 + 雾）。
+    /// 透视空间 RGBA 纹理三角网格（方向光 + 雾 + ACES）。
     TexturedMesh3d,
 }
 
