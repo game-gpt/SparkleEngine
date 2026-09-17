@@ -189,8 +189,7 @@ impl SkinnedMeshCmd {
 /// 一帧 3D 绘制 + HUD。
 ///
 /// 提交顺序由后端保证：`sky_meshes` → `sky_emissive_meshes`（additive）→ 清深度 →
-/// Opaque → Transparent → HUD。
-/// 世界自发光 / 全屏后处理尚未立契约。
+/// Opaque → Transparent → Emissive（世界加性）→ HUD。
 #[derive(Debug)]
 pub struct DrawList3d {
     pub clear: Color,
@@ -207,6 +206,8 @@ pub struct DrawList3d {
     pub tex_meshes: Vec<TexMeshCmd>,
     /// Transparent：树叶 / 玻璃等；深度测试开启、不写深度。
     pub tex_meshes_xlu: Vec<TexMeshCmd>,
+    /// 世界自发光（岩浆/引擎等）；测深、不写深、additive。
+    pub tex_meshes_emissive: Vec<TexMeshCmd>,
     /// 不透明蒙皮网格（在静态 meshes / tex_meshes 之后绘制）。
     pub skinned_meshes: Vec<SkinnedMeshCmd>,
     /// 本帧新建 / 更新纹理，由 wgpu 后端上传。
@@ -226,6 +227,7 @@ impl DrawList3d {
             meshes: Vec::new(),
             tex_meshes: Vec::new(),
             tex_meshes_xlu: Vec::new(),
+            tex_meshes_emissive: Vec::new(),
             skinned_meshes: Vec::new(),
             texture_uploads: Vec::new(),
             hud: DrawList::new(Color::rgba(0.0, 0.0, 0.0, 0.0)),
@@ -318,7 +320,7 @@ impl DrawList3d {
         texture: TextureId,
         vertices: Arc<[TexMeshVertex]>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, None, None, false);
+        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Opaque);
     }
 
     pub fn tex_mesh_resident(
@@ -329,7 +331,7 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, false);
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Opaque);
     }
 
     /// 半透明纹理网格（Transparent pass：测深不写深）。
@@ -339,7 +341,7 @@ impl DrawList3d {
         texture: TextureId,
         vertices: Arc<[TexMeshVertex]>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, None, None, true);
+        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Xlu);
     }
 
     pub fn tex_mesh_xlu_resident(
@@ -350,7 +352,28 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, true);
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Xlu);
+    }
+
+    /// 世界自发光纹理网格（Emissive pass：测深不写深、additive）。
+    pub fn tex_mesh_emissive(
+        &mut self,
+        model: Mat4,
+        texture: TextureId,
+        vertices: Arc<[TexMeshVertex]>,
+    ) {
+        self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Emissive);
+    }
+
+    pub fn tex_mesh_emissive_resident(
+        &mut self,
+        model: Mat4,
+        texture: TextureId,
+        vertices: Arc<[TexMeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, TexPass::Emissive);
     }
 
     /// 不透明蒙皮网格（可选纹理；首切 palette ≤ [`MAX_SKIN_JOINTS`]）。
@@ -444,7 +467,7 @@ impl DrawList3d {
         vertices: Arc<[TexMeshVertex]>,
         resident: Option<MeshResidentKey>,
         local_aabb: Option<Aabb3>,
-        transparent: bool,
+        pass: TexPass,
     ) {
         if vertices.is_empty() {
             return;
@@ -456,10 +479,10 @@ impl DrawList3d {
             resident,
             local_aabb,
         };
-        if transparent {
-            self.tex_meshes_xlu.push(cmd);
-        } else {
-            self.tex_meshes.push(cmd);
+        match pass {
+            TexPass::Opaque => self.tex_meshes.push(cmd),
+            TexPass::Xlu => self.tex_meshes_xlu.push(cmd),
+            TexPass::Emissive => self.tex_meshes_emissive.push(cmd),
         }
     }
 
@@ -507,6 +530,8 @@ impl DrawList3d {
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes_xlu
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes_emissive
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.skinned_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
     }
@@ -523,7 +548,16 @@ impl DrawList3d {
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes_xlu
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes_emissive
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.skinned_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TexPass {
+    Opaque,
+    Xlu,
+    Emissive,
 }
