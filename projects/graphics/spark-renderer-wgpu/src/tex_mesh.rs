@@ -42,6 +42,8 @@ struct ResidentTexMesh {
 /// 纹理网格管线与缓存。
 pub struct TexMeshGpu {
     pipeline: wgpu::RenderPipeline,
+    /// Transparent：测深、不写深、双面（树叶/玻璃）。
+    pipeline_xlu: wgpu::RenderPipeline,
     bgl: wgpu::BindGroupLayout,
     uniform: wgpu::Buffer,
     sampler: wgpu::Sampler,
@@ -149,6 +151,51 @@ impl TexMeshGpu {
             multiview_mask: None,
             cache: None,
         });
+        let pipeline_xlu = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("tex-mesh3d-xlu"),
+            layout: Some(&pl),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<TexVertGpu>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![
+                        0 => Float32x3,
+                        1 => Float32x3,
+                        2 => Float32x2,
+                        3 => Float32x4
+                    ],
+                })],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                // 树叶/玻璃双面可见。
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
         let transient_cap = 256_000u64;
         let transient_vbo = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("tex-mesh-transient-vbo"),
@@ -158,6 +205,7 @@ impl TexMeshGpu {
         });
         Self {
             pipeline,
+            pipeline_xlu,
             bgl,
             uniform,
             sampler,
@@ -251,7 +299,7 @@ impl TexMeshGpu {
     }
 
     pub fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
-        for mesh in &list.tex_meshes {
+        for mesh in list.tex_meshes.iter().chain(list.tex_meshes_xlu.iter()) {
             if let Some(key) = mesh.resident {
                 self.ensure_resident(device, key, &mesh.vertices);
             }
@@ -296,13 +344,47 @@ impl TexMeshGpu {
         list: &DrawList3d,
         lights_bind: &'a wgpu::BindGroup,
     ) -> Result<(), SparkError> {
-        if list.tex_meshes.is_empty() {
+        self.draw_cmds(pass, queue, &list.tex_meshes, &list.view_proj, lights_bind, false)
+    }
+
+    /// Transparent pass：在不透明与 HUD 之间调用。
+    pub fn draw_xlu<'a>(
+        &'a self,
+        pass: &mut wgpu::RenderPass<'a>,
+        queue: &wgpu::Queue,
+        list: &DrawList3d,
+        lights_bind: &'a wgpu::BindGroup,
+    ) -> Result<(), SparkError> {
+        self.draw_cmds(
+            pass,
+            queue,
+            &list.tex_meshes_xlu,
+            &list.view_proj,
+            lights_bind,
+            true,
+        )
+    }
+
+    fn draw_cmds<'a>(
+        &'a self,
+        pass: &mut wgpu::RenderPass<'a>,
+        queue: &wgpu::Queue,
+        meshes: &[spark_renderer::TexMeshCmd],
+        view_proj: &spark_geometry::Mat4,
+        lights_bind: &'a wgpu::BindGroup,
+        transparent: bool,
+    ) -> Result<(), SparkError> {
+        if meshes.is_empty() {
             return Ok(());
         }
-        pass.set_pipeline(&self.pipeline);
+        pass.set_pipeline(if transparent {
+            &self.pipeline_xlu
+        } else {
+            &self.pipeline
+        });
         pass.set_bind_group(1, lights_bind, &[]);
-        let vp = mat4_to_cols_pub(&list.view_proj);
-        for mesh in &list.tex_meshes {
+        let vp = mat4_to_cols_pub(view_proj);
+        for mesh in meshes {
             let Some(tex) = self.textures.get(&mesh.texture.0) else {
                 continue;
             };

@@ -188,8 +188,9 @@ impl SkinnedMeshCmd {
 
 /// 一帧 3D 绘制 + HUD。
 ///
-/// 提交顺序由后端保证：`sky_meshes`（SkyPass）→ 清深度 → `meshes`/`tex_meshes`/`skinned_meshes`（Opaque）→ HUD。
-/// 透明 / 自发光 / 后处理列表尚未立契约，禁止把半透明语义塞进不透明网格。
+/// 提交顺序由后端保证：`sky_meshes`（SkyPass）→ 清深度 → Opaque（`meshes` /
+/// `tex_meshes` / `skinned_meshes`）→ Transparent（`tex_meshes_xlu`）→ HUD。
+/// 自发光 / 后处理列表尚未立契约。
 #[derive(Debug)]
 pub struct DrawList3d {
     pub clear: Color,
@@ -202,6 +203,8 @@ pub struct DrawList3d {
     pub sky_meshes: Vec<MeshCmd>,
     pub meshes: Vec<MeshCmd>,
     pub tex_meshes: Vec<TexMeshCmd>,
+    /// Transparent：树叶 / 玻璃等；深度测试开启、不写深度。
+    pub tex_meshes_xlu: Vec<TexMeshCmd>,
     /// 不透明蒙皮网格（在静态 meshes / tex_meshes 之后绘制）。
     pub skinned_meshes: Vec<SkinnedMeshCmd>,
     /// 本帧新建 / 更新纹理，由 wgpu 后端上传。
@@ -219,6 +222,7 @@ impl DrawList3d {
             sky_meshes: Vec::new(),
             meshes: Vec::new(),
             tex_meshes: Vec::new(),
+            tex_meshes_xlu: Vec::new(),
             skinned_meshes: Vec::new(),
             texture_uploads: Vec::new(),
             hud: DrawList::new(Color::rgba(0.0, 0.0, 0.0, 0.0)),
@@ -296,7 +300,7 @@ impl DrawList3d {
         texture: TextureId,
         vertices: Arc<[TexMeshVertex]>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, None, None);
+        self.push_tex_mesh(model, texture, vertices, None, None, false);
     }
 
     pub fn tex_mesh_resident(
@@ -307,7 +311,28 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb);
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, false);
+    }
+
+    /// 半透明纹理网格（Transparent pass：测深不写深）。
+    pub fn tex_mesh_xlu(
+        &mut self,
+        model: Mat4,
+        texture: TextureId,
+        vertices: Arc<[TexMeshVertex]>,
+    ) {
+        self.push_tex_mesh(model, texture, vertices, None, None, true);
+    }
+
+    pub fn tex_mesh_xlu_resident(
+        &mut self,
+        model: Mat4,
+        texture: TextureId,
+        vertices: Arc<[TexMeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_tex_mesh(model, texture, vertices, Some(key), local_aabb, true);
     }
 
     /// 不透明蒙皮网格（可选纹理；首切 palette ≤ [`MAX_SKIN_JOINTS`]）。
@@ -383,17 +408,23 @@ impl DrawList3d {
         vertices: Arc<[TexMeshVertex]>,
         resident: Option<MeshResidentKey>,
         local_aabb: Option<Aabb3>,
+        transparent: bool,
     ) {
         if vertices.is_empty() {
             return;
         }
-        self.tex_meshes.push(TexMeshCmd {
+        let cmd = TexMeshCmd {
             model,
             texture,
             vertices,
             resident,
             local_aabb,
-        });
+        };
+        if transparent {
+            self.tex_meshes_xlu.push(cmd);
+        } else {
+            self.tex_meshes.push(cmd);
+        }
     }
 
     fn push_skinned_mesh(
@@ -438,6 +469,8 @@ impl DrawList3d {
         self.meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes_xlu
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.skinned_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
     }
@@ -451,6 +484,8 @@ impl DrawList3d {
         };
         self.meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.tex_meshes_xlu
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.skinned_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
