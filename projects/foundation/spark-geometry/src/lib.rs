@@ -8,6 +8,7 @@ mod circle;
 mod collide;
 mod line;
 mod mat4;
+mod periodic;
 mod polygon;
 mod quat;
 mod ray3;
@@ -25,6 +26,10 @@ pub use collide::{
 };
 pub use line::{LineSegment, Ray};
 pub use mat4::Mat4;
+pub use periodic::{
+    floor_mod, normalize_position, periodic_distance, shortest_delta, shortest_delta_1d,
+    PeriodSize, PeriodicAxes,
+};
 pub use polygon::Polygon;
 pub use quat::Quat;
 pub use ray3::{ray_aabb, ray_voxel, ray_voxel_dda, Ray3, VoxelHit};
