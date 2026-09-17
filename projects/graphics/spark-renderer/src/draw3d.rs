@@ -107,6 +107,45 @@ impl Default for FrameLights3d {
     }
 }
 
+/// 单级太阳阴影（正交投影）；`enabled=false` 时着色器跳过采样。
+#[derive(Debug, Clone, Copy)]
+pub struct ShadowParams3d {
+    pub enabled: bool,
+    pub light_view_proj: Mat4,
+    pub bias: f32,
+    /// 阴影压暗强度 0..1。
+    pub strength: f32,
+}
+
+impl Default for ShadowParams3d {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            light_view_proj: Mat4::IDENTITY,
+            bias: 0.0018,
+            strength: 0.55,
+        }
+    }
+}
+
+impl ShadowParams3d {
+    /// 以 `focus` 为中心的太阳正交阴影盒（世界单位）。
+    pub fn from_sun(sun_dir: Vec3, focus: Vec3, half_extent: f32) -> Self {
+        let sun = sun_dir.normalized();
+        let extent = half_extent.max(8.0);
+        let depth = extent * 3.0;
+        let eye = focus + sun * (depth * 0.42);
+        let view = Mat4::look_to(eye, -sun, Vec3::Y);
+        let proj = Mat4::orthographic(-extent, extent, -extent, extent, 1.0, depth);
+        Self {
+            enabled: true,
+            light_view_proj: proj.mul(view),
+            bias: 0.0018,
+            strength: 0.58,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MeshCmd {
     pub model: Mat4,
@@ -226,6 +265,8 @@ pub struct DrawList3d {
     pub texture_uploads: Vec<(TextureId, RgbaImage)>,
     /// 全屏 bloom 强度；`0` 关闭后处理。
     pub bloom_strength: f32,
+    /// 单级太阳阴影参数。
+    pub shadow: ShadowParams3d,
     pub hud: DrawList,
 }
 
@@ -249,6 +290,7 @@ impl DrawList3d {
             view_model_meshes: Vec::new(),
             texture_uploads: Vec::new(),
             bloom_strength: 0.55,
+            shadow: ShadowParams3d::default(),
             hud: DrawList::new(Color::rgba(0.0, 0.0, 0.0, 0.0)),
         }
     }

@@ -146,6 +146,7 @@ struct GpuState3d {
     tex_mesh: crate::tex_mesh::TexMeshGpu,
     skinned_mesh: crate::skinned_mesh::SkinnedMeshGpu,
     bloom: crate::bloom::BloomGpu,
+    shadow: crate::shadow::ShadowMapGpu,
 }
 
 impl GpuState3d {
@@ -278,9 +279,16 @@ impl GpuState3d {
             bind_group_layouts: &[Some(&mesh_bgl)],
             immediate_size: 0,
         });
-        // 不透明：object + frame lights。
+        let shadow = crate::shadow::ShadowMapGpu::new(&device);
+        // 不透明 / 透明 lit：object + frame lights + sun shadow。
         let mesh_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("mesh3d-lit-pl"),
+            bind_group_layouts: &[Some(&mesh_bgl), Some(&lights_bgl), Some(shadow.sample_bgl())],
+            immediate_size: 0,
+        });
+        // 大气穹顶：object + lights，无阴影采样。
+        let mesh_pl_lights = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("mesh3d-lights-pl"),
             bind_group_layouts: &[Some(&mesh_bgl), Some(&lights_bgl)],
             immediate_size: 0,
         });
@@ -438,7 +446,7 @@ impl GpuState3d {
         });
         let sky_atmosphere_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("mesh3d-sky-atmosphere"),
-            layout: Some(&mesh_pl),
+            layout: Some(&mesh_pl_lights),
             vertex: wgpu::VertexState {
                 module: &sky_atm_shader,
                 entry_point: Some("vs_main"),
@@ -747,7 +755,8 @@ impl GpuState3d {
         });
 
         tracing::info!("GPU 3D ready");
-        let tex_mesh = crate::tex_mesh::TexMeshGpu::new(&device, format, &lights_bgl);
+        let tex_mesh =
+            crate::tex_mesh::TexMeshGpu::new(&device, format, &lights_bgl, shadow.sample_bgl());
         let skinned_mesh = crate::skinned_mesh::SkinnedMeshGpu::new(&device, format, &lights_bgl);
         let bloom = crate::bloom::BloomGpu::new(&device, format);
         Ok(Self {
@@ -786,6 +795,7 @@ impl GpuState3d {
             tex_mesh,
             skinned_mesh,
             bloom,
+            shadow,
         })
     }
 
@@ -1075,6 +1085,10 @@ impl GpuState3d {
                 label: Some("frame3d"),
             });
 
+        self.shadow.write_params(&self.queue, list);
+        self.shadow
+            .render_casters(&mut encoder, &self.device, &self.queue, list);
+
         // SkyPass：大气穹顶 → 顶点色天体 → 加性光晕；不写深度；随后清深度再画不透明世界。
         let has_sky = !list.sky_atmosphere_meshes.is_empty()
             || !list.sky_meshes.is_empty()
@@ -1160,9 +1174,15 @@ impl GpuState3d {
             pass.set_pipeline(&self.mesh_pipeline);
             pass.set_bind_group(0, &self.mesh_bind, &[]);
             pass.set_bind_group(1, &self.lights_bind, &[]);
+            pass.set_bind_group(2, self.shadow.sample_bind(), &[]);
             self.draw_mesh_cmds(&mut pass, &list.meshes, &list.view_proj);
-            self.tex_mesh
-                .draw(&mut pass, &self.queue, list, &self.lights_bind)?;
+            self.tex_mesh.draw(
+                &mut pass,
+                &self.queue,
+                list,
+                &self.lights_bind,
+                self.shadow.sample_bind(),
+            )?;
             self.skinned_mesh.draw(
                 &mut pass,
                 &self.device,
@@ -1199,11 +1219,17 @@ impl GpuState3d {
                 pass.set_pipeline(&self.mesh_xlu_pipeline);
                 pass.set_bind_group(0, &self.mesh_bind, &[]);
                 pass.set_bind_group(1, &self.lights_bind, &[]);
+                pass.set_bind_group(2, self.shadow.sample_bind(), &[]);
                 self.draw_mesh_cmds(&mut pass, &list.meshes_xlu, &list.view_proj);
             }
             if !list.tex_meshes_xlu.is_empty() {
-                self.tex_mesh
-                    .draw_xlu(&mut pass, &self.queue, list, &self.lights_bind)?;
+                self.tex_mesh.draw_xlu(
+                    &mut pass,
+                    &self.queue,
+                    list,
+                    &self.lights_bind,
+                    self.shadow.sample_bind(),
+                )?;
             }
         }
 
@@ -1266,6 +1292,7 @@ impl GpuState3d {
             pass.set_pipeline(&self.mesh_pipeline);
             pass.set_bind_group(0, &self.mesh_bind, &[]);
             pass.set_bind_group(1, &self.lights_bind, &[]);
+            pass.set_bind_group(2, self.shadow.sample_bind(), &[]);
             self.draw_mesh_cmds(&mut pass, &list.view_model_meshes, &list.view_proj);
         }
 

@@ -60,6 +60,7 @@ impl TexMeshGpu {
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         lights_bgl: &wgpu::BindGroupLayout,
+        shadow_bgl: &wgpu::BindGroupLayout,
     ) -> Self {
         let shader = create_builtin(device, BuiltinShader::TexturedMesh3d);
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -106,6 +107,11 @@ impl TexMeshGpu {
         });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("tex-mesh3d-pl"),
+            bind_group_layouts: &[Some(&bgl), Some(lights_bgl), Some(shadow_bgl)],
+            immediate_size: 0,
+        });
+        let pl_emissive = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("tex-mesh3d-emissive-pl"),
             bind_group_layouts: &[Some(&bgl), Some(lights_bgl)],
             immediate_size: 0,
         });
@@ -201,7 +207,7 @@ impl TexMeshGpu {
         let emissive_shader = create_builtin(device, BuiltinShader::EmissiveMesh3d);
         let pipeline_emissive = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("tex-mesh3d-emissive"),
-            layout: Some(&pl),
+            layout: Some(&pl_emissive),
             vertex: wgpu::VertexState {
                 module: &emissive_shader,
                 entry_point: Some("vs_main"),
@@ -407,6 +413,7 @@ impl TexMeshGpu {
         queue: &wgpu::Queue,
         list: &DrawList3d,
         lights_bind: &'a wgpu::BindGroup,
+        shadow_bind: &'a wgpu::BindGroup,
     ) -> Result<(), SparkError> {
         self.draw_cmds(
             pass,
@@ -414,6 +421,7 @@ impl TexMeshGpu {
             &list.tex_meshes,
             &list.view_proj,
             lights_bind,
+            Some(shadow_bind),
             TexDrawKind::Opaque,
         )
     }
@@ -425,6 +433,7 @@ impl TexMeshGpu {
         queue: &wgpu::Queue,
         list: &DrawList3d,
         lights_bind: &'a wgpu::BindGroup,
+        shadow_bind: &'a wgpu::BindGroup,
     ) -> Result<(), SparkError> {
         self.draw_cmds(
             pass,
@@ -432,6 +441,7 @@ impl TexMeshGpu {
             &list.tex_meshes_xlu,
             &list.view_proj,
             lights_bind,
+            Some(shadow_bind),
             TexDrawKind::Xlu,
         )
     }
@@ -450,6 +460,7 @@ impl TexMeshGpu {
             &list.tex_meshes_emissive,
             &list.view_proj,
             lights_bind,
+            None,
             TexDrawKind::Emissive,
         )
     }
@@ -461,6 +472,7 @@ impl TexMeshGpu {
         meshes: &[spark_renderer::TexMeshCmd],
         view_proj: &spark_geometry::Mat4,
         lights_bind: &'a wgpu::BindGroup,
+        shadow_bind: Option<&'a wgpu::BindGroup>,
         kind: TexDrawKind,
     ) -> Result<(), SparkError> {
         if meshes.is_empty() {
@@ -472,6 +484,9 @@ impl TexMeshGpu {
             TexDrawKind::Emissive => &self.pipeline_emissive,
         });
         pass.set_bind_group(1, lights_bind, &[]);
+        if let Some(shadow) = shadow_bind {
+            pass.set_bind_group(2, shadow, &[]);
+        }
         let vp = mat4_to_cols_pub(view_proj);
         for mesh in meshes {
             let Some(tex) = self.textures.get(&mesh.texture.0) else {
