@@ -728,6 +728,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
                 dt,
                 screen_w: sw,
                 screen_h: sh,
+                timing: Default::default(),
             };
             self.host.update(&frame);
         }
