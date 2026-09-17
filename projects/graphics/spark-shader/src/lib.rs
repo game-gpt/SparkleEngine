@@ -22,6 +22,10 @@ pub enum BuiltinShader {
     EmissiveMesh3d,
     /// 透视空间蒙皮三角网格（关节 palette + 方向光 + 雾）。
     SkinnedMesh3d,
+    /// 全屏 bloom 提取 / 模糊。
+    Bloom,
+    /// 全屏 bloom 合成。
+    BloomComposite,
 }
 
 impl BuiltinShader {
@@ -34,6 +38,8 @@ impl BuiltinShader {
             Self::TexturedMesh3d => "spark-shader/textured-mesh3d",
             Self::EmissiveMesh3d => "spark-shader/emissive-mesh3d",
             Self::SkinnedMesh3d => "spark-shader/skinned-mesh3d",
+            Self::Bloom => "spark-shader/bloom",
+            Self::BloomComposite => "spark-shader/bloom-composite",
         }
     }
 
@@ -46,6 +52,8 @@ impl BuiltinShader {
             Self::TexturedMesh3d => include_str!("shaders/mesh3d_tex.wgsl"),
             Self::EmissiveMesh3d => include_str!("shaders/mesh3d_tex_emissive.wgsl"),
             Self::SkinnedMesh3d => include_str!("shaders/mesh3d_skinned.wgsl"),
+            Self::Bloom => include_str!("shaders/bloom.wgsl"),
+            Self::BloomComposite => include_str!("shaders/bloom_composite.wgsl"),
         }
     }
 
@@ -110,11 +118,18 @@ mod tests {
             BuiltinShader::SolidMesh3d,
             BuiltinShader::LitSolidMesh3d,
             BuiltinShader::TexturedMesh3d,
+            BuiltinShader::EmissiveMesh3d,
             BuiltinShader::SkinnedMesh3d,
+            BuiltinShader::Bloom,
+            BuiltinShader::BloomComposite,
         ] {
             validate_source(&s.into()).unwrap();
             assert!(s.wgsl().contains("vs_main"));
-            assert!(s.wgsl().contains("fs_main"));
+            assert!(
+                s.wgsl().contains("fs_main")
+                    || s.wgsl().contains("fs_extract")
+                    || s.wgsl().contains("fs_blur")
+            );
         }
     }
 }
