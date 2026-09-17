@@ -44,6 +44,8 @@ pub struct ShadowMapGpu {
     depth_pipeline_mesh: wgpu::RenderPipeline,
     depth_pipeline_tex: wgpu::RenderPipeline,
     object_uniform: wgpu::Buffer,
+    object_uniform_stride: u64,
+    object_uniform_slots: usize,
     object_bind: wgpu::BindGroup,
     shadow_bgl: wgpu::BindGroupLayout,
     shadow_uniform: wgpu::Buffer,
@@ -100,15 +102,20 @@ impl ShadowMapGpu {
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+                    has_dynamic_offset: true,
+                    min_binding_size: crate::dyn_ubo::binding_size(
+                        std::mem::size_of::<ObjectUniforms>() as u64,
+                    ),
                 },
                 count: None,
             }],
         });
+        let object_uniform_stride =
+            crate::dyn_ubo::uniform_stride(device, std::mem::size_of::<ObjectUniforms>() as u64);
+        let object_uniform_slots = 512usize;
         let object_uniform = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("shadow-object-uniform"),
-            size: std::mem::size_of::<ObjectUniforms>() as u64,
+            label: Some("shadow-object-uniform-ring"),
+            size: object_uniform_stride * object_uniform_slots as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -117,7 +124,13 @@ impl ShadowMapGpu {
             layout: &object_bgl,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: object_uniform.as_entire_binding(),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &object_uniform,
+                    offset: 0,
+                    size: crate::dyn_ubo::binding_size(
+                        std::mem::size_of::<ObjectUniforms>() as u64,
+                    ),
+                }),
             }],
         });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -282,6 +295,8 @@ impl ShadowMapGpu {
             depth_pipeline_mesh,
             depth_pipeline_tex,
             object_uniform,
+            object_uniform_stride,
+            object_uniform_slots,
             object_bind,
             shadow_bgl,
             shadow_uniform,
@@ -339,13 +354,12 @@ impl ShadowMapGpu {
             });
 
             let light_vp = list.shadow.light_view_proj[layer];
+            let mut ubo_slot = 0usize;
             pass.set_pipeline(&self.depth_pipeline_mesh);
-            pass.set_bind_group(0, &self.object_bind, &[]);
-            self.draw_mesh_depth(&mut pass, queue, &list.meshes, &light_vp);
+            self.draw_mesh_depth(&mut pass, queue, &list.meshes, &light_vp, &mut ubo_slot);
 
             pass.set_pipeline(&self.depth_pipeline_tex);
-            pass.set_bind_group(0, &self.object_bind, &[]);
-            self.draw_tex_depth(&mut pass, queue, &list.tex_meshes, &light_vp);
+            self.draw_tex_depth(&mut pass, queue, &list.tex_meshes, &light_vp, &mut ubo_slot);
         }
     }
 
@@ -473,17 +487,34 @@ impl ShadowMapGpu {
         queue: &wgpu::Queue,
         meshes: &[MeshCmd],
         light_vp: &spark_geometry::Mat4,
+        ubo_slot: &mut usize,
     ) {
         let vp = mat4_to_cols_pub(light_vp);
-        for mesh in meshes {
-            if mesh.vertices.is_empty() {
+        let mut planned: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
+        for (mi, mesh) in meshes.iter().enumerate() {
+            let drawable = if let Some(key) = mesh.resident {
+                self.mesh_cache.contains_key(&key.id.0)
+            } else {
+                !mesh.vertices.is_empty() && (mesh.vertices.len() as u64) <= self.transient_cap
+            };
+            if !drawable {
                 continue;
+            }
+            if *ubo_slot >= self.object_uniform_slots {
+                break;
             }
             let uniforms = ObjectUniforms {
                 view_proj: vp,
                 model: mat4_to_cols_pub(&mesh.model),
             };
-            queue.write_buffer(&self.object_uniform, 0, bytemuck::bytes_of(&uniforms));
+            let off = *ubo_slot as u64 * self.object_uniform_stride;
+            queue.write_buffer(&self.object_uniform, off, bytemuck::bytes_of(&uniforms));
+            planned.push((off as u32, mi));
+            *ubo_slot += 1;
+        }
+        for (dyn_off, mi) in planned {
+            let mesh = &meshes[mi];
+            pass.set_bind_group(0, &self.object_bind, &[dyn_off]);
             if let Some(key) = mesh.resident {
                 let Some(e) = self.mesh_cache.get(&key.id.0) else {
                     continue;
@@ -510,17 +541,34 @@ impl ShadowMapGpu {
         queue: &wgpu::Queue,
         meshes: &[TexMeshCmd],
         light_vp: &spark_geometry::Mat4,
+        ubo_slot: &mut usize,
     ) {
         let vp = mat4_to_cols_pub(light_vp);
-        for mesh in meshes {
-            if mesh.vertices.is_empty() {
+        let mut planned: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
+        for (mi, mesh) in meshes.iter().enumerate() {
+            let drawable = if let Some(key) = mesh.resident {
+                self.tex_cache.contains_key(&key.id.0)
+            } else {
+                !mesh.vertices.is_empty() && (mesh.vertices.len() as u64) <= self.transient_cap
+            };
+            if !drawable {
                 continue;
+            }
+            if *ubo_slot >= self.object_uniform_slots {
+                break;
             }
             let uniforms = ObjectUniforms {
                 view_proj: vp,
                 model: mat4_to_cols_pub(&mesh.model),
             };
-            queue.write_buffer(&self.object_uniform, 0, bytemuck::bytes_of(&uniforms));
+            let off = *ubo_slot as u64 * self.object_uniform_stride;
+            queue.write_buffer(&self.object_uniform, off, bytemuck::bytes_of(&uniforms));
+            planned.push((off as u32, mi));
+            *ubo_slot += 1;
+        }
+        for (dyn_off, mi) in planned {
+            let mesh = &meshes[mi];
+            pass.set_bind_group(0, &self.object_bind, &[dyn_off]);
             if let Some(key) = mesh.resident {
                 let Some(e) = self.tex_cache.get(&key.id.0) else {
                     continue;
