@@ -205,6 +205,10 @@ pub struct DrawList3d {
     /// Sky 加性发光（方日光晕等）；测深 Always、不写深、additive。
     pub sky_emissive_meshes: Vec<MeshCmd>,
     pub meshes: Vec<MeshCmd>,
+    /// 顶点色半透明（面罩等）；测深不写深。
+    pub meshes_xlu: Vec<MeshCmd>,
+    /// 顶点色自发光（灯条等）；测深不写深、additive。
+    pub meshes_emissive: Vec<MeshCmd>,
     pub tex_meshes: Vec<TexMeshCmd>,
     /// Transparent：树叶 / 玻璃等；深度测试开启、不写深度。
     pub tex_meshes_xlu: Vec<TexMeshCmd>,
@@ -230,6 +234,8 @@ impl DrawList3d {
             sky_meshes: Vec::new(),
             sky_emissive_meshes: Vec::new(),
             meshes: Vec::new(),
+            meshes_xlu: Vec::new(),
+            meshes_emissive: Vec::new(),
             tex_meshes: Vec::new(),
             tex_meshes_xlu: Vec::new(),
             tex_meshes_emissive: Vec::new(),
@@ -288,6 +294,36 @@ impl DrawList3d {
         local_aabb: Option<Aabb3>,
     ) {
         self.push_mesh(model, vertices, Some(key), local_aabb);
+    }
+
+    /// 顶点色半透明网格（Transparent pass）。
+    pub fn mesh_xlu(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {
+        self.push_mesh_xlu(model, vertices, None, None);
+    }
+
+    pub fn mesh_xlu_resident(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_mesh_xlu(model, vertices, Some(key), local_aabb);
+    }
+
+    /// 顶点色自发光网格（Emissive pass）。
+    pub fn mesh_emissive(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {
+        self.push_mesh_emissive(model, vertices, None, None);
+    }
+
+    pub fn mesh_emissive_resident(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_mesh_emissive(model, vertices, Some(key), local_aabb);
     }
 
     /// 天空 / 天体网格（走 SkyPass，不参与不透明深度竞争）。
@@ -445,6 +481,42 @@ impl DrawList3d {
         });
     }
 
+    fn push_mesh_xlu(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        resident: Option<MeshResidentKey>,
+        local_aabb: Option<Aabb3>,
+    ) {
+        if vertices.is_empty() {
+            return;
+        }
+        self.meshes_xlu.push(MeshCmd {
+            model,
+            vertices,
+            resident,
+            local_aabb,
+        });
+    }
+
+    fn push_mesh_emissive(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        resident: Option<MeshResidentKey>,
+        local_aabb: Option<Aabb3>,
+    ) {
+        if vertices.is_empty() {
+            return;
+        }
+        self.meshes_emissive.push(MeshCmd {
+            model,
+            vertices,
+            resident,
+            local_aabb,
+        });
+    }
+
     fn push_sky_mesh(
         &mut self,
         model: Mat4,
@@ -565,6 +637,10 @@ impl DrawList3d {
             frustum.intersects_aabb(&world)
         };
         self.meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.meshes_xlu
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.meshes_emissive
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes_xlu
@@ -583,6 +659,10 @@ impl DrawList3d {
             dist <= max_d
         };
         self.meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.meshes_xlu
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
+        self.meshes_emissive
+            .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes
             .retain(|m| m.world_aabb().map(keep).unwrap_or(true));
         self.tex_meshes_xlu
