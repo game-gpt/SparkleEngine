@@ -85,10 +85,17 @@ impl TexMeshCmd {
 }
 
 /// 一帧 3D 绘制 + HUD。
+///
+/// 提交顺序由后端保证：`sky_meshes`（SkyPass）→ 清深度 → `meshes`/`tex_meshes`（Opaque）→ HUD。
+/// 透明 / 自发光 / 后处理列表尚未立契约，禁止把半透明语义塞进不透明网格。
 #[derive(Debug)]
 pub struct DrawList3d {
     pub clear: Color,
     pub view_proj: Mat4,
+    /// 天空 / 天体专用 VP（通常为去平移的 `Camera3d::sky_view_proj`）。
+    pub sky_view_proj: Mat4,
+    /// SkyPass：无深度写入；在清深度前绘制。
+    pub sky_meshes: Vec<MeshCmd>,
     pub meshes: Vec<MeshCmd>,
     pub tex_meshes: Vec<TexMeshCmd>,
     /// 本帧新建 / 更新纹理，由 wgpu 后端上传。
@@ -101,6 +108,8 @@ impl DrawList3d {
         Self {
             clear,
             view_proj,
+            sky_view_proj: view_proj,
+            sky_meshes: Vec::new(),
             meshes: Vec::new(),
             tex_meshes: Vec::new(),
             texture_uploads: Vec::new(),
@@ -158,6 +167,21 @@ impl DrawList3d {
         self.push_mesh(model, vertices, Some(key), local_aabb);
     }
 
+    /// 天空 / 天体网格（走 SkyPass，不参与不透明深度竞争）。
+    pub fn sky_mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {
+        self.push_sky_mesh(model, vertices, None, None);
+    }
+
+    pub fn sky_mesh_resident(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+    ) {
+        self.push_sky_mesh(model, vertices, Some(key), local_aabb);
+    }
+
     pub fn tex_mesh(
         &mut self,
         model: Mat4,
@@ -189,6 +213,24 @@ impl DrawList3d {
             return;
         }
         self.meshes.push(MeshCmd {
+            model,
+            vertices,
+            resident,
+            local_aabb,
+        });
+    }
+
+    fn push_sky_mesh(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        resident: Option<MeshResidentKey>,
+        local_aabb: Option<Aabb3>,
+    ) {
+        if vertices.is_empty() {
+            return;
+        }
+        self.sky_meshes.push(MeshCmd {
             model,
             vertices,
             resident,

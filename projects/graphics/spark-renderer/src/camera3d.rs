@@ -73,6 +73,14 @@ impl Camera3d {
         self.proj_matrix(aspect).mul(self.view_matrix())
     }
 
+    /// 天空用 VP：与主相机同朝向，眼点固定在原点（去掉平移）。
+    ///
+    /// 天空几何应放在单位球/远球上并以单位 model 提交，避免每帧平移整球。
+    pub fn sky_view_proj(&self, aspect: f32) -> Mat4 {
+        let view = Mat4::look_to(Vec3::ZERO, self.forward(), Vec3::Y);
+        self.proj_matrix(aspect).mul(view)
+    }
+
     /// 当前相机的视锥（给定宽高比）。
     pub fn frustum(&self, aspect: f32) -> crate::frustum::Frustum {
         crate::frustum::Frustum::from_view_proj(&self.view_proj(aspect))

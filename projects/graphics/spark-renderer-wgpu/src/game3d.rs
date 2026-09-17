@@ -8,7 +8,8 @@ use bytemuck::{Pod, Zeroable};
 use spark_core::{Color, SparkError};
 use spark_font::GlyphCache;
 use spark_renderer::{
-    DrawList, DrawList3d, FrameCtx, GameHost3d, Input, MeshResidentKey, MeshVertex, WindowConfig,
+    DrawList, DrawList3d, FrameCtx, GameHost3d, Input, MeshCmd, MeshResidentKey, MeshVertex,
+    WindowConfig,
 };
 use spark_shader::{BuiltinShader, create_builtin};
 use winit::application::ApplicationHandler;
@@ -85,7 +86,10 @@ struct GpuState3d {
     config: wgpu::SurfaceConfiguration,
     depth_view: wgpu::TextureView,
     depth_tex: wgpu::Texture,
+    /// 不透明网格：写深度，Less。
     mesh_pipeline: wgpu::RenderPipeline,
+    /// 天空 / 天体：不写深度，Always（绘制顺序即前后）。
+    sky_pipeline: wgpu::RenderPipeline,
     solid_pipeline: wgpu::RenderPipeline,
     glyph_pipeline: wgpu::RenderPipeline,
     mesh_bind: wgpu::BindGroup,
@@ -231,6 +235,47 @@ impl GpuState3d {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        // SkyPass：同顶点色 shader，关闭深度写入，Always 比较，避免与天体共面竞争。
+        let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("mesh3d-sky"),
+            layout: Some(&mesh_pl),
+            vertex: wgpu::VertexState {
+                module: &mesh_shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<MeshVertGpu>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4],
+                })],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &mesh_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                // 内向穹顶：顶点按内表面绕序，背面剔除仍适用。
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
                 stencil: Default::default(),
                 bias: Default::default(),
             }),
@@ -462,6 +507,7 @@ impl GpuState3d {
             depth_view,
             depth_tex,
             mesh_pipeline,
+            sky_pipeline,
             solid_pipeline,
             glyph_pipeline,
             mesh_bind,
@@ -503,6 +549,48 @@ impl GpuState3d {
                 color: v.color,
             })
             .collect()
+    }
+
+    /// 提交一组顶点色网格（天空或不透明）；`view_proj` 由调用方选择主相机或天空 VP。
+    fn draw_mesh_cmds(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        meshes: &[MeshCmd],
+        view_proj: &spark_geometry::Mat4,
+    ) {
+        let vp = mat4_to_cols(view_proj);
+        for mesh in meshes {
+            if mesh.vertices.is_empty() {
+                continue;
+            }
+            let uniforms = Uniforms3d {
+                view_proj: vp,
+                model: mat4_to_cols(&mesh.model),
+            };
+            self.queue
+                .write_buffer(&self.mesh_uniform, 0, bytemuck::bytes_of(&uniforms));
+
+            if let Some(key) = mesh.resident {
+                let Some(entry) = self.mesh_cache.get(&key.id.0) else {
+                    continue;
+                };
+                if entry.vertex_count == 0 {
+                    continue;
+                }
+                let vcount = entry.vertex_count;
+                pass.set_vertex_buffer(0, entry.buffer.slice(..));
+                pass.draw(0..vcount, 0..1);
+            } else {
+                let gpu_verts = self.upload_mesh_verts(&mesh.vertices);
+                if gpu_verts.len() as u64 > self.mesh_cap {
+                    continue;
+                }
+                self.queue
+                    .write_buffer(&self.mesh_vbo, 0, bytemuck::cast_slice(&gpu_verts));
+                pass.set_vertex_buffer(0, self.mesh_vbo.slice(..));
+                pass.draw(0..gpu_verts.len() as u32, 0..1);
+            }
+        }
     }
 
     /// 确保驻留网格与 `revision` 一致，过期则重建 VBO。
@@ -683,7 +771,7 @@ impl GpuState3d {
         let view = frame.texture.create_view(&Default::default());
 
         // 渲染通道开始前完成驻留上传，避免与 pass 借用冲突。
-        for mesh in &list.meshes {
+        for mesh in list.sky_meshes.iter().chain(list.meshes.iter()) {
             if let Some(key) = mesh.resident {
                 self.ensure_resident(key, &mesh.vertices);
             }
@@ -698,9 +786,10 @@ impl GpuState3d {
                 label: Some("frame3d"),
             });
 
-        {
+        // SkyPass：先画天空/天体，不写深度；随后清深度再画不透明世界。
+        if !list.sky_meshes.is_empty() {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("3d"),
+                label: Some("sky"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -725,42 +814,47 @@ impl GpuState3d {
                 }),
                 ..Default::default()
             });
+            pass.set_pipeline(&self.sky_pipeline);
+            pass.set_bind_group(0, &self.mesh_bind, &[]);
+            self.draw_mesh_cmds(&mut pass, &list.sky_meshes, &list.sky_view_proj);
+        }
+
+        {
+            let color_load = if list.sky_meshes.is_empty() {
+                wgpu::LoadOp::Clear(wgpu::Color {
+                    r: list.clear.r as f64,
+                    g: list.clear.g as f64,
+                    b: list.clear.b as f64,
+                    a: list.clear.a as f64,
+                })
+            } else {
+                wgpu::LoadOp::Load
+            };
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("3d-opaque"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: color_load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        // 天空之后重新开始场景深度。
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                ..Default::default()
+            });
             pass.set_pipeline(&self.mesh_pipeline);
             pass.set_bind_group(0, &self.mesh_bind, &[]);
-
-            let vp = mat4_to_cols(&list.view_proj);
-            for mesh in &list.meshes {
-                if mesh.vertices.is_empty() {
-                    continue;
-                }
-                let uniforms = Uniforms3d {
-                    view_proj: vp,
-                    model: mat4_to_cols(&mesh.model),
-                };
-                self.queue
-                    .write_buffer(&self.mesh_uniform, 0, bytemuck::bytes_of(&uniforms));
-
-                if let Some(key) = mesh.resident {
-                    let Some(entry) = self.mesh_cache.get(&key.id.0) else {
-                        continue;
-                    };
-                    if entry.vertex_count == 0 {
-                        continue;
-                    }
-                    let vcount = entry.vertex_count;
-                    pass.set_vertex_buffer(0, entry.buffer.slice(..));
-                    pass.draw(0..vcount, 0..1);
-                } else {
-                    let gpu_verts = self.upload_mesh_verts(&mesh.vertices);
-                    if gpu_verts.len() as u64 > self.mesh_cap {
-                        continue;
-                    }
-                    self.queue
-                        .write_buffer(&self.mesh_vbo, 0, bytemuck::cast_slice(&gpu_verts));
-                    pass.set_vertex_buffer(0, self.mesh_vbo.slice(..));
-                    pass.draw(0..gpu_verts.len() as u32, 0..1);
-                }
-            }
+            self.draw_mesh_cmds(&mut pass, &list.meshes, &list.view_proj);
             self.tex_mesh.draw(&mut pass, &self.queue, list)?;
         }
 
