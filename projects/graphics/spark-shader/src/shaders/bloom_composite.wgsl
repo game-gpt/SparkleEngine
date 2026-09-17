@@ -1,8 +1,12 @@
 // Bloom 合成：scene + bloom * strength。
 
+// 均匀缓冲布局须与 CPU `CompUniforms`（4×f32）一致。
+// 勿用 `f32` + `vec3`：WGSL uniform 下 `vec3` 对齐 16，结构体会膨胀到 32。
 struct CompUniforms {
     strength: f32,
-    _pad: vec3<f32>,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 @group(0) @binding(0)
