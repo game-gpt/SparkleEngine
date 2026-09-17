@@ -107,11 +107,18 @@ impl Default for FrameLights3d {
     }
 }
 
-/// 单级太阳阴影（正交投影）；`enabled=false` 时着色器跳过采样。
+/// 太阳阴影级联上限（与 GPU uniform / 深度数组层数一致）。
+pub const MAX_SHADOW_CASCADES: usize = 3;
+
+/// 太阳正交阴影（1..3 级联）；`enabled=false` 时着色器跳过采样。
 #[derive(Debug, Clone, Copy)]
 pub struct ShadowParams3d {
     pub enabled: bool,
-    pub light_view_proj: Mat4,
+    /// 有效级联数，钳制到 `1..=MAX_SHADOW_CASCADES`。
+    pub cascade_count: u32,
+    pub light_view_proj: [Mat4; MAX_SHADOW_CASCADES],
+    /// 相对 `focus`（通常为相机眼）的世界距离：级联 `i` 覆盖到 `split_end[i]`。
+    pub split_end: [f32; MAX_SHADOW_CASCADES],
     pub bias: f32,
     /// 阴影压暗强度 0..1。
     pub strength: f32,
@@ -121,7 +128,9 @@ impl Default for ShadowParams3d {
     fn default() -> Self {
         Self {
             enabled: false,
-            light_view_proj: Mat4::IDENTITY,
+            cascade_count: 1,
+            light_view_proj: [Mat4::IDENTITY; MAX_SHADOW_CASCADES],
+            split_end: [0.0; MAX_SHADOW_CASCADES],
             bias: 0.0018,
             strength: 0.55,
         }
@@ -129,17 +138,37 @@ impl Default for ShadowParams3d {
 }
 
 impl ShadowParams3d {
-    /// 以 `focus` 为中心的太阳正交阴影盒（世界单位）。
+    /// 以 `focus` 为中心的单级太阳正交阴影盒（世界单位）。
     pub fn from_sun(sun_dir: Vec3, focus: Vec3, half_extent: f32) -> Self {
+        Self::from_sun_cascaded(sun_dir, focus, &[half_extent])
+    }
+
+    /// 同焦点、多级正交盒：近景高分辨率 + 远景覆盖。
+    ///
+    /// `half_extents` 由近到远，长度 1..=3；空切片退化为关闭。
+    pub fn from_sun_cascaded(sun_dir: Vec3, focus: Vec3, half_extents: &[f32]) -> Self {
+        if half_extents.is_empty() {
+            return Self::default();
+        }
         let sun = sun_dir.normalized();
-        let extent = half_extent.max(8.0);
-        let depth = extent * 3.0;
-        let eye = focus + sun * (depth * 0.42);
-        let view = Mat4::look_to(eye, -sun, Vec3::Y);
-        let proj = Mat4::orthographic(-extent, extent, -extent, extent, 1.0, depth);
+        let n = half_extents.len().min(MAX_SHADOW_CASCADES);
+        let mut light_view_proj = [Mat4::IDENTITY; MAX_SHADOW_CASCADES];
+        let mut split_end = [0.0f32; MAX_SHADOW_CASCADES];
+        for i in 0..n {
+            let extent = half_extents[i].max(8.0);
+            let depth = extent * 3.0;
+            let eye = focus + sun * (depth * 0.42);
+            let view = Mat4::look_to(eye, -sun, Vec3::Y);
+            let proj = Mat4::orthographic(-extent, extent, -extent, extent, 1.0, depth);
+            light_view_proj[i] = proj.mul(view);
+            // 盒半宽近似覆盖半径；略放大避免盒角被裁切。
+            split_end[i] = extent * 1.35;
+        }
         Self {
             enabled: true,
-            light_view_proj: proj.mul(view),
+            cascade_count: n as u32,
+            light_view_proj,
+            split_end,
             bias: 0.0018,
             strength: 0.58,
         }

@@ -13,6 +13,7 @@ pub use camera3d::Camera3d;
 pub use draw::{DrawList, QuadCmd, TextCmd};
 pub use draw3d::{
     DrawList3d, FrameLights3d, MeshCmd, MeshId, MeshResidentKey, MeshVertex, ShadowParams3d,
+    MAX_SHADOW_CASCADES,
     SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, MAX_SKIN_JOINTS,
 };
 pub use frustum::{CullParams, Frustum};
