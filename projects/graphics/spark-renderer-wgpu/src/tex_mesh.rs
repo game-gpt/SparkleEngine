@@ -364,6 +364,7 @@ impl TexMeshGpu {
     }
 
     pub fn prepare_residents(&mut self, device: &wgpu::Device, list: &DrawList3d) {
+        let mut uploads = 0usize;
         for mesh in list
             .tex_meshes
             .iter()
@@ -371,8 +372,26 @@ impl TexMeshGpu {
             .chain(list.tex_meshes_emissive.iter())
         {
             if let Some(key) = mesh.resident {
+                if !Self::resident_stale(self.mesh_cache.get(&key.id.0), key, mesh.vertices.len()) {
+                    continue;
+                }
+                if uploads >= crate::RESIDENT_UPLOADS_PER_FRAME {
+                    continue;
+                }
                 self.ensure_resident(device, key, &mesh.vertices);
+                uploads += 1;
             }
+        }
+    }
+
+    fn resident_stale(
+        entry: Option<&ResidentTexMesh>,
+        key: MeshResidentKey,
+        vertex_count: usize,
+    ) -> bool {
+        match entry {
+            Some(e) => e.revision != key.revision || e.vertex_count as usize != vertex_count,
+            None => vertex_count > 0,
         }
     }
 
