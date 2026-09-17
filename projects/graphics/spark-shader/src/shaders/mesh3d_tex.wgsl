@@ -74,7 +74,17 @@ fn sun_shadow(world_pos: vec3<f32>) -> f32 {
     if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || depth < 0.0 || depth > 1.0 {
         return 1.0;
     }
-    let lit = textureSampleCompare(shadow_map, shadow_samp, uv, depth - shadow.params.y);
+    // 3×3 PCF：软化体素台阶上的硬影锯齿。
+    let texel = 1.0 / 2048.0;
+    let bias = shadow.params.y;
+    var acc = 0.0;
+    for (var oy = -1; oy <= 1; oy++) {
+        for (var ox = -1; ox <= 1; ox++) {
+            let o = vec2<f32>(f32(ox), f32(oy)) * texel;
+            acc += textureSampleCompare(shadow_map, shadow_samp, uv + o, depth - bias);
+        }
+    }
+    let lit = acc / 9.0;
     return mix(1.0 - shadow.params.z, 1.0, lit);
 }
 
