@@ -10,7 +10,8 @@ use wgpu::util::DeviceExt;
 
 use crate::game3d::mat4_to_cols_pub;
 
-const MAP_SIZE: u32 = 2048;
+// 近场单级联够用；2048² 深度填充在转视角时过重。
+const MAP_SIZE: u32 = 1024;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
