@@ -1,6 +1,6 @@
 //! 列主序 4×4 矩阵（与 WGSL `mat4x4` 内存布局一致）。
 
-use crate::Vec3;
+use crate::{Quat, Vec3};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Mat4 {
@@ -28,6 +28,24 @@ impl Mat4 {
         m.cols[13] = t.y;
         m.cols[14] = t.z;
         m
+    }
+
+    pub fn scaling(s: Vec3) -> Self {
+        Self {
+            cols: [
+                s.x, 0.0, 0.0, 0.0, //
+                0.0, s.y, 0.0, 0.0, //
+                0.0, 0.0, s.z, 0.0, //
+                0.0, 0.0, 0.0, 1.0,
+            ],
+        }
+    }
+
+    /// `T * R * S`（先缩放，再旋转，再平移）。
+    pub fn from_trs(translation: Vec3, rotation: Quat, scale: Vec3) -> Self {
+        Self::translation(translation)
+            .mul(rotation.to_mat4())
+            .mul(Self::scaling(scale))
     }
 
     pub fn rotation_y(rad: f32) -> Self {
