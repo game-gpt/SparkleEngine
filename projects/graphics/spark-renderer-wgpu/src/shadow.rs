@@ -2,8 +2,8 @@
 
 use bytemuck::{Pod, Zeroable};
 use spark_renderer::{
-    DrawList3d, MeshCmd, MeshResidentKey, MeshVertex, ShadowParams3d, TexMeshCmd, TexMeshVertex,
-    MAX_SHADOW_CASCADES,
+    DrawList3d, Frustum, MeshCmd, MeshResidentKey, MeshVertex, ShadowParams3d, TexMeshCmd,
+    TexMeshVertex, MAX_SHADOW_CASCADES,
 };
 use spark_shader::{create_builtin, BuiltinShader};
 use wgpu::util::DeviceExt;
@@ -354,12 +354,27 @@ impl ShadowMapGpu {
             });
 
             let light_vp = list.shadow.light_view_proj[layer];
+            let light_frustum = Frustum::from_view_proj(&light_vp);
             let mut ubo_slot = 0usize;
             pass.set_pipeline(&self.depth_pipeline_mesh);
-            self.draw_mesh_depth(&mut pass, queue, &list.meshes, &light_vp, &mut ubo_slot);
+            self.draw_mesh_depth(
+                &mut pass,
+                queue,
+                &list.meshes,
+                &light_vp,
+                &light_frustum,
+                &mut ubo_slot,
+            );
 
             pass.set_pipeline(&self.depth_pipeline_tex);
-            self.draw_tex_depth(&mut pass, queue, &list.tex_meshes, &light_vp, &mut ubo_slot);
+            self.draw_tex_depth(
+                &mut pass,
+                queue,
+                &list.tex_meshes,
+                &light_vp,
+                &light_frustum,
+                &mut ubo_slot,
+            );
         }
     }
 
@@ -487,11 +502,18 @@ impl ShadowMapGpu {
         queue: &wgpu::Queue,
         meshes: &[MeshCmd],
         light_vp: &spark_geometry::Mat4,
+        light_frustum: &Frustum,
         ubo_slot: &mut usize,
     ) {
         let vp = mat4_to_cols_pub(light_vp);
         let mut planned: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
         for (mi, mesh) in meshes.iter().enumerate() {
+            if mesh
+                .world_aabb()
+                .is_some_and(|aabb| !light_frustum.intersects_aabb(&aabb))
+            {
+                continue;
+            }
             let drawable = if let Some(key) = mesh.resident {
                 self.mesh_cache.contains_key(&key.id.0)
             } else {
@@ -541,11 +563,18 @@ impl ShadowMapGpu {
         queue: &wgpu::Queue,
         meshes: &[TexMeshCmd],
         light_vp: &spark_geometry::Mat4,
+        light_frustum: &Frustum,
         ubo_slot: &mut usize,
     ) {
         let vp = mat4_to_cols_pub(light_vp);
         let mut planned: Vec<(u32, usize)> = Vec::with_capacity(meshes.len());
         for (mi, mesh) in meshes.iter().enumerate() {
+            if mesh
+                .world_aabb()
+                .is_some_and(|aabb| !light_frustum.intersects_aabb(&aabb))
+            {
+                continue;
+            }
             let drawable = if let Some(key) = mesh.resident {
                 self.tex_cache.contains_key(&key.id.0)
             } else {
