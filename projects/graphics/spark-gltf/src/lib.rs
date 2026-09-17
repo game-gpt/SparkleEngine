@@ -69,6 +69,25 @@ mod tests {
         assert!(v.weights[0] + v.weights[1] + v.weights[2] + v.weights[3] > 0.99);
     }
 
+    #[test]
+    fn imported_skeleton_builds_rest_palette() {
+        use spark_anim::{build_skin_palette, evaluate_pose, socket_world_position, LocalPose};
+
+        let json = include_str!("../tests/fixtures/two_bone.gltf");
+        let asset = import_slice(json.as_bytes()).expect("import");
+        let sk = asset.skeleton.expect("skeleton");
+        let pose = LocalPose::rest(&sk);
+        let globals = evaluate_pose(&sk, &pose);
+        let palette = build_skin_palette(&sk, &globals);
+        assert_eq!(palette.len(), 2);
+        let tip = socket_world_position(&sk, &globals, "tip").expect("tip");
+        assert!(
+            (tip.y - 2.0).abs() < 1e-3,
+            "tip should sit at y=2 in rest pose, got {}",
+            tip.y
+        );
+    }
+
     fn base64_encode(bytes: &[u8]) -> String {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD.encode(bytes)
