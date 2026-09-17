@@ -8,10 +8,13 @@
 //! - **负责**：BCP 47、消息求值契约、回退链、切换事务数据、伪本地化钩子位。
 //! - **不负责**：机器翻译、玩法权威状态、已格式化文本的网络/存档权威。
 
+mod bundle;
 mod check;
+mod compile;
 mod coverage;
 mod diagnostic;
 mod document;
+mod eval;
 mod locale;
 mod manifest;
 mod message;
@@ -19,7 +22,9 @@ mod pseudo;
 mod snapshot;
 mod text;
 
+pub use bundle::{CompiledMessage, LocalizationBundle};
 pub use check::{CheckIssue, CheckIssueKind, CheckReport, check_document, check_locale_set};
+pub use compile::{CompileError, CompileOptions, CompileOutput, compile_document, compile_documents};
 pub use coverage::{
     CoverageEntry, CoverageReport, CoverageStatus, coverage_against, coverage_set, fallback_key,
 };
