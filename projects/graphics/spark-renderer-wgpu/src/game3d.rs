@@ -136,6 +136,7 @@ struct GpuState3d {
     /// 按 `MeshId` 驻留的 GPU 网格。
     mesh_cache: HashMap<u64, ResidentMesh>,
     tex_mesh: crate::tex_mesh::TexMeshGpu,
+    skinned_mesh: crate::skinned_mesh::SkinnedMeshGpu,
 }
 
 impl GpuState3d {
@@ -559,6 +560,7 @@ impl GpuState3d {
 
         tracing::info!("GPU 3D ready");
         let tex_mesh = crate::tex_mesh::TexMeshGpu::new(&device, format, &lights_bgl);
+        let skinned_mesh = crate::skinned_mesh::SkinnedMeshGpu::new(&device, format, &lights_bgl);
         Ok(Self {
             window,
             surface,
@@ -589,6 +591,7 @@ impl GpuState3d {
             glyph_cap,
             mesh_cache: HashMap::new(),
             tex_mesh,
+            skinned_mesh,
         })
     }
 
@@ -843,6 +846,7 @@ impl GpuState3d {
         self.tex_mesh
             .ingest_uploads(&self.device, &self.queue, &list.texture_uploads)?;
         self.tex_mesh.prepare_residents(&self.device, list);
+        self.skinned_mesh.prepare_residents(&self.device, list);
 
         let lights_gpu = FrameLightsGpu::from_lights(&list.lights);
         self.queue
@@ -926,6 +930,14 @@ impl GpuState3d {
             self.draw_mesh_cmds(&mut pass, &list.meshes, &list.view_proj);
             self.tex_mesh
                 .draw(&mut pass, &self.queue, list, &self.lights_bind)?;
+            self.skinned_mesh.draw(
+                &mut pass,
+                &self.device,
+                &self.queue,
+                list,
+                &self.lights_bind,
+                &list.view_proj,
+            )?;
         }
 
         {
