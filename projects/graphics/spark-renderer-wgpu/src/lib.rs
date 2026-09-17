@@ -11,6 +11,7 @@ mod game3d;
 mod shadow;
 mod skinned_mesh;
 mod tex_mesh;
+mod tex_quad2d;
 mod winit_map;
 
 /// 每帧最多新建/更新的驻留网格 VBO 数（分摊开局 remesh 洪峰，未上传的本帧跳过绘制）。
@@ -21,8 +22,8 @@ pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
     alloc_texture_id, Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx,
     Frustum, GameHost, GameHost3d, Input, Key, Mat4, MeshCmd, MeshId, MeshResidentKey, MeshVertex,
-    MouseBtn, QuadCmd, RgbaImage, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, TextCmd,
-    TextureId, Vec3, WindowConfig, MAX_SKIN_JOINTS,
+    MouseBtn, QuadCmd, RgbaImage, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, TexQuadCmd,
+    TextCmd, TextureId, Vec3, WindowConfig, MAX_SKIN_JOINTS,
 };
 
 use std::sync::Arc;
@@ -77,6 +78,7 @@ struct GpuState {
     glyph_vbo: wgpu::Buffer,
     solid_cap: u64,
     glyph_cap: u64,
+    tex_quads: crate::tex_quad2d::TexQuad2dGpu,
 }
 
 impl GpuState {
@@ -345,6 +347,8 @@ impl GpuState {
             mapped_at_creation: false,
         });
 
+        let tex_quads = crate::tex_quad2d::TexQuad2dGpu::new(&device, format, &uniform_buf);
+
         Ok(Self {
             window,
             surface,
@@ -363,6 +367,7 @@ impl GpuState {
             glyph_vbo,
             solid_cap,
             glyph_cap,
+            tex_quads,
         })
     }
 
@@ -552,6 +557,13 @@ impl GpuState {
         }
         self.upload_atlas_if_needed();
 
+        self.tex_quads.prepare_frame(
+            &self.device,
+            &self.queue,
+            &self.uniform_buf,
+            list,
+        )?;
+
         self.ensure_solid_cap(solids.len() as u64)?;
         self.ensure_glyph_cap(glyphs.len() as u64)?;
         if !solids.is_empty() {
@@ -610,6 +622,7 @@ impl GpuState {
                 pass.set_vertex_buffer(0, self.solid_vbo.slice(..));
                 pass.draw(0..solids.len() as u32, 0..1);
             }
+            self.tex_quads.encode_pass(&mut pass);
             if !glyphs.is_empty() {
                 pass.set_pipeline(&self.glyph_pipeline);
                 pass.set_bind_group(0, &self.glyph_bind, &[]);
