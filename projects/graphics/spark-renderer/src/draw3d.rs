@@ -181,6 +181,8 @@ pub struct MeshCmd {
     pub vertices: Arc<[MeshVertex]>,
     pub resident: Option<MeshResidentKey>,
     pub local_aabb: Option<Aabb3>,
+    /// 是否参与太阳阴影深度 pass；远景代理可关以省级联开销。
+    pub casts_shadow: bool,
 }
 
 impl MeshCmd {
@@ -196,6 +198,7 @@ pub struct TexMeshCmd {
     pub vertices: Arc<[TexMeshVertex]>,
     pub resident: Option<MeshResidentKey>,
     pub local_aabb: Option<Aabb3>,
+    pub casts_shadow: bool,
 }
 
 impl TexMeshCmd {
@@ -351,7 +354,7 @@ impl DrawList3d {
     }
 
     pub fn mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {
-        self.push_mesh(model, vertices, None, None);
+        self.push_mesh(model, vertices, None, None, true);
     }
 
     pub fn mesh_vec(&mut self, model: Mat4, vertices: Vec<MeshVertex>) {
@@ -361,7 +364,7 @@ impl DrawList3d {
     }
 
     pub fn mesh_culled(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, local_aabb: Aabb3) {
-        self.push_mesh(model, vertices, None, Some(local_aabb));
+        self.push_mesh(model, vertices, None, Some(local_aabb), true);
     }
 
     pub fn mesh_resident(
@@ -371,7 +374,19 @@ impl DrawList3d {
         key: MeshResidentKey,
         local_aabb: Option<Aabb3>,
     ) {
-        self.push_mesh(model, vertices, Some(key), local_aabb);
+        self.push_mesh(model, vertices, Some(key), local_aabb, true);
+    }
+
+    /// 与 `mesh_resident` 相同，但可关闭阴影投射（远景高度场等）。
+    pub fn mesh_resident_cast_shadow(
+        &mut self,
+        model: Mat4,
+        vertices: Arc<[MeshVertex]>,
+        key: MeshResidentKey,
+        local_aabb: Option<Aabb3>,
+        casts_shadow: bool,
+    ) {
+        self.push_mesh(model, vertices, Some(key), local_aabb, casts_shadow);
     }
 
     /// 顶点色半透明网格（Transparent pass）。
@@ -562,6 +577,7 @@ impl DrawList3d {
         vertices: Arc<[MeshVertex]>,
         resident: Option<MeshResidentKey>,
         local_aabb: Option<Aabb3>,
+        casts_shadow: bool,
     ) {
         if vertices.is_empty() {
             return;
@@ -571,6 +587,7 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
+            casts_shadow,
         });
     }
 
@@ -589,6 +606,7 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
+            casts_shadow: false,
         });
     }
 
@@ -607,6 +625,7 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
+            casts_shadow: false,
         });
     }
 
@@ -625,6 +644,7 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
+            casts_shadow: false,
         });
     }
 
@@ -643,6 +663,7 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
+            casts_shadow: false,
         });
     }
 
@@ -661,6 +682,7 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
+            casts_shadow: false,
         });
     }
 
@@ -679,6 +701,7 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
+            casts_shadow: false,
         });
     }
 
@@ -700,6 +723,8 @@ impl DrawList3d {
             vertices,
             resident,
             local_aabb,
+            // 不透明可投射；透明/自发光不进阴影深度。
+            casts_shadow: matches!(pass, TexPass::Opaque),
         };
         match pass {
             TexPass::Opaque => self.tex_meshes.push(cmd),
