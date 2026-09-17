@@ -2940,9 +2940,11 @@ dependencies = [
  "serde",
  "spark-core",
  "spark-ecs",
+ "spark-event",
  "spark-gc",
  "spark-input",
  "spark-jit",
+ "spark-localization",
  "spark-plugin",
  "spark-renderer",
  "spark-renderer-wgpu",
@@ -3075,6 +3077,9 @@ dependencies = [
 name = "spark-localization"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "spark-asset",
  "spark-core",
  "thiserror 2.0.20",
 ]

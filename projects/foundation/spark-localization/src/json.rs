@@ -46,21 +46,21 @@ struct JsonRichMessage {
     select: Option<JsonSelect>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum JsonPattern {
     Text(String),
     Nodes(Vec<JsonNode>),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum JsonNode {
     Text(String),
     Object(JsonNodeObject),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct JsonNodeObject {
     #[serde(default)]
     argument: Option<String>,
@@ -74,7 +74,7 @@ struct JsonNodeObject {
     select: Option<JsonSelect>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct JsonSelect {
     argument: String,
     #[serde(default)]
@@ -226,7 +226,7 @@ fn parse_format(raw: Option<&str>) -> Result<ArgumentFormat, JsonError> {
 mod tests {
     use super::*;
     use crate::compile::compile_document;
-    use crate::locale::LocaleSnapshot;
+    use crate::LocaleSnapshot;
     use crate::message::{MessageArgs, MessageRef, MessageValue};
 
     #[test]

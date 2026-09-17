@@ -12,6 +12,9 @@ publish = false
 
 [dependencies]
 spark-core = { workspace = true }
+spark-asset = { workspace = true }
 thiserror = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [dev-dependencies]
