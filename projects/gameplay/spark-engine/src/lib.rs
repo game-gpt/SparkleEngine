@@ -13,6 +13,7 @@ mod ecs_host;
 mod frame;
 mod hooks;
 mod loader;
+mod localization;
 mod manifest;
 mod registry;
 mod run;
@@ -25,6 +26,7 @@ pub use frame::{
 };
 pub use hooks::{HookBus, HookRef};
 pub use loader::{LoadedMod, ModLoader};
+pub use localization::LocalizationService;
 pub use manifest::ModManifest;
 pub use registry::{DataRegistry, RegValue};
 pub use run::{run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
@@ -69,13 +71,24 @@ impl From<EngineError> for SparkError {
     }
 }
 
-/// 模组间共享状态（钩子、数据表、日志缓冲）。
-#[derive(Debug, Default)]
+/// 模组间共享状态（钩子、数据表、日志缓冲、事件与本地化）。
+#[derive(Default)]
 pub struct EngineShared {
     pub hooks: HookBus,
     pub registry: DataRegistry,
     /// 脚本 `log` 原生写入，便于测试与宿主读取。
     pub logs: Vec<String>,
+    pub events: spark_event::EventBus,
+    pub localization: LocalizationService,
+}
+
+impl EngineShared {
+    /// 帧边界：提交待切换 Locale，并翻转事件双缓冲。
+    pub fn begin_frame(&mut self) -> Option<spark_localization::LocaleChanged> {
+        let changed = self.localization.commit_pending(&mut self.events);
+        self.events.update_all();
+        changed
+    }
 }
 
 /// VM 之上的引擎壳。
@@ -117,6 +130,11 @@ impl SparkEngine {
 
     pub fn shared(&self) -> &Rc<RefCell<EngineShared>> {
         &self.shared
+    }
+
+    /// 帧边界：提交待切换 Locale 并翻转事件双缓冲。
+    pub fn begin_frame(&self) -> Option<spark_localization::LocaleChanged> {
+        self.shared.borrow_mut().begin_frame()
     }
 
     pub fn mod_ids(&self) -> impl Iterator<Item = &str> {

@@ -92,7 +92,7 @@ packages/
 
 | Crate | 职责 |
 |-------|------|
-| `spark-engine` | 帧主循环编排 + VM 之上的模组加载、钩子、数据表与资源挂载（模组跑 `spark-vm`） |
+| `spark-engine` | 帧主循环编排 + VM 之上的模组加载、钩子、数据表、本地化服务与资源挂载（模组跑 `spark-vm`） |
 | `spark-engine-rts` | RTS 特异化：选取、指令队列、迷雾骨架 |
 | `spark-engine-stg` | STG 特异化：弹幕池、发射器、判定与关卡时钟 |
 | `spark-engine-rpg` | RPG 特异化：队伍、背包、属性、任务、回合序 |
