@@ -56,8 +56,9 @@ fn fs_main(v: VsOut) -> @location(0) vec4<f32> {
     let dist = length(v.world_pos - lights.eye.xyz);
     let fog_t = 1.0 - exp(-lights.fog_color_density.w * dist);
     rgb = mix(rgb, lights.fog_color_density.xyz, clamp(fog_t, 0.0, 1.0));
-    // 简易曝光 + ACES：不透明 pass 先有稳定色调，完整 HDR 后处理后置。
-    rgb = aces_tonemap(rgb * 1.15);
+    // `eye.w` = 曝光倍率（`FrameLights3d.exposure`）。
+    let exposure = select(1.15, lights.eye.w, lights.eye.w > 0.01);
+    rgb = aces_tonemap(rgb * exposure);
     return vec4<f32>(rgb, v.color.w);
 }
 

@@ -89,6 +89,8 @@ pub struct FrameLights3d {
     pub fog_color: Color,
     pub fog_density: f32,
     pub eye: Vec3,
+    /// ACES 前曝光倍率（典型 0.9–1.4）。
+    pub exposure: f32,
 }
 
 impl Default for FrameLights3d {
@@ -100,6 +102,7 @@ impl Default for FrameLights3d {
             fog_color: Color::rgb(0.62, 0.70, 0.82),
             fog_density: 0.0012,
             eye: Vec3::ZERO,
+            exposure: 1.15,
         }
     }
 }

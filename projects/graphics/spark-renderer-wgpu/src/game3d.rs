@@ -54,7 +54,7 @@ impl FrameLightsGpu {
             sun_color: l.sun_color.to_array(),
             ambient: l.ambient.to_array(),
             fog_color_density: [l.fog_color.r, l.fog_color.g, l.fog_color.b, l.fog_density],
-            eye: [l.eye.x, l.eye.y, l.eye.z, 0.0],
+            eye: [l.eye.x, l.eye.y, l.eye.z, l.exposure],
         }
     }
 }
