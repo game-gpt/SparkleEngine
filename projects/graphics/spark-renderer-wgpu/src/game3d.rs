@@ -1041,6 +1041,7 @@ impl GpuState3d {
             .chain(list.meshes.iter())
             .chain(list.meshes_xlu.iter())
             .chain(list.meshes_emissive.iter())
+            .chain(list.view_model_meshes.iter())
         {
             if let Some(key) = mesh.resident {
                 self.ensure_resident(key, &mesh.vertices);
@@ -1237,6 +1238,35 @@ impl GpuState3d {
                 self.tex_mesh
                     .draw_emissive(&mut pass, &self.queue, list, &self.lights_bind)?;
             }
+        }
+
+        // View-model：清深度后绘制，避免世界近景裁切手臂/武器。
+        if !list.view_model_meshes.is_empty() {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("3d-view-model"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: color_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                ..Default::default()
+            });
+            pass.set_pipeline(&self.mesh_pipeline);
+            pass.set_bind_group(0, &self.mesh_bind, &[]);
+            pass.set_bind_group(1, &self.lights_bind, &[]);
+            self.draw_mesh_cmds(&mut pass, &list.view_model_meshes, &list.view_proj);
         }
 
         // 场景色 → bloom → 交换链；HUD 叠在交换链上保持清晰。
