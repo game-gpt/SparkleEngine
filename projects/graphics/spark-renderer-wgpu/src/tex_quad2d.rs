@@ -28,8 +28,10 @@ pub struct TexQuad2dGpu {
     textures: HashMap<u32, GpuTex>,
     vbo: wgpu::Buffer,
     cap: u64,
-    /// 本帧批：`(texture_id, vertex_start, vertex_count)`。
+    /// 本帧批：`(texture_id, vertex_start, vertex_count)`，保持提交顺序。
     frame_ranges: Vec<(u32, u32, u32)>,
+    /// `prepare_layered` 后世界层顶点上界（HUD 纹理从此开始）。
+    world_vert_end: u32,
 }
 
 impl TexQuad2dGpu {
@@ -70,7 +72,6 @@ impl TexQuad2dGpu {
                 },
             ],
         });
-        // 像素风格默认近邻采样。
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("tex-quad2d-nearest"),
             mag_filter: wgpu::FilterMode::Nearest,
@@ -127,6 +128,7 @@ impl TexQuad2dGpu {
             vbo,
             cap,
             frame_ranges: Vec::new(),
+            world_vert_end: 0,
         }
     }
 
@@ -218,7 +220,51 @@ impl TexQuad2dGpu {
         self.cap = cap;
     }
 
-    /// 上传顶点并记下本帧批范围（须在开 pass 前调用）。
+    fn append_quad(verts: &mut Vec<TexQuadVertex>, q: &TexQuadCmd) {
+        let x0 = q.dest.x;
+        let y0 = q.dest.y;
+        let x1 = q.dest.x + q.dest.w;
+        let y1 = q.dest.y + q.dest.h;
+        let u0 = q.uv.x;
+        let v0 = q.uv.y;
+        let u1 = q.uv.x + q.uv.w;
+        let v1 = q.uv.y + q.uv.h;
+        let c = q.color.to_array();
+        verts.extend_from_slice(&[
+            TexQuadVertex {
+                pos: [x0, y0],
+                uv: [u0, v0],
+                color: c,
+            },
+            TexQuadVertex {
+                pos: [x1, y0],
+                uv: [u1, v0],
+                color: c,
+            },
+            TexQuadVertex {
+                pos: [x1, y1],
+                uv: [u1, v1],
+                color: c,
+            },
+            TexQuadVertex {
+                pos: [x0, y0],
+                uv: [u0, v0],
+                color: c,
+            },
+            TexQuadVertex {
+                pos: [x1, y1],
+                uv: [u1, v1],
+                color: c,
+            },
+            TexQuadVertex {
+                pos: [x0, y1],
+                uv: [u0, v1],
+                color: c,
+            },
+        ]);
+    }
+
+    /// 按命令顺序上传顶点；仅合并**连续**同纹理批，不重排。
     pub fn prepare_draw(
         &mut self,
         device: &wgpu::Device,
@@ -229,68 +275,31 @@ impl TexQuad2dGpu {
         if cmds.is_empty() {
             return;
         }
-        let mut order: Vec<u32> = Vec::new();
-        let mut groups: HashMap<u32, Vec<&TexQuadCmd>> = HashMap::new();
-        for c in cmds {
-            groups.entry(c.texture.0).or_default().push(c);
-            if !order.contains(&c.texture.0) {
-                order.push(c.texture.0);
-            }
-        }
         let mut all_verts: Vec<TexQuadVertex> = Vec::new();
-        for id in order {
-            let Some(batch) = groups.get(&id) else {
-                continue;
-            };
+        let mut cur_id: Option<u32> = None;
+        let mut run_start = 0u32;
+        for q in cmds {
+            let id = q.texture.0;
             if !self.textures.contains_key(&id) {
                 continue;
             }
-            let start = all_verts.len() as u32;
-            for q in batch {
-                let x0 = q.dest.x;
-                let y0 = q.dest.y;
-                let x1 = q.dest.x + q.dest.w;
-                let y1 = q.dest.y + q.dest.h;
-                let u0 = q.uv.x;
-                let v0 = q.uv.y;
-                let u1 = q.uv.x + q.uv.w;
-                let v1 = q.uv.y + q.uv.h;
-                let c = q.color.to_array();
-                all_verts.extend_from_slice(&[
-                    TexQuadVertex {
-                        pos: [x0, y0],
-                        uv: [u0, v0],
-                        color: c,
-                    },
-                    TexQuadVertex {
-                        pos: [x1, y0],
-                        uv: [u1, v0],
-                        color: c,
-                    },
-                    TexQuadVertex {
-                        pos: [x1, y1],
-                        uv: [u1, v1],
-                        color: c,
-                    },
-                    TexQuadVertex {
-                        pos: [x0, y0],
-                        uv: [u0, v0],
-                        color: c,
-                    },
-                    TexQuadVertex {
-                        pos: [x1, y1],
-                        uv: [u1, v1],
-                        color: c,
-                    },
-                    TexQuadVertex {
-                        pos: [x0, y1],
-                        uv: [u0, v1],
-                        color: c,
-                    },
-                ]);
+            if cur_id != Some(id) {
+                if let Some(prev) = cur_id {
+                    let count = all_verts.len() as u32 - run_start;
+                    if count > 0 {
+                        self.frame_ranges.push((prev, run_start, count));
+                    }
+                }
+                cur_id = Some(id);
+                run_start = all_verts.len() as u32;
             }
-            let count = all_verts.len() as u32 - start;
-            self.frame_ranges.push((id, start, count));
+            Self::append_quad(&mut all_verts, q);
+        }
+        if let Some(prev) = cur_id {
+            let count = all_verts.len() as u32 - run_start;
+            if count > 0 {
+                self.frame_ranges.push((prev, run_start, count));
+            }
         }
         if all_verts.is_empty() {
             return;
@@ -299,20 +308,39 @@ impl TexQuad2dGpu {
         queue.write_buffer(&self.vbo, 0, bytemuck::cast_slice(&all_verts));
     }
 
-    /// 在已开启的 pass 中提交本帧纹理四边形（仅共享借用）。
     pub fn encode_pass<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
-        if self.frame_ranges.is_empty() {
+        self.encode_pass_range(pass, 0, u32::MAX);
+    }
+
+    /// 只提交顶点落在 `[vert_lo, vert_hi)` 内的批（用于 world/hud 分层）。
+    pub fn encode_pass_range<'a>(
+        &'a self,
+        pass: &mut wgpu::RenderPass<'a>,
+        vert_lo: u32,
+        vert_hi: u32,
+    ) {
+        if self.frame_ranges.is_empty() || vert_lo >= vert_hi {
             return;
         }
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, self.vbo.slice(..));
         for &(id, start, count) in &self.frame_ranges {
+            let end = start + count;
+            let lo = start.max(vert_lo);
+            let hi = end.min(vert_hi);
+            if lo >= hi {
+                continue;
+            }
             let Some(tex) = self.textures.get(&id) else {
                 continue;
             };
             pass.set_bind_group(0, &tex.bind, &[]);
-            pass.draw(start..start + count, 0..1);
+            pass.draw(lo..hi, 0..1);
         }
+    }
+
+    pub fn world_vert_end(&self) -> u32 {
+        self.world_vert_end
     }
 
     pub fn prepare_frame(
@@ -323,7 +351,60 @@ impl TexQuad2dGpu {
         list: &DrawList,
     ) -> Result<(), SparkError> {
         self.ingest_uploads(device, queue, uniform_buf, &list.texture_uploads)?;
-        self.prepare_draw(device, queue, &list.tex_quads);
+        self.frame_ranges.clear();
+        let mut all_verts: Vec<TexQuadVertex> = Vec::new();
+
+        Self::append_cmds_ordered(
+            &self.textures,
+            &list.tex_quads,
+            &mut all_verts,
+            &mut self.frame_ranges,
+        );
+        self.world_vert_end = all_verts.len() as u32;
+        Self::append_cmds_ordered(
+            &self.textures,
+            &list.hud_tex_quads,
+            &mut all_verts,
+            &mut self.frame_ranges,
+        );
+
+        if !all_verts.is_empty() {
+            self.ensure_cap(device, all_verts.len() as u64);
+            queue.write_buffer(&self.vbo, 0, bytemuck::cast_slice(&all_verts));
+        }
         Ok(())
+    }
+
+    fn append_cmds_ordered(
+        textures: &HashMap<u32, GpuTex>,
+        cmds: &[TexQuadCmd],
+        all_verts: &mut Vec<TexQuadVertex>,
+        ranges: &mut Vec<(u32, u32, u32)>,
+    ) {
+        let mut cur_id: Option<u32> = None;
+        let mut run_start = 0u32;
+        for q in cmds {
+            let id = q.texture.0;
+            if !textures.contains_key(&id) {
+                continue;
+            }
+            if cur_id != Some(id) {
+                if let Some(prev) = cur_id {
+                    let count = all_verts.len() as u32 - run_start;
+                    if count > 0 {
+                        ranges.push((prev, run_start, count));
+                    }
+                }
+                cur_id = Some(id);
+                run_start = all_verts.len() as u32;
+            }
+            Self::append_quad(all_verts, q);
+        }
+        if let Some(prev) = cur_id {
+            let count = all_verts.len() as u32 - run_start;
+            if count > 0 {
+                ranges.push((prev, run_start, count));
+            }
+        }
     }
 }
