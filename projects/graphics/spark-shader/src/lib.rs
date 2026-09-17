@@ -28,6 +28,8 @@ pub enum BuiltinShader {
     BloomComposite,
     /// 视线方向大气穹顶（SkyPass；消费 `FrameLights`）。
     SkyAtmosphere3d,
+    /// 深度专用（太阳阴影图；无 fragment）。
+    DepthOnlyMesh3d,
 }
 
 impl BuiltinShader {
@@ -43,6 +45,7 @@ impl BuiltinShader {
             Self::Bloom => "spark-shader/bloom",
             Self::BloomComposite => "spark-shader/bloom-composite",
             Self::SkyAtmosphere3d => "spark-shader/sky-atmosphere3d",
+            Self::DepthOnlyMesh3d => "spark-shader/depth-only-mesh3d",
         }
     }
 
@@ -58,6 +61,7 @@ impl BuiltinShader {
             Self::Bloom => include_str!("shaders/bloom.wgsl"),
             Self::BloomComposite => include_str!("shaders/bloom_composite.wgsl"),
             Self::SkyAtmosphere3d => include_str!("shaders/sky_atmosphere.wgsl"),
+            Self::DepthOnlyMesh3d => include_str!("shaders/mesh3d_depth.wgsl"),
         }
     }
 
@@ -127,6 +131,7 @@ mod tests {
             BuiltinShader::Bloom,
             BuiltinShader::BloomComposite,
             BuiltinShader::SkyAtmosphere3d,
+            BuiltinShader::DepthOnlyMesh3d,
         ] {
             validate_source(&s.into()).unwrap();
             assert!(s.wgsl().contains("vs_main"));
@@ -134,6 +139,7 @@ mod tests {
                 s.wgsl().contains("fs_main")
                     || s.wgsl().contains("fs_extract")
                     || s.wgsl().contains("fs_blur")
+                    || matches!(s, BuiltinShader::DepthOnlyMesh3d)
             );
         }
     }
