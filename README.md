@@ -48,7 +48,7 @@ packages/
 |-------|------|
 | `spark-core` | 基础类型与错误 |
 | `spark-logger` | 分级日志、目标过滤与可插拔 sink |
-| `spark-geometry` | 2D 几何：向量运算、圆/线段/射线、变换与相交 |
+| `spark-geometry` | 2D/3D 几何：向量、`Quat`/`Trs`/`Mat4`、圆/射线、变换与相交 |
 | `spark-ecs` | Archetype ECS：Entity / Component / Query / Resource / Schedule |
 | `spark-time` | 固定/可变时间步、缩放与暂停 |
 | `spark-event` | 事件总线占位 |
@@ -64,6 +64,7 @@ packages/
 | Crate | 职责 |
 |-------|------|
 | `spark-shader` | WGSL 内建着色器与模块装载 |
+| `spark-anim` | 骨架、命名挂点、剪辑采样、混合与皮肤矩阵（CPU） |
 | `spark-font` | 字体装载、字形栅格化与 CPU 图集 |
 | `spark-image` | 像素图装载、精灵裁切与九宫格拉伸 |
 | `spark-renderer` | 2D 绘制列表 / 帧上下文 / 宿主契约（后端无关） |

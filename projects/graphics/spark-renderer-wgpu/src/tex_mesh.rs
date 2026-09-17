@@ -16,6 +16,7 @@ use crate::game3d::mat4_to_cols_pub;
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct TexVertGpu {
     pos: [f32; 3],
+    normal: [f32; 3],
     uv: [f32; 2],
     color: [f32; 4],
 }
@@ -51,7 +52,11 @@ pub struct TexMeshGpu {
 }
 
 impl TexMeshGpu {
-    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        lights_bgl: &wgpu::BindGroupLayout,
+    ) -> Self {
         let shader = create_builtin(device, BuiltinShader::TexturedMesh3d);
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("tex-mesh3d-bgl"),
@@ -97,7 +102,7 @@ impl TexMeshGpu {
         });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("tex-mesh3d-pl"),
-            bind_group_layouts: &[Some(&bgl)],
+            bind_group_layouts: &[Some(&bgl), Some(lights_bgl)],
             immediate_size: 0,
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -112,8 +117,9 @@ impl TexMeshGpu {
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x3,
-                        1 => Float32x2,
-                        2 => Float32x4
+                        1 => Float32x3,
+                        2 => Float32x2,
+                        3 => Float32x4
                     ],
                 })],
             },
@@ -237,6 +243,7 @@ impl TexMeshGpu {
             .iter()
             .map(|v| TexVertGpu {
                 pos: v.pos,
+                normal: v.normal,
                 uv: v.uv,
                 color: v.color,
             })
@@ -287,11 +294,13 @@ impl TexMeshGpu {
         pass: &mut wgpu::RenderPass<'a>,
         queue: &wgpu::Queue,
         list: &DrawList3d,
+        lights_bind: &'a wgpu::BindGroup,
     ) -> Result<(), SparkError> {
         if list.tex_meshes.is_empty() {
             return Ok(());
         }
         pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(1, lights_bind, &[]);
         let vp = mat4_to_cols_pub(&list.view_proj);
         for mesh in &list.tex_meshes {
             let Some(tex) = self.textures.get(&mesh.texture.0) else {
