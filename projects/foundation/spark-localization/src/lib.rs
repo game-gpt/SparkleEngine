@@ -9,6 +9,7 @@
 //! - **不负责**：机器翻译、玩法权威状态、已格式化文本的网络/存档权威。
 
 mod check;
+mod coverage;
 mod diagnostic;
 mod document;
 mod locale;
@@ -19,6 +20,9 @@ mod snapshot;
 mod text;
 
 pub use check::{CheckIssue, CheckIssueKind, CheckReport, check_document, check_locale_set};
+pub use coverage::{
+    CoverageEntry, CoverageReport, CoverageStatus, coverage_against, coverage_set, fallback_key,
+};
 pub use diagnostic::{DiagnosticFlags, DiagnosticRecord, MessageDiagnostic};
 pub use document::{
     ArgumentFormat, LocalizationDocument, MessageDefinition, MessageName, MessageNode, SelectKind,
