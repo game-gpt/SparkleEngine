@@ -717,6 +717,9 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
                         .on_mouse_button(btn, winit_map::button_state(*state));
                 }
             }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.input.on_wheel(winit_map::wheel_lines(*delta));
+            }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Some(key) = winit_map::key(event.physical_key) {
                     self.input

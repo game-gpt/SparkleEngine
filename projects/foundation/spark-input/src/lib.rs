@@ -96,6 +96,8 @@ pub struct Input {
     mouse_released: HashSet<MouseBtn>,
     /// 本帧鼠标增量（设备像素，后端在 `begin_frame` 前写入，帧末清零）。
     mouse_delta: (f32, f32),
+    /// 本帧滚轮。正值朝上（远离用户）。
+    wheel: f32,
 }
 
 impl Input {
@@ -105,6 +107,11 @@ impl Input {
         self.mouse_pressed.clear();
         self.mouse_released.clear();
         self.mouse_delta = (0.0, 0.0);
+        self.wheel = 0.0;
+    }
+
+    pub fn on_wheel(&mut self, dy: f32) {
+        self.wheel += dy;
     }
 
     pub fn on_mouse_delta(&mut self, dx: f32, dy: f32) {
@@ -168,5 +175,9 @@ impl Input {
 
     pub fn mouse_delta(&self) -> (f32, f32) {
         self.mouse_delta
+    }
+
+    pub fn wheel(&self) -> f32 {
+        self.wheel
     }
 }

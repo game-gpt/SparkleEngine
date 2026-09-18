@@ -1528,6 +1528,9 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
                         .on_mouse_button(b, winit_map::button_state(state));
                 }
             }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.input.on_wheel(winit_map::wheel_lines(delta));
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 self.input.on_cursor(
                     position.x as f32 / self.scale,
