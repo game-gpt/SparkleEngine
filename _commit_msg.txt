@@ -1,3 +1,0 @@
-✨ Purge sentence payloads from graphics and gameplay errors
-
-Replace remaining Chinese or prose `SparkError::internal` call sites with stable codes plus typed `ErrorArg` facts across font, video, audio, renderer, shader, VFS, GPU host, inventory, script, Live2D, and glTF detail tokens.
