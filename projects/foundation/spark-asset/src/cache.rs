@@ -179,6 +179,6 @@ mod tests {
         let loader = BytesLoader::new(".");
         let mut cache = AssetCache::new();
         let err = cache.load("no_such_spark_asset_xyz.bin", &loader);
-        assert!(matches!(err, Err(AssetError::Load(LoadError::NotFound(_)))));
+        assert!(matches!(err, Err(AssetError::Load(LoadError::NotFound { .. }))));
     }
 }

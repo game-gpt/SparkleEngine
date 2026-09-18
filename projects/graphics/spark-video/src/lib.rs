@@ -24,7 +24,7 @@ impl VideoClip {
         let video = reader
             .default_video()
             .cloned()
-            .ok_or_else(|| SparkError::Message("媒体中无视频轨".into()))?;
+            .ok_or_else(|| SparkError::internal("媒体中无视频轨"))?;
         let audio_track_id = reader.default_audio().map(|a| a.track_id);
         Ok(Self {
             reader,
@@ -38,7 +38,7 @@ impl VideoClip {
         let video = reader
             .default_video()
             .cloned()
-            .ok_or_else(|| SparkError::Message("媒体中无视频轨".into()))?;
+            .ok_or_else(|| SparkError::internal("媒体中无视频轨"))?;
         let audio_track_id = reader.default_audio().map(|a| a.track_id);
         Ok(Self {
             reader,

@@ -110,7 +110,7 @@ pub fn create_builtin(device: &Device, builtin: BuiltinShader) -> wgpu::ShaderMo
 /// 校验 WGSL 非空（装载前快速失败；真正编译错误仍由 wgpu 报告）。
 pub fn validate_source(source: &ShaderSource<'_>) -> Result<(), SparkError> {
     if source.wgsl.trim().is_empty() {
-        return Err(SparkError::Message(format!(
+        return Err(SparkError::internal(format!(
             "着色器源码为空：{}",
             source.label
         )));

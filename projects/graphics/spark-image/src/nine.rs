@@ -80,10 +80,10 @@ impl NineSlice {
     fn validate_margin(&self) -> Result<(), SparkError> {
         let m = self.margin;
         if m.left < 0.0 || m.right < 0.0 || m.top < 0.0 || m.bottom < 0.0 {
-            return Err(SparkError::Message("九宫格边距不能为负".into()));
+            return Err(SparkError::internal("九宫格边距不能为负"));
         }
         if m.left + m.right > self.source.w + 1e-3 || m.top + m.bottom > self.source.h + 1e-3 {
-            return Err(SparkError::Message("九宫格边距超过源矩形".into()));
+            return Err(SparkError::internal("九宫格边距超过源矩形"));
         }
         Ok(())
     }
@@ -94,7 +94,7 @@ impl NineSlice {
     pub fn layout(&self, dest: Rect) -> Result<Vec<NineQuad>, SparkError> {
         self.validate_margin()?;
         if dest.w <= 0.0 || dest.h <= 0.0 {
-            return Err(SparkError::Message("目标矩形宽高须为正".into()));
+            return Err(SparkError::internal("目标矩形宽高须为正"));
         }
 
         let sx = self.source.x;

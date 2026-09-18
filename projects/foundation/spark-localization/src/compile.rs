@@ -1,19 +1,38 @@
 //! 将作者文档编译为 [`LocalizationBundle`]。
 
-use thiserror::Error;
-
 use crate::bundle::{CompiledMessage, LocalizationBundle};
 use crate::check::{CheckReport, check_document};
 use crate::document::LocalizationDocument;
 
 /// 编译错误。
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompileError {
-    #[error("文档检查失败（{0} 个问题）")]
-    CheckFailed(usize),
-    #[error("{0}")]
-    Message(String),
+    /// 文档检查未通过。
+    CheckFailed { count: usize },
+    /// 编译阶段事实不足，`detail` 仅供调试器展开。
+    Internal { detail: String },
 }
+
+impl CompileError {
+    pub fn check_failed(count: usize) -> Self {
+        Self::CheckFailed { count }
+    }
+
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::CheckFailed { .. } => "spark.localization.check_failed",
+            Self::Internal { .. } => "spark.localization.compile_internal",
+        }
+    }
+}
+
+impl std::fmt::Display for CompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for CompileError {}
 
 /// 编译选项。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,7 +66,7 @@ pub fn compile_documents(
         report.issues.extend(check_document(doc).issues);
     }
     if options.reject_on_check_failure && !report.is_ok() {
-        return Err(CompileError::CheckFailed(report.error_count()));
+        return Err(CompileError::check_failed(report.error_count()));
     }
 
     let mut bundle = LocalizationBundle::new();

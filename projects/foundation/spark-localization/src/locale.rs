@@ -3,8 +3,6 @@
 use std::fmt;
 use std::sync::Arc;
 
-use thiserror::Error;
-
 /// 书写方向。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum TextDirection {
@@ -28,13 +26,36 @@ impl TextDirection {
 }
 
 /// Locale 解析错误。
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocaleParseError {
-    #[error("locale 标签为空")]
+    /// 空标签。
     Empty,
-    #[error("locale 标签非法：{0}")]
-    Invalid(String),
+    /// 标签无法规范化。`detail` 是校验器原始说明，不是用户文案。
+    Invalid { detail: String },
 }
+
+impl LocaleParseError {
+    pub fn invalid(detail: impl Into<String>) -> Self {
+        Self::Invalid {
+            detail: detail.into(),
+        }
+    }
+
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Empty => "spark.localization.locale_empty",
+            Self::Invalid { .. } => "spark.localization.locale_invalid",
+        }
+    }
+}
+
+impl std::fmt::Display for LocaleParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for LocaleParseError {}
 
 /// 经过验证与规范化的 BCP 47 Locale。
 ///
@@ -80,7 +101,7 @@ impl LocaleId {
 
         for (index, raw) in trimmed.split(['-', '_']).enumerate() {
             if raw.is_empty() {
-                return Err(LocaleParseError::Invalid(trimmed.to_string()));
+                return Err(LocaleParseError::invalid(trimmed));
             }
             // 扩展子标签：后面整段丢弃。
             if raw.eq_ignore_ascii_case("u") || raw.eq_ignore_ascii_case("x") || raw.eq_ignore_ascii_case("t") {
@@ -90,7 +111,7 @@ impl LocaleId {
             match index {
                 0 => {
                     if !(2..=8).contains(&raw.len()) || !raw.chars().all(|c| c.is_ascii_alphabetic()) {
-                        return Err(LocaleParseError::Invalid(trimmed.to_string()));
+                        return Err(LocaleParseError::invalid(trimmed));
                     }
                     language = Some(raw.to_ascii_lowercase());
                 }
@@ -119,7 +140,7 @@ impl LocaleId {
             }
         }
 
-        let language = language.ok_or_else(|| LocaleParseError::Invalid(trimmed.to_string()))?;
+        let language = language.ok_or_else(|| LocaleParseError::invalid(trimmed))?;
         Ok(Self::from_parts(language, script, region))
     }
 

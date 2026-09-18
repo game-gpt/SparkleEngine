@@ -19,6 +19,7 @@ mod eval;
 mod json;
 mod locale;
 mod manifest;
+mod manifest_von;
 mod message;
 mod pseudo;
 mod snapshot;
@@ -43,6 +44,7 @@ pub use locale::{
     LocaleId, LocaleParseError, LocaleRequest, TextDirection, build_fallback_chain, negotiate,
 };
 pub use manifest::{LocaleEntry, LocalizationManifest, NamespaceOwner};
+pub use manifest_von::{ManifestVonError, manifest_from_von_str};
 pub use message::{
     AttributeId, MessageArgs, MessageDateTime, MessageDecimal, MessageDuration, MessageId,
     MessageRef, MessageValue, NamespaceId,

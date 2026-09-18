@@ -1,14 +1,13 @@
 [package]
-name = "spark-core"
+name = "spark-diagnostics"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 元引擎基础类型与工具"
-keywords = ["spark", "game-engine"]
+description = "Spark 结构化错误、诊断与错误参数（无用户最终句子）"
+keywords = ["spark", "diagnostics", "error"]
 categories = ["game-development"]
 publish = false
 
 [dependencies]
-spark-diagnostics = { workspace = true }

@@ -20,6 +20,7 @@ readme = "readme.md"
 
 [workspace.dependencies]
 spark-core = { path = "projects/foundation/spark-core" }
+spark-diagnostics = { path = "projects/foundation/spark-diagnostics" }
 spark-logger = { path = "projects/foundation/spark-logger" }
 spark-geometry = { path = "projects/foundation/spark-geometry" }
 spark-ecs = { path = "projects/foundation/spark-ecs" }

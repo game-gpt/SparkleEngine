@@ -60,7 +60,7 @@ impl Plugin for Live2dPlugin {
                 .borrow_mut()
                 .backend
                 .load(&path)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Number(id.0 as f64))
         });
 
@@ -70,7 +70,7 @@ impl Plugin for Live2dPlugin {
             rt.borrow_mut()
                 .backend
                 .unload(id)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
 
@@ -82,7 +82,7 @@ impl Plugin for Live2dPlugin {
             rt.borrow_mut()
                 .backend
                 .set_param(id, &name, value)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
 
@@ -94,7 +94,7 @@ impl Plugin for Live2dPlugin {
                 .borrow()
                 .backend
                 .get_param(id, &name)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Number(v as f64))
         });
 
@@ -109,7 +109,7 @@ impl Plugin for Live2dPlugin {
             rt.borrow_mut()
                 .backend
                 .update(id, dt)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
 
@@ -125,7 +125,7 @@ impl Plugin for Live2dPlugin {
             rt.borrow_mut()
                 .backend
                 .start_motion(id, &group, index)
-                .map_err(|e| VmError::Message(e.to_string()))?;
+                .map_err(|_| VmError::BadNativeArg { name: "backend" })?;
             Ok(Value::Null)
         });
     }
@@ -135,7 +135,7 @@ fn arg_model(args: &[Value], i: usize) -> Result<Live2dModelId, VmError> {
     let n = args
         .get(i)
         .and_then(|v| v.as_number())
-        .ok_or_else(|| VmError::Message("需要模型 id（number）".into()))?;
+        .ok_or_else(|| VmError::BadNativeArg { name: "model_id" })?;
     Ok(Live2dModelId(n as u32))
 }
 
@@ -143,22 +143,22 @@ fn arg_f32(args: &[Value], i: usize) -> Result<f32, VmError> {
     args.get(i)
         .and_then(|v| v.as_number())
         .map(|n| n as f32)
-        .ok_or_else(|| VmError::Message("需要 number 参数".into()))
+        .ok_or_else(|| VmError::BadNativeArg { name: "number" })
 }
 
 fn arg_string(ctx: &NativeCtx<'_>, args: &[Value], i: usize) -> Result<String, VmError> {
     let v = args
         .get(i)
-        .ok_or_else(|| VmError::Message("缺少字符串参数".into()))?;
+        .ok_or_else(|| VmError::BadNativeArg { name: "string" })?;
     match v {
         Value::Handle(h) => match ctx.heap.get(*h) {
             Ok(GcObject::String(s)) => Ok(s.clone()),
-            _ => Err(VmError::Message("期望字符串".into())),
+            _ => Err(VmError::BadNativeArg { name: "string" }),
         },
         Value::Number(n) => Ok(n.to_string()),
         Value::Bool(b) => Ok(b.to_string()),
         Value::Null => Ok(String::new()),
-        _ => Err(VmError::Message("期望字符串".into())),
+        _ => Err(VmError::BadNativeArg { name: "string" }),
     }
 }
 

@@ -28,15 +28,15 @@ impl RgbaImage {
         let need = (width as usize)
             .checked_mul(height as usize)
             .and_then(|n| n.checked_mul(4))
-            .ok_or_else(|| SparkError::Message("纹理尺寸溢出".into()))?;
+            .ok_or_else(|| SparkError::internal("纹理尺寸溢出"))?;
         if rgba.len() != need {
-            return Err(SparkError::Message(format!(
+            return Err(SparkError::internal(format!(
                 "RGBA 长度不符：期望 {need}，得到 {}",
                 rgba.len()
             )));
         }
         if width == 0 || height == 0 {
-            return Err(SparkError::Message("纹理宽高须为正".into()));
+            return Err(SparkError::internal("纹理宽高须为正"));
         }
         Ok(Self {
             width,

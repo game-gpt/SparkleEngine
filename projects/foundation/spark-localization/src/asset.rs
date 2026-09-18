@@ -1,9 +1,9 @@
 //! 经 `spark-asset` 装载本地化 JSON 文档并编译为包 / 快照。
 
+use std::fmt;
 use std::sync::Arc;
 
 use spark_asset::{AssetKey, AssetLoader, LoadError};
-use thiserror::Error;
 
 use crate::bundle::LocalizationBundle;
 use crate::compile::{CompileError, CompileOptions, compile_documents};
@@ -14,16 +14,62 @@ use crate::manifest::LocalizationManifest;
 use crate::snapshot::LocaleSnapshot;
 
 /// 资产装载 / 编译错误。
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum LocaleLoadError {
-    #[error(transparent)]
-    Load(#[from] LoadError),
-    #[error(transparent)]
-    Json(#[from] JsonError),
-    #[error(transparent)]
-    Compile(#[from] CompileError),
-    #[error("{0}")]
-    Message(String),
+    Load(LoadError),
+    Json(JsonError),
+    Compile(CompileError),
+    /// 清单缺少分片。
+    EmptyShards,
+    /// 装载后无可用 Locale。
+    NoAvailableLocales,
+}
+
+impl LocaleLoadError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Load(e) => e.code(),
+            Self::Json(e) => e.code(),
+            Self::Compile(e) => e.code(),
+            Self::EmptyShards => "spark.localization.empty_shards",
+            Self::NoAvailableLocales => "spark.localization.no_available_locales",
+        }
+    }
+}
+
+impl fmt::Display for LocaleLoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for LocaleLoadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Load(e) => Some(e),
+            Self::Json(e) => Some(e),
+            Self::Compile(e) => Some(e),
+            Self::EmptyShards | Self::NoAvailableLocales => None,
+        }
+    }
+}
+
+impl From<LoadError> for LocaleLoadError {
+    fn from(value: LoadError) -> Self {
+        Self::Load(value)
+    }
+}
+
+impl From<JsonError> for LocaleLoadError {
+    fn from(value: JsonError) -> Self {
+        Self::Json(value)
+    }
+}
+
+impl From<CompileError> for LocaleLoadError {
+    fn from(value: CompileError) -> Self {
+        Self::Compile(value)
+    }
 }
 
 /// 用 [`AssetLoader`] 读取逻辑路径上的 JSON 语言包。
@@ -48,9 +94,7 @@ pub fn load_bundle_from_manifest(
         }
     }
     if documents.is_empty() {
-        return Err(LocaleLoadError::Message(
-            "manifest has no localization shards".into(),
-        ));
+        return Err(LocaleLoadError::EmptyShards);
     }
     Ok(compile_documents(&documents, CompileOptions::default())?.bundle)
 }
@@ -69,9 +113,7 @@ pub fn prepare_snapshot(
         manifest.available_locales()
     };
     if available.is_empty() {
-        return Err(LocaleLoadError::Message(
-            "no available locales after load".into(),
-        ));
+        return Err(LocaleLoadError::NoAvailableLocales);
     }
     let resolved = negotiate(request, &available, &manifest.product_default);
     Ok(LocaleSnapshot::from_bundle(
@@ -105,7 +147,7 @@ impl AssetLoader for MemoryLocaleLoader {
         self.files
             .get(key.as_str())
             .map(|b| b.as_ref().to_vec())
-            .ok_or_else(|| LoadError::NotFound(key.as_str().to_string()))
+            .ok_or_else(|| LoadError::not_found(key.as_str()))
     }
 }
 
