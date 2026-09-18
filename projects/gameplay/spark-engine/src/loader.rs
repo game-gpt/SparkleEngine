@@ -26,7 +26,7 @@ pub fn discover_and_order(mods_root: &Path) -> Result<Vec<ModManifest>, EngineEr
         return Ok(Vec::new());
     }
     let rd = std::fs::read_dir(mods_root).map_err(|e| {
-        EngineError::io(mods_root.display().to_string(), e.to_string())
+        EngineError::from_io(mods_root.display().to_string(), e)
     })?;
     for ent in rd.flatten() {
         let p = ent.path();

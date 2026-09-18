@@ -39,7 +39,7 @@ impl GlyphCache {
         for path in system_font_candidates() {
             if let Ok(bytes) = std::fs::read(&path) {
                 if let Ok(font) = Font::from_bytes(bytes, FontSettings::default()) {
-                    tracing::info!(path = %path.display(), "已加载系统字体");
+                    tracing::info!(event = "spark.font.system_loaded", path = %path.display());
                     return Ok(Self::new(font));
                 }
             }

@@ -3034,6 +3034,7 @@ dependencies = [
  "gltf",
  "spark-anim",
  "spark-core",
+ "spark-diagnostics",
  "spark-geometry",
  "spark-renderer",
 ]
@@ -3117,6 +3118,7 @@ dependencies = [
 name = "spark-plugin"
 version = "0.1.0"
 dependencies = [
+ "spark-diagnostics",
  "spark-gc",
  "spark-vm",
  "tracing",

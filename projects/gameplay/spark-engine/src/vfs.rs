@@ -67,11 +67,11 @@ impl ModVfs {
     pub fn read_to_string(&self, rel: &str) -> Result<String, EngineError> {
         let p = self.resolve(rel)?;
         std::fs::read_to_string(&p)
-            .map_err(|e| EngineError::io(p.display().to_string(), e.to_string()))
+            .map_err(|e| EngineError::from_io(p.display().to_string(), e))
     }
 
     pub fn read_bytes(&self, rel: &str) -> Result<Vec<u8>, EngineError> {
         let p = self.resolve(rel)?;
-        std::fs::read(&p).map_err(|e| EngineError::io(p.display().to_string(), e.to_string()))
+        std::fs::read(&p).map_err(|e| EngineError::from_io(p.display().to_string(), e))
     }
 }

@@ -61,7 +61,8 @@ pub enum EngineError {
         source: crate::manifest::ManifestParseError,
     },
     ManifestMissingId { path: String },
-    Io { path: String, detail: String },
+    /// 文件系统失败：`kind` 为稳定机器令牌（如 `not_found`），不是 OS 本地化句子。
+    Io { path: String, kind: String },
     HookFailed {
         hook: String,
         mod_id: String,
@@ -71,23 +72,19 @@ pub enum EngineError {
 }
 
 impl EngineError {
-    pub fn code(&self) -> &'static str {
+    pub fn code(&self) -> String {
         match self {
-            Self::Spark(e) => {
-                // 透传 SparkError 的码字符串不便为 &'static；统一用包装码。
-                let _ = e;
-                "spark.engine.spark"
-            }
-            Self::Script(_) => "spark.engine.script",
-            Self::Plugin(_) => "spark.engine.plugin",
-            Self::ModNotFound { .. } => "spark.engine.mod_not_found",
-            Self::MissingDep { .. } => "spark.engine.missing_dep",
-            Self::CyclicDeps { .. } => "spark.engine.cyclic_deps",
-            Self::DuplicateMod { .. } => "spark.engine.duplicate_mod",
-            Self::ManifestParse { source, .. } => source.code(),
-            Self::ManifestMissingId { .. } => "spark.engine.manifest_missing_id",
-            Self::Io { .. } => "spark.engine.io",
-            Self::HookFailed { .. } => "spark.engine.hook_failed",
+            Self::Spark(e) => e.code.to_string(),
+            Self::Script(e) => e.code().to_string(),
+            Self::Plugin(e) => e.code().to_string(),
+            Self::ModNotFound { .. } => "spark.engine.mod_not_found".into(),
+            Self::MissingDep { .. } => "spark.engine.missing_dep".into(),
+            Self::CyclicDeps { .. } => "spark.engine.cyclic_deps".into(),
+            Self::DuplicateMod { .. } => "spark.engine.duplicate_mod".into(),
+            Self::ManifestParse { source, .. } => source.code().to_string(),
+            Self::ManifestMissingId { .. } => "spark.engine.manifest_missing_id".into(),
+            Self::Io { .. } => "spark.engine.io".into(),
+            Self::HookFailed { .. } => "spark.engine.hook_failed".into(),
         }
     }
 
@@ -95,6 +92,9 @@ impl EngineError {
         use spark_diagnostics::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
         match self {
+            Self::Spark(e) => e.args.clone(),
+            Self::Script(e) => e.args(),
+            Self::Plugin(e) => e.args(),
             Self::ModNotFound { id } | Self::DuplicateMod { id } => {
                 ErrorArgs::new().with("id", ErrorArg::String(Arc::from(id.as_str())))
             }
@@ -110,27 +110,53 @@ impl EngineError {
             Self::ManifestMissingId { path } => {
                 ErrorArgs::new().with("path", ErrorArg::Path(Arc::from(path.as_str())))
             }
-            Self::Io { path, detail } => ErrorArgs::new()
+            Self::Io { path, kind } => ErrorArgs::new()
                 .with("path", ErrorArg::Path(Arc::from(path.as_str())))
-                .with("opaque", ErrorArg::String(Arc::from(detail.as_str()))),
+                .with("kind", ErrorArg::String(Arc::from(kind.as_str()))),
             Self::HookFailed {
                 hook,
                 mod_id,
                 function,
-                ..
-            } => ErrorArgs::new()
+                source,
+            } => source.args()
                 .with("hook", ErrorArg::String(Arc::from(hook.as_str())))
                 .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str())))
                 .with("function", ErrorArg::String(Arc::from(function.as_str()))),
-            Self::Spark(_) | Self::Script(_) | Self::Plugin(_) => ErrorArgs::new(),
         }
     }
 
-    pub fn io(path: impl Into<String>, detail: impl Into<String>) -> Self {
+    /// 由 `std::io::Error` 构造；只保留稳定 `ErrorKind` 令牌。
+    pub fn from_io(path: impl Into<String>, err: std::io::Error) -> Self {
         Self::Io {
             path: path.into(),
-            detail: detail.into(),
+            kind: io_kind_token(err.kind()).into(),
         }
+    }
+}
+
+fn io_kind_token(kind: std::io::ErrorKind) -> &'static str {
+    use std::io::ErrorKind::*;
+    match kind {
+        NotFound => "not_found",
+        PermissionDenied => "permission_denied",
+        ConnectionRefused => "connection_refused",
+        ConnectionReset => "connection_reset",
+        ConnectionAborted => "connection_aborted",
+        NotConnected => "not_connected",
+        AddrInUse => "addr_in_use",
+        AddrNotAvailable => "addr_not_available",
+        BrokenPipe => "broken_pipe",
+        AlreadyExists => "already_exists",
+        WouldBlock => "would_block",
+        InvalidInput => "invalid_input",
+        InvalidData => "invalid_data",
+        TimedOut => "timed_out",
+        WriteZero => "write_zero",
+        Interrupted => "interrupted",
+        Unsupported => "unsupported",
+        UnexpectedEof => "unexpected_eof",
+        OutOfMemory => "out_of_memory",
+        _ => "other",
     }
 }
 
@@ -140,7 +166,7 @@ impl std::fmt::Display for EngineError {
             Self::Spark(e) => e.fmt(f),
             Self::Script(e) => e.fmt(f),
             Self::Plugin(e) => e.fmt(f),
-            other => f.write_str(other.code()),
+            other => f.write_str(&other.code()),
         }
     }
 }
@@ -180,7 +206,11 @@ impl From<EngineError> for SparkError {
     fn from(e: EngineError) -> Self {
         match e {
             EngineError::Spark(s) => s,
-            other => SparkError::new(spark_core::ErrorCode::parse(other.code())),
+            other => {
+                let code = spark_core::ErrorCode::parse(&other.code());
+                let args = other.args();
+                SparkError::new(code).with_args(args)
+            }
         }
     }
 }
@@ -309,7 +339,7 @@ impl SparkEngine {
         if let Some(entry) = &manifest.entry {
             let entry_path = root.join(entry);
             let source = std::fs::read_to_string(&entry_path).map_err(|e| {
-                EngineError::io(entry_path.display().to_string(), e.to_string())
+                EngineError::from_io(entry_path.display().to_string(), e)
             })?;
             let lang = resolve_language(manifest.language.as_deref(), entry);
             let natives = self.compile_native_names();
@@ -332,7 +362,7 @@ impl SparkEngine {
                 enabled: true,
             },
         );
-        tracing::info!(mod_id = %id, "模组已加载");
+        tracing::info!(event = "spark.engine.mod_loaded", mod_id = %id);
         Ok(())
     }
 
@@ -430,7 +460,7 @@ fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
         return Ok(candidate);
     }
     let rd = std::fs::read_dir(root).map_err(|e| {
-        EngineError::io(root.display().to_string(), e.to_string())
+        EngineError::from_io(root.display().to_string(), e)
     })?;
     for ent in rd.flatten() {
         let p = ent.path();
