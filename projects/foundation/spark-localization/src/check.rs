@@ -14,19 +14,22 @@ pub enum CheckIssueKind {
     MissingKey,
     ExtraKey,
     ArgumentMismatch,
+    NamespaceMismatch,
     MissingSelectCase,
     Cycle,
     EmptyMessage,
 }
 
 /// 单条检查结果。
+///
+/// `token` 仅承载机器可读附加事实（标识符链、参数名列表等），禁止用户句子。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckIssue {
     pub kind: CheckIssueKind,
     pub namespace: NamespaceId,
     pub locale: Option<LocaleId>,
     pub message: Option<MessageName>,
-    pub detail: Arc<str>,
+    pub token: Option<Arc<str>>,
 }
 
 /// 一组同命名空间、多 Locale 文档的检查报告。
@@ -55,7 +58,7 @@ pub fn check_document(doc: &LocalizationDocument) -> CheckReport {
                 namespace: doc.namespace.clone(),
                 locale: Some(doc.locale.clone()),
                 message: Some(name.clone()),
-                detail: Arc::from("message body is empty"),
+                token: None,
             });
         }
         let mut stack = Vec::new();
@@ -75,14 +78,15 @@ pub fn check_locale_set(baseline: &LocalizationDocument, others: &[LocalizationD
     for doc in others {
         if doc.namespace != baseline.namespace {
             report.issues.push(CheckIssue {
-                kind: CheckIssueKind::ArgumentMismatch,
+                kind: CheckIssueKind::NamespaceMismatch,
                 namespace: doc.namespace.clone(),
                 locale: Some(doc.locale.clone()),
                 message: None,
-                detail: Arc::from(format!(
-                    "namespace {} does not match baseline {}",
-                    doc.namespace, baseline.namespace
-                )),
+                token: Some(Arc::from(format!(
+                    "{}!={}",
+                    doc.namespace.as_str(),
+                    baseline.namespace.as_str()
+                ))),
             });
             continue;
         }
@@ -95,7 +99,7 @@ pub fn check_locale_set(baseline: &LocalizationDocument, others: &[LocalizationD
                 namespace: doc.namespace.clone(),
                 locale: Some(doc.locale.clone()),
                 message: Some(missing.clone()),
-                detail: Arc::from("missing relative to baseline"),
+                token: None,
             });
         }
         for extra in keys.difference(&base_keys) {
@@ -104,7 +108,7 @@ pub fn check_locale_set(baseline: &LocalizationDocument, others: &[LocalizationD
                 namespace: doc.namespace.clone(),
                 locale: Some(doc.locale.clone()),
                 message: Some(extra.clone()),
-                detail: Arc::from("not present in baseline"),
+                token: None,
             });
         }
 
@@ -117,7 +121,11 @@ pub fn check_locale_set(baseline: &LocalizationDocument, others: &[LocalizationD
                         namespace: doc.namespace.clone(),
                         locale: Some(doc.locale.clone()),
                         message: Some(message.clone()),
-                        detail: Arc::from(format!("expected args {expected:?}, got {actual:?}")),
+                        token: Some(Arc::from(format!(
+                            "{}!={}",
+                            join_names(expected),
+                            join_names(actual)
+                        ))),
                     });
                 }
             }
@@ -190,7 +198,7 @@ fn require_other_case(
             namespace: doc.namespace.clone(),
             locale: Some(doc.locale.clone()),
             message: Some(name.clone()),
-            detail: Arc::from("select/plural missing required `other` case"),
+            token: Some(Arc::from("missing_other")),
         });
     }
 }
@@ -209,7 +217,7 @@ fn detect_cycles(
             namespace: doc.namespace.clone(),
             locale: Some(doc.locale.clone()),
             message: Some(name.clone()),
-            detail: Arc::from(format!("cycle via {}", join_stack(stack))),
+            token: Some(Arc::from(join_stack(stack))),
         });
         return;
     }
@@ -256,7 +264,15 @@ fn join_stack(stack: &[MessageName]) -> String {
         .iter()
         .map(MessageName::as_str)
         .collect::<Vec<_>>()
-        .join(" -> ")
+        .join("->")
+}
+
+fn join_names(names: &BTreeSet<Arc<str>>) -> String {
+    names
+        .iter()
+        .map(|s| s.as_ref())
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn collect_arg_schemas(doc: &LocalizationDocument) -> BTreeMap<MessageName, BTreeSet<Arc<str>>> {
@@ -342,5 +358,22 @@ mod tests {
         let zh = LocalizationDocument::new(LocaleId::parse("zh-Hans-CN").unwrap(), "game");
         let report = check_locale_set(&en, &[zh]);
         assert!(report.issues.iter().any(|i| i.kind == CheckIssueKind::MissingKey));
+    }
+
+    #[test]
+    fn issues_carry_tokens_not_prose() {
+        let mut en = LocalizationDocument::new(LocaleId::parse("en").unwrap(), "game");
+        en.insert("a", MessageDefinition::Text(Arc::from("A")));
+        let mut zh = LocalizationDocument::new(LocaleId::parse("zh-Hans-CN").unwrap(), "other");
+        zh.insert("a", MessageDefinition::Text(Arc::from("甲")));
+        let report = check_locale_set(&en, &[zh]);
+        let issue = report
+            .issues
+            .iter()
+            .find(|i| i.kind == CheckIssueKind::NamespaceMismatch)
+            .expect("namespace mismatch");
+        let token = issue.token.as_deref().unwrap_or("");
+        assert!(token.contains("!="));
+        assert!(!token.contains(' '));
     }
 }
