@@ -43,9 +43,10 @@ impl JsSparkHost {
 
     #[napi]
     pub fn load_bytes(&mut self, root: String, key: String) -> Result<u32> {
+        // FFI 边界：向 JS 暴露稳定错误码（Display），不是自然语言句子。
         self.inner
             .load_bytes(&root, &key)
-            .map_err(|e| Error::from_reason(e))
+            .map_err(|e| Error::from_reason(e.to_string()))
     }
 
     #[napi]
