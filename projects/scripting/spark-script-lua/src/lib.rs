@@ -19,16 +19,23 @@ pub enum LuaScriptError {
 }
 
 impl LuaScriptError {
-    pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+    pub fn parse_failed(diag_count: u64) -> Self {
         Self::Parse {
-            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+            args: ErrorArgs::new()
+                .with("reason", ErrorArg::String(std::sync::Arc::from("parse_failed")))
+                .with("diagnostics", ErrorArg::Unsigned(diag_count)),
         }
     }
 
-    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+    pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile {
-            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
         }
+    }
+
+    /// 兼容旧调用：仍写入 `reason`，禁止把 oak Display 句子塞进 opaque。
+    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::compile_reason(detail)
     }
 }
 
@@ -58,15 +65,7 @@ pub fn parse(source: &str) -> Result<LuaRoot, LuaScriptError> {
     let out = builder.build(&text, &[], &mut session);
     match out.result {
         Ok(root) => Ok(root),
-        Err(e) => {
-            let mut detail = e.to_string();
-            if !out.diagnostics.is_empty() {
-                let soft: Vec<String> = out.diagnostics.iter().map(|d| format!("{d:?}")).collect();
-                detail.push_str("; ");
-                detail.push_str(&soft.join("; "));
-            }
-            Err(LuaScriptError::parse_opaque(detail))
-        }
+        Err(_e) => Err(LuaScriptError::parse_failed(out.diagnostics.len() as u64)),
     }
 }
 

@@ -59,16 +59,24 @@ impl ScriptError {
         }
     }
 
-    pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+    pub fn parse_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Parse {
-            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
         }
     }
 
-    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+    pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile {
-            args: ErrorArgs::new().with("opaque", ErrorArg::String(detail.into())),
+            args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
         }
+    }
+
+    pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::parse_reason(detail)
+    }
+
+    pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
+        Self::compile_reason(detail)
     }
 
     pub fn args(&self) -> ErrorArgs {
