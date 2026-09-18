@@ -27,7 +27,7 @@ pub use frame::{
 pub use hooks::{HookBus, HookRef};
 pub use loader::{LoadedMod, ModLoader};
 pub use localization::LocalizationService;
-pub use manifest::ModManifest;
+pub use manifest::{ManifestParseError, ModManifest};
 pub use registry::{DataRegistry, RegValue};
 pub use run::{run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
@@ -56,7 +56,10 @@ pub enum EngineError {
     MissingDep { mod_id: String, dep: String },
     CyclicDeps { mods: String },
     DuplicateMod { id: String },
-    ManifestParse { path: String, detail: String },
+    ManifestParse {
+        path: String,
+        source: crate::manifest::ManifestParseError,
+    },
     ManifestMissingId { path: String },
     Io { path: String, detail: String },
     HookFailed {
@@ -81,10 +84,45 @@ impl EngineError {
             Self::MissingDep { .. } => "spark.engine.missing_dep",
             Self::CyclicDeps { .. } => "spark.engine.cyclic_deps",
             Self::DuplicateMod { .. } => "spark.engine.duplicate_mod",
-            Self::ManifestParse { .. } => "spark.engine.manifest_parse",
+            Self::ManifestParse { source, .. } => source.code(),
             Self::ManifestMissingId { .. } => "spark.engine.manifest_missing_id",
             Self::Io { .. } => "spark.engine.io",
             Self::HookFailed { .. } => "spark.engine.hook_failed",
+        }
+    }
+
+    pub fn args(&self) -> spark_diagnostics::ErrorArgs {
+        use spark_diagnostics::{ErrorArg, ErrorArgs};
+        use std::sync::Arc;
+        match self {
+            Self::ModNotFound { id } | Self::DuplicateMod { id } => {
+                ErrorArgs::new().with("id", ErrorArg::String(Arc::from(id.as_str())))
+            }
+            Self::MissingDep { mod_id, dep } => ErrorArgs::new()
+                .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str())))
+                .with("dep", ErrorArg::String(Arc::from(dep.as_str()))),
+            Self::CyclicDeps { mods } => {
+                ErrorArgs::new().with("mods", ErrorArg::String(Arc::from(mods.as_str())))
+            }
+            Self::ManifestParse { path, source } => source
+                .args()
+                .with("path", ErrorArg::Path(Arc::from(path.as_str()))),
+            Self::ManifestMissingId { path } => {
+                ErrorArgs::new().with("path", ErrorArg::Path(Arc::from(path.as_str())))
+            }
+            Self::Io { path, detail } => ErrorArgs::new()
+                .with("path", ErrorArg::Path(Arc::from(path.as_str())))
+                .with("opaque", ErrorArg::String(Arc::from(detail.as_str()))),
+            Self::HookFailed {
+                hook,
+                mod_id,
+                function,
+                ..
+            } => ErrorArgs::new()
+                .with("hook", ErrorArg::String(Arc::from(hook.as_str())))
+                .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str())))
+                .with("function", ErrorArg::String(Arc::from(function.as_str()))),
+            Self::Spark(_) | Self::Script(_) | Self::Plugin(_) => ErrorArgs::new(),
         }
     }
 
@@ -113,6 +151,7 @@ impl std::error::Error for EngineError {
             Self::Spark(e) => Some(e),
             Self::Script(e) => Some(e),
             Self::Plugin(e) => Some(e),
+            Self::ManifestParse { source, .. } => Some(source),
             Self::HookFailed { source, .. } => Some(source),
             _ => None,
         }

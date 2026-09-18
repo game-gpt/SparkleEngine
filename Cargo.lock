@@ -2932,6 +2932,7 @@ name = "spark-engine"
 version = "0.1.0"
 dependencies = [
  "spark-core",
+ "spark-diagnostics",
  "spark-ecs",
  "spark-event",
  "spark-gc",
@@ -3239,6 +3240,7 @@ name = "spark-vm"
 version = "0.1.0"
 dependencies = [
  "spark-core",
+ "spark-diagnostics",
  "spark-gc",
 ]
 

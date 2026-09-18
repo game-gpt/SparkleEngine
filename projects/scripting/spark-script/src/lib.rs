@@ -71,10 +71,10 @@ impl ScriptError {
         }
     }
 
-    pub fn args(&self) -> Option<&ErrorArgs> {
+    pub fn args(&self) -> ErrorArgs {
         match self {
-            Self::Parse { args } | Self::Compile { args } => Some(args),
-            Self::Vm(_) => None,
+            Self::Parse { args } | Self::Compile { args } => args.clone(),
+            Self::Vm(e) => e.args(),
         }
     }
 }
