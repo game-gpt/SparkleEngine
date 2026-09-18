@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+use spark_core::{ErrorArg, ErrorArgs};
+
 /// 图内节点句柄（稠密从 0 递增）。
 pub type NodeId = u32;
 
@@ -47,6 +49,14 @@ impl CircuitError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::UnknownNode(_) => "spark.circuit.unknown_node",
+        }
+    }
+
+    pub fn args(&self) -> ErrorArgs {
+        match self {
+            Self::UnknownNode(id) => {
+                ErrorArgs::new().with("node", ErrorArg::Unsigned(u64::from(*id)))
+            }
         }
     }
 }

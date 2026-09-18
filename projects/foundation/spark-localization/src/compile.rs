@@ -24,6 +24,20 @@ impl CompileError {
             Self::Internal { .. } => "spark.localization.compile_internal",
         }
     }
+
+    pub fn args(&self) -> spark_core::ErrorArgs {
+        use spark_core::{ErrorArg, ErrorArgs};
+        use std::sync::Arc;
+        match self {
+            Self::CheckFailed { count } => {
+                ErrorArgs::new().with("count", ErrorArg::Unsigned(*count as u64))
+            }
+            Self::Internal { detail } => {
+                // `detail` 仅供调试器展开，不得作为用户可见句子权威。
+                ErrorArgs::new().with("opaque", ErrorArg::String(Arc::from(detail.as_str())))
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for CompileError {

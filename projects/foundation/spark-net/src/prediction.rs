@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+use spark_core::ErrorArgs;
+
 use crate::channel::Sequence;
 
 /// 预测时钟错误。`Display` 只输出稳定码。
@@ -17,6 +19,10 @@ impl PredictionError {
             Self::TickRewind => "spark.net.prediction.tick_rewind",
             Self::BufferOverflow => "spark.net.prediction.buffer_overflow",
         }
+    }
+
+    pub fn args(&self) -> ErrorArgs {
+        ErrorArgs::new()
     }
 }
 

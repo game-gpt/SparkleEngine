@@ -12,14 +12,16 @@ pub use prediction::{PredictionClock, PredictionError};
 pub use transport::{InMemoryTransport, PeerId, Transport};
 
 use std::fmt;
+use std::sync::Arc;
 
-use spark_core::SparkError;
+use spark_core::{ErrorArg, ErrorArgs, SparkError};
 
 /// 网络层结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]
 pub enum NetError {
     Spark(SparkError),
     NotConnected(PeerId),
+    /// `detail` 必须是机器令牌，不是自然语言。
     Internal { detail: String },
 }
 
@@ -35,6 +37,18 @@ impl NetError {
     pub fn internal(detail: impl Into<String>) -> Self {
         Self::Internal {
             detail: detail.into(),
+        }
+    }
+
+    pub fn args(&self) -> ErrorArgs {
+        match self {
+            Self::Spark(e) => e.args.clone(),
+            Self::NotConnected(peer) => {
+                ErrorArgs::new().with("peer", ErrorArg::Unsigned(u64::from(peer.0)))
+            }
+            Self::Internal { detail } => {
+                ErrorArgs::new().with("reason", ErrorArg::String(Arc::from(detail.as_str())))
+            }
         }
     }
 }

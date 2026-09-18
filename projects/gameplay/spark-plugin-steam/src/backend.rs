@@ -75,7 +75,7 @@ impl SteamBackend for NullSteamBackend {
 
     fn unlock_achievement(&mut self, id: &str) -> Result<(), SparkError> {
         self.achievements.insert(id.into(), true);
-        tracing::info!(achievement = id, "Steam 占位解锁成就");
+        tracing::info!(event = "spark.steam.achievement_unlocked", achievement = id);
         Ok(())
     }
 
@@ -115,7 +115,7 @@ impl SteamBackend for NullSteamBackend {
     }
 
     fn overlay_open_url(&mut self, url: &str) -> Result<(), SparkError> {
-        tracing::debug!(url, "Steam 占位 overlay_open_url");
+        tracing::debug!(event = "spark.steam.overlay_open_url", url);
         Ok(())
     }
 }

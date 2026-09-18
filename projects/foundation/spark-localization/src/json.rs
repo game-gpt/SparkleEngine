@@ -34,6 +34,23 @@ impl JsonError {
             Self::UnknownArgumentFormat { .. } => "spark.localization.json_unknown_arg_format",
         }
     }
+
+    pub fn args(&self) -> spark_core::ErrorArgs {
+        use spark_core::{ErrorArg, ErrorArgs};
+        match self {
+            Self::Locale(e) => e.args(),
+            Self::Serde { detail } => {
+                ErrorArgs::new().with("opaque", ErrorArg::String(Arc::from(detail.as_str())))
+            }
+            Self::RichMessageIncomplete | Self::NodeObjectIncomplete => ErrorArgs::new(),
+            Self::UnknownSelectKind { kind } => {
+                ErrorArgs::new().with("kind", ErrorArg::String(Arc::from(kind.as_str())))
+            }
+            Self::UnknownArgumentFormat { format } => {
+                ErrorArgs::new().with("format", ErrorArg::String(Arc::from(format.as_str())))
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for JsonError {

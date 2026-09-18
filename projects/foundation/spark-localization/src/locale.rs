@@ -47,6 +47,17 @@ impl LocaleParseError {
             Self::Invalid { .. } => "spark.localization.locale_invalid",
         }
     }
+
+    pub fn args(&self) -> spark_core::ErrorArgs {
+        use spark_core::{ErrorArg, ErrorArgs};
+        use std::sync::Arc;
+        match self {
+            Self::Empty => ErrorArgs::new(),
+            Self::Invalid { detail } => {
+                ErrorArgs::new().with("reason", ErrorArg::String(Arc::from(detail.as_str())))
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for LocaleParseError {

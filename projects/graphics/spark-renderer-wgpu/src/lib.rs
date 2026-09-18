@@ -672,7 +672,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         let window = match event_loop.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {
-                tracing::error!(?e, "create window");
+                tracing::error!(event = "spark.renderer.window_create_failed", ?e);
                 event_loop.exit();
                 return;
             }
@@ -680,13 +680,13 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         self.scale = window.scale_factor() as f32;
         match pollster::block_on(GpuState::new(window.clone())) {
             Ok(s) => {
-                tracing::info!("GPU ready");
+                tracing::info!(event = "spark.renderer.gpu_ready");
                 window.request_redraw();
                 self.state = Some(s);
                 self.last = Instant::now();
             }
             Err(e) => {
-                tracing::error!(?e, "GPU init failed");
+                tracing::error!(event = "spark.renderer.gpu_init_failed", ?e);
                 event_loop.exit();
             }
         }
@@ -773,7 +773,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         let mut draw = DrawList::new(clear);
         self.host.draw(&mut draw);
         if let Err(e) = gpu.render(&draw) {
-            tracing::error!(?e, "render failed");
+            tracing::error!(event = "spark.renderer.render_failed", ?e);
             event_loop.exit();
             return;
         }

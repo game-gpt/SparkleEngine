@@ -47,7 +47,7 @@ impl Live2dBackend for NullLive2dBackend {
                 params: std::collections::HashMap::new(),
             },
         );
-        tracing::info!(path, model = id, "Live2D 占位后端加载模型");
+        tracing::info!(event = "spark.live2d.model_loaded", path, model = id);
         Ok(Live2dModelId(id))
     }
 
@@ -86,7 +86,7 @@ impl Live2dBackend for NullLive2dBackend {
         if !self.models.contains_key(&id.0) {
             return Err(invalid_model(id));
         }
-        tracing::debug!(?id, group, index, "Live2D 占位 start_motion");
+        tracing::debug!(event = "spark.live2d.start_motion", ?id, group, index);
         Ok(())
     }
 }

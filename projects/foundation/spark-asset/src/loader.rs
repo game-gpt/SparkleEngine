@@ -4,6 +4,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use spark_core::{ErrorArg, ErrorArgs};
+
 use crate::handle::AssetKey;
 
 /// 资源加载失败（稳定码 + 路径事实；`Display` 不输出自然语言）。
@@ -35,6 +37,33 @@ impl LoadError {
             Self::NotFound { .. } => "spark.asset.not_found",
             Self::Io { .. } => "spark.asset.io",
         }
+    }
+
+    pub fn args(&self) -> ErrorArgs {
+        match self {
+            Self::NotFound { key } => {
+                ErrorArgs::new().with("key", ErrorArg::AssetKey(Arc::clone(key)))
+            }
+            Self::Io { key, cause } => ErrorArgs::new()
+                .with("key", ErrorArg::AssetKey(Arc::clone(key)))
+                .with(
+                    "kind",
+                    ErrorArg::String(Arc::from(io_kind_token(cause.kind()))),
+                ),
+        }
+    }
+}
+
+fn io_kind_token(kind: std::io::ErrorKind) -> &'static str {
+    use std::io::ErrorKind::*;
+    match kind {
+        NotFound => "not_found",
+        PermissionDenied => "permission_denied",
+        InvalidData => "invalid_data",
+        UnexpectedEof => "unexpected_eof",
+        AlreadyExists => "already_exists",
+        TimedOut => "timed_out",
+        _ => "other",
     }
 }
 
