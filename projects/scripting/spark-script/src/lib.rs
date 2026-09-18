@@ -11,7 +11,8 @@
 
 use spark_jit::JitEngine;
 use spark_vm::{HostHooks, Module, StdHost, Vm, VmError};
-use thiserror::Error;
+
+pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 
 /// 脚本源语言。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,21 +25,50 @@ pub enum ScriptLanguage {
     Ruby,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum ScriptError {
-    #[error("解析错误：{0}")]
-    Parse(String),
-    #[error("编译错误：{0}")]
-    Compile(String),
-    #[error(transparent)]
-    Vm(#[from] VmError),
+    /// 解析失败。`detail` 为前端原始说明。
+    Parse { detail: String },
+    /// 编译失败。
+    Compile { detail: String },
+    /// VM 执行失败。
+    Vm(VmError),
+}
+
+impl std::fmt::Display for ScriptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Parse { .. } => f.write_str("spark.script.parse"),
+            Self::Compile { .. } => f.write_str("spark.script.compile"),
+            Self::Vm(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for ScriptError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Vm(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<VmError> for ScriptError {
+    fn from(value: VmError) -> Self {
+        Self::Vm(value)
+    }
 }
 
 impl From<spark_script_valkyrie::ValkyrieScriptError> for ScriptError {
     fn from(e: spark_script_valkyrie::ValkyrieScriptError) -> Self {
         match e {
-            spark_script_valkyrie::ValkyrieScriptError::Parse(s) => ScriptError::Parse(s),
-            spark_script_valkyrie::ValkyrieScriptError::Compile(s) => ScriptError::Compile(s),
+            spark_script_valkyrie::ValkyrieScriptError::Parse { detail } => {
+                ScriptError::Parse { detail }
+            }
+            spark_script_valkyrie::ValkyrieScriptError::Compile { detail } => {
+                ScriptError::Compile { detail }
+            }
         }
     }
 }
@@ -46,8 +76,8 @@ impl From<spark_script_valkyrie::ValkyrieScriptError> for ScriptError {
 impl From<spark_script_lua::LuaScriptError> for ScriptError {
     fn from(e: spark_script_lua::LuaScriptError) -> Self {
         match e {
-            spark_script_lua::LuaScriptError::Parse(s) => ScriptError::Parse(s),
-            spark_script_lua::LuaScriptError::Compile(s) => ScriptError::Compile(s),
+            spark_script_lua::LuaScriptError::Parse { detail } => ScriptError::Parse { detail },
+            spark_script_lua::LuaScriptError::Compile { detail } => ScriptError::Compile { detail },
         }
     }
 }
@@ -55,8 +85,10 @@ impl From<spark_script_lua::LuaScriptError> for ScriptError {
 impl From<spark_script_ruby::RubyScriptError> for ScriptError {
     fn from(e: spark_script_ruby::RubyScriptError) -> Self {
         match e {
-            spark_script_ruby::RubyScriptError::Parse(s) => ScriptError::Parse(s),
-            spark_script_ruby::RubyScriptError::Compile(s) => ScriptError::Compile(s),
+            spark_script_ruby::RubyScriptError::Parse { detail } => ScriptError::Parse { detail },
+            spark_script_ruby::RubyScriptError::Compile { detail } => {
+                ScriptError::Compile { detail }
+            }
         }
     }
 }
@@ -76,6 +108,20 @@ impl ScriptEngine {
 
     pub fn compile_with_natives(source: &str, natives: &[&str]) -> Result<Self, ScriptError> {
         Self::compile_with(ScriptLanguage::Valkyrie, source, natives)
+    }
+
+    /// 使用完整宿主签名编译（Valkyrie）；其它前端暂时只取函数名。
+    pub fn compile_with_registry(
+        language: ScriptLanguage,
+        source: &str,
+        natives: &NativeRegistry,
+    ) -> Result<Self, ScriptError> {
+        let module = compile_module_with_registry(language, source, natives)?;
+        Ok(Self {
+            vm: Vm::new(module),
+            jit: JitEngine::new(256),
+            language,
+        })
     }
 
     /// 指定前端语言编译到同一 [`Module`] / VM。
@@ -134,6 +180,21 @@ pub fn compile_module(
         ScriptLanguage::Valkyrie => Ok(spark_script_valkyrie::compile(source, natives)?),
         ScriptLanguage::Lua => Ok(spark_script_lua::compile(source, natives)?),
         ScriptLanguage::Ruby => Ok(spark_script_ruby::compile(source, natives)?),
+    }
+}
+
+/// 带 [`NativeRegistry`] 编译；非 Valkyrie 前端回退为仅函数名。
+pub fn compile_module_with_registry(
+    language: ScriptLanguage,
+    source: &str,
+    natives: &NativeRegistry,
+) -> Result<Module, ScriptError> {
+    match language {
+        ScriptLanguage::Valkyrie => Ok(spark_script_valkyrie::compile_with_registry(source, natives)?),
+        ScriptLanguage::Lua | ScriptLanguage::Ruby => {
+            let names = natives.name_list();
+            compile_module(language, source, &names)
+        }
     }
 }
 
@@ -217,5 +278,22 @@ mod tests {
             .call("double", &[spark_gc::Value::Number(21.0)], &mut host)
             .unwrap();
         assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn compile_with_native_registry() {
+        let mut reg = NativeRegistry::new();
+        reg.insert(
+            NativeSignature::new("ping")
+                .param(NativeParam::new("n", "Number"))
+                .returns("Number"),
+        );
+        let eng = ScriptEngine::compile_with_registry(
+            ScriptLanguage::Valkyrie,
+            "return ping(1)",
+            &reg,
+        )
+        .unwrap();
+        assert!(eng.vm.module.native_names.iter().any(|n| n == "ping"));
     }
 }

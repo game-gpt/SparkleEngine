@@ -8,22 +8,30 @@ mod compile;
 use oak_core::{Builder, SourceText};
 use oak_lua::{LuaBuilder, LuaLanguage, LuaRoot};
 use spark_vm::Module;
-use thiserror::Error;
 
 pub use compile::compile_root;
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum LuaScriptError {
-    #[error("解析错误：{0}")]
-    Parse(String),
-    #[error("编译错误：{0}")]
-    Compile(String),
+    Parse { detail: String },
+    Compile { detail: String },
 }
+
+impl std::fmt::Display for LuaScriptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Parse { .. } => f.write_str("spark.script.lua.parse"),
+            Self::Compile { .. } => f.write_str("spark.script.lua.compile"),
+        }
+    }
+}
+
+impl std::error::Error for LuaScriptError {}
 
 /// 源码 → [`Module`]。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, LuaScriptError> {
     let root = parse(source)?;
-    compile_root(&root, natives).map_err(LuaScriptError::Compile)
+    compile_root(&root, natives).map_err(|detail| LuaScriptError::Compile { detail })
 }
 
 /// 解析为 AST 根。
@@ -36,13 +44,13 @@ pub fn parse(source: &str) -> Result<LuaRoot, LuaScriptError> {
     match out.result {
         Ok(root) => Ok(root),
         Err(e) => {
-            let mut msg = e.to_string();
+            let mut detail = e.to_string();
             if !out.diagnostics.is_empty() {
                 let soft: Vec<String> = out.diagnostics.iter().map(|d| format!("{d:?}")).collect();
-                msg.push_str("; ");
-                msg.push_str(&soft.join("; "));
+                detail.push_str("; ");
+                detail.push_str(&soft.join("; "));
             }
-            Err(LuaScriptError::Parse(msg))
+            Err(LuaScriptError::Parse { detail })
         }
     }
 }

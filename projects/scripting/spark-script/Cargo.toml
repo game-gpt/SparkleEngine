@@ -18,4 +18,3 @@ spark-jit = { workspace = true }
 spark-script-valkyrie = { workspace = true }
 spark-script-lua = { workspace = true }
 spark-script-ruby = { workspace = true }
-thiserror = { workspace = true }
