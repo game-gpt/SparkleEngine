@@ -1,6 +1,6 @@
 //! Live2D 后端接口（与具体 SDK 解耦）。
 
-use spark_core::SparkError;
+use spark_core::{ErrorArg, SparkError, codes};
 
 use crate::runtime::Live2dModelId;
 
@@ -49,32 +49,26 @@ impl Live2dBackend for NullLive2dBackend {
 
     fn unload(&mut self, id: Live2dModelId) -> Result<(), SparkError> {
         if self.models.remove(&id.0).is_none() {
-            return Err(SparkError::internal(format!("无效 Live2D 模型 {id:?}")));
+            return Err(invalid_model(id));
         }
         Ok(())
     }
 
     fn set_param(&mut self, id: Live2dModelId, name: &str, value: f32) -> Result<(), SparkError> {
-        let m = self
-            .models
-            .get_mut(&id.0)
-            .ok_or_else(|| SparkError::internal(format!("无效 Live2D 模型 {id:?}")))?;
+        let m = self.models.get_mut(&id.0).ok_or_else(|| invalid_model(id))?;
         m.params.insert(name.into(), value);
         Ok(())
     }
 
     fn get_param(&self, id: Live2dModelId, name: &str) -> Result<f32, SparkError> {
-        let m = self
-            .models
-            .get(&id.0)
-            .ok_or_else(|| SparkError::internal(format!("无效 Live2D 模型 {id:?}")))?;
+        let m = self.models.get(&id.0).ok_or_else(|| invalid_model(id))?;
         Ok(m.params.get(name).copied().unwrap_or(0.0))
     }
 
     fn update(&mut self, id: Live2dModelId, dt: f32) -> Result<(), SparkError> {
         let _ = dt;
         if !self.models.contains_key(&id.0) {
-            return Err(SparkError::internal(format!("无效 Live2D 模型 {id:?}")));
+            return Err(invalid_model(id));
         }
         Ok(())
     }
@@ -86,9 +80,14 @@ impl Live2dBackend for NullLive2dBackend {
         index: i32,
     ) -> Result<(), SparkError> {
         if !self.models.contains_key(&id.0) {
-            return Err(SparkError::internal(format!("无效 Live2D 模型 {id:?}")));
+            return Err(invalid_model(id));
         }
         tracing::debug!(?id, group, index, "Live2D 占位 start_motion");
         Ok(())
     }
+}
+
+fn invalid_model(id: Live2dModelId) -> SparkError {
+    SparkError::new(codes::live2d_model_invalid())
+        .arg("id", ErrorArg::Unsigned(id.0 as u64))
 }

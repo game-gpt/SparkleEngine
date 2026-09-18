@@ -9,7 +9,7 @@ use std::time::Duration;
 use rodio::buffer::SamplesBuffer;
 use rodio::source::Source;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
-use spark_core::SparkError;
+use spark_core::{SparkError, codes};
 
 /// 重新导出：游戏可预解码后缓存。
 pub use spark_media::{AudioDecoder, PcmAudio};
@@ -167,7 +167,7 @@ impl AudioBus {
             return Ok(());
         };
         let sink = Sink::try_new(handle)
-            .map_err(|e| SparkError::internal(format!("创建音频 Sink 失败：{e}")))?;
+            .map_err(|e| SparkError::new(codes::audio_sink()).caused_by(e))?;
         if pcm.samples.is_empty() {
             return Ok(());
         }

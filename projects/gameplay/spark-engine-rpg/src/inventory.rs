@@ -1,6 +1,6 @@
 //! 堆叠背包（物品 ID 为不透明字符串）。
 
-use spark_core::SparkError;
+use spark_core::{ErrorArg, SparkError, codes};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemStack {
@@ -52,15 +52,17 @@ impl Inventory {
                 return Ok(());
             }
         }
-        Err(SparkError::internal("背包已满"))
+        Err(SparkError::new(codes::inventory_full()))
     }
 
     pub fn remove(&mut self, id: &str, count: u32) -> Result<(), SparkError> {
         let have = self.count(id);
         if have < count {
-            return Err(SparkError::internal(format!(
-                "物品不足：需要 {count}，仅有 {have}"
-            )));
+            return Err(SparkError::new(codes::inventory_invalid())
+                .arg("reason", ErrorArg::String("insufficient".into()))
+                .arg("need", ErrorArg::Unsigned(count as u64))
+                .arg("have", ErrorArg::Unsigned(have as u64))
+                .arg("item", ErrorArg::String(id.into())));
         }
         let mut left = count;
         for slot in &mut self.slots {

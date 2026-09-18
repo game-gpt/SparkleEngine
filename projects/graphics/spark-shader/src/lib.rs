@@ -2,7 +2,9 @@
 //!
 //! WGSL 正文归本 crate；`spark-renderer-wgpu` 只消费编译结果与入口名，不内嵌着色器字符串。
 
-use spark_core::SparkError;
+use std::sync::Arc;
+
+use spark_core::{ErrorArg, SparkError, codes};
 use wgpu::Device;
 
 /// 引擎内建着色器（与 `src/shaders/*.wgsl` 一一对应）。
@@ -110,10 +112,8 @@ pub fn create_builtin(device: &Device, builtin: BuiltinShader) -> wgpu::ShaderMo
 /// 校验 WGSL 非空（装载前快速失败；真正编译错误仍由 wgpu 报告）。
 pub fn validate_source(source: &ShaderSource<'_>) -> Result<(), SparkError> {
     if source.wgsl.trim().is_empty() {
-        return Err(SparkError::internal(format!(
-            "着色器源码为空：{}",
-            source.label
-        )));
+        return Err(SparkError::new(codes::shader_empty())
+            .arg("label", ErrorArg::String(Arc::from(source.label))));
     }
     Ok(())
 }

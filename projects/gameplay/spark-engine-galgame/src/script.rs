@@ -1,6 +1,6 @@
 //! 对白与选项播放器。
 
-use spark_core::SparkError;
+use spark_core::{ErrorArg, SparkError, codes};
 
 use crate::flags::FlagStore;
 
@@ -78,10 +78,14 @@ impl ScriptPlayer {
 
     pub fn choose(&mut self, index: usize, flags: &mut FlagStore) -> Result<(), SparkError> {
         let Some(choices) = self.waiting_choice.take() else {
-            return Err(SparkError::internal("当前没有选项"));
+            return Err(SparkError::new(codes::script_choice_invalid())
+                .arg("reason", ErrorArg::String("no_choices".into())));
         };
         let Some(c) = choices.get(index) else {
-            return Err(SparkError::internal("选项下标越界"));
+            return Err(SparkError::new(codes::script_choice_invalid())
+                .arg("reason", ErrorArg::String("index_out_of_bounds".into()))
+                .arg("index", ErrorArg::Unsigned(index as u64))
+                .arg("len", ErrorArg::Unsigned(choices.len() as u64)));
         };
         if let Some((k, v)) = &c.set_flag {
             flags.set(k, *v);

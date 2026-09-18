@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use spark_core::SparkError;
+use spark_core::{ErrorArg, SparkError, codes};
 
 /// 不透明纹理 ID。进程内单调分配，跨帧可缓存。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -28,15 +28,20 @@ impl RgbaImage {
         let need = (width as usize)
             .checked_mul(height as usize)
             .and_then(|n| n.checked_mul(4))
-            .ok_or_else(|| SparkError::internal("纹理尺寸溢出"))?;
+            .ok_or_else(|| {
+                SparkError::new(codes::image_dimension_overflow())
+                    .arg("width", ErrorArg::Unsigned(width as u64))
+                    .arg("height", ErrorArg::Unsigned(height as u64))
+            })?;
         if rgba.len() != need {
-            return Err(SparkError::internal(format!(
-                "RGBA 长度不符：期望 {need}，得到 {}",
-                rgba.len()
-            )));
+            return Err(SparkError::new(codes::image_rgba_length_mismatch())
+                .arg("expected", ErrorArg::Unsigned(need as u64))
+                .arg("got", ErrorArg::Unsigned(rgba.len() as u64)));
         }
         if width == 0 || height == 0 {
-            return Err(SparkError::internal("纹理宽高须为正"));
+            return Err(SparkError::new(codes::texture_size_invalid())
+                .arg("width", ErrorArg::Unsigned(width as u64))
+                .arg("height", ErrorArg::Unsigned(height as u64)));
         }
         Ok(Self {
             width,

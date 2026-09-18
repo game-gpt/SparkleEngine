@@ -161,6 +161,70 @@ pub mod codes {
     pub fn image_dest_invalid() -> ErrorCode {
         ErrorCode::new("spark", "image.dest_invalid")
     }
+
+    pub fn font_not_found() -> ErrorCode {
+        ErrorCode::new("spark", "font.not_found")
+    }
+
+    pub fn font_parse() -> ErrorCode {
+        ErrorCode::new("spark", "font.parse")
+    }
+
+    pub fn video_no_track() -> ErrorCode {
+        ErrorCode::new("spark", "video.no_track")
+    }
+
+    pub fn audio_sink() -> ErrorCode {
+        ErrorCode::new("spark", "audio.sink")
+    }
+
+    pub fn texture_size_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "texture.size_invalid")
+    }
+
+    pub fn shader_empty() -> ErrorCode {
+        ErrorCode::new("spark", "shader.empty")
+    }
+
+    pub fn vfs_path_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "vfs.path_invalid")
+    }
+
+    pub fn gltf_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "gltf.invalid")
+    }
+
+    pub fn gpu_surface() -> ErrorCode {
+        ErrorCode::new("spark", "gpu.surface")
+    }
+
+    pub fn gpu_adapter() -> ErrorCode {
+        ErrorCode::new("spark", "gpu.adapter")
+    }
+
+    pub fn gpu_device() -> ErrorCode {
+        ErrorCode::new("spark", "gpu.device")
+    }
+
+    pub fn gpu_event_loop() -> ErrorCode {
+        ErrorCode::new("spark", "gpu.event_loop")
+    }
+
+    pub fn inventory_full() -> ErrorCode {
+        ErrorCode::new("spark", "inventory.full")
+    }
+
+    pub fn inventory_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "inventory.invalid")
+    }
+
+    pub fn script_choice_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "script.choice_invalid")
+    }
+
+    pub fn live2d_model_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "live2d.model_invalid")
+    }
 }
 
 #[cfg(test)]

@@ -1,8 +1,9 @@
 //! 模组资源虚拟路径：限制在模组根目录内。
 
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
-use spark_core::SparkError;
+use spark_core::{ErrorArg, SparkError, codes};
 
 use crate::EngineError;
 
@@ -29,35 +30,35 @@ impl ModVfs {
                 Component::Normal(s) => out.push(s),
                 Component::CurDir => {}
                 Component::ParentDir => {
-                    return Err(SparkError::internal(format!(
-                        "模组 `{}` 资源路径不允许 `..`：{rel}",
-                        self.mod_id
-                    )));
+                    return Err(SparkError::new(codes::vfs_path_invalid())
+                        .arg("mod_id", ErrorArg::String(Arc::from(self.mod_id.as_str())))
+                        .arg("path", ErrorArg::Path(Arc::from(rel)))
+                        .arg("reason", ErrorArg::String(Arc::from("parent_dir"))));
                 }
                 Component::RootDir | Component::Prefix(_) => {
-                    return Err(SparkError::internal(format!(
-                        "模组 `{}` 资源路径非法：{rel}",
-                        self.mod_id
-                    )));
+                    return Err(SparkError::new(codes::vfs_path_invalid())
+                        .arg("mod_id", ErrorArg::String(Arc::from(self.mod_id.as_str())))
+                        .arg("path", ErrorArg::Path(Arc::from(rel)))
+                        .arg("reason", ErrorArg::String(Arc::from("absolute"))));
                 }
             }
         }
         let root = self.root.canonicalize().unwrap_or_else(|_| self.root.clone());
         match out.canonicalize() {
             Ok(canon) if canon.starts_with(&root) => Ok(canon),
-            Ok(_) => Err(SparkError::internal(format!(
-                "模组 `{}` 资源越界：{rel}",
-                self.mod_id
-            ))),
+            Ok(_) => Err(SparkError::new(codes::vfs_path_invalid())
+                .arg("mod_id", ErrorArg::String(Arc::from(self.mod_id.as_str())))
+                .arg("path", ErrorArg::Path(Arc::from(rel)))
+                .arg("reason", ErrorArg::String(Arc::from("escape")))),
             // 文件尚不存在时仍返回规范化拼接路径（不 canonicalize）
             Err(_) => {
                 if out.starts_with(&self.root) {
                     Ok(out)
                 } else {
-                    Err(SparkError::internal(format!(
-                        "模组 `{}` 资源越界：{rel}",
-                        self.mod_id
-                    )))
+                    Err(SparkError::new(codes::vfs_path_invalid())
+                        .arg("mod_id", ErrorArg::String(Arc::from(self.mod_id.as_str())))
+                        .arg("path", ErrorArg::Path(Arc::from(rel)))
+                        .arg("reason", ErrorArg::String(Arc::from("escape"))))
                 }
             }
         }
