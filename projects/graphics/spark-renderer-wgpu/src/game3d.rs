@@ -174,9 +174,9 @@ impl GpuState3d {
                 apply_limit_buckets: false,
             })
             .await
-            .map_err(|e| {
+            .map_err(|_| {
                 SparkError::new(codes::gpu_adapter())
-                    .caused_by(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                    .arg("reason", spark_core::ErrorArg::String(std::sync::Arc::from("no_adapter")))
             })?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
