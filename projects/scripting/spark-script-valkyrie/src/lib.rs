@@ -12,7 +12,7 @@ mod parse;
 use compile::compile_root;
 use parse::parse as parse_source;
 
-use spark_diagnostics::{ErrorArg, ErrorArgs};
+use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
 use spark_vm::Module;
 
 pub use ast::ValkyrieRoot;
@@ -21,21 +21,38 @@ pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 #[derive(Debug)]
 pub enum ValkyrieScriptError {
     /// 解析失败。`args.reason` 为机器令牌（非用户 Locale 句子）。
-    Parse { args: ErrorArgs },
+    Parse {
+        args: ErrorArgs,
+        span: Option<SourceSpan>,
+    },
     /// 编译失败。
-    Compile { args: ErrorArgs },
+    Compile {
+        args: ErrorArgs,
+        span: Option<SourceSpan>,
+    },
 }
 
 impl ValkyrieScriptError {
     pub fn parse_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Parse {
             args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
+            span: None,
+        }
+    }
+
+    pub fn parse_at(reason: impl Into<std::sync::Arc<str>>, span: SourceSpan) -> Self {
+        Self::Parse {
+            args: ErrorArgs::new()
+                .with("reason", ErrorArg::String(reason.into()))
+                .with("span", ErrorArg::Span(span)),
+            span: Some(span),
         }
     }
 
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile {
             args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())),
+            span: None,
         }
     }
 
@@ -45,6 +62,20 @@ impl ValkyrieScriptError {
 
     pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
         Self::compile_reason(detail)
+    }
+
+    pub fn span(&self) -> Option<SourceSpan> {
+        match self {
+            Self::Parse { span, .. } | Self::Compile { span, .. } => *span,
+        }
+    }
+
+    pub fn context(&self) -> ErrorContext {
+        let mut ctx = ErrorContext::new().target("spark-script-valkyrie");
+        if let Some(span) = self.span() {
+            ctx = ctx.with_span(span);
+        }
+        ctx
     }
 }
 
@@ -81,7 +112,7 @@ pub fn compile_with_registry(
 
 /// 解析为 AST 根。
 pub fn parse(source: &str) -> Result<ValkyrieRoot, ValkyrieScriptError> {
-    parse_source(source).map_err(ValkyrieScriptError::parse_opaque)
+    parse_source(source).map_err(|fail| ValkyrieScriptError::parse_at(fail.reason, fail.span))
 }
 
 /// 调试：列出根上 `micro` 名。
@@ -146,5 +177,24 @@ mod tests {
         });
         let _ = vm.run(&mut StdHost).unwrap();
         assert_eq!(called.get(), 1);
+    }
+
+    #[test]
+    fn parse_error_carries_source_span() {
+        let err = parse("return @").expect_err("illegal char");
+        let span = err.span().expect("span");
+        assert_eq!(span.start, 7);
+        assert_eq!(span.end, 8);
+        assert_eq!(err.to_string(), "spark.script.valkyrie.parse");
+        match &err {
+            ValkyrieScriptError::Parse { args, .. } => {
+                assert!(matches!(
+                    args.get("reason"),
+                    Some(ErrorArg::String(s)) if s.as_ref().starts_with("illegal_char:")
+                ));
+                assert!(matches!(args.get("span"), Some(ErrorArg::Span(_))));
+            }
+            _ => panic!("expected Parse"),
+        }
     }
 }

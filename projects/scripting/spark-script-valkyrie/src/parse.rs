@@ -2,6 +2,12 @@
 //!
 //! 上游 `oak-valkyrie` Builder 对表达式语句还原仍不稳定，本前端用手写子集
 //! 覆盖 `micro` / `let` / `return` / `if` / `while` / 调用，保证归一到 `spark-vm`。
+//!
+//! 词法错误携带字节 [`SourceSpan`]，供结构化脚本错误挂接。
+
+use std::sync::Arc;
+
+use spark_diagnostics::SourceSpan;
 
 use crate::ast::{BinOp, Expr, Item, Micro, Stmt, UnaryOp, ValkyrieRoot};
 
@@ -42,43 +48,82 @@ enum Tok {
     Eof,
 }
 
-pub(crate) fn parse(source: &str) -> Result<ValkyrieRoot, String> {
+#[derive(Debug, Clone, PartialEq)]
+struct Spanned {
+    kind: Tok,
+    span: SourceSpan,
+}
+
+/// 解析失败：机器令牌 + 源码范围（非用户句子）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ParseFail {
+    pub reason: Arc<str>,
+    pub span: SourceSpan,
+}
+
+impl ParseFail {
+    fn new(reason: impl Into<Arc<str>>, span: SourceSpan) -> Self {
+        Self {
+            reason: reason.into(),
+            span,
+        }
+    }
+
+    fn at(reason: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
+        Self::new(reason, SourceSpan::new(start, end))
+    }
+}
+
+pub(crate) fn parse(source: &str) -> Result<ValkyrieRoot, ParseFail> {
     let tokens = lex(source)?;
     let mut p = Parser { tokens, i: 0 };
     p.parse_root()
 }
 
 struct Parser {
-    tokens: Vec<Tok>,
+    tokens: Vec<Spanned>,
     i: usize,
 }
 
 impl Parser {
-    fn peek(&self) -> &Tok {
-        self.tokens.get(self.i).unwrap_or(&Tok::Eof)
+    fn peek(&self) -> &Spanned {
+        self.tokens
+            .get(self.i)
+            .unwrap_or_else(|| self.tokens.last().expect("lex always emits Eof"))
     }
 
-    fn bump(&mut self) -> Tok {
-        let t = self.tokens.get(self.i).cloned().unwrap_or(Tok::Eof);
-        if self.i < self.tokens.len() {
+    fn peek_kind(&self) -> &Tok {
+        &self.peek().kind
+    }
+
+    fn bump(&mut self) -> Spanned {
+        let t = self.peek().clone();
+        if self.i + 1 < self.tokens.len() {
             self.i += 1;
         }
         t
     }
 
-    fn eat(&mut self, expect: &Tok) -> Result<(), String> {
+    fn fail(&self, reason: impl Into<Arc<str>>) -> ParseFail {
+        ParseFail::new(reason, self.peek().span)
+    }
+
+    fn eat(&mut self, expect: &Tok) -> Result<(), ParseFail> {
         let got = self.bump();
-        if &got == expect {
+        if &got.kind == expect {
             Ok(())
         } else {
-            Err(format!("expected_token:{expect:?}:got:{got:?}"))
+            Err(ParseFail::new(
+                format!("expected_token:{expect:?}:got:{:?}", got.kind),
+                got.span,
+            ))
         }
     }
 
-    fn parse_root(&mut self) -> Result<ValkyrieRoot, String> {
+    fn parse_root(&mut self) -> Result<ValkyrieRoot, ParseFail> {
         let mut items = Vec::new();
-        while !matches!(self.peek(), Tok::Eof) {
-            if matches!(self.peek(), Tok::KwMicro) {
+        while !matches!(self.peek_kind(), Tok::Eof) {
+            if matches!(self.peek_kind(), Tok::KwMicro) {
                 items.push(Item::Micro(self.parse_micro()?));
             } else {
                 items.push(Item::Stmt(self.parse_stmt()?));
@@ -87,22 +132,37 @@ impl Parser {
         Ok(ValkyrieRoot { items })
     }
 
-    fn parse_micro(&mut self) -> Result<Micro, String> {
+    fn parse_micro(&mut self) -> Result<Micro, ParseFail> {
         self.eat(&Tok::KwMicro)?;
-        // 兼容 legacy `fn`
         let name = match self.bump() {
-            Tok::Ident(n) => n,
-            other => return Err(format!("expected_micro_name:{other:?}")),
+            Spanned {
+                kind: Tok::Ident(name),
+                ..
+            } => name,
+            other => {
+                return Err(ParseFail::new(
+                    format!("expected_micro_name:{:?}", other.kind),
+                    other.span,
+                ));
+            }
         };
         self.eat(&Tok::LParen)?;
         let mut params = Vec::new();
-        if !matches!(self.peek(), Tok::RParen) {
+        if !matches!(self.peek_kind(), Tok::RParen) {
             loop {
                 match self.bump() {
-                    Tok::Ident(p) => params.push(p),
-                    other => return Err(format!("expected_param_name:{other:?}")),
+                    Spanned {
+                        kind: Tok::Ident(p),
+                        ..
+                    } => params.push(p),
+                    other => {
+                        return Err(ParseFail::new(
+                            format!("expected_param_name:{:?}", other.kind),
+                            other.span,
+                        ));
+                    }
                 }
-                if matches!(self.peek(), Tok::Comma) {
+                if matches!(self.peek_kind(), Tok::Comma) {
                     self.bump();
                     continue;
                 }
@@ -114,23 +174,31 @@ impl Parser {
         Ok(Micro { name, params, body })
     }
 
-    fn parse_block_stmts(&mut self) -> Result<Vec<Stmt>, String> {
+    fn parse_block_stmts(&mut self) -> Result<Vec<Stmt>, ParseFail> {
         self.eat(&Tok::LBrace)?;
         let mut body = Vec::new();
-        while !matches!(self.peek(), Tok::RBrace | Tok::Eof) {
+        while !matches!(self.peek_kind(), Tok::RBrace | Tok::Eof) {
             body.push(self.parse_stmt()?);
         }
         self.eat(&Tok::RBrace)?;
         Ok(body)
     }
 
-    fn parse_stmt(&mut self) -> Result<Stmt, String> {
-        match self.peek() {
+    fn parse_stmt(&mut self) -> Result<Stmt, ParseFail> {
+        match self.peek_kind() {
             Tok::KwLet => {
                 self.bump();
                 let name = match self.bump() {
-                    Tok::Ident(n) => n,
-                    other => return Err(format!("expected_binding_name:{other:?}")),
+                    Spanned {
+                        kind: Tok::Ident(name),
+                        ..
+                    } => name,
+                    other => {
+                        return Err(ParseFail::new(
+                            format!("expected_binding_name:{:?}", other.kind),
+                            other.span,
+                        ));
+                    }
                 };
                 self.eat(&Tok::Assign)?;
                 let value = self.parse_expr()?;
@@ -139,8 +207,8 @@ impl Parser {
             Tok::KwReturn => {
                 self.bump();
                 if matches!(
-                    self.peek(),
-                    Tok::RBrace | Tok::Eof | Tok::KwMicro | Tok::KwLet | Tok::KwIf | Tok::KwWhile | Tok::KwLoop
+                    self.peek_kind(),
+                    Tok::RBrace | Tok::Eof | Tok::KwElse | Tok::KwMicro
                 ) {
                     Ok(Stmt::Return(None))
                 } else {
@@ -151,13 +219,13 @@ impl Parser {
         }
     }
 
-    fn parse_expr(&mut self) -> Result<Expr, String> {
+    fn parse_expr(&mut self) -> Result<Expr, ParseFail> {
         self.parse_or()
     }
 
-    fn parse_or(&mut self) -> Result<Expr, String> {
+    fn parse_or(&mut self) -> Result<Expr, ParseFail> {
         let mut lhs = self.parse_and()?;
-        while matches!(self.peek(), Tok::KwOr) {
+        while matches!(self.peek_kind(), Tok::KwOr) {
             self.bump();
             let rhs = self.parse_and()?;
             lhs = Expr::Binary {
@@ -169,9 +237,9 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_and(&mut self) -> Result<Expr, String> {
+    fn parse_and(&mut self) -> Result<Expr, ParseFail> {
         let mut lhs = self.parse_cmp()?;
-        while matches!(self.peek(), Tok::KwAnd) {
+        while matches!(self.peek_kind(), Tok::KwAnd) {
             self.bump();
             let rhs = self.parse_cmp()?;
             lhs = Expr::Binary {
@@ -183,18 +251,18 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_cmp(&mut self) -> Result<Expr, String> {
+    fn parse_cmp(&mut self) -> Result<Expr, ParseFail> {
         let mut lhs = self.parse_add()?;
-        let op = match self.peek() {
-            Tok::EqEq => Some(BinOp::Eq),
-            Tok::NotEq => Some(BinOp::Ne),
-            Tok::Lt => Some(BinOp::Lt),
-            Tok::Le => Some(BinOp::Le),
-            Tok::Gt => Some(BinOp::Gt),
-            Tok::Ge => Some(BinOp::Ge),
-            _ => None,
-        };
-        if let Some(op) = op {
+        loop {
+            let op = match self.peek_kind() {
+                Tok::EqEq => BinOp::Eq,
+                Tok::NotEq => BinOp::Ne,
+                Tok::Lt => BinOp::Lt,
+                Tok::Le => BinOp::Le,
+                Tok::Gt => BinOp::Gt,
+                Tok::Ge => BinOp::Ge,
+                _ => break,
+            };
             self.bump();
             let rhs = self.parse_add()?;
             lhs = Expr::Binary {
@@ -206,15 +274,14 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_add(&mut self) -> Result<Expr, String> {
+    fn parse_add(&mut self) -> Result<Expr, ParseFail> {
         let mut lhs = self.parse_mul()?;
         loop {
-            let op = match self.peek() {
-                Tok::Plus => Some(BinOp::Add),
-                Tok::Minus => Some(BinOp::Sub),
-                _ => None,
+            let op = match self.peek_kind() {
+                Tok::Plus => BinOp::Add,
+                Tok::Minus => BinOp::Sub,
+                _ => break,
             };
-            let Some(op) = op else { break };
             self.bump();
             let rhs = self.parse_mul()?;
             lhs = Expr::Binary {
@@ -226,15 +293,14 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_mul(&mut self) -> Result<Expr, String> {
+    fn parse_mul(&mut self) -> Result<Expr, ParseFail> {
         let mut lhs = self.parse_unary()?;
         loop {
-            let op = match self.peek() {
-                Tok::Star => Some(BinOp::Mul),
-                Tok::Slash => Some(BinOp::Div),
-                _ => None,
+            let op = match self.peek_kind() {
+                Tok::Star => BinOp::Mul,
+                Tok::Slash => BinOp::Div,
+                _ => break,
             };
-            let Some(op) = op else { break };
             self.bump();
             let rhs = self.parse_unary()?;
             lhs = Expr::Binary {
@@ -246,8 +312,8 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_unary(&mut self) -> Result<Expr, String> {
-        match self.peek() {
+    fn parse_unary(&mut self) -> Result<Expr, ParseFail> {
+        match self.peek_kind() {
             Tok::Minus => {
                 self.bump();
                 Ok(Expr::Unary {
@@ -266,28 +332,45 @@ impl Parser {
         }
     }
 
-    fn parse_primary(&mut self) -> Result<Expr, String> {
-        match self.bump() {
-            Tok::Number(n) => Ok(Expr::Number(n)),
-            Tok::String(s) => Ok(Expr::String(s)),
-            Tok::KwTrue => Ok(Expr::Bool(true)),
-            Tok::KwFalse => Ok(Expr::Bool(false)),
-            Tok::KwNull => Ok(Expr::Null),
-            Tok::KwIf => self.parse_if_expr(),
-            Tok::KwWhile => self.parse_while_expr(),
-            Tok::KwLoop => {
-                // `loop while cond { ... }`
-                self.eat(&Tok::KwWhile)?;
+    fn parse_primary(&mut self) -> Result<Expr, ParseFail> {
+        match self.peek_kind().clone() {
+            Tok::KwIf => {
+                self.bump();
+                self.parse_if_expr()
+            }
+            Tok::KwWhile | Tok::KwLoop => {
+                self.bump();
                 self.parse_while_expr()
             }
+            Tok::Number(n) => {
+                self.bump();
+                Ok(Expr::Number(n))
+            }
+            Tok::String(s) => {
+                self.bump();
+                Ok(Expr::String(s))
+            }
+            Tok::KwTrue => {
+                self.bump();
+                Ok(Expr::Bool(true))
+            }
+            Tok::KwFalse => {
+                self.bump();
+                Ok(Expr::Bool(false))
+            }
+            Tok::KwNull => {
+                self.bump();
+                Ok(Expr::Null)
+            }
             Tok::Ident(name) => {
-                if matches!(self.peek(), Tok::LParen) {
+                self.bump();
+                if matches!(self.peek_kind(), Tok::LParen) {
                     self.bump();
                     let mut args = Vec::new();
-                    if !matches!(self.peek(), Tok::RParen) {
+                    if !matches!(self.peek_kind(), Tok::RParen) {
                         loop {
                             args.push(self.parse_expr()?);
-                            if matches!(self.peek(), Tok::Comma) {
+                            if matches!(self.peek_kind(), Tok::Comma) {
                                 self.bump();
                                 continue;
                             }
@@ -301,26 +384,28 @@ impl Parser {
                 }
             }
             Tok::LParen => {
+                self.bump();
                 let e = self.parse_expr()?;
                 self.eat(&Tok::RParen)?;
                 Ok(e)
             }
             Tok::LBrace => {
                 let mut body = Vec::new();
-                while !matches!(self.peek(), Tok::RBrace | Tok::Eof) {
+                self.bump();
+                while !matches!(self.peek_kind(), Tok::RBrace | Tok::Eof) {
                     body.push(self.parse_stmt()?);
                 }
                 self.eat(&Tok::RBrace)?;
                 Ok(Expr::Block(body))
             }
-            other => Err(format!("unexpected_token:{other:?}")),
+            other => Err(self.fail(format!("unexpected_token:{other:?}"))),
         }
     }
 
-    fn parse_if_expr(&mut self) -> Result<Expr, String> {
+    fn parse_if_expr(&mut self) -> Result<Expr, ParseFail> {
         let cond = self.parse_expr()?;
         let then_body = self.parse_block_stmts()?;
-        let else_body = if matches!(self.peek(), Tok::KwElse) {
+        let else_body = if matches!(self.peek_kind(), Tok::KwElse) {
             self.bump();
             Some(self.parse_block_stmts()?)
         } else {
@@ -333,7 +418,7 @@ impl Parser {
         })
     }
 
-    fn parse_while_expr(&mut self) -> Result<Expr, String> {
+    fn parse_while_expr(&mut self) -> Result<Expr, ParseFail> {
         let cond = self.parse_expr()?;
         let body = self.parse_block_stmts()?;
         Ok(Expr::While {
@@ -343,18 +428,26 @@ impl Parser {
     }
 }
 
-fn lex(source: &str) -> Result<Vec<Tok>, String> {
+fn push_tok(out: &mut Vec<Spanned>, kind: Tok, start: usize, end: usize) {
+    out.push(Spanned {
+        kind,
+        span: SourceSpan::new(start, end),
+    });
+}
+
+fn lex(source: &str) -> Result<Vec<Spanned>, ParseFail> {
     let mut out = Vec::new();
-    let chars: Vec<char> = source.chars().collect();
+    let bytes = source.as_bytes();
     let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        if c.is_whitespace() {
+    while i < bytes.len() {
+        let start = i;
+        let c = bytes[i] as char;
+        if c.is_ascii_whitespace() {
             i += 1;
             continue;
         }
-        if c == '/' && i + 1 < chars.len() && chars[i + 1] == '/' {
-            while i < chars.len() && chars[i] != '\n' {
+        if c == '/' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
+            while i < bytes.len() && bytes[i] != b'\n' {
                 i += 1;
             }
             continue;
@@ -362,49 +455,57 @@ fn lex(source: &str) -> Result<Vec<Tok>, String> {
         if c == '"' {
             i += 1;
             let mut s = String::new();
-            while i < chars.len() && chars[i] != '"' {
-                if chars[i] == '\\' && i + 1 < chars.len() {
+            while i < bytes.len() && bytes[i] != b'"' {
+                if bytes[i] == b'\\' && i + 1 < bytes.len() {
                     i += 1;
-                    s.push(chars[i]);
+                    s.push(bytes[i] as char);
                     i += 1;
                 } else {
-                    s.push(chars[i]);
+                    s.push(bytes[i] as char);
                     i += 1;
                 }
             }
-            if i >= chars.len() {
-                return Err("unclosed_string".into());
+            if i >= bytes.len() {
+                return Err(ParseFail::at("unclosed_string", start, source.len()));
             }
             i += 1;
-            out.push(Tok::String(s));
+            push_tok(&mut out, Tok::String(s), start, i);
             continue;
         }
         if c.is_ascii_digit() {
-            let start = i;
             i += 1;
-            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
-                i += 1;
+            while i < bytes.len() {
+                let ch = bytes[i] as char;
+                if ch.is_ascii_digit() || ch == '.' {
+                    i += 1;
+                } else {
+                    break;
+                }
             }
-            let text: String = chars[start..i].iter().collect();
+            let text = &source[start..i];
             let n: f64 = text
                 .parse()
-                .map_err(|_| format!("invalid_number:{text}"))?;
-            out.push(Tok::Number(n));
+                .map_err(|_| ParseFail::at(format!("invalid_number:{text}"), start, i))?;
+            push_tok(&mut out, Tok::Number(n), start, i);
             continue;
         }
         if c.is_ascii_alphabetic() || c == '_' {
-            let start = i;
             i += 1;
-            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
-                i += 1;
+            while i < bytes.len() {
+                let ch = bytes[i] as char;
+                if ch.is_ascii_alphanumeric() || ch == '_' {
+                    i += 1;
+                } else {
+                    break;
+                }
             }
-            let text: String = chars[start..i].iter().collect();
-            out.push(keyword_or_ident(&text));
+            let text = &source[start..i];
+            push_tok(&mut out, keyword_or_ident(text), start, i);
             continue;
         }
-        if i + 1 < chars.len() {
-            let two: String = chars[i..i + 2].iter().collect();
-            let tok = match two.as_str() {
+        if i + 1 < bytes.len() {
+            let two = &source[i..i + 2];
+            let tok = match two {
                 "==" => Some(Tok::EqEq),
                 "!=" => Some(Tok::NotEq),
                 "<=" => Some(Tok::Le),
@@ -414,7 +515,7 @@ fn lex(source: &str) -> Result<Vec<Tok>, String> {
                 _ => None,
             };
             if let Some(t) = tok {
-                out.push(t);
+                push_tok(&mut out, t, start, i + 2);
                 i += 2;
                 continue;
             }
@@ -433,12 +534,14 @@ fn lex(source: &str) -> Result<Vec<Tok>, String> {
             '}' => Tok::RBrace,
             ',' => Tok::Comma,
             '!' => Tok::Bang,
-            other => return Err(format!("illegal_char:{other}")),
+            other => {
+                return Err(ParseFail::at(format!("illegal_char:{other}"), start, start + 1));
+            }
         };
-        out.push(tok);
+        push_tok(&mut out, tok, start, start + 1);
         i += 1;
     }
-    out.push(Tok::Eof);
+    push_tok(&mut out, Tok::Eof, source.len(), source.len());
     Ok(out)
 }
 
