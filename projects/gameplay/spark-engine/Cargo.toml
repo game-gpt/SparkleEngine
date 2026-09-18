@@ -24,7 +24,5 @@ spark-localization = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 spark-renderer-wgpu = { workspace = true }
-serde = { version = "1", features = ["derive"] }
-toml = "0.8"
 thiserror = { workspace = true }
 tracing = { workspace = true }
