@@ -6,7 +6,7 @@ use spark_vm::{FuncProto, Module, Op};
 
 use crate::ast::{BinOp, Expr, Item, Micro, Stmt, UnaryOp, ValkyrieRoot};
 
-pub fn compile_root(root: &ValkyrieRoot, native_names: &[&str]) -> Result<Module, String> {
+pub(crate) fn compile_root(root: &ValkyrieRoot, native_names: &[&str]) -> Result<Module, String> {
     let native_set: HashSet<&str> = native_names.iter().copied().collect();
     let mut functions: Vec<FuncProto> = Vec::new();
     let mut fn_index: HashMap<String, usize> = HashMap::new();
