@@ -11,3 +11,4 @@ categories = ["game-development"]
 publish = false
 
 [dependencies]
+spark-diagnostics = { workspace = true }

@@ -1,10 +1,11 @@
 //! Spark 分级日志。可插拔 sink，不含游戏遥测 schema。
 //!
-//! 宏用法与常见日志库一致：
-//! ```ignore
-//! info!("ready");
-//! info!(target: "ac3", "chunks={}", n);
-//! ```
+//! 正式 API：[`Logger::emit`] 结构化 [`LogEvent`]（稳定 event 码 + 字段）。
+//! 格式字符串宏 / [`Logger::log`] 保留为 **raw** 路径：非结构化、非本地化、不可作程序判断。
+
+mod event;
+
+pub use event::{EventId, LogEvent};
 
 use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
@@ -155,6 +156,22 @@ impl Logger {
         LoggerBuilder::default()
     }
 
+    /// 结构化事件（首选）。
+    pub fn emit(&self, event: LogEvent) {
+        if event.level < self.min_level {
+            return;
+        }
+        let record = Record {
+            level: event.level,
+            target: event.target,
+            message: event.code_line(),
+        };
+        for sink in self.sinks.iter() {
+            sink.log(&record);
+        }
+    }
+
+    /// Raw 字符串日志（临时调试；非结构化、非 Locale 权威）。
     pub fn log(&self, level: Level, target: &'static str, message: impl Into<String>) {
         if level < self.min_level {
             return;
@@ -167,6 +184,11 @@ impl Logger {
         for sink in self.sinks.iter() {
             sink.log(&record);
         }
+    }
+
+    /// 同 [`Self::log`]，语义上标明 raw/debug。
+    pub fn raw_debug(&self, target: &'static str, message: impl Into<String>) {
+        self.log(Level::Debug, target, message);
     }
 
     pub fn trace(&self, target: &'static str, message: impl Into<String>) {
