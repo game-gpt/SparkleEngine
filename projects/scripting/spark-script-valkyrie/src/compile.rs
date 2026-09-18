@@ -237,7 +237,7 @@ fn compile_expr(ctx: &mut Ctx<'_>, e: &Expr) -> Result<(), String> {
         Expr::Call { name, args } => {
             if name == "print" || name == "puts" {
                 if args.len() != 1 {
-                    return Err("print/puts 仅支持单参数".into());
+                    return Err("print_arity_one".into());
                 }
                 compile_expr(ctx, &args[0])?;
                 ctx.f.emit(Op::Print);
@@ -264,7 +264,7 @@ fn compile_expr(ctx: &mut Ctx<'_>, e: &Expr) -> Result<(), String> {
                 ctx.f.emit_u8(args.len() as u8);
                 return Ok(());
             }
-            return Err(format!("未知函数：{name}"));
+            return Err(format!("unknown_function:{name}"));
         }
         Expr::If {
             cond,

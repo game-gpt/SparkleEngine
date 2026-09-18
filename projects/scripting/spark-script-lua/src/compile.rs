@@ -75,16 +75,16 @@ pub fn compile_root(root: &LuaRoot, native_names: &[&str]) -> Result<Module, Str
 
 fn function_name(f: &LuaFunctionStatement) -> Result<String, String> {
     if f.receiver.is_some() {
-        return Err("暂不支持 method 语法 function a:b()".into());
+        return Err("unsupported_method_def".into());
     }
     if f.name.len() != 1 {
         return Err(format!(
-            "暂不支持限定函数名：{}",
+            "unsupported_qualified_name:{}",
             f.name.join(".")
         ));
     }
     if f.is_vararg {
-        return Err("暂不支持可变参数 ...".into());
+        return Err("unsupported_varargs".into());
     }
     Ok(f.name[0].clone())
 }
@@ -178,33 +178,33 @@ fn compile_statement(ctx: &mut Ctx<'_>, stmt: &LuaStatement) -> Result<(), Strin
             match r.values.as_slice() {
                 [] => ctx.f.emit(Op::LoadNull),
                 [v] => compile_expr(ctx, v)?,
-                _ => return Err("暂只支持单返回值".into()),
+                _ => return Err("single_return_only".into()),
             }
             ctx.f.emit(Op::Return);
             Ok(())
         }
         LuaStatement::If(i) => compile_if(ctx, i),
         LuaStatement::While(w) => compile_while(ctx, w),
-        LuaStatement::Function(_) => Err("嵌套 function 声明暂不支持".into()),
+        LuaStatement::Function(_) => Err("nested_function_unsupported".into()),
         LuaStatement::Do(block) => {
             for s in block {
                 compile_statement(ctx, s)?;
             }
             Ok(())
         }
-        other => Err(format!("暂不支持的语句：{other:?}")),
+        other => Err(format!("unsupported_stmt:{other:?}")),
     }
 }
 
 fn compile_local(ctx: &mut Ctx<'_>, l: &LuaLocalStatement) -> Result<(), String> {
     if l.names.len() != 1 {
-        return Err("暂只支持单个 local 绑定".into());
+        return Err("single_local_binding_only".into());
     }
     let name = &l.names[0];
     match l.values.as_slice() {
         [] => ctx.f.emit(Op::LoadNull),
         [v] => compile_expr(ctx, v)?,
-        _ => return Err("暂只支持单个 local 初值".into()),
+        _ => return Err("single_local_init_only".into()),
     }
     let slot = ctx.alloc_local(name);
     ctx.f.emit(Op::StoreLocal);
@@ -214,10 +214,10 @@ fn compile_local(ctx: &mut Ctx<'_>, l: &LuaLocalStatement) -> Result<(), String>
 
 fn compile_assignment(ctx: &mut Ctx<'_>, a: &LuaAssignmentStatement) -> Result<(), String> {
     if a.targets.len() != 1 || a.values.len() != 1 {
-        return Err("暂只支持单目标赋值".into());
+        return Err("single_assign_target_only".into());
     }
     let LuaExpression::Identifier(name) = &a.targets[0] else {
-        return Err("暂只支持标识符赋值".into());
+        return Err("ident_assign_only".into());
     };
     compile_expr(ctx, &a.values[0])?;
     let slot = ctx.alloc_local(name);
@@ -228,7 +228,7 @@ fn compile_assignment(ctx: &mut Ctx<'_>, a: &LuaAssignmentStatement) -> Result<(
 
 fn compile_if(ctx: &mut Ctx<'_>, i: &LuaIfStatement) -> Result<(), String> {
     if !i.else_ifs.is_empty() {
-        return Err("暂不支持 elseif".into());
+        return Err("unsupported_elseif".into());
     }
     compile_expr(ctx, &i.condition)?;
     ctx.f.emit(Op::JumpIfFalse);
@@ -306,7 +306,7 @@ fn compile_expr(ctx: &mut Ctx<'_>, expr: &LuaExpression) -> Result<(), String> {
             match u.op.as_str() {
                 "-" => ctx.f.emit(Op::Neg),
                 "not" => ctx.f.emit(Op::Not),
-                other => return Err(format!("不支持的一元算符：{other}")),
+                other => return Err(format!("unsupported_unary:{other}")),
             }
         }
         LuaExpression::Binary(b) => match b.op.as_str() {
@@ -326,13 +326,13 @@ fn compile_expr(ctx: &mut Ctx<'_>, expr: &LuaExpression) -> Result<(), String> {
                     "<=" => Op::Le,
                     ">" => Op::Gt,
                     ">=" => Op::Ge,
-                    _ => return Err(format!("不支持的二元算符：{other}")),
+                    _ => return Err(format!("unsupported_binary:{other}")),
                 };
                 ctx.f.emit(op);
             }
         },
         LuaExpression::Call(c) => compile_call(ctx, c)?,
-        other => return Err(format!("暂不支持的表达式：{other:?}")),
+        other => return Err(format!("unsupported_expr:{other:?}")),
     }
     Ok(())
 }
@@ -341,7 +341,7 @@ fn compile_call(ctx: &mut Ctx<'_>, c: &LuaCallExpression) -> Result<(), String> 
     if let LuaExpression::Identifier(name) = &c.function {
         if name == "print" || name == "println" {
             if c.arguments.len() != 1 {
-                return Err("print 仅支持单参数".into());
+                return Err("print_arity_one".into());
             }
             compile_expr(ctx, &c.arguments[0])?;
             ctx.f.emit(Op::Print);

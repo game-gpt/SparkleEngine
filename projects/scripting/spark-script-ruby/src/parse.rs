@@ -70,7 +70,7 @@ impl Parser {
         if &got == expect {
             Ok(())
         } else {
-            Err(format!("期望 {expect:?}，得到 {got:?}"))
+            Err(format!("expected_token:{expect:?}:got:{got:?}"))
         }
     }
 
@@ -90,7 +90,7 @@ impl Parser {
         self.eat(&Tok::KwDef)?;
         let name = match self.bump() {
             Tok::Ident(n) => n,
-            other => return Err(format!("期望方法名，得到 {other:?}")),
+            other => return Err(format!("expected_method_name:{other:?}")),
         };
         let mut params = Vec::new();
         if matches!(self.peek(), Tok::LParen) {
@@ -99,7 +99,7 @@ impl Parser {
                 loop {
                     match self.bump() {
                         Tok::Ident(p) => params.push(p),
-                        other => return Err(format!("期望参数名，得到 {other:?}")),
+                        other => return Err(format!("expected_param_name:{other:?}")),
                     }
                     if matches!(self.peek(), Tok::Comma) {
                         self.bump();
@@ -173,7 +173,7 @@ impl Parser {
             }
             Some(eb)
         } else if matches!(self.peek(), Tok::KwElsif) {
-            return Err("暂不支持 elsif".into());
+            return Err("unsupported_elsif".into());
         } else {
             None
         };
@@ -339,7 +339,7 @@ impl Parser {
                 self.eat(&Tok::RParen)?;
                 Ok(e)
             }
-            other => Err(format!("意外记号：{other:?}")),
+            other => Err(format!("unexpected_token:{other:?}")),
         }
     }
 }
@@ -375,7 +375,7 @@ fn lex(source: &str) -> Result<Vec<Tok>, String> {
                 }
             }
             if i >= chars.len() {
-                return Err("未闭合字符串".into());
+                return Err("unclosed_string".into());
             }
             i += 1;
             out.push(Tok::String(s));
@@ -390,7 +390,7 @@ fn lex(source: &str) -> Result<Vec<Tok>, String> {
             let text: String = chars[start..i].iter().collect();
             let n: f64 = text
                 .parse()
-                .map_err(|_| format!("非法数字：{text}"))?;
+                .map_err(|_| format!("invalid_number:{text}"))?;
             out.push(Tok::Number(n));
             continue;
         }
@@ -434,7 +434,7 @@ fn lex(source: &str) -> Result<Vec<Tok>, String> {
             ')' => Tok::RParen,
             ',' => Tok::Comma,
             '!' => Tok::Bang,
-            other => return Err(format!("非法字符：{other}")),
+            other => return Err(format!("illegal_char:{other}")),
         };
         out.push(tok);
         i += 1;
