@@ -45,7 +45,7 @@ impl AudioDecoder {
         track_id: Option<u32>,
     ) -> Result<PcmAudio, MediaError> {
         let path = path.as_ref();
-        let file = File::open(path).map_err(|e| MediaError::open_path(path, e.to_string()))?;
+        let file = File::open(path).map_err(|e| MediaError::open_path(path, &e))?;
         let mut hint = Hint::new();
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             hint.with_extension(ext);
