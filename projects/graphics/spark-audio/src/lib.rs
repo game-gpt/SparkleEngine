@@ -84,7 +84,11 @@ impl AudioQueue {
                         if let Some(out) = errors.as_deref_mut() {
                             out.push(e);
                         } else {
-                            tracing::warn!(error = %e, path = %path.display(), "音频文件播放失败");
+                            tracing::warn!(
+                                event = "spark.audio.play_file_failed",
+                                error = %e,
+                                path = %path.display()
+                            );
                         }
                     }
                 }
@@ -104,7 +108,7 @@ impl AudioBus {
     pub fn try_open() -> Self {
         match OutputStream::try_default() {
             Ok((stream, handle)) => {
-                tracing::info!("音频输出已就绪");
+                tracing::info!(event = "spark.audio.output_ready");
                 Self {
                     _stream: Some(stream),
                     handle: Some(handle),
@@ -112,7 +116,7 @@ impl AudioBus {
                 }
             }
             Err(err) => {
-                tracing::warn!(?err, "音频输出不可用，静默运行");
+                tracing::warn!(event = "spark.audio.output_unavailable", ?err);
                 Self {
                     _stream: None,
                     handle: None,

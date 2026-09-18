@@ -117,7 +117,7 @@ impl GlyphCache {
             self.row_h = 0;
         }
         if self.cursor_y + gh + 1 >= self.atlas_h {
-            tracing::warn!("字形图集已满，跳过字符");
+            tracing::warn!(event = "spark.font.atlas_full");
             return None;
         }
         for row in 0..metrics.height {
