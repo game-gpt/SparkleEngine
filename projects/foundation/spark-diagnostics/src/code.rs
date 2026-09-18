@@ -209,22 +209,6 @@ pub mod codes {
     pub fn gpu_event_loop() -> ErrorCode {
         ErrorCode::new("spark", "gpu.event_loop")
     }
-
-    pub fn inventory_full() -> ErrorCode {
-        ErrorCode::new("spark", "inventory.full")
-    }
-
-    pub fn inventory_invalid() -> ErrorCode {
-        ErrorCode::new("spark", "inventory.invalid")
-    }
-
-    pub fn script_choice_invalid() -> ErrorCode {
-        ErrorCode::new("spark", "script.choice_invalid")
-    }
-
-    pub fn live2d_model_invalid() -> ErrorCode {
-        ErrorCode::new("spark", "live2d.model_invalid")
-    }
 }
 
 #[cfg(test)]

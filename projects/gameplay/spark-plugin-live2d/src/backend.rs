@@ -1,8 +1,12 @@
 //! Live2D 后端接口（与具体 SDK 解耦）。
 
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_core::{ErrorArg, ErrorCode, SparkError};
 
 use crate::runtime::Live2dModelId;
+
+fn model_invalid() -> ErrorCode {
+    ErrorCode::new("spark.plugin.live2d", "model_invalid")
+}
 
 /// Cubism / 其它运行时的可替换后端。
 pub trait Live2dBackend: Send {
@@ -88,6 +92,5 @@ impl Live2dBackend for NullLive2dBackend {
 }
 
 fn invalid_model(id: Live2dModelId) -> SparkError {
-    SparkError::new(codes::live2d_model_invalid())
-        .arg("id", ErrorArg::Unsigned(id.0 as u64))
+    SparkError::new(model_invalid()).arg("id", ErrorArg::Unsigned(id.0 as u64))
 }
