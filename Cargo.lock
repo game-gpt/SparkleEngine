@@ -2898,7 +2898,7 @@ dependencies = [
 name = "spark-circuit"
 version = "0.1.0"
 dependencies = [
- "thiserror 2.0.20",
+ "spark-core",
 ]
 
 [[package]]
@@ -2982,7 +2982,6 @@ version = "0.1.0"
 dependencies = [
  "spark-core",
  "spark-engine",
- "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -2993,7 +2992,6 @@ dependencies = [
  "spark-core",
  "spark-engine",
  "spark-geometry",
- "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -3037,7 +3035,6 @@ dependencies = [
  "spark-core",
  "spark-geometry",
  "spark-renderer",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3046,7 +3043,6 @@ version = "0.1.0"
 dependencies = [
  "image",
  "spark-core",
- "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -3094,7 +3090,6 @@ dependencies = [
  "spark-asset",
  "spark-core",
  "spark-geometry",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3102,7 +3097,6 @@ name = "spark-net"
 version = "0.1.0"
 dependencies = [
  "spark-core",
- "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -3112,7 +3106,6 @@ version = "0.1.0"
 dependencies = [
  "spark-core",
  "spark-geometry",
- "thiserror 2.0.20",
  "tracing",
 ]
 

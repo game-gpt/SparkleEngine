@@ -1,16 +1,32 @@
 //! 客户端预测时钟。
 
-use thiserror::Error;
+use std::fmt;
 
 use crate::channel::Sequence;
 
-#[derive(Debug, Error, PartialEq, Eq)]
+/// 预测时钟错误。`Display` 只输出稳定码。
+#[derive(Debug, PartialEq, Eq)]
 pub enum PredictionError {
-    #[error("权威 tick 回退")]
     TickRewind,
-    #[error("输入缓冲溢出")]
     BufferOverflow,
 }
+
+impl PredictionError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::TickRewind => "spark.net.prediction.tick_rewind",
+            Self::BufferOverflow => "spark.net.prediction.buffer_overflow",
+        }
+    }
+}
+
+impl fmt::Display for PredictionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for PredictionError {}
 
 /// 本地预测 tick 与待确认输入序号。
 #[derive(Debug, Clone)]

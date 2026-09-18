@@ -31,7 +31,7 @@ pub(crate) fn import_skeleton(
         return Ok(None);
     }
     if joint_nodes.len() > MAX_JOINTS {
-        return Err(GltfError::Message(format!(
+        return Err(GltfError::invalid(format!(
             "关节数 {} 超过首切上限 {MAX_JOINTS}",
             joint_nodes.len()
         )));
@@ -42,8 +42,8 @@ pub(crate) fn import_skeleton(
         None => vec![Mat4::IDENTITY; joint_nodes.len()],
     };
     if ibm.len() != joint_nodes.len() {
-        return Err(GltfError::Message(
-            "inverseBindMatrices 长度与 joints 不一致".into(),
+        return Err(GltfError::invalid(
+            "inverseBindMatrices 长度与 joints 不一致",
         ));
     }
 
@@ -267,7 +267,7 @@ fn topo_joint_order(joint_nodes: &[gltf::Node]) -> Result<Vec<usize>, GltfError>
         }
     }
     if order.len() != n {
-        return Err(GltfError::Message("皮肤关节层级存在环".into()));
+        return Err(GltfError::invalid("皮肤关节层级存在环"));
     }
     Ok(order)
 }
