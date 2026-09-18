@@ -48,7 +48,7 @@ packages/
 |-------|------|
 | `spark-core` | 基础类型与错误别名 |
 | `spark-diagnostics` | 结构化 Error / Diagnostic / ErrorArgs（无用户最终句子） |
-| `spark-logger` | 分级日志、目标过滤与可插拔 sink |
+| `spark-logger` | 分级日志、可插拔 sink、结构化 `LogEvent`（`spark_event!`） |
 | `spark-geometry` | 2D/3D 几何：向量、`Quat`/`Trs`/`Mat4`、圆/射线、变换与相交 |
 | `spark-ecs` | Archetype ECS：Entity / Component / Query / Resource / Schedule |
 | `spark-time` | 固定/可变时间步、缩放与暂停 |
