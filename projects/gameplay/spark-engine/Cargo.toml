@@ -24,5 +24,4 @@ spark-localization = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 spark-renderer-wgpu = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }

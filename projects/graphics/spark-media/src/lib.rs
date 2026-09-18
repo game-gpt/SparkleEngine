@@ -13,31 +13,93 @@ pub use decode::{AudioDecoder, PcmAudio};
 pub use demux::{MediaPacket, MediaReader, PacketKind};
 pub use probe::{probe_bytes, probe_path, AudioTrackInfo, MediaInfo, TrackInfo, VideoTrackInfo};
 
-use spark_core::SparkError;
-use thiserror::Error;
+use std::fmt;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-#[derive(Debug, Error)]
+use spark_core::{ErrorArg, SparkError};
+
+/// 媒体层结构化错误。`Display` 只输出稳定码。
+#[derive(Debug)]
 pub enum MediaError {
-    #[error("{0}")]
-    Message(String),
-    #[error("无音频轨")]
+    Open {
+        path: Option<PathBuf>,
+        detail: String,
+    },
     NoAudioTrack,
-    #[error("无视频轨")]
     NoVideoTrack,
-    #[error("编解码不支持：{0}")]
-    UnsupportedCodec(String),
-    #[error("已到流末尾")]
+    UnsupportedCodec { codec: String },
     EndOfStream,
+    Decode { detail: String },
 }
+
+impl MediaError {
+    pub fn open(path: impl Into<Option<PathBuf>>, detail: impl Into<String>) -> Self {
+        Self::Open {
+            path: path.into(),
+            detail: detail.into(),
+        }
+    }
+
+    pub fn open_path(path: impl Into<PathBuf>, detail: impl Into<String>) -> Self {
+        Self::Open {
+            path: Some(path.into()),
+            detail: detail.into(),
+        }
+    }
+
+    pub fn decode(detail: impl Into<String>) -> Self {
+        Self::Decode {
+            detail: detail.into(),
+        }
+    }
+
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Open { .. } => "spark.media.open",
+            Self::NoAudioTrack => "spark.media.no_audio_track",
+            Self::NoVideoTrack => "spark.media.no_video_track",
+            Self::UnsupportedCodec { .. } => "spark.media.unsupported_codec",
+            Self::EndOfStream => "spark.media.end_of_stream",
+            Self::Decode { .. } => "spark.media.decode",
+        }
+    }
+}
+
+impl fmt::Display for MediaError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl std::error::Error for MediaError {}
 
 impl From<MediaError> for SparkError {
     fn from(e: MediaError) -> Self {
-        SparkError::Message(e.to_string())
+        let mut err = SparkError::new(spark_core::ErrorCode::parse(e.code()));
+        match &e {
+            MediaError::Open { path, detail } => {
+                if let Some(p) = path {
+                    err = err.arg(
+                        "path",
+                        ErrorArg::String(Arc::from(p.to_string_lossy().as_ref())),
+                    );
+                }
+                err.arg("detail", ErrorArg::String(Arc::from(detail.as_str())))
+            }
+            MediaError::UnsupportedCodec { codec } => {
+                err.arg("codec", ErrorArg::String(Arc::from(codec.as_str())))
+            }
+            MediaError::Decode { detail } => {
+                err.arg("detail", ErrorArg::String(Arc::from(detail.as_str())))
+            }
+            _ => err,
+        }
     }
 }
 
 impl From<symphonia::core::errors::Error> for MediaError {
     fn from(e: symphonia::core::errors::Error) -> Self {
-        MediaError::Message(e.to_string())
+        MediaError::decode(e.to_string())
     }
 }

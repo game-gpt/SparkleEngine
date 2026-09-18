@@ -26,7 +26,7 @@ pub fn discover_and_order(mods_root: &Path) -> Result<Vec<ModManifest>, EngineEr
         return Ok(Vec::new());
     }
     let rd = std::fs::read_dir(mods_root).map_err(|e| {
-        EngineError::Message(format!("读取模组根失败 {}: {e}", mods_root.display()))
+        EngineError::io(mods_root.display().to_string(), e.to_string())
     })?;
     for ent in rd.flatten() {
         let p = ent.path();
@@ -39,7 +39,7 @@ pub fn discover_and_order(mods_root: &Path) -> Result<Vec<ModManifest>, EngineEr
         }
         let m = ModManifest::from_path(&von)?;
         if by_id.contains_key(&m.id) {
-            return Err(EngineError::Message(format!("重复模组 id `{}`", m.id)));
+            return Err(EngineError::DuplicateMod { id: m.id });
         }
         by_id.insert(m.id.clone(), m);
     }
@@ -48,7 +48,10 @@ pub fn discover_and_order(mods_root: &Path) -> Result<Vec<ModManifest>, EngineEr
     for m in by_id.values() {
         for dep in &m.dependencies {
             if !by_id.contains_key(dep) {
-                return Err(EngineError::MissingDep(m.id.clone(), dep.clone()));
+                return Err(EngineError::MissingDep {
+                    mod_id: m.id.clone(),
+                    dep: dep.clone(),
+                });
             }
         }
     }
@@ -101,7 +104,9 @@ fn topological_sort(
     }
     if out.len() != ids.len() {
         let left: Vec<_> = ids.into_iter().filter(|i| !seen.contains(i)).collect();
-        return Err(EngineError::CyclicDeps(left.join(", ")));
+        return Err(EngineError::CyclicDeps {
+            mods: left.join(", "),
+        });
     }
     Ok(out)
 }

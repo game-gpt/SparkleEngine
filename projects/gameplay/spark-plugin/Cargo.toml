@@ -13,5 +13,4 @@ publish = false
 [dependencies]
 spark-gc = { workspace = true }
 spark-vm = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }

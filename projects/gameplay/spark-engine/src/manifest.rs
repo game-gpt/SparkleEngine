@@ -5,8 +5,6 @@
 use std::fs;
 use std::path::Path;
 
-use spark_core::SparkError;
-
 use crate::EngineError;
 
 /// 模组清单。
@@ -26,22 +24,19 @@ impl ModManifest {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, EngineError> {
         let path = path.as_ref();
         let text = fs::read_to_string(path).map_err(|e| {
-            EngineError::Spark(SparkError::Message(format!(
-                "读取清单失败 {}: {e}",
-                path.display()
-            )))
+            EngineError::io(path.display().to_string(), e.to_string())
         })?;
-        let mut m = parse_mod_von(&text).map_err(|e| {
-            EngineError::Message(format!("解析清单失败 {}: {e}", path.display()))
+        let mut m = parse_mod_von(&text).map_err(|detail| EngineError::ManifestParse {
+            path: path.display().to_string(),
+            detail,
         })?;
         if m.name.is_empty() {
             m.name = m.id.clone();
         }
         if m.id.is_empty() {
-            return Err(EngineError::Message(format!(
-                "清单缺少 id：{}",
-                path.display()
-            )));
+            return Err(EngineError::ManifestMissingId {
+                path: path.display().to_string(),
+            });
         }
         Ok(m)
     }
