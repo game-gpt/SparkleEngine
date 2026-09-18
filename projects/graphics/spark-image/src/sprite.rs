@@ -1,6 +1,6 @@
 //! 精灵与网格图集裁切。
 
-use spark_core::{Rect, SparkError, Vec2};
+use spark_core::{ErrorArg, Rect, SparkError, Vec2, codes};
 
 use crate::{validate_region, PixelImage};
 
@@ -83,10 +83,11 @@ impl SpriteSheet {
     /// 按行列取精灵（列先行后，原点左上）。
     pub fn sprite_at(&self, col: u32, row: u32) -> Result<Sprite, SparkError> {
         if col >= self.columns || row >= self.rows {
-            return Err(SparkError::internal(format!(
-                "精灵格越界 ({col},{row}) 于 {}x{}",
-                self.columns, self.rows
-            )));
+            return Err(SparkError::new(codes::image_sprite_out_of_bounds())
+                .arg("col", ErrorArg::Unsigned(col as u64))
+                .arg("row", ErrorArg::Unsigned(row as u64))
+                .arg("columns", ErrorArg::Unsigned(self.columns as u64))
+                .arg("rows", ErrorArg::Unsigned(self.rows as u64)));
         }
         let x = self.margin_x + col * (self.cell_w + self.spacing_x);
         let y = self.margin_y + row * (self.cell_h + self.spacing_y);
@@ -101,7 +102,8 @@ impl SpriteSheet {
     /// 按线性下标取精灵（行主序）。
     pub fn sprite_index(&self, index: u32) -> Result<Sprite, SparkError> {
         if self.columns == 0 {
-            return Err(SparkError::internal("精灵表列数为 0"));
+            return Err(SparkError::new(codes::image_sprite_grid_invalid())
+                .arg("reason", ErrorArg::String("zero_columns".into())));
         }
         let col = index % self.columns;
         let row = index / self.columns;
@@ -111,16 +113,18 @@ impl SpriteSheet {
     /// 从图像尺寸推断格大小（无边距无间距时）。
     pub fn from_image(image: &PixelImage, columns: u32, rows: u32) -> Result<Self, SparkError> {
         if columns == 0 || rows == 0 {
-            return Err(SparkError::internal("精灵表行列须为正"));
+            return Err(SparkError::new(codes::image_sprite_grid_invalid())
+                .arg("reason", ErrorArg::String("non_positive_grid".into()))
+                .arg("columns", ErrorArg::Unsigned(columns as u64))
+                .arg("rows", ErrorArg::Unsigned(rows as u64)));
         }
         if image.width() % columns != 0 || image.height() % rows != 0 {
-            return Err(SparkError::internal(format!(
-                "图像 {}x{} 无法整除为 {}x{} 格",
-                image.width(),
-                image.height(),
-                columns,
-                rows
-            )));
+            return Err(SparkError::new(codes::image_sprite_grid_invalid())
+                .arg("reason", ErrorArg::String("not_divisible".into()))
+                .arg("img_w", ErrorArg::Unsigned(image.width() as u64))
+                .arg("img_h", ErrorArg::Unsigned(image.height() as u64))
+                .arg("columns", ErrorArg::Unsigned(columns as u64))
+                .arg("rows", ErrorArg::Unsigned(rows as u64)));
         }
         Ok(Self::grid(
             columns,

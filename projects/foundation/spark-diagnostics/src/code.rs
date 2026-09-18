@@ -121,6 +121,46 @@ pub mod codes {
     pub fn localization_locale_invalid() -> ErrorCode {
         ErrorCode::new("spark", "localization.locale_invalid")
     }
+
+    pub fn image_dimension_overflow() -> ErrorCode {
+        ErrorCode::new("spark", "image.dimension_overflow")
+    }
+
+    pub fn image_rgba_length_mismatch() -> ErrorCode {
+        ErrorCode::new("spark", "image.rgba_length_mismatch")
+    }
+
+    pub fn image_decode() -> ErrorCode {
+        ErrorCode::new("spark", "image.decode")
+    }
+
+    pub fn image_pixel_out_of_bounds() -> ErrorCode {
+        ErrorCode::new("spark", "image.pixel_out_of_bounds")
+    }
+
+    pub fn image_region_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "image.region_invalid")
+    }
+
+    pub fn image_region_out_of_bounds() -> ErrorCode {
+        ErrorCode::new("spark", "image.region_out_of_bounds")
+    }
+
+    pub fn image_sprite_out_of_bounds() -> ErrorCode {
+        ErrorCode::new("spark", "image.sprite_out_of_bounds")
+    }
+
+    pub fn image_sprite_grid_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "image.sprite_grid_invalid")
+    }
+
+    pub fn image_nine_margin_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "image.nine_margin_invalid")
+    }
+
+    pub fn image_dest_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "image.dest_invalid")
+    }
 }
 
 #[cfg(test)]
