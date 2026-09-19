@@ -15,6 +15,7 @@ mod compile;
 mod coverage;
 mod diagnostic;
 mod document;
+mod document_von;
 mod eval;
 mod json;
 mod locale;
@@ -40,6 +41,7 @@ pub use diagnostic::{DiagnosticFlags, DiagnosticRecord, MessageDiagnostic};
 pub use document::{
     ArgumentFormat, LocalizationDocument, MessageDefinition, MessageName, MessageNode, SelectKind,
 };
+pub use document_von::{DocumentVonError, document_from_von_str};
 pub use json::{JsonError, document_from_json_slice, document_from_json_str};
 pub use locale::{
     LocaleId, LocaleParseError, LocaleRequest, TextDirection, build_fallback_chain, negotiate,
