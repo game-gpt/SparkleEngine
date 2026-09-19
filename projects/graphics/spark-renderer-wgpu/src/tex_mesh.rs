@@ -114,6 +114,7 @@ impl TexMeshGpu {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -370,38 +371,13 @@ impl TexMeshGpu {
         uploads: &[(TextureId, RgbaImage)],
     ) -> Result<(), SparkError> {
         for (id, img) in uploads {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("mesh3d-albedo"),
-                size: wgpu::Extent3d {
-                    width: img.width,
-                    height: img.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
+            let texture = crate::mipmap::create_rgba_texture_with_mips(
+                device,
+                queue,
+                "mesh3d-albedo",
+                img.width,
+                img.height,
                 &img.rgba,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(img.width * 4),
-                    rows_per_image: Some(img.height),
-                },
-                wgpu::Extent3d {
-                    width: img.width,
-                    height: img.height,
-                    depth_or_array_layers: 1,
-                },
             );
             let view = texture.create_view(&Default::default());
             let bind = self.make_tex_bind(device, &view);
