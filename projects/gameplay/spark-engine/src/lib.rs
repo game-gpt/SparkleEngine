@@ -9,6 +9,7 @@
 //! Rust 宿主若直接需要能力，请 path 依赖对应 crate，勿把 Rust API 伪装成插件。
 
 mod api;
+mod domain;
 mod ecs_host;
 mod frame;
 mod hooks;
@@ -20,6 +21,7 @@ mod run;
 mod vfs;
 
 pub use api::{BuiltinApi, ENGINE_NATIVES};
+pub use domain::{ScriptBudget, ScriptDomain};
 pub use ecs_host::{DrawBuffer3d, EcsHost3d, FrameSnapshot};
 pub use frame::{
     FrameLoop, FrameLoopConfig, LoopedHost2d, LoopedHost3d, StepMode,
@@ -69,6 +71,8 @@ pub enum EngineError {
         function: String,
         source: ScriptError,
     },
+    /// 脚本领域已被禁用（trap / 预算等）。
+    ScriptDomainDisabled { mod_id: String },
 }
 
 impl EngineError {
@@ -85,6 +89,7 @@ impl EngineError {
             Self::ManifestMissingId { .. } => "spark.engine.manifest_missing_id".into(),
             Self::Io { .. } => "spark.engine.io".into(),
             Self::HookFailed { .. } => "spark.engine.hook_failed".into(),
+            Self::ScriptDomainDisabled { .. } => "spark.engine.script_domain_disabled".into(),
         }
     }
 
@@ -122,6 +127,8 @@ impl EngineError {
                 .with("hook", ErrorArg::String(Arc::from(hook.as_str())))
                 .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str())))
                 .with("function", ErrorArg::String(Arc::from(function.as_str()))),
+            Self::ScriptDomainDisabled { mod_id } => ErrorArgs::new()
+                .with("mod_id", ErrorArg::String(Arc::from(mod_id.as_str()))),
         }
     }
 
