@@ -106,16 +106,9 @@ fn collect_methods(stmts: &[StatementNode], out: &mut Vec<MethodRef>, class_pref
                     collect_methods(else_body, out, class_prefix);
                 }
             }
-            StatementNode::While { body, .. } | StatementNode::Until { body, .. } => {
-                collect_methods(body, out, class_prefix);
-            }
-            StatementNode::For { body, .. } => {
-                collect_methods(body, out, class_prefix);
-            }
-            StatementNode::Expression(ExpressionNode::MethodCall {
-                block_body: Some(body),
-                ..
-            }) => {
+            StatementNode::While { body, .. }
+            | StatementNode::Until { body, .. }
+            | StatementNode::For { body, .. } => {
                 collect_methods(body, out, class_prefix);
             }
             _ => {}
@@ -321,16 +314,15 @@ fn compile_stmt(ctx: &mut Ctx<'_>, stmt: &StatementNode) -> Result<(), String> {
             ..
         } => compile_for(ctx, var, iterable, body),
         StatementNode::Break { .. } => {
-            if ctx.loop_breaks.is_empty() {
-                // 块/`case` 外 break：RGSS 过渡期当空语句，避免整脚本编译失败。
-                ctx.f.emit(Op::LoadNull);
-                return Ok(());
+            if let Some(breaks) = ctx.loop_breaks.last_mut() {
+                ctx.f.emit(Op::Jump);
+                let at = ctx.f.len();
+                ctx.f.emit_i16(0);
+                breaks.push(at);
+                Ok(())
+            } else {
+                Err("break_outside_loop".into())
             }
-            ctx.f.emit(Op::Jump);
-            let at = ctx.f.len();
-            ctx.f.emit_i16(0);
-            ctx.loop_breaks.last_mut().unwrap().push(at);
-            Ok(())
         }
         StatementNode::Next { .. } | StatementNode::Redo { .. } | StatementNode::Case { .. } => {
             Err("unsupported_statement".into())
@@ -396,17 +388,8 @@ fn compile_expr(ctx: &mut Ctx<'_>, expr: &ExpressionNode) -> Result<(), String> 
             receiver,
             method,
             args,
-            block_params,
-            block_body,
             ..
-        } => compile_method_call(
-            ctx,
-            receiver.as_deref(),
-            method,
-            args,
-            block_params,
-            block_body.as_deref(),
-        )?,
+        } => compile_method_call(ctx, receiver.as_deref(), method, args, &[], None)?,
         ExpressionNode::BinaryOp {
             left,
             operator,
@@ -533,6 +516,11 @@ fn compile_method_call(
     block_params: &[String],
     block_body: Option<&[StatementNode]>,
 ) -> Result<(), String> {
+    // 无接收者的裸名：若已是局部变量（含方法参数），按变量读，不调方法。
+    // 对应 Ruby「局部变量遮蔽方法」；避免 `unless base` 在参数场景被编成 CallNative。
+    if receiver.is_none() && args.is_empty() && block_body.is_none() && ctx.locals.contains_key(method) {
+        return compile_name_load(ctx, method);
+    }
     // `loop do ... end`
     if method == "loop" && receiver.is_none() {
         if let Some(body) = block_body {
@@ -550,8 +538,12 @@ fn compile_method_call(
     }
 
     // `Foo.new(...)` → 分配带 `__class` 的表，再 `Send initialize`。
+    // `Array.new(n)` / `Array.new(n, fill)` → 真数组。
     if method == "new" {
         if let Some(ExpressionNode::Identifier { name, .. }) = receiver {
+            if name == "Array" {
+                return compile_array_new(ctx, args);
+            }
             if is_constant_name(name) || name.contains("::") {
                 return compile_class_new(ctx, name, args);
             }
@@ -597,7 +589,6 @@ fn constant_recv_path(expr: &ExpressionNode) -> Option<String> {
             receiver: Some(recv),
             method,
             args,
-            block_body: None,
             ..
         } if args.is_empty() && is_constant_name(method) => {
             let base = constant_recv_path(recv)?;
@@ -626,6 +617,8 @@ fn compile_infinite_loop(ctx: &mut Ctx<'_>, body: &[StatementNode]) -> Result<()
     Ok(())
 }
 
+#[allow(dead_code)] // AST 恢复 For 节点时复用
+#[allow(dead_code)] // AST 恢复 For 节点时复用
 fn compile_for(
     ctx: &mut Ctx<'_>,
     var: &str,
@@ -772,19 +765,34 @@ fn compile_class_new(ctx: &mut Ctx<'_>, class_name: &str, args: &[ExpressionNode
     ctx.f.emit_u16(field);
     ctx.f.emit(Op::Pop);
     ctx.f.emit_u8(1);
-    let init_fn = format!("{class_name}_initialize");
-    if ctx.fn_index.contains_key(&init_fn) {
-        ctx.f.emit(Op::Dup);
-        for arg in args {
-            compile_expr(ctx, arg)?;
-        }
-        let init = ctx.f.add_string("initialize");
-        ctx.f.emit(Op::Send);
-        ctx.f.emit_u16(init);
-        ctx.f.emit_u8(args.len() as u8);
-        ctx.f.emit(Op::Pop);
-        ctx.f.emit_u8(1);
+    // 总是发 `initialize`：脚本方法或宿主 native（`Bitmap_initialize` 等）。
+    ctx.f.emit(Op::Dup);
+    for arg in args {
+        compile_expr(ctx, arg)?;
     }
+    let init = ctx.f.add_string("initialize");
+    ctx.f.emit(Op::Send);
+    ctx.f.emit_u16(init);
+    ctx.f.emit_u8(args.len() as u8);
+    ctx.f.emit(Op::Pop);
+    ctx.f.emit_u8(1);
+    Ok(())
+}
+
+fn compile_array_new(ctx: &mut Ctx<'_>, args: &[ExpressionNode]) -> Result<(), String> {
+    // `Array.new` → []；`Array.new(n)` / `Array.new(n, fill)` 在运行时展开。
+    if args.is_empty() {
+        ctx.f.emit(Op::NewArray);
+        ctx.f.emit_u8(0);
+        return Ok(());
+    }
+    for arg in args {
+        compile_expr(ctx, arg)?;
+    }
+    let slot = ctx.intern_native("Array_new");
+    ctx.f.emit(Op::CallNative);
+    ctx.f.emit_u16(slot);
+    ctx.f.emit_u8(args.len() as u8);
     Ok(())
 }
 
