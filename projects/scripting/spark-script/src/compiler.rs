@@ -10,7 +10,7 @@ use crate::cache::ArtifactCache;
 use crate::dep_graph::PackageDepGraph;
 use crate::host_schema::{HostFunction, HostFunctionId, HostSchema};
 use crate::request::{CompilationRequest, LanguageFrontend};
-use crate::{compile_module, compile_module_with_registry, ScriptError, ScriptLanguage};
+use crate::{compile_module_with_registry, ScriptError, ScriptLanguage};
 use spark_script_valkyrie::NativeRegistry;
 
 /// 编译产物（目标 → 链接 → 映像）。
@@ -43,15 +43,13 @@ impl ScriptCompiler {
             return Ok(hit);
         }
         let language = ScriptLanguage::from(request.language.frontend);
+        let reg = request.host_schema.to_native_registry();
         let module = match language {
             ScriptLanguage::Valkyrie => {
-                let reg = request.host_schema.to_native_registry();
                 spark_script_valkyrie::compile_with_registry(source, &reg)?
             }
-            ScriptLanguage::Lua | ScriptLanguage::Ruby => {
-                let names = request.host_schema.short_names();
-                compile_module(language, source, &names)?
-            }
+            ScriptLanguage::Lua => spark_script_lua::compile_with_registry(source, &reg)?,
+            ScriptLanguage::Ruby => spark_script_ruby::compile_with_registry(source, &reg)?,
         };
         let package = self.seal(request, module)?;
         self.cache.insert(key, package.clone());
@@ -89,15 +87,13 @@ impl ScriptCompiler {
             ScriptError::compile_reason("compilation_request_missing_source")
         })?;
         let language = ScriptLanguage::from(request.language.frontend);
+        let reg = request.host_schema.to_native_registry();
         let module = match language {
             ScriptLanguage::Valkyrie => {
-                let reg = request.host_schema.to_native_registry();
                 spark_script_valkyrie::compile_with_registry(source, &reg)?
             }
-            ScriptLanguage::Lua | ScriptLanguage::Ruby => {
-                let names = request.host_schema.short_names();
-                compile_module(language, source, &names)?
-            }
+            ScriptLanguage::Lua => spark_script_lua::compile_with_registry(source, &reg)?,
+            ScriptLanguage::Ruby => spark_script_ruby::compile_with_registry(source, &reg)?,
         };
         Ok(SparkObject::from_legacy_module(
             request.package.clone(),
@@ -259,7 +255,7 @@ mod tests {
     }
 }
 
-/// 仅用 registry 编译（Valkyrie 走完整签名；其它前端取名）。
+/// 用 registry 编译各前端（均经 `compile_with_registry`）。
 pub fn compile_package_with_registry(
     language: ScriptLanguage,
     source: &str,

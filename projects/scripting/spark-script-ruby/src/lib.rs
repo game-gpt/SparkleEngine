@@ -93,6 +93,15 @@ pub fn compile(source: &str, natives: &[&str]) -> Result<Module, RubyScriptError
     }
 }
 
+/// 带完整宿主签名的编译入口（当前与 [`compile`] 相同：只用函数名列表）。
+pub fn compile_with_registry(
+    source: &str,
+    natives: &spark_script_valkyrie::NativeRegistry,
+) -> Result<Module, RubyScriptError> {
+    let names = natives.name_list();
+    compile(source, &names)
+}
+
 /// 解析为 Oaks AST。
 pub fn parse(source: &str) -> Result<RubyRoot, RubyScriptError> {
     let language = RubyLanguage::default();
