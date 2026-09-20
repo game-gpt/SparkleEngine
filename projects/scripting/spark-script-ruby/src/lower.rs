@@ -1,8 +1,8 @@
 //! Ruby AST → Spark HIR（子集）。
 //!
 //! 支持：顶层 / `def` 内 `return`、局部赋值、算术比较、字面量、
-//! `if` / `while` / `until`、数值 `for .. in a..b`、`&&`/`||`/`and`/`or`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
-//! 类、实例变量、全局、`Send`、块、`each`/`break`/`case` 等回退旧路径。
+//! `if` / `while` / `until` / `break`、数值 `for .. in a..b`、`&&`/`||`/`and`/`or`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
+//! 类、实例变量、全局、`Send`、块、`each`/`case` 等回退旧路径。
 //!
 //! 注：Oaks 当前 builder 不产出 `Case`，且 `case`/`when` 解析会卡死，故不走 IR。
 
@@ -218,8 +218,8 @@ fn lower_statement(
             lower_for_range(var, iterable, body, locals, local_tys, fn_index, native_set)?,
             false,
         )),
+        StatementNode::Break { .. } => Ok((HirStmt::Break { span: None }, false)),
         StatementNode::Case { .. }
-        | StatementNode::Break { .. }
         | StatementNode::Next { .. }
         | StatementNode::Redo { .. }
         | StatementNode::MethodDef { .. }

@@ -32,6 +32,7 @@ fn lower_function(func: &HirFunction) -> Result<MirFunction, String> {
         blocks: Vec::new(),
         current: 0,
         effects: Vec::new(),
+        loop_exits: Vec::new(),
     };
     cx.blocks.push(BasicBlock {
         id: 0,
@@ -78,6 +79,8 @@ struct LowerCx {
     blocks: Vec<BasicBlock>,
     current: usize,
     effects: Vec<IrEffect>,
+    /// 嵌套 `While` 的出口块（供 `Break`）。
+    loop_exits: Vec<u32>,
 }
 
 impl LowerCx {
@@ -197,13 +200,22 @@ fn lower_stmt(cx: &mut LowerCx, stmt: &HirStmt) -> Result<(), String> {
                 else_target: exit,
             });
             cx.switch(body_id);
+            cx.loop_exits.push(exit);
             for s in body {
                 lower_stmt(cx, s)?;
             }
+            cx.loop_exits.pop();
             if cx.term_is_open() {
                 cx.set_term(MirTerminator::Jump { target: header });
             }
             cx.switch(exit);
+            Ok(())
+        }
+        HirStmt::Break { .. } => {
+            let Some(&exit) = cx.loop_exits.last() else {
+                return Err("break_outside_loop".into());
+            };
+            cx.set_term(MirTerminator::Jump { target: exit });
             Ok(())
         }
     }
