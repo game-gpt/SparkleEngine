@@ -45,11 +45,23 @@ fn lower_function(func: &HirFunction) -> Result<MirFunction, String> {
             saw_return = true;
         }
         lower_stmt(&mut cx, stmt)?;
+        if matches!(
+            cx.blocks[cx.current].terminator,
+            MirTerminator::Return { .. }
+        ) {
+            // 后续语句不可达；若还有语句则开新块承接（简化：直接停）。
+            break;
+        }
     }
-    if !saw_return {
-        let v = cx.alloc();
-        cx.emit(MirInst::ConstNull { dst: v });
-        cx.set_term(MirTerminator::Return { value: Some(v) });
+    if matches!(
+        cx.blocks[cx.current].terminator,
+        MirTerminator::Unreachable
+    ) {
+        if !saw_return {
+            let v = cx.alloc();
+            cx.emit(MirInst::ConstNull { dst: v });
+            cx.set_term(MirTerminator::Return { value: Some(v) });
+        }
     }
 
     Ok(MirFunction {
@@ -102,9 +114,19 @@ impl LowerCx {
             self.effects.push(effect);
         }
     }
+
+    fn term_is_open(&self) -> bool {
+        matches!(
+            self.blocks[self.current].terminator,
+            MirTerminator::Unreachable
+        )
+    }
 }
 
 fn lower_stmt(cx: &mut LowerCx, stmt: &HirStmt) -> Result<(), String> {
+    if !cx.term_is_open() {
+        return Ok(());
+    }
     match stmt {
         HirStmt::Expr { expr, .. } => {
             let _ = lower_expr(cx, expr)?;
@@ -149,20 +171,14 @@ fn lower_stmt(cx: &mut LowerCx, stmt: &HirStmt) -> Result<(), String> {
             for s in then_body {
                 lower_stmt(cx, s)?;
             }
-            if matches!(
-                cx.blocks[cx.current].terminator,
-                MirTerminator::Unreachable
-            ) {
+            if cx.term_is_open() {
                 cx.set_term(MirTerminator::Jump { target: join_id });
             }
             cx.switch(else_id);
             for s in else_body {
                 lower_stmt(cx, s)?;
             }
-            if matches!(
-                cx.blocks[cx.current].terminator,
-                MirTerminator::Unreachable
-            ) {
+            if cx.term_is_open() {
                 cx.set_term(MirTerminator::Jump { target: join_id });
             }
             cx.switch(join_id);
@@ -184,10 +200,7 @@ fn lower_stmt(cx: &mut LowerCx, stmt: &HirStmt) -> Result<(), String> {
             for s in body {
                 lower_stmt(cx, s)?;
             }
-            if matches!(
-                cx.blocks[cx.current].terminator,
-                MirTerminator::Unreachable
-            ) {
+            if cx.term_is_open() {
                 cx.set_term(MirTerminator::Jump { target: header });
             }
             cx.switch(exit);
@@ -235,6 +248,14 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
             });
             Ok(dst)
         }
+        HirExpr::FuncRef { func_index, .. } => {
+            let dst = cx.alloc();
+            cx.emit(MirInst::ConstFunc {
+                dst,
+                func_index: *func_index,
+            });
+            Ok(dst)
+        }
         HirExpr::Binary { op, lhs, rhs, .. } => {
             let l = lower_expr(cx, lhs)?;
             let r = lower_expr(cx, rhs)?;
@@ -258,7 +279,6 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
             Ok(dst)
         }
         HirExpr::ToBool { expr, .. } => {
-            // Spark 核心真值：仅 false/null 为假。前端须先展开语言特有规则。
             let src = lower_expr(cx, expr)?;
             let dst = cx.alloc();
             cx.emit(MirInst::Unary {
@@ -273,6 +293,11 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
                 src: dst,
             });
             Ok(dst2)
+        }
+        HirExpr::Print { value, .. } => {
+            let src = lower_expr(cx, value)?;
+            cx.emit(MirInst::Print { src });
+            Ok(src)
         }
         HirExpr::HostCall {
             host_name, args, ..
@@ -290,8 +315,73 @@ fn lower_expr(cx: &mut LowerCx, expr: &HirExpr) -> Result<MirValue, String> {
             });
             Ok(dst)
         }
-        HirExpr::Call { .. } | HirExpr::DynamicSend { .. } | HirExpr::If { .. } | HirExpr::Block { .. } => {
-            Err(format!("unsupported_hir_expr_in_lower:{expr:?}"))
+        HirExpr::Call { callee, args, .. } => {
+            let func = lower_expr(cx, callee)?;
+            let mut argv = Vec::with_capacity(args.len());
+            for a in args {
+                argv.push(lower_expr(cx, a)?);
+            }
+            let dst = cx.alloc();
+            cx.emit(MirInst::Call {
+                dst: Some(dst),
+                func,
+                args: argv,
+            });
+            Ok(dst)
         }
+        HirExpr::If {
+            cond,
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            let c = lower_expr(cx, cond)?;
+            let then_id = cx.new_block();
+            let else_id = cx.new_block();
+            let join_id = cx.new_block();
+            let result = cx.alloc();
+            cx.set_term(MirTerminator::Branch {
+                cond: c,
+                then_target: then_id,
+                else_target: else_id,
+            });
+            cx.switch(then_id);
+            let tv = lower_expr(cx, then_branch)?;
+            cx.emit(MirInst::Move {
+                dst: result,
+                src: tv,
+            });
+            cx.set_term(MirTerminator::Jump { target: join_id });
+            cx.switch(else_id);
+            let ev = lower_expr(cx, else_branch)?;
+            cx.emit(MirInst::Move {
+                dst: result,
+                src: ev,
+            });
+            cx.set_term(MirTerminator::Jump { target: join_id });
+            cx.switch(join_id);
+            Ok(result)
+        }
+        HirExpr::Block {
+            stmts, result, ..
+        } => {
+            for s in stmts {
+                lower_stmt(cx, s)?;
+                if !cx.term_is_open() {
+                    let dummy = cx.alloc();
+                    cx.emit(MirInst::ConstNull { dst: dummy });
+                    return Ok(dummy);
+                }
+            }
+            match result {
+                Some(e) => lower_expr(cx, e),
+                None => {
+                    let dst = cx.alloc();
+                    cx.emit(MirInst::ConstNull { dst });
+                    Ok(dst)
+                }
+            }
+        }
+        HirExpr::DynamicSend { .. } => Err(format!("unsupported_hir_expr_in_lower:{expr:?}")),
     }
 }

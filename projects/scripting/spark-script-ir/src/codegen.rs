@@ -126,8 +126,9 @@ fn inst_max_value(inst: &MirInst) -> u32 {
         | MirInst::ConstBool { dst, .. }
         | MirInst::ConstNumber { dst, .. }
         | MirInst::ConstString { dst, .. }
+        | MirInst::ConstFunc { dst, .. }
         | MirInst::LoadLocal { dst, .. } => dst.0,
-        MirInst::StoreLocal { src, .. } => src.0,
+        MirInst::StoreLocal { src, .. } | MirInst::Print { src } => src.0,
         MirInst::Move { dst, src } => dst.0.max(src.0),
         MirInst::Binary { dst, lhs, rhs, .. } => dst.0.max(lhs.0).max(rhs.0),
         MirInst::Unary { dst, src, .. } => dst.0.max(src.0),
@@ -201,6 +202,12 @@ fn emit_inst(
             f.emit_u16(i);
             store(f, slot_of(*dst));
         }
+        MirInst::ConstFunc { dst, func_index } => {
+            let i = f.add_const_func(*func_index);
+            f.emit(Op::LoadConst);
+            f.emit_u16(i);
+            store(f, slot_of(*dst));
+        }
         MirInst::LoadLocal { dst, index } => {
             f.emit(Op::LoadLocal);
             f.emit_u16(*index as u16);
@@ -231,6 +238,27 @@ fn emit_inst(
             f.emit(unary_op(*op));
             store(f, slot_of(*dst));
         }
+        MirInst::Print { src } => {
+            f.emit(Op::LoadLocal);
+            f.emit_u16(slot_of(*src));
+            f.emit(Op::Print);
+        }
+        MirInst::Call { dst, func, args } => {
+            f.emit(Op::LoadLocal);
+            f.emit_u16(slot_of(*func));
+            for a in args {
+                f.emit(Op::LoadLocal);
+                f.emit_u16(slot_of(*a));
+            }
+            f.emit(Op::Call);
+            f.emit_u8(args.len() as u8);
+            if let Some(d) = dst {
+                store(f, slot_of(*d));
+            } else {
+                f.emit(Op::Pop);
+                f.emit_u8(1);
+            }
+        }
         MirInst::HostCall {
             dst,
             host_slot_or_name,
@@ -247,7 +275,6 @@ fn emit_inst(
             if !native_names.iter().any(|n| n == name) {
                 return Err(format!("native_missing:{name}"));
             }
-            // CallNative 操作数 = 本函数字符串池下标。
             let si = f.add_string(name);
             f.emit(Op::CallNative);
             f.emit_u16(si);
@@ -259,7 +286,7 @@ fn emit_inst(
                 f.emit_u8(1);
             }
         }
-        MirInst::Call { .. } | MirInst::DynamicSend { .. } => {
+        MirInst::DynamicSend { .. } => {
             Err(format!("unsupported_mir_inst:{inst:?}"))?
         }
     }
@@ -331,6 +358,76 @@ mod tests {
                 }],
                 span: None,
             }],
+        };
+        let mir = lower_module(&hir).unwrap();
+        let module = emit_module(&mir).unwrap();
+        let mut vm = Vm::new(module);
+        let mut host = StdHost;
+        let v = vm.run(&mut host).unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn call_via_ir_pipeline() {
+        let hir = HirModule {
+            package: PackageId::anonymous(),
+            name: Arc::from("main"),
+            functions: vec![
+                HirFunction {
+                    name: Arc::from("add"),
+                    symbol: None,
+                    params: vec![
+                        (Arc::from("a"), Ty::Float),
+                        (Arc::from("b"), Ty::Float),
+                    ],
+                    return_ty: Ty::Float,
+                    locals: Vec::new(),
+                    body: vec![HirStmt::Return {
+                        value: Some(HirExpr::Binary {
+                            op: HirBinaryOp::Add,
+                            lhs: Box::new(HirExpr::Local {
+                                index: 0,
+                                span: None,
+                            }),
+                            rhs: Box::new(HirExpr::Local {
+                                index: 1,
+                                span: None,
+                            }),
+                            span: None,
+                        }),
+                        span: None,
+                    }],
+                    span: None,
+                },
+                HirFunction {
+                    name: Arc::from("__main"),
+                    symbol: None,
+                    params: Vec::new(),
+                    return_ty: Ty::Float,
+                    locals: Vec::new(),
+                    body: vec![HirStmt::Return {
+                        value: Some(HirExpr::Call {
+                            callee: Box::new(HirExpr::FuncRef {
+                                func_index: 0,
+                                span: None,
+                            }),
+                            args: vec![
+                                HirExpr::LiteralNumber {
+                                    value: 40.0,
+                                    span: None,
+                                },
+                                HirExpr::LiteralNumber {
+                                    value: 2.0,
+                                    span: None,
+                                },
+                            ],
+                            span: None,
+                        }),
+                        span: None,
+                    }],
+                    span: None,
+                },
+            ],
         };
         let mir = lower_module(&hir).unwrap();
         let module = emit_module(&mir).unwrap();

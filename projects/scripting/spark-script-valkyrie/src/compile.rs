@@ -1,7 +1,8 @@
 //! Oaks `oak-valkyrie` AST → `spark-vm` 字节码。
 //!
-//! 支持子集：`micro` / `let` / `return` / `if` / `loop while`、算术比较、
+//! 支持子集：`micro` / `let` / `return` / `if` / `while`、算术比较、
 //! 调用（脚本 micro / 原生 / `print`）。完整语言其余构造报 `unsupported_*`。
+//! 优先路径见 `lower.rs` → `spark-script-ir`；本文件为回退发射器。
 
 use std::collections::{HashMap, HashSet};
 

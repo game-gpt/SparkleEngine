@@ -1,17 +1,19 @@
-//! Oaks `oak-valkyrie` Builder → `spark-vm` 字节码。
+//! Oaks `oak-valkyrie` Builder → Spark HIR → 公共 IR → `spark-vm` 字节码。
 //!
-//! 解析只走 [`ValkyrieBuilder`]；本 crate 只做子集字节码 lowering。
-//! 游戏绑定经原生函数表注入。
+//! 解析只走 [`ValkyrieBuilder`]。优先经 `spark-script-ir` 管线；子集不覆盖时回退旧 lowering。
 
 mod compile;
+mod lower;
 mod native_sig;
 
 use compile::compile_root;
+use lower::lower_root_to_hir;
 
 use oak_core::{Builder, SourceText};
 use oak_core::errors::OakErrorKind;
 use oak_valkyrie::{ValkyrieBuilder, ValkyrieLanguage, ValkyrieRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
+use spark_script_ir::{emit_module, lower_module};
 use spark_vm::Module;
 
 pub use native_sig::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
@@ -82,9 +84,16 @@ impl std::error::Error for ValkyrieScriptError {}
 ///
 /// `natives` 仅提供函数名，**不足以**支撑补全与类型检查。
 /// 新代码请优先使用 [`compile_with_registry`]。
+/// 优先走 HIR→MIR→字节码；子集不覆盖则回退旧路径。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, ValkyrieScriptError> {
     let root = parse(source)?;
-    compile_root(&root, natives).map_err(ValkyrieScriptError::compile_opaque)
+    match lower_root_to_hir(&root, natives) {
+        Ok(hir) => {
+            let mir = lower_module(&hir).map_err(ValkyrieScriptError::compile_opaque)?;
+            emit_module(&mir).map_err(ValkyrieScriptError::compile_opaque)
+        }
+        Err(_) => compile_root(&root, natives).map_err(ValkyrieScriptError::compile_opaque),
+    }
 }
 
 /// 带完整宿主签名的编译入口。
@@ -160,6 +169,52 @@ mod tests {
                 return a + b
             }
             return add(40, 2)
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        let v = vm.run(&mut StdHost).unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn short_circuit_and_or() {
+        use spark_gc::Value;
+        // Oaks 当前对 `false && …` / `if true` 解析不稳，用比较表达式覆盖短路。
+        let m = compile("return 1 < 0 && 99", &[]).unwrap();
+        let mut vm = Vm::new(m);
+        let v = vm.run(&mut StdHost).unwrap();
+        assert!(matches!(v, Value::Bool(false)));
+
+        let m = compile("return 1 < 2 || 0", &[]).unwrap();
+        let mut vm = Vm::new(m);
+        let v = vm.run(&mut StdHost).unwrap();
+        assert!(matches!(v, Value::Bool(true)));
+    }
+
+    #[test]
+    fn if_while_via_ir() {
+        let m = compile(
+            r#"
+            if 1 < 2 {
+                return 40 + 2
+            }
+            return 0
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        let v = vm.run(&mut StdHost).unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
+
+        let m = compile(
+            r#"
+            while 1 < 0 {
+                return 1
+            }
+            return 42
             "#,
             &[],
         )
