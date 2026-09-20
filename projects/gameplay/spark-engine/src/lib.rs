@@ -3,7 +3,7 @@
 //! 提供：固定步 / update·draw 相位编排、[`EcsHost3d`]（`Schedule` ↔ `GameHost3d`）、
 //! 模组清单与发现、依赖排序加载、脚本入口、命名钩子、
 //! 通用数据表、模组资源路径、脚本插件挂载（[`PluginRegistry`]）。模组逻辑一律跑在
-//! [`spark_vm`]（经 [`spark_script`] 多前端编译），与宿主目标平台无关。
+//! [`ScriptDomain`]（经 [`spark_script`] 编译为映像后装载），与宿主目标平台无关。
 //! **不**拥有窗口后端（winit 等止于 `spark-renderer-wgpu` / 绑定宿主）。
 //! **不**提供游戏内容权威（方块 / 配方等由游戏仓解释 [`DataRegistry`]）。
 //! Rust 宿主若直接需要能力，请 path 依赖对应 crate，勿把 Rust API 伪装成插件。
@@ -42,7 +42,9 @@ use std::rc::Rc;
 
 use spark_core::SparkError;
 use spark_gc::Value;
-use spark_script::{ScriptEngine, ScriptError, ScriptLanguage};
+use spark_script::{
+    HostFunction, HostFunctionId, HostSchema, ScriptCompiler, ScriptError, ScriptLanguage,
+};
 use spark_vm::{HostHooks, StdHost};
 
 use crate::api::install_builtins;
@@ -341,7 +343,7 @@ impl SparkEngine {
         }
 
         let vfs = ModVfs::new(manifest.id.clone(), root.clone());
-        let mut script = None;
+        let mut domain = None;
 
         if let Some(entry) = &manifest.entry {
             let entry_path = root.join(entry);
@@ -350,12 +352,27 @@ impl SparkEngine {
             })?;
             let lang = resolve_language(manifest.language.as_deref(), entry);
             let natives = self.compile_native_names();
-            let mut eng = ScriptEngine::compile_with(lang, &source, &natives)?;
-            install_builtins(&mut eng, &self.shared, &manifest.id, &vfs);
-            self.plugins.install_all(&mut eng.vm);
-            let mut host = StdHost;
-            eng.eval_with(&mut host)?;
-            script = Some(eng);
+            let host_schema = host_schema_from_names(&natives);
+            let package = ScriptCompiler::new()
+                .compile_with_native_names(lang, &source, &natives)
+                .map_err(EngineError::Script)?;
+            let mut script_domain = ScriptDomain::from_image(
+                manifest.id.as_str(),
+                &package.image,
+                &host_schema,
+                ScriptBudget::default(),
+            )?;
+            install_builtins(
+                &mut script_domain.runtime.vm,
+                &self.shared,
+                &manifest.id,
+                &vfs,
+            );
+            self.plugins.install_all(&mut script_domain.runtime.vm);
+            // 过渡期：仍执行顶层以便 `register_hook`；正式模组应改用生命周期导出。
+            let mut hooks = StdHost;
+            script_domain.eval_entry(&mut hooks)?;
+            domain = Some(script_domain);
         }
 
         let id = manifest.id.clone();
@@ -365,7 +382,7 @@ impl SparkEngine {
                 manifest,
                 root,
                 vfs,
-                script,
+                domain,
                 enabled: true,
             },
         );
@@ -393,17 +410,20 @@ impl SparkEngine {
             let Some(m) = self.mods.get_mut(&href.mod_id) else {
                 continue;
             };
-            let Some(script) = m.script.as_mut() else {
+            let Some(domain) = m.domain.as_mut() else {
                 continue;
             };
-            script.call(&href.function, args, host).map_err(|source| {
-                EngineError::HookFailed {
-                    hook: hook.to_string(),
-                    mod_id: href.mod_id.clone(),
-                    function: href.function.clone(),
-                    source,
-                }
-            })?;
+            domain
+                .call(&href.function, args, host)
+                .map_err(|err| match err {
+                    EngineError::Script(source) => EngineError::HookFailed {
+                        hook: hook.to_string(),
+                        mod_id: href.mod_id.clone(),
+                        function: href.function.clone(),
+                        source,
+                    },
+                    other => other,
+                })?;
         }
         Ok(())
     }
@@ -459,6 +479,18 @@ impl SparkEngine {
         }
         names
     }
+}
+
+fn host_schema_from_names(names: &[&str]) -> HostSchema {
+    let mut schema = HostSchema::new(1);
+    for name in names {
+        schema.insert(HostFunction::new(HostFunctionId::new(
+            "spark.engine",
+            *name,
+            1,
+        )));
+    }
+    schema
 }
 
 fn find_dir_for_id(root: &Path, id: &str) -> Result<PathBuf, EngineError> {
@@ -585,7 +617,12 @@ dependencies = ["core"]
                 },
                 root: PathBuf::from("."),
                 vfs: ModVfs::new("hand", PathBuf::from(".")),
-                script: Some(ScriptEngine::from_module(module)),
+                domain: Some(ScriptDomain::from_legacy_module(
+                    "hand",
+                    module,
+                    ScriptLanguage::Valkyrie,
+                    ScriptBudget::default(),
+                )),
                 enabled: true,
             },
         );
