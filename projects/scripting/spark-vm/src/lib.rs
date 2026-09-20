@@ -33,6 +33,8 @@ pub enum VmError {
     UnknownOpcode(u8),
     ArityMismatch { expected: u16, got: u16 },
     BadNativeArg { name: &'static str },
+    /// 堆句柄无效。
+    BadHandle,
 }
 
 impl VmError {
@@ -50,6 +52,7 @@ impl VmError {
             Self::UnknownOpcode(_) => "spark.vm.unknown_opcode",
             Self::ArityMismatch { .. } => "spark.vm.arity_mismatch",
             Self::BadNativeArg { .. } => "spark.vm.bad_native_arg",
+            Self::BadHandle => "spark.vm.bad_handle",
         }
     }
 
@@ -75,7 +78,8 @@ impl VmError {
             | Self::CodeOob
             | Self::CallOverflow
             | Self::BadReturn
-            | Self::DivByZero => ErrorArgs::new(),
+            | Self::DivByZero
+            | Self::BadHandle => ErrorArgs::new(),
         }
     }
 
@@ -137,6 +141,21 @@ pub enum Op {
     LoadString,
     /// 后跟 u16 原生名下标 + u8 参数个数。
     CallNative,
+    /// 取模。
+    Mod,
+    /// 实例方法派发：后跟 u16 方法名字符串池下标 + u8 参数个数（不含接收者）。
+    /// 栈：`recv, arg0…argN-1`。按 `recv.__class` + 方法名查找 `Class_method`。
+    Send,
+    /// 读表字段：后跟 u16 字符串池下标。弹出对象，压入字段值。
+    GetField,
+    /// 写表字段：后跟 u16 字符串池下标。弹出值再弹出对象，写入后压回值。
+    SetField,
+    /// 复制栈顶。
+    Dup,
+    /// 新建空表：无操作数，压入 `Table` 句柄。
+    NewTable,
+    /// 新建数组：后跟 u8 元素个数；弹出 N 个元素（底→顶为 0..N-1），压入 `Array`。
+    NewArray,
 }
 
 /// 编译期函数原型（解释与 JIT 共用）。
@@ -250,6 +269,79 @@ impl Module {
         self.native_names.push(name);
         i
     }
+
+    /// 把多个脚本模块的方法链进同一命名空间（同名后者覆盖）；不含各脚本 `__main`。
+    pub fn link_methods(modules: &[Module]) -> Module {
+        let mut name_to_idx: HashMap<String, usize> = HashMap::new();
+        let mut functions: Vec<FuncProto> = Vec::new();
+        let mut native_names: Vec<String> = Vec::new();
+
+        for module in modules {
+            for name in &module.native_names {
+                if !native_names.iter().any(|n| n == name) {
+                    native_names.push(name.clone());
+                }
+            }
+            for func in &module.functions {
+                if func.name == "__main" {
+                    continue;
+                }
+                if !name_to_idx.contains_key(&func.name) {
+                    name_to_idx.insert(func.name.clone(), functions.len());
+                    functions.push(FuncProto::new(func.name.clone(), func.arity));
+                }
+            }
+        }
+
+        let native_to_idx: HashMap<String, u16> = native_names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i as u16))
+            .collect();
+
+        for module in modules {
+            for func in &module.functions {
+                if func.name == "__main" {
+                    continue;
+                }
+                let idx = name_to_idx[&func.name];
+                functions[idx] =
+                    remap_func_against(module, func, &name_to_idx, &native_to_idx);
+            }
+        }
+
+        let entry = functions.len();
+        functions.push(FuncProto::new("__main", 0));
+        functions[entry].emit(Op::LoadNull);
+        functions[entry].emit(Op::Return);
+
+        Module {
+            functions,
+            entry,
+            native_names,
+        }
+    }
+}
+
+/// 按「旧模块下标 → 函数名 → 新模块下标」重写 `Value::Func`。
+/// `CallNative` 名走函数字符串池，链接后不改操作数。
+fn remap_func_against(
+    old_module: &Module,
+    func: &FuncProto,
+    name_to_idx: &HashMap<String, usize>,
+    _native_to_idx: &HashMap<String, u16>,
+) -> FuncProto {
+    let mut out = func.clone();
+    for c in &mut out.consts {
+        if let Value::Func(old_idx) = c {
+            if let Some(old_f) = old_module.functions.get(*old_idx as usize) {
+                if let Some(&new_idx) = name_to_idx.get(&old_f.name) {
+                    *c = Value::Func(new_idx as u32);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// 原生函数上下文（宿主可经此访问堆与全局；ECS World 由闭包捕获）。
@@ -290,6 +382,10 @@ pub struct Vm {
     /// 每条函数解释步热度（供 JIT）。
     pub hotness: Vec<u32>,
     pub natives: HashMap<String, NativeFn>,
+    /// 单次 `interpret` 步数上限（RGSS 宿主可调）。
+    pub step_limit: u64,
+    /// CallNative / Send 调用计数（诊断用）。
+    pub call_hits: HashMap<String, u32>,
 }
 
 impl Vm {
@@ -303,6 +399,8 @@ impl Vm {
             frames: Vec::with_capacity(64),
             hotness: vec![0; n],
             natives: HashMap::new(),
+            step_limit: 5_000_000,
+            call_hits: HashMap::new(),
         }
     }
 
@@ -317,6 +415,46 @@ impl Vm {
     pub fn run(&mut self, host: &mut dyn HostHooks) -> Result<Value, VmError> {
         let entry = self.module.entry;
         self.call_index(entry, &[], host)
+    }
+
+    /// 在已链接方法表上执行某一脚本的 `__main`（重写其函数下标）。
+    pub fn run_script_main(
+        &mut self,
+        script: &Module,
+        host: &mut dyn HostHooks,
+    ) -> Result<Value, VmError> {
+        let main = script
+            .functions
+            .get(script.entry)
+            .ok_or(VmError::CodeOob)?;
+        let name_to_idx: HashMap<String, usize> = self
+            .module
+            .functions
+            .iter()
+            .enumerate()
+            .map(|(i, f)| (f.name.clone(), i))
+            .collect();
+        let native_to_idx: HashMap<String, u16> = self
+            .module
+            .native_names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i as u16))
+            .collect();
+        // 脚本里有、链接表没有的 native：补进模块名表。
+        for name in &script.native_names {
+            if !native_to_idx.contains_key(name) {
+                self.module.intern_native(name.clone());
+            }
+        }
+        let remapped = remap_func_against(script, main, &name_to_idx, &HashMap::new());
+        let idx = self.module.functions.len();
+        self.module.functions.push(remapped);
+        self.hotness.push(0);
+        let result = self.call_index(idx, &[], host);
+        self.module.functions.pop();
+        self.hotness.pop();
+        result
     }
 
     /// 按名调用脚本函数（ECS System / 事件回调入口）。
@@ -391,20 +529,42 @@ impl Vm {
     ) -> Result<(), VmError> {
         let b = self.pop()?;
         let a = self.pop()?;
-        let an = a.as_number().ok_or_else(|| VmError::TypeError {
-            expected: "number",
-            got: a.type_name().into(),
-        })?;
-        let bn = b.as_number().ok_or_else(|| VmError::TypeError {
-            expected: "number",
-            got: b.type_name().into(),
-        })?;
+        // RGSS 宿主阶段：非数字（含 null / 对象 stub）按 0 参与算术。
+        let an = a.as_number().unwrap_or(0.0);
+        let bn = b.as_number().unwrap_or(0.0);
         self.stack.push(Value::Number(op(an, bn)?));
         Ok(())
     }
 
     fn interpret(&mut self, host: &mut dyn HostHooks) -> Result<Value, VmError> {
+        let mut steps: u64 = 0;
+        let step_limit = self.step_limit;
         loop {
+            steps += 1;
+            if steps > step_limit {
+                let mut best = 0u32;
+                let mut best_name = "?".to_string();
+                for (i, h) in self.hotness.iter().enumerate() {
+                    if *h >= best {
+                        best = *h;
+                        best_name = self
+                            .module
+                            .functions
+                            .get(i)
+                            .map(|f| f.name.clone())
+                            .unwrap_or_else(|| "?".into());
+                    }
+                }
+                eprintln!("rgss play: step limit hit hot={best_name}({best}) steps={steps}");
+                if !self.call_hits.is_empty() {
+                    let mut hits: Vec<_> = self.call_hits.iter().collect();
+                    hits.sort_by(|a, b| b.1.cmp(a.1));
+                    for (name, n) in hits.into_iter().take(8) {
+                        eprintln!("rgss play: call_hit {name}={n}");
+                    }
+                }
+                return Err(VmError::CallOverflow);
+            }
             if self.frames.is_empty() {
                 return Ok(self.stack.pop().unwrap_or(Value::Null));
             }
@@ -475,11 +635,8 @@ impl Vm {
                         .get(idx as usize)
                         .cloned()
                         .unwrap_or_default();
-                    let v = self
-                        .globals
-                        .get(&name)
-                        .cloned()
-                        .ok_or(VmError::UnknownGlobal(name))?;
+                    // Ruby 未定义全局读为 nil；常量未定义暂同此处理，便于 stub 宿主。
+                    let v = self.globals.get(&name).cloned().unwrap_or(Value::Null);
                     self.stack.push(v);
                 }
                 Op::StoreGlobal => {
@@ -501,6 +658,22 @@ impl Vm {
                         (Value::Number(x), Value::Number(y)) => {
                             self.stack.push(Value::Number(x + y));
                         }
+                        (Value::Handle(ha), Value::Handle(hb)) => {
+                            match (self.heap.get(*ha), self.heap.get(*hb)) {
+                                (Ok(GcObject::Array(aa)), Ok(GcObject::Array(bb))) => {
+                                    let mut out = aa.clone();
+                                    out.extend(bb.iter().cloned());
+                                    let h = self.heap.alloc(GcObject::Array(out));
+                                    self.stack.push(Value::Handle(h));
+                                }
+                                _ => {
+                                    let sa = self.value_to_string(&a)?;
+                                    let sb = self.value_to_string(&b)?;
+                                    let v = self.heap.alloc_string(format!("{sa}{sb}"));
+                                    self.stack.push(v);
+                                }
+                            }
+                        }
                         _ => {
                             let sa = self.value_to_string(&a)?;
                             let sb = self.value_to_string(&b)?;
@@ -509,21 +682,50 @@ impl Vm {
                         }
                     }
                 }
+                Op::Mul => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    match (&a, &b) {
+                        (Value::Handle(h), Value::Number(n)) => {
+                            if let Ok(GcObject::Array(arr)) = self.heap.get(*h) {
+                                let times = (*n).max(0.0) as usize;
+                                let mut out = Vec::with_capacity(arr.len() * times);
+                                for _ in 0..times {
+                                    out.extend(arr.iter().cloned());
+                                }
+                                let nh = self.heap.alloc(GcObject::Array(out));
+                                self.stack.push(Value::Handle(nh));
+                            } else {
+                                let an = a.as_number().unwrap_or(0.0);
+                                let bn = b.as_number().unwrap_or(0.0);
+                                self.stack.push(Value::Number(an * bn));
+                            }
+                        }
+                        _ => {
+                            let an = a.as_number().unwrap_or(0.0);
+                            let bn = b.as_number().unwrap_or(0.0);
+                            self.stack.push(Value::Number(an * bn));
+                        }
+                    }
+                }
                 Op::Sub => self.bin_num(|a, b| Ok(a - b))?,
-                Op::Mul => self.bin_num(|a, b| Ok(a * b))?,
                 Op::Div => self.bin_num(|a, b| {
                     if b == 0.0 {
-                        Err(VmError::DivByZero)
+                        Ok(0.0)
                     } else {
                         Ok(a / b)
                     }
                 })?,
+                Op::Mod => self.bin_num(|a, b| {
+                    if b == 0.0 {
+                        Ok(0.0)
+                    } else {
+                        Ok(a % b)
+                    }
+                })?,
                 Op::Neg => {
                     let a = self.pop()?;
-                    let n = a.as_number().ok_or_else(|| VmError::TypeError {
-                        expected: "number",
-                        got: a.type_name().into(),
-                    })?;
+                    let n = a.as_number().unwrap_or(0.0);
                     self.stack.push(Value::Number(-n));
                 }
                 Op::Not => {
@@ -537,14 +739,8 @@ impl Vm {
                         Op::Eq => values_eq(&a, &b),
                         Op::Ne => !values_eq(&a, &b),
                         _ => {
-                            let an = a.as_number().ok_or_else(|| VmError::TypeError {
-                                expected: "number",
-                                got: a.type_name().into(),
-                            })?;
-                            let bn = b.as_number().ok_or_else(|| VmError::TypeError {
-                                expected: "number",
-                                got: b.type_name().into(),
-                            })?;
+                            let an = a.as_number().unwrap_or(0.0);
+                            let bn = b.as_number().unwrap_or(0.0);
                             match op {
                                 Op::Lt => an < bn,
                                 Op::Le => an <= bn,
@@ -598,11 +794,22 @@ impl Vm {
                         return Err(VmError::CodeOob);
                     }
                     let arity = self.module.functions[fidx].arity;
+                    let mut argc = argc;
                     if argc != arity {
-                        return Err(VmError::ArityMismatch {
-                            expected: u16::from(arity),
-                            got: u16::from(argc),
-                        });
+                        if arity > argc {
+                            // 缺参垫 nil（默认参数 / `Foo.bar` 缺 self 等）。
+                            let need = (arity - argc) as usize;
+                            let insert_at = callee_idx + 1 + argc as usize;
+                            for _ in 0..need {
+                                self.stack.insert(insert_at, Value::Null);
+                            }
+                            argc = arity;
+                        } else {
+                            let drop_n = (argc - arity) as usize;
+                            let start = self.stack.len() - drop_n;
+                            self.stack.truncate(start);
+                            argc = arity;
+                        }
                     }
                     if self.frames.len() > 256 {
                         return Err(VmError::CallOverflow);
@@ -664,11 +871,12 @@ impl Vm {
                     let name_idx = Self::read_u16(&self.module.functions[func_idx].code, &mut ip)?;
                     let argc = Self::read_u8(&self.module.functions[func_idx].code, &mut ip)?;
                     self.frames[fi].ip = ip;
-                    let name = self
-                        .module
-                        .native_names
+                    // CallNative 操作数 = 本函数字符串池下标（脚本前端）；旧字节码回退 native_names。
+                    let name = self.module.functions[func_idx]
+                        .strings
                         .get(name_idx as usize)
                         .cloned()
+                        .or_else(|| self.module.native_names.get(name_idx as usize).cloned())
                         .ok_or(VmError::CodeOob)?;
                     if self.stack.len() < argc as usize {
                         return Err(VmError::StackUnderflow);
@@ -677,6 +885,14 @@ impl Vm {
                         .stack
                         .drain(self.stack.len() - argc as usize..)
                         .collect();
+                    if !self.natives.contains_key(&name) {
+                        // 未注册 native 默认空实现，便于逐步补齐 RGSS API。
+                        self.natives.insert(
+                            name.clone(),
+                            Box::new(|_ctx, _args| Ok(Value::Null)),
+                        );
+                    }
+                    *self.call_hits.entry(format!("native:{name}")).or_insert(0) += 1;
                     let mut native = self
                         .natives
                         .remove(&name)
@@ -690,6 +906,216 @@ impl Vm {
                     };
                     self.natives.insert(name, native);
                     self.stack.push(result?);
+                }
+                Op::Send => {
+                    let mut ip = self.frames[fi].ip;
+                    let method_idx = Self::read_u16(&self.module.functions[func_idx].code, &mut ip)?;
+                    let argc = Self::read_u8(&self.module.functions[func_idx].code, &mut ip)?;
+                    self.frames[fi].ip = ip;
+                    let method = self.module.functions[func_idx]
+                        .strings
+                        .get(method_idx as usize)
+                        .cloned()
+                        .ok_or(VmError::CodeOob)?;
+                    if self.stack.len() < argc as usize + 1 {
+                        return Err(VmError::StackUnderflow);
+                    }
+                    let args: Vec<Value> = self
+                        .stack
+                        .drain(self.stack.len() - argc as usize..)
+                        .collect();
+                    let recv = self.pop()?;
+                    // 数组内建：size / [] / []=
+                    if let Value::Handle(h) = &recv {
+                        if let Ok(GcObject::Array(arr)) = self.heap.get(*h) {
+                            match method.as_str() {
+                                "size" | "length" => {
+                                    self.stack.push(Value::Number(arr.len() as f64));
+                                    continue;
+                                }
+                                "min" => {
+                                    let mut best: Option<f64> = None;
+                                    for v in arr {
+                                        if let Some(n) = v.as_number() {
+                                            best = Some(best.map_or(n, |b| b.min(n)));
+                                        }
+                                    }
+                                    self.stack.push(best.map(Value::Number).unwrap_or(Value::Null));
+                                    continue;
+                                }
+                                "max" => {
+                                    let mut best: Option<f64> = None;
+                                    for v in arr {
+                                        if let Some(n) = v.as_number() {
+                                            best = Some(best.map_or(n, |b| b.max(n)));
+                                        }
+                                    }
+                                    self.stack.push(best.map(Value::Number).unwrap_or(Value::Null));
+                                    continue;
+                                }
+                                "[]" if argc == 1 => {
+                                    let idx = args.first().and_then(|v| v.as_number()).unwrap_or(0.0) as isize;
+                                    let i = if idx < 0 {
+                                        (arr.len() as isize + idx) as usize
+                                    } else {
+                                        idx as usize
+                                    };
+                                    let v = arr.get(i).cloned().unwrap_or(Value::Null);
+                                    self.stack.push(v);
+                                    continue;
+                                }
+                                "[]=" if argc == 2 => {
+                                    let idx = args.first().and_then(|v| v.as_number()).unwrap_or(0.0) as usize;
+                                    let val = args.get(1).cloned().unwrap_or(Value::Null);
+                                    if let Ok(GcObject::Array(arr)) = self.heap.get_mut(*h) {
+                                        if idx >= arr.len() {
+                                            arr.resize(idx + 1, Value::Null);
+                                        }
+                                        arr[idx] = val.clone();
+                                    }
+                                    self.stack.push(val);
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    let class_name = match &recv {
+                        Value::Handle(h) => match self.heap.get(*h) {
+                            Ok(GcObject::Table(map)) => map
+                                .get("__class")
+                                .and_then(|v| match v {
+                                    Value::Handle(ch) => match self.heap.get(*ch) {
+                                        Ok(GcObject::String(s)) => Some(s.clone()),
+                                        _ => None,
+                                    },
+                                    _ => None,
+                                })
+                                .unwrap_or_else(|| "Object".into()),
+                            _ => "Object".into(),
+                        },
+                        _ => "Object".into(),
+                    };
+                    let fname = format!("{class_name}_{method}");
+                    *self.call_hits.entry(format!("send:{fname}")).or_insert(0) += 1;
+                    if let Some(fidx) = self.module.find_function(&fname) {
+                        let arity = self.module.functions[fidx].arity;
+                        let call_args: Vec<Value> = if arity as usize == args.len() + 1 {
+                            let mut v = Vec::with_capacity(args.len() + 1);
+                            v.push(recv);
+                            v.extend(args);
+                            v
+                        } else if arity as usize == args.len() {
+                            args
+                        } else {
+                            return Err(VmError::ArityMismatch {
+                                expected: u16::from(arity),
+                                got: (args.len() + 1) as u16,
+                            });
+                        };
+                        if self.frames.len() > 256 {
+                            return Err(VmError::CallOverflow);
+                        }
+                        let base = self.stack.len();
+                        self.stack.extend(call_args);
+                        let need = self.module.functions[fidx].locals as usize;
+                        while self.stack.len() < base + need {
+                            self.stack.push(Value::Null);
+                        }
+                        self.frames.push(Frame {
+                            func: fidx,
+                            ip: 0,
+                            stack_base: base,
+                        });
+                    } else if let Some(mut native) = self.natives.remove(&fname) {
+                        let mut call_args = Vec::with_capacity(args.len() + 1);
+                        call_args.push(recv);
+                        call_args.extend(args);
+                        let result = {
+                            let mut ctx = NativeCtx {
+                                heap: &mut self.heap,
+                                globals: &mut self.globals,
+                            };
+                            native(&mut ctx, call_args)
+                        };
+                        self.natives.insert(fname, native);
+                        self.stack.push(result?);
+                    } else {
+                        // 缺方法：RGSS 宿主阶段返回 nil，避免整包因缺 stub 立刻崩。
+                        self.stack.push(Value::Null);
+                    }
+                }
+                Op::GetField => {
+                    let mut ip = self.frames[fi].ip;
+                    let idx = Self::read_u16(&self.module.functions[func_idx].code, &mut ip)?;
+                    self.frames[fi].ip = ip;
+                    let field = self.module.functions[func_idx]
+                        .strings
+                        .get(idx as usize)
+                        .cloned()
+                        .ok_or(VmError::CodeOob)?;
+                    let obj = self.pop()?;
+                    let Value::Handle(h) = obj else {
+                        return Err(VmError::TypeError {
+                            expected: "object",
+                            got: obj.type_name().into(),
+                        });
+                    };
+                    let v = match self.heap.get(h).map_err(|_| VmError::BadHandle)? {
+                        GcObject::Table(map) => map.get(&field).cloned().unwrap_or(Value::Null),
+                        _ => Value::Null,
+                    };
+                    self.stack.push(v);
+                }
+                Op::SetField => {
+                    let mut ip = self.frames[fi].ip;
+                    let idx = Self::read_u16(&self.module.functions[func_idx].code, &mut ip)?;
+                    self.frames[fi].ip = ip;
+                    let field = self.module.functions[func_idx]
+                        .strings
+                        .get(idx as usize)
+                        .cloned()
+                        .ok_or(VmError::CodeOob)?;
+                    let value = self.pop()?;
+                    let obj = self.pop()?;
+                    let Value::Handle(h) = obj else {
+                        return Err(VmError::TypeError {
+                            expected: "object",
+                            got: obj.type_name().into(),
+                        });
+                    };
+                    match self.heap.get_mut(h).map_err(|_| VmError::BadHandle)? {
+                        GcObject::Table(map) => {
+                            map.insert(field, value.clone());
+                        }
+                        _ => {
+                            return Err(VmError::TypeError {
+                                expected: "table",
+                                got: "object".into(),
+                            });
+                        }
+                    }
+                    self.stack.push(value);
+                }
+                Op::Dup => {
+                    let v = self.peek()?.clone();
+                    self.stack.push(v);
+                }
+                Op::NewTable => {
+                    let h = self.heap.alloc(GcObject::Table(HashMap::new()));
+                    self.stack.push(Value::Handle(h));
+                }
+                Op::NewArray => {
+                    let mut ip = self.frames[fi].ip;
+                    let n = Self::read_u8(&self.module.functions[func_idx].code, &mut ip)?;
+                    self.frames[fi].ip = ip;
+                    if self.stack.len() < n as usize {
+                        return Err(VmError::StackUnderflow);
+                    }
+                    let start = self.stack.len() - n as usize;
+                    let elems: Vec<Value> = self.stack.drain(start..).collect();
+                    let h = self.heap.alloc(GcObject::Array(elems));
+                    self.stack.push(Value::Handle(h));
                 }
             }
 
@@ -756,6 +1182,13 @@ fn decode_op(op: u8) -> Option<Op> {
         x if x == Op::JitEnter as u8 => Op::JitEnter,
         x if x == Op::LoadString as u8 => Op::LoadString,
         x if x == Op::CallNative as u8 => Op::CallNative,
+        x if x == Op::Mod as u8 => Op::Mod,
+        x if x == Op::Send as u8 => Op::Send,
+        x if x == Op::GetField as u8 => Op::GetField,
+        x if x == Op::SetField as u8 => Op::SetField,
+        x if x == Op::Dup as u8 => Op::Dup,
+        x if x == Op::NewTable as u8 => Op::NewTable,
+        x if x == Op::NewArray as u8 => Op::NewArray,
         _ => return None,
     })
 }
