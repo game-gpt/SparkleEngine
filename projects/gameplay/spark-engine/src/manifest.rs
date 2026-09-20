@@ -18,6 +18,8 @@ pub struct ModManifest {
     pub version: String,
     /// 相对模组根的入口脚本；缺省则只挂载资源 / 清单。
     pub entry: Option<String>,
+    /// 相对模组根的已验证 `.spkx` 映像；若存在则优先于源码编译装载。
+    pub artifact: Option<String>,
     /// 脚本语言：`valkyrie` / `lua` / `ruby`；缺省时按入口扩展名推断。
     pub language: Option<String>,
     pub dependencies: Vec<String>,
@@ -97,6 +99,7 @@ pub fn parse_mod_von(text: &str) -> Result<ModManifest, ManifestParseError> {
     let mut name = String::new();
     let mut version = "0.0.0".to_string();
     let mut entry = None;
+    let mut artifact = None;
     let mut language = None;
     let mut dependencies = Vec::new();
 
@@ -116,6 +119,7 @@ pub fn parse_mod_von(text: &str) -> Result<ModManifest, ManifestParseError> {
             "name" => name = parse_string(value)?,
             "version" => version = parse_string(value)?,
             "entry" => entry = Some(parse_string(value)?),
+            "artifact" => artifact = Some(parse_string(value)?),
             "language" => language = Some(parse_string(value)?),
             "dependencies" => dependencies = parse_string_array(value)?,
             other => {
@@ -132,6 +136,7 @@ pub fn parse_mod_von(text: &str) -> Result<ModManifest, ManifestParseError> {
         name,
         version,
         entry,
+        artifact,
         language,
         dependencies,
     })
@@ -300,6 +305,17 @@ dependencies = ["core", "extra"]
         assert_eq!(m.name, "Demo");
         assert_eq!(m.entry.as_deref(), Some("main.vk"));
         assert_eq!(m.dependencies, vec!["core", "extra"]);
+    }
+
+    #[test]
+    fn parses_artifact_field() {
+        let raw = r#"
+id = "packed"
+artifact = "dist/main.spkx"
+"#;
+        let m = parse_mod_von(raw).unwrap();
+        assert_eq!(m.artifact.as_deref(), Some("dist/main.spkx"));
+        assert!(m.entry.is_none());
     }
 
     #[test]
