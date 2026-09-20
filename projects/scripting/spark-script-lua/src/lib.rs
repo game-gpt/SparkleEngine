@@ -127,6 +127,41 @@ mod tests {
     }
 
     #[test]
+    fn elseif_and_do_via_ir() {
+        let m = compile(
+            r#"
+            local x = 2
+            if x < 1 then
+                return 0
+            elseif x < 3 then
+                return 42
+            else
+                return 1
+            end
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
+
+        let m = compile(
+            r#"
+            local n = 0
+            do
+                n = n + 40
+                n = n + 2
+            end
+            return n
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        assert_eq!(vm.run(&mut StdHost).unwrap().as_number(), Some(42.0));
+    }
+
+    #[test]
     fn function_call() {
         let m = compile(
             r#"
