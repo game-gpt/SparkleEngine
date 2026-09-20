@@ -47,6 +47,7 @@ spark-video = { path = "projects/graphics/spark-video" }
 spark-gc = { path = "projects/scripting/spark-gc" }
 spark-vm = { path = "projects/scripting/spark-vm" }
 spark-jit = { path = "projects/scripting/spark-jit" }
+spark-script-ir = { path = "projects/scripting/spark-script-ir" }
 spark-script = { path = "projects/scripting/spark-script" }
 spark-script-valkyrie = { path = "projects/scripting/spark-script-valkyrie" }
 spark-script-lua = { path = "projects/scripting/spark-script-lua" }

@@ -1,12 +1,28 @@
 //! Spark HIR：统一语义层（非 VM 指令）。
-//!
-//! 语言糖应在进入 HIR 前由前端展开。HIR 仍可保留源映射以便诊断。
 
 use std::sync::Arc;
 
 use spark_diagnostics::SourceSpan;
 
-use crate::request::PackageId;
+/// 包身份（IR 层轻量表示）。
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PackageId {
+    pub name: Arc<str>,
+    pub version: Arc<str>,
+}
+
+impl PackageId {
+    pub fn new(name: impl Into<Arc<str>>, version: impl Into<Arc<str>>) -> Self {
+        Self {
+            name: name.into(),
+            version: version.into(),
+        }
+    }
+
+    pub fn anonymous() -> Self {
+        Self::new("_anonymous", "0")
+    }
+}
 
 /// 稳定符号身份（链接用，不是显示名）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -16,7 +32,7 @@ pub struct SymbolId {
     pub local_index: u32,
 }
 
-/// 公共值类型（动态语言可大量使用 [`Ty::Dynamic`]）。
+/// 公共值类型。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
     Null,
@@ -61,20 +77,17 @@ pub enum HirExpr {
         index: u32,
         span: Option<SourceSpan>,
     },
-    /// 语义已明确的调用（参数个数与 ABI 在检查阶段校验）。
     Call {
         callee: Box<HirExpr>,
         args: Vec<HirExpr>,
         span: Option<SourceSpan>,
     },
-    /// 规则固定的动态发送（效果可见，不是未定义的语言专用节点）。
     DynamicSend {
         receiver: Box<HirExpr>,
         method: Arc<str>,
         args: Vec<HirExpr>,
         span: Option<SourceSpan>,
     },
-    /// 宿主槽位调用（降低后应使用链接槽，此处可先保留 stable id 字符串）。
     HostCall {
         host_name: Arc<str>,
         args: Vec<HirExpr>,
@@ -91,7 +104,6 @@ pub enum HirExpr {
         expr: Box<HirExpr>,
         span: Option<SourceSpan>,
     },
-    /// 显式真值转换（各语言规则已在前端展开到此）。
     ToBool {
         expr: Box<HirExpr>,
         span: Option<SourceSpan>,
@@ -146,7 +158,6 @@ pub enum HirStmt {
         value: Option<HirExpr>,
         span: Option<SourceSpan>,
     },
-    /// 显式分支（短路等已展开为此）。
     If {
         cond: HirExpr,
         then_body: Vec<HirStmt>,

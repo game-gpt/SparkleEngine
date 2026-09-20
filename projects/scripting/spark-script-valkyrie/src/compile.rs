@@ -397,9 +397,11 @@ fn compile_call(
         for a in args {
             compile_expr(ctx, a)?;
         }
-        let ni = ctx.intern_native(&name);
+        // CallNative 操作数 = 本函数字符串池下标（与 spark-vm 约定一致）。
+        let _ = ctx.intern_native(&name);
+        let si = ctx.f.add_string(name);
         ctx.f.emit(Op::CallNative);
-        ctx.f.emit_u16(ni);
+        ctx.f.emit_u16(si);
         ctx.f.emit_u8(args.len() as u8);
         return Ok(());
     }

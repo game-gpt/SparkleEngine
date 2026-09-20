@@ -3322,9 +3322,18 @@ dependencies = [
  "spark-diagnostics",
  "spark-gc",
  "spark-jit",
+ "spark-script-ir",
  "spark-script-lua",
  "spark-script-ruby",
  "spark-script-valkyrie",
+ "spark-vm",
+]
+
+[[package]]
+name = "spark-script-ir"
+version = "0.1.0"
+dependencies = [
+ "spark-diagnostics",
  "spark-vm",
 ]
 
@@ -3357,6 +3366,7 @@ dependencies = [
  "oak-valkyrie",
  "spark-diagnostics",
  "spark-gc",
+ "spark-script-ir",
  "spark-vm",
 ]
 

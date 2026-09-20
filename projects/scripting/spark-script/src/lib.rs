@@ -12,7 +12,6 @@ mod artifact;
 mod compiler;
 mod diagnostic;
 mod host_schema;
-mod ir;
 mod request;
 mod runtime;
 
@@ -28,17 +27,17 @@ pub use host_schema::{
     CapabilityId, DeterminismClass, HostEffect, HostErrorModel, HostFunction, HostFunctionId,
     HostPhase, HostSchema, SuspensionBehavior, ThreadAffinity,
 };
-pub use ir::hir::{
-    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, SymbolId, Ty,
-};
-pub use ir::mir::{
-    BasicBlock, HostRef, MirFunction, MirInst, MirModule, MirTerminator, MirValue,
-};
 pub use request::{
     CompilationRequest, DebugInfoLevel, LanguageFrontend, LanguageProfile, LanguageProfileId,
     OptimizationLevel, PackageId, SourceFile,
 };
 pub use runtime::ScriptRuntime;
+pub use spark_script_ir::{
+    BasicBlock, HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, HostRef,
+    MirFunction, MirInst, MirModule, MirTerminator, MirValue, SymbolId, Ty, emit_module,
+    lower_module,
+};
+pub use spark_script_ir::PackageId as IrPackageId;
 pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 
 /// 脚本源语言（过渡期枚举；正式路径请用 [`LanguageProfile`]）。
