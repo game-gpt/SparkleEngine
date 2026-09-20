@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use spark_vm::Module;
+use spark_vm::{verify_bytecode, BytecodeVerifyError, Module};
 
 use crate::host_schema::HostSchema;
 use crate::request::{LanguageProfile, PackageId};
@@ -154,20 +154,16 @@ impl std::fmt::Display for LinkError {
 
 impl std::error::Error for LinkError {}
 
-/// 字节码验证错误。
+/// 字节码验证错误（包装 `spark-vm` 验证器）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerifyError {
-    EmptyModule,
-    EntryOutOfBounds { entry: usize, len: usize },
-    EmptyFunction { index: usize },
+    Bytecode(BytecodeVerifyError),
 }
 
 impl VerifyError {
     pub fn code(&self) -> &'static str {
         match self {
-            Self::EmptyModule => "spark.script.verify.empty_module",
-            Self::EntryOutOfBounds { .. } => "spark.script.verify.entry_oob",
-            Self::EmptyFunction { .. } => "spark.script.verify.empty_function",
+            Self::Bytecode(e) => e.code(),
         }
     }
 }
@@ -180,6 +176,11 @@ impl std::fmt::Display for VerifyError {
 
 impl std::error::Error for VerifyError {}
 
+impl From<BytecodeVerifyError> for VerifyError {
+    fn from(value: BytecodeVerifyError) -> Self {
+        Self::Bytecode(value)
+    }
+}
 /// 经过验证、可供 VM 装载的不可变映像。
 #[derive(Debug, Clone)]
 pub struct ExecutableImage {
@@ -193,9 +194,9 @@ pub struct ExecutableImage {
 }
 
 impl ExecutableImage {
-    /// 对已链接程序做最小结构验证后封存。
+    /// 对已链接程序做字节码验证后封存。
     pub fn verify(program: LinkedProgram) -> Result<Self, VerifyError> {
-        verify_module(&program.legacy_module)?;
+        verify_bytecode(&program.legacy_module)?;
         Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
             package: program.package,
@@ -229,24 +230,6 @@ impl ExecutableImage {
     pub fn clone_module(&self) -> Module {
         self.module.clone()
     }
-}
-
-fn verify_module(module: &Module) -> Result<(), VerifyError> {
-    if module.functions.is_empty() {
-        return Err(VerifyError::EmptyModule);
-    }
-    if module.entry >= module.functions.len() {
-        return Err(VerifyError::EntryOutOfBounds {
-            entry: module.entry,
-            len: module.functions.len(),
-        });
-    }
-    for (index, func) in module.functions.iter().enumerate() {
-        if func.code.is_empty() {
-            return Err(VerifyError::EmptyFunction { index });
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

@@ -15,6 +15,10 @@ use std::sync::Arc;
 use spark_diagnostics::{Error, ErrorArg, ErrorArgs, ErrorCode};
 use spark_gc::{GcObject, Heap, Value};
 
+mod verify;
+
+pub use verify::{verify_bytecode, BytecodeVerifyError};
+
 /// VM 结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]
 pub enum VmError {
@@ -1242,7 +1246,7 @@ impl Vm {
     }
 }
 
-fn decode_op(op: u8) -> Option<Op> {
+pub(crate) fn decode_op(op: u8) -> Option<Op> {
     Some(match op {
         x if x == Op::Nop as u8 => Op::Nop,
         x if x == Op::LoadNull as u8 => Op::LoadNull,
