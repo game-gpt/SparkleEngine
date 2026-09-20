@@ -8,7 +8,7 @@ mod hir;
 mod lower;
 mod mir;
 
-pub use codegen::emit_module;
+pub use codegen::{emit_module, emit_module_with_host, HostEmitMode};
 pub use hir::{
     HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, PackageId, SymbolId, Ty,
 };

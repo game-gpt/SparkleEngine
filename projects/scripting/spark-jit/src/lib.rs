@@ -130,7 +130,7 @@ fn operand_bytes(op: u8) -> usize {
         4
     } else if op == Op::LoadString as u8 {
         2
-    } else if op == Op::CallNative as u8 {
+    } else if op == Op::CallNative as u8 || op == Op::CallHost as u8 {
         3
     } else {
         0

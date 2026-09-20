@@ -261,6 +261,14 @@ impl HostSchema {
             .map(|i| i as u32)
     }
 
+    /// 按短名查找槽位。
+    pub fn slot_of_short_name(&self, name: &str) -> Option<u32> {
+        self.functions
+            .iter()
+            .position(|f| f.id.name.as_ref() == name)
+            .map(|i| i as u32)
+    }
+
     pub fn short_names(&self) -> Vec<&str> {
         self.functions.iter().map(|f| f.short_name()).collect()
     }

@@ -160,6 +160,8 @@ pub enum Op {
     NewTable,
     /// 新建数组：后跟 u8 元素个数；弹出 N 个元素（底→顶为 0..N-1），压入 `Array`。
     NewArray,
+    /// 宿主槽位调用：后跟 u16 槽位 + u8 参数个数（链接后 ABI；不经字符串查找）。
+    CallHost,
 }
 
 /// 编译期函数原型（解释与 JIT 共用）。
@@ -386,9 +388,11 @@ pub struct Vm {
     /// 每条函数解释步热度（供 JIT）。
     pub hotness: Vec<u32>,
     pub natives: HashMap<String, NativeFn>,
+    /// 宿主槽位 → 短名（与编译期 `HostSchema` 插入顺序一致）。
+    pub host_slot_names: Vec<String>,
     /// 单次 `interpret` 步数上限（RGSS 宿主可调）。
     pub step_limit: u64,
-    /// CallNative / Send 调用计数（诊断用）。
+    /// CallNative / Send / CallHost 调用计数（诊断用）。
     pub call_hits: HashMap<String, u32>,
 }
 
@@ -403,9 +407,15 @@ impl Vm {
             frames: Vec::with_capacity(64),
             hotness: vec![0; n],
             natives: HashMap::new(),
+            host_slot_names: Vec::new(),
             step_limit: 5_000_000,
             call_hits: HashMap::new(),
         }
+    }
+
+    /// 装载编译期宿主槽位表（短名顺序 = 槽位下标）。
+    pub fn prepare_host_slots(&mut self, names: impl IntoIterator<Item = impl Into<String>>) {
+        self.host_slot_names = names.into_iter().map(Into::into).collect();
     }
 
     pub fn register_native<F>(&mut self, name: impl Into<String>, f: F)
@@ -473,6 +483,29 @@ impl Vm {
             .find_function(name)
             .ok_or_else(|| VmError::UnknownFunction(name.into()))?;
         self.call_index(idx, args, host)
+    }
+
+    fn invoke_native(&mut self, name: &str, args: Vec<Value>) -> Result<Value, VmError> {
+        if !self.natives.contains_key(name) {
+            // 未注册 native 默认空实现，便于逐步补齐 RGSS API。
+            self.natives.insert(
+                name.to_string(),
+                Box::new(|_ctx, _args| Ok(Value::Null)),
+            );
+        }
+        let mut native = self
+            .natives
+            .remove(name)
+            .ok_or_else(|| VmError::UnknownNative(name.to_string()))?;
+        let result = {
+            let mut ctx = NativeCtx {
+                heap: &mut self.heap,
+                globals: &mut self.globals,
+            };
+            native(&mut ctx, args)
+        };
+        self.natives.insert(name.to_string(), native);
+        result
     }
 
     fn call_index(
@@ -914,27 +947,30 @@ impl Vm {
                         .stack
                         .drain(self.stack.len() - argc as usize..)
                         .collect();
-                    if !self.natives.contains_key(&name) {
-                        // 未注册 native 默认空实现，便于逐步补齐 RGSS API。
-                        self.natives.insert(
-                            name.clone(),
-                            Box::new(|_ctx, _args| Ok(Value::Null)),
-                        );
-                    }
                     *self.call_hits.entry(format!("native:{name}")).or_insert(0) += 1;
-                    let mut native = self
-                        .natives
-                        .remove(&name)
-                        .ok_or_else(|| VmError::UnknownNative(name.clone()))?;
-                    let result = {
-                        let mut ctx = NativeCtx {
-                            heap: &mut self.heap,
-                            globals: &mut self.globals,
-                        };
-                        native(&mut ctx, args)
-                    };
-                    self.natives.insert(name, native);
-                    self.stack.push(result?);
+                    let result = self.invoke_native(&name, args)?;
+                    self.stack.push(result);
+                }
+                Op::CallHost => {
+                    let mut ip = self.frames[fi].ip;
+                    let slot = Self::read_u16(&self.module.functions[func_idx].code, &mut ip)?;
+                    let argc = Self::read_u8(&self.module.functions[func_idx].code, &mut ip)?;
+                    self.frames[fi].ip = ip;
+                    let name = self
+                        .host_slot_names
+                        .get(slot as usize)
+                        .cloned()
+                        .ok_or_else(|| VmError::UnknownNative(format!("host_slot:{slot}")))?;
+                    if self.stack.len() < argc as usize {
+                        return Err(VmError::StackUnderflow);
+                    }
+                    let args: Vec<Value> = self
+                        .stack
+                        .drain(self.stack.len() - argc as usize..)
+                        .collect();
+                    *self.call_hits.entry(format!("host:{slot}:{name}")).or_insert(0) += 1;
+                    let result = self.invoke_native(&name, args)?;
+                    self.stack.push(result);
                 }
                 Op::Send => {
                     let mut ip = self.frames[fi].ip;
@@ -1286,6 +1322,7 @@ pub(crate) fn decode_op(op: u8) -> Option<Op> {
         x if x == Op::Dup as u8 => Op::Dup,
         x if x == Op::NewTable as u8 => Op::NewTable,
         x if x == Op::NewArray as u8 => Op::NewArray,
+        x if x == Op::CallHost as u8 => Op::CallHost,
         _ => return None,
     })
 }
@@ -1356,5 +1393,31 @@ mod tests {
             .call_function("add", &[Value::Number(40.0), Value::Number(2.0)], &mut host)
             .unwrap();
         assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn call_host_slot_dispatches_by_prepared_name() {
+        let mut f = FuncProto::new("__main", 0);
+        let c = f.add_const_number(21.0);
+        f.emit(Op::LoadConst);
+        f.emit_u16(c);
+        f.emit(Op::CallHost);
+        f.emit_u16(0);
+        f.emit_u8(1);
+        f.emit(Op::Return);
+        let mut vm = Vm::new(Module {
+            functions: vec![f],
+            entry: 0,
+            native_names: vec!["double".into()],
+        });
+        vm.prepare_host_slots(["double"]);
+        vm.register_native("double", |_ctx, args| {
+            let n = args.first().and_then(|v| v.as_number()).unwrap_or(0.0);
+            Ok(Value::Number(n * 2.0))
+        });
+        let mut host = BufHost(String::new());
+        let v = vm.run(&mut host).unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
+        assert_eq!(vm.call_hits.get("host:0:double"), Some(&1));
     }
 }

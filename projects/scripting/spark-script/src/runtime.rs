@@ -23,8 +23,10 @@ impl ScriptRuntime {
         image
             .check_host_schema(host)
             .map_err(link_to_script_error)?;
+        let mut vm = Vm::new(image.clone_module());
+        vm.prepare_host_slots(host.short_names().into_iter().map(str::to_string));
         Ok(Self {
-            vm: Vm::new(image.clone_module()),
+            vm,
             jit: JitEngine::new(256),
             language: image.language.clone(),
             host_schema_hash: image.host_schema_hash,
