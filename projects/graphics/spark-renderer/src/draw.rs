@@ -23,6 +23,8 @@ pub struct TexQuadCmd {
     pub dest: Rect,
     pub uv: Rect,
     pub color: Color,
+    /// 绕 `dest` 中心逆时针旋转（弧度）。`0` 为轴对齐。
+    pub angle_rad: f32,
 }
 
 /// 2D 绘制层：世界在下，HUD 在上（同层内纹理压在纯色之上）。
@@ -116,11 +118,24 @@ impl DrawList {
 
     /// 绘制纹理四边形。`uv` 为归一化 [0,1] 源矩形。
     pub fn tex_rect(&mut self, texture: TextureId, dest: Rect, uv: Rect, color: Color) {
+        self.tex_rect_rot(texture, dest, uv, color, 0.0);
+    }
+
+    /// 绘制纹理四边形，绕 `dest` 中心旋转 `angle_rad` 弧度。
+    pub fn tex_rect_rot(
+        &mut self,
+        texture: TextureId,
+        dest: Rect,
+        uv: Rect,
+        color: Color,
+        angle_rad: f32,
+    ) {
         let q = TexQuadCmd {
             texture,
             dest,
             uv,
             color,
+            angle_rad,
         };
         match self.layer {
             DrawLayer2d::World => self.tex_quads.push(q),

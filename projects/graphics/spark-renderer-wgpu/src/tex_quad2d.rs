@@ -207,34 +207,48 @@ impl TexQuad2dGpu {
         let u1 = q.uv.x + q.uv.w;
         let v1 = q.uv.y + q.uv.h;
         let c = q.color.to_array();
+        // 绕 dest 中心旋转屏幕坐标。着色器仍只做像素→NDC。
+        let (p00, p10, p11, p01) = if q.angle_rad.abs() < 1e-8 {
+            ([x0, y0], [x1, y0], [x1, y1], [x0, y1])
+        } else {
+            let (s, cos) = q.angle_rad.sin_cos();
+            let cx = (x0 + x1) * 0.5;
+            let cy = (y0 + y1) * 0.5;
+            let rot = |px: f32, py: f32| -> [f32; 2] {
+                let dx = px - cx;
+                let dy = py - cy;
+                [cx + dx * cos - dy * s, cy + dx * s + dy * cos]
+            };
+            (rot(x0, y0), rot(x1, y0), rot(x1, y1), rot(x0, y1))
+        };
         verts.extend_from_slice(&[
             TexQuadVertex {
-                pos: [x0, y0],
+                pos: p00,
                 uv: [u0, v0],
                 color: c,
             },
             TexQuadVertex {
-                pos: [x1, y0],
+                pos: p10,
                 uv: [u1, v0],
                 color: c,
             },
             TexQuadVertex {
-                pos: [x1, y1],
+                pos: p11,
                 uv: [u1, v1],
                 color: c,
             },
             TexQuadVertex {
-                pos: [x0, y0],
+                pos: p00,
                 uv: [u0, v0],
                 color: c,
             },
             TexQuadVertex {
-                pos: [x1, y1],
+                pos: p11,
                 uv: [u1, v1],
                 color: c,
             },
             TexQuadVertex {
-                pos: [x0, y1],
+                pos: p01,
                 uv: [u0, v1],
                 color: c,
             },
