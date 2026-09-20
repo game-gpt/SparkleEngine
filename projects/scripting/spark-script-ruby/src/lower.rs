@@ -1,8 +1,10 @@
 //! Ruby AST → Spark HIR（子集）。
 //!
 //! 支持：顶层 / `def` 内 `return`、局部赋值、算术比较、字面量、
-//! `if` / `while` / `until` / `case`、`&&`/`||`/`and`/`or`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
-//! 类、实例变量、全局、`Send`、块、`for`/`each`/`break` 等回退旧路径。
+//! `if` / `while` / `until`、数值 `for .. in a..b`、`&&`/`||`/`and`/`or`、无接收者方法调用与宿主调用、`puts`/`print`/`p`。
+//! 类、实例变量、全局、`Send`、块、`each`/`break`/`case` 等回退旧路径。
+//!
+//! 注：Oaks 当前 builder 不产出 `Case`，且 `case`/`when` 解析会卡死，故不走 IR。
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -203,71 +205,18 @@ fn lower_statement(
             lower_while(condition, body, true, locals, local_tys, fn_index, native_set)?,
             false,
         )),
-        StatementNode::Case {
-            value,
-            when_clauses,
-            else_clause,
-            ..
-        } => Ok((
-            lower_case(
-                value,
-                when_clauses,
-                else_clause.as_deref(),
-                locals,
-                local_tys,
-                fn_index,
-                native_set,
-            )?,
-            false,
-        )),
         StatementNode::Expression(expr) => {
             let expr = lower_expr(expr, locals, fn_index, native_set)?;
             Ok((HirStmt::Expr { expr, span: None }, false))
         }
         StatementNode::For { .. }
+        | StatementNode::Case { .. }
         | StatementNode::Break { .. }
         | StatementNode::Next { .. }
         | StatementNode::Redo { .. }
         | StatementNode::MethodDef { .. }
         | StatementNode::ClassDef { .. } => Err(format!("ir_unsupported_stmt:{stmt:?}")),
     }
-}
-
-fn lower_case(
-    value: &ExpressionNode,
-    when_clauses: &[(ExpressionNode, Vec<StatementNode>)],
-    else_clause: Option<&[StatementNode]>,
-    locals: &mut HashMap<String, u32>,
-    local_tys: &mut Vec<(Arc<str>, Ty)>,
-    fn_index: &HashMap<String, u32>,
-    native_set: &HashSet<&str>,
-) -> Result<HirStmt, String> {
-    let subject = lower_expr(value, locals, fn_index, native_set)?;
-    let mut else_body = match else_clause {
-        Some(block) => lower_block_stmts(block, locals, local_tys, fn_index, native_set)?.0,
-        None => Vec::new(),
-    };
-    // when 从后往前折成嵌套 If：case v when a .. when b .. else ..
-    for (pat, block) in when_clauses.iter().rev() {
-        let pat_expr = lower_expr(pat, locals, fn_index, native_set)?;
-        let cond = HirExpr::Binary {
-            op: HirBinaryOp::Eq,
-            lhs: Box::new(subject.clone()),
-            rhs: Box::new(pat_expr),
-            span: None,
-        };
-        let (then_body, _) = lower_block_stmts(block, locals, local_tys, fn_index, native_set)?;
-        else_body = vec![HirStmt::If {
-            cond,
-            then_body,
-            else_body,
-            span: None,
-        }];
-    }
-    Ok(else_body.into_iter().next().unwrap_or(HirStmt::Expr {
-        expr: HirExpr::LiteralNull { span: None },
-        span: None,
-    }))
 }
 
 fn lower_assignment(
