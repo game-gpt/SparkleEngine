@@ -41,7 +41,7 @@ pub use hooks::{HookBus, HookRef};
 pub use loader::{LoadedMod, ModLoader};
 pub use localization::LocalizationService;
 pub use manifest::{ManifestParseError, ModManifest};
-pub use query_view::ScriptQueryView;
+pub use query_view::{ScriptQuerySnapshot, ScriptQueryView};
 pub use registry::{DataRegistry, RegValue};
 pub use run::{run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
 pub use script_system::{
@@ -249,6 +249,8 @@ pub struct EngineShared {
     pub logs: Vec<String>,
     pub events: spark_event::EventBus,
     pub localization: LocalizationService,
+    /// 帧同步点拍摄的 ECS 只读查询快照（脚本 `query_*` 读取）。
+    pub query: ScriptQuerySnapshot,
 }
 
 impl EngineShared {
@@ -537,7 +539,13 @@ impl SparkEngine {
         for (_mod_id, cmds) in batches {
             report.merge(apply_script_commands(world, &cmds));
         }
+        self.refresh_script_query(world);
         report
+    }
+
+    /// 从当前世界刷新脚本可读查询快照（应在提交命令后、跑脚本前调用）。
+    pub fn refresh_script_query(&mut self, world: &spark_ecs::World) {
+        self.shared.borrow_mut().query = ScriptQuerySnapshot::from_world(world);
     }
 
     /// 向指定模组领域入队事件（不立即派发）。
@@ -645,12 +653,15 @@ impl SparkEngine {
     }
 
     /// 调度某一 phase 的脚本 System，派发事件，并把命令提交到 `world`。
+    ///
+    /// 调度前刷新查询快照，使本拍脚本读到当前世界；提交命令后再刷一次。
     pub fn run_script_systems(
         &mut self,
         phase: HostPhase,
         world: &mut spark_ecs::World,
         host: &mut dyn HostHooks,
     ) -> Result<CommandApplyReport, EngineError> {
+        self.refresh_script_query(world);
         self.run_script_phase(phase, host)?;
         self.dispatch_script_events(host)?;
         Ok(self.apply_script_commands_to_world(world))
@@ -922,6 +933,52 @@ entry = "main.vk"
                 .map(|t| t.name.as_ref()),
             Some("rock")
         );
+        assert_eq!(eng.shared.borrow().query.count("rock"), 1);
+    }
+
+    #[test]
+    fn query_natives_read_refreshed_snapshot() {
+        let root = std::env::temp_dir().join("spark_engine_mod_query");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "query_demo"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro on_load() {
+                queue_spawn("rock")
+                return 0
+            }
+            micro update() {
+                return query_archetype_count("rock")
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        eng.load_mod_dir(&root).unwrap();
+        let mut world = spark_ecs::World::new();
+        let _ = eng.apply_script_commands_to_world(&mut world);
+        let mut host = StdHost;
+        let v = eng
+            .get_mod_mut("query_demo")
+            .unwrap()
+            .domain
+            .as_mut()
+            .unwrap()
+            .call("update", &[], &mut host)
+            .unwrap();
+        assert_eq!(v.as_number(), Some(1.0));
+        let bits = eng.shared.borrow().query.entity_at("rock", 0).unwrap();
+        assert!(world.is_alive(spark_ecs::Entity::from_bits(bits)));
     }
 
     #[test]
