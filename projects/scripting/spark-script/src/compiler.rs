@@ -3,6 +3,7 @@
 use crate::artifact::{
     ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError,
 };
+use crate::cache::ArtifactCache;
 use crate::host_schema::{HostFunction, HostFunctionId, HostSchema};
 use crate::request::{CompilationRequest, LanguageFrontend};
 use crate::{compile_module, compile_module_with_registry, ScriptError, ScriptLanguage};
@@ -20,6 +21,7 @@ pub struct CompiledPackage {
 #[derive(Debug, Default)]
 pub struct ScriptCompiler {
     pub diagnostics: crate::diagnostic::DiagnosticBatch,
+    pub cache: ArtifactCache,
 }
 
 impl ScriptCompiler {
@@ -27,11 +29,15 @@ impl ScriptCompiler {
         Self::default()
     }
 
-    /// 按正式 [`CompilationRequest`] 编译并链接、验证。
+    /// 按正式 [`CompilationRequest`] 编译并链接、验证（命中缓存则跳过前端）。
     pub fn compile(&mut self, request: &CompilationRequest) -> Result<CompiledPackage, ScriptError> {
         let source = request.primary_source().ok_or_else(|| {
             ScriptError::compile_reason("compilation_request_missing_source")
         })?;
+        let key = ArtifactCache::key_for(request, source);
+        if let Some(hit) = self.cache.get(key) {
+            return Ok(hit);
+        }
         let language = ScriptLanguage::from(request.language.frontend);
         let module = match language {
             ScriptLanguage::Valkyrie => {
@@ -43,7 +49,9 @@ impl ScriptCompiler {
                 compile_module(language, source, &names)?
             }
         };
-        self.seal(request, module)
+        let package = self.seal(request, module)?;
+        self.cache.insert(key, package.clone());
+        Ok(package)
     }
 
     /// 过渡期便利：语言 + 源码 + schema。
@@ -106,6 +114,29 @@ fn script_link_error(err: LinkError) -> ScriptError {
 
 fn script_verify_error(err: VerifyError) -> ScriptError {
     ScriptError::compile_reason(err.code())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ScriptLanguage;
+
+    #[test]
+    fn compile_hits_artifact_cache() {
+        let host = HostSchema::new(1);
+        let mut compiler = ScriptCompiler::new();
+        let a = compiler
+            .compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host)
+            .unwrap();
+        assert_eq!(compiler.cache.misses, 1);
+        assert_eq!(compiler.cache.hits, 0);
+        let b = compiler
+            .compile_source(ScriptLanguage::Valkyrie, "return 1 + 2", &host)
+            .unwrap();
+        assert_eq!(compiler.cache.hits, 1);
+        assert_eq!(compiler.cache.len(), 1);
+        assert_eq!(a.image.host_schema_hash, b.image.host_schema_hash);
+    }
 }
 
 /// 仅用 registry 编译（Valkyrie 走完整签名；其它前端取名）。
