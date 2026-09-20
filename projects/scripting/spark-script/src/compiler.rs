@@ -76,6 +76,55 @@ impl ScriptCompiler {
         self.compile_source(language, source, &host)
     }
 
+    /// 只编译为目标 [`SparkObject`]（不链接），供写出 `.spko` 或后续 `link_many`。
+    pub fn compile_object(
+        &mut self,
+        request: &CompilationRequest,
+    ) -> Result<SparkObject, ScriptError> {
+        let source = request.primary_source().ok_or_else(|| {
+            ScriptError::compile_reason("compilation_request_missing_source")
+        })?;
+        let language = ScriptLanguage::from(request.language.frontend);
+        let module = match language {
+            ScriptLanguage::Valkyrie => {
+                let reg = request.host_schema.to_native_registry();
+                spark_script_valkyrie::compile_with_registry(source, &reg)?
+            }
+            ScriptLanguage::Lua | ScriptLanguage::Ruby => {
+                let names = request.host_schema.short_names();
+                compile_module(language, source, &names)?
+            }
+        };
+        Ok(SparkObject::from_legacy_module(
+            request.package.clone(),
+            request.language.clone(),
+            &request.host_schema,
+            module,
+        ))
+    }
+
+    /// 将已有目标链接并验证为完整包。
+    pub fn link_objects(
+        &mut self,
+        objects: &[SparkObject],
+        host: &HostSchema,
+    ) -> Result<CompiledPackage, ScriptError> {
+        let program = if objects.len() == 1 {
+            LinkedProgram::link_single(objects[0].clone(), host).map_err(script_link_error)?
+        } else {
+            LinkedProgram::link_many(objects, host).map_err(script_link_error)?
+        };
+        let image = ExecutableImage::verify(program.clone()).map_err(script_verify_error)?;
+        Ok(CompiledPackage {
+            object: objects
+                .first()
+                .cloned()
+                .ok_or_else(|| ScriptError::compile_reason("spark.script.link.empty_set"))?,
+            program,
+            image,
+        })
+    }
+
     pub(crate) fn seal(
         &mut self,
         request: &CompilationRequest,
@@ -117,6 +166,7 @@ fn script_verify_error(err: VerifyError) -> ScriptError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::request::CompilationRequest;
     use crate::ScriptLanguage;
 
     #[test]
@@ -147,6 +197,20 @@ mod tests {
             .compile_with_native_names(ScriptLanguage::Valkyrie, "return 40 + 2", &[])
             .unwrap();
         assert_eq!(compiler.cache.hits, 1);
+    }
+
+    #[test]
+    fn compile_object_and_link_roundtrip() {
+        let host = HostSchema::new(1);
+        let req = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1 + 2", host.clone());
+        let mut compiler = ScriptCompiler::new();
+        let obj = compiler.compile_object(&req).unwrap();
+        let bytes = obj.to_spko_bytes().unwrap();
+        let loaded = SparkObject::from_spko_bytes(&bytes).unwrap();
+        let package = compiler.link_objects(&[loaded], &host).unwrap();
+        let mut rt = crate::ScriptRuntime::from_image(&package.image, &host).unwrap();
+        let v = rt.eval().unwrap();
+        assert_eq!(v.as_number(), Some(3.0));
     }
 }
 

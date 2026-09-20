@@ -10,11 +10,13 @@
 
 mod artifact;
 mod cache;
+mod codec;
 mod compiler;
 mod diagnostic;
 mod host_schema;
 mod request;
 mod runtime;
+mod spko;
 mod spkx;
 
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
@@ -23,7 +25,7 @@ use spark_vm::{HostHooks, Module, StdHost, VmError};
 pub use artifact::{
     ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError, ARTIFACT_FORMAT_VERSION,
 };
-pub use spkx::{ArtifactIoError, SPKX_MAGIC};
+pub use codec::{ArtifactIoError, SPKO_MAGIC, SPKX_MAGIC};
 pub use cache::ArtifactCache;
 pub use compiler::{compile_package_with_registry, CompiledPackage, ScriptCompiler};
 pub use diagnostic::{DiagnosticBatch, ScriptDiagnostic};
