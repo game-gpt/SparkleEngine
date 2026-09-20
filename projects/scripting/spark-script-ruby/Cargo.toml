@@ -11,5 +11,8 @@ categories = ["game-development"]
 publish = false
 
 [dependencies]
+oak-core = { workspace = true }
+oak-ruby = { workspace = true }
 spark-diagnostics = { workspace = true }
 spark-vm = { workspace = true }
+spark-gc = { workspace = true }

@@ -4,7 +4,7 @@
 //! |------|-------|------|
 //! | Valkyrie | `spark-script-valkyrie` | Oaks `oak-valkyrie` Builder |
 //! | Lua | `spark-script-lua` | Oaks `oak-lua` |
-//! | Ruby（RPG Maker / RGSS 子集） | `spark-script-ruby` | 自研子集（上游 Builder 未就绪） |
+//! | Ruby（RPG Maker / RGSS 子集） | `spark-script-ruby` | Oaks `oak-ruby` Builder |
 //!
 //! 游戏绑定经原生函数表注入。ECS 侧用 [`spark_vm::Vm::call_function`] 调脚本，
 //! 不把 World 塞进本 crate。
