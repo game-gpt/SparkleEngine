@@ -26,7 +26,10 @@ mod script_system;
 mod vfs;
 
 pub use api::{BuiltinApi, ENGINE_NATIVES};
-pub use command_apply::{apply_script_commands, CommandApplyReport, ScriptArchetypeTag};
+pub use command_apply::{
+    apply_script_commands, apply_script_commands_with, CommandApplyReport, ComponentDescriptorId,
+    ScriptArchetypeTag, ScriptComponentCatalog, ScriptMarker, SCRIPT_MARKER_NAME,
+};
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
 pub use ecs_host::{DrawBuffer3d, EcsHost3d, FrameSnapshot};
