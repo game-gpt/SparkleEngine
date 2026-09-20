@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use spark_vm::{verify_bytecode, BytecodeVerifyError, Module};
+use spark_vm::{verify_bytecode_with_host, BytecodeVerifyError, Module};
 
 use crate::host_schema::HostSchema;
 use crate::request::{LanguageProfile, PackageId};
@@ -70,6 +70,8 @@ pub struct LinkedProgram {
     pub language: LanguageProfile,
     pub host_schema_hash: u64,
     pub host_abi_version: u32,
+    /// 链接时宿主函数槽位数（与 [`HostSchema`] 插入顺序一致）。
+    pub host_slot_count: u32,
     pub legacy_module: Module,
     /// 导出生命周期名（若存在）。
     pub lifecycle_exports: Vec<Arc<str>>,
@@ -103,8 +105,14 @@ impl LinkedProgram {
         let mut module = object.legacy_module;
         let slot_names = host.short_names();
         spark_vm::bind_host_slots(&mut module, &slot_names).map_err(|detail| {
-            LinkError::HostBindFailed {
-                detail: Arc::from(detail),
+            if let Some(name) = detail.strip_prefix("unbound_native:") {
+                LinkError::UnboundNativeCall {
+                    name: Arc::from(name),
+                }
+            } else {
+                LinkError::HostBindFailed {
+                    detail: Arc::from(detail),
+                }
             }
         })?;
         Ok(Self {
@@ -113,6 +121,7 @@ impl LinkedProgram {
             language: object.language,
             host_schema_hash: object.host_schema_hash,
             host_abi_version: object.host_abi_version,
+            host_slot_count: host.functions.len() as u32,
             legacy_module: module,
             lifecycle_exports,
         })
@@ -141,6 +150,7 @@ pub enum LinkError {
     AbiVersionMismatch { object: u32, host: u32 },
     HostSchemaMismatch,
     UnresolvedHost { name: Arc<str> },
+    UnboundNativeCall { name: Arc<str> },
     HostBindFailed { detail: Arc<str> },
 }
 
@@ -150,6 +160,7 @@ impl LinkError {
             Self::AbiVersionMismatch { .. } => "spark.script.link.abi_mismatch",
             Self::HostSchemaMismatch => "spark.script.link.host_schema_mismatch",
             Self::UnresolvedHost { .. } => "spark.script.link.unresolved_host",
+            Self::UnboundNativeCall { .. } => "spark.script.link.unbound_native",
             Self::HostBindFailed { .. } => "spark.script.link.host_bind_failed",
         }
     }
@@ -198,20 +209,22 @@ pub struct ExecutableImage {
     pub language: LanguageProfile,
     pub host_schema_hash: u64,
     pub host_abi_version: u32,
+    pub host_slot_count: u32,
     pub lifecycle_exports: Vec<Arc<str>>,
     module: Module,
 }
 
 impl ExecutableImage {
-    /// 对已链接程序做字节码验证后封存。
+    /// 对已链接程序做字节码验证后封存（含宿主槽位契约）。
     pub fn verify(program: LinkedProgram) -> Result<Self, VerifyError> {
-        verify_bytecode(&program.legacy_module)?;
+        verify_bytecode_with_host(&program.legacy_module, program.host_slot_count)?;
         Ok(Self {
             format_version: ARTIFACT_FORMAT_VERSION,
             package: program.package,
             language: program.language,
             host_schema_hash: program.host_schema_hash,
             host_abi_version: program.host_abi_version,
+            host_slot_count: program.host_slot_count,
             lifecycle_exports: program.lifecycle_exports,
             module: program.legacy_module,
         })
@@ -330,5 +343,59 @@ mod tests {
             .code
             .iter()
             .any(|&b| b == Op::CallNative as u8));
+    }
+
+    #[test]
+    fn unbound_call_native_fails_link() {
+        let mut f = FuncProto::new("__main", 0);
+        let si = f.add_string("sneaky");
+        f.emit(Op::LoadNull);
+        f.emit(Op::CallNative);
+        f.emit_u16(si);
+        f.emit_u8(1);
+        f.emit(Op::Return);
+        let host = schema_with_print();
+        let obj = SparkObject::from_legacy_module(
+            PackageId::anonymous(),
+            crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
+            &host,
+            Module {
+                functions: vec![f],
+                entry: 0,
+                // 故意不进 imports：只靠字符串池里的 CallNative
+                native_names: Vec::new(),
+            },
+        );
+        let err = LinkedProgram::link_single(obj, &host).unwrap_err();
+        assert!(matches!(err, LinkError::UnboundNativeCall { .. }));
+    }
+
+    #[test]
+    fn verify_rejects_host_slot_oob() {
+        let mut f = FuncProto::new("__main", 0);
+        f.emit(Op::LoadNull);
+        f.emit(Op::CallHost);
+        f.emit_u16(5);
+        f.emit_u8(1);
+        f.emit(Op::Return);
+        let program = LinkedProgram {
+            format_version: ARTIFACT_FORMAT_VERSION,
+            package: PackageId::anonymous(),
+            language: crate::request::LanguageProfile::default_for(crate::ScriptLanguage::Valkyrie),
+            host_schema_hash: 0,
+            host_abi_version: 1,
+            host_slot_count: 1,
+            legacy_module: Module {
+                functions: vec![f],
+                entry: 0,
+                native_names: vec!["print".into()],
+            },
+            lifecycle_exports: Vec::new(),
+        };
+        let err = ExecutableImage::verify(program).unwrap_err();
+        assert!(matches!(
+            err,
+            VerifyError::Bytecode(BytecodeVerifyError::HostSlotOob { .. })
+        ));
     }
 }

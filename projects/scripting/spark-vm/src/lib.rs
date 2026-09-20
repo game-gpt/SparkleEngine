@@ -20,7 +20,7 @@ mod bind;
 mod verify;
 
 pub use bind::bind_host_slots;
-pub use verify::{verify_bytecode, BytecodeVerifyError};
+pub use verify::{verify_bytecode, verify_bytecode_with_host, BytecodeVerifyError};
 
 /// VM 结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]

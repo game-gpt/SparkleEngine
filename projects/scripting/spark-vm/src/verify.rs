@@ -18,6 +18,13 @@ pub enum BytecodeVerifyError {
     ConstOob { func: usize, offset: usize, index: u16, len: usize },
     StringOob { func: usize, offset: usize, index: u16, len: usize },
     FuncOob { func: usize, offset: usize, index: u32, len: usize },
+    HostSlotOob {
+        func: usize,
+        offset: usize,
+        slot: u16,
+        len: u32,
+    },
+    ResidualCallNative { func: usize, offset: usize },
     MissingReturn { func: usize },
 }
 
@@ -35,6 +42,8 @@ impl BytecodeVerifyError {
             Self::ConstOob { .. } => "spark.vm.verify.const_oob",
             Self::StringOob { .. } => "spark.vm.verify.string_oob",
             Self::FuncOob { .. } => "spark.vm.verify.func_oob",
+            Self::HostSlotOob { .. } => "spark.vm.verify.host_slot_oob",
+            Self::ResidualCallNative { .. } => "spark.vm.verify.residual_call_native",
             Self::MissingReturn { .. } => "spark.vm.verify.missing_return",
         }
     }
@@ -48,8 +57,23 @@ impl std::fmt::Display for BytecodeVerifyError {
 
 impl std::error::Error for BytecodeVerifyError {}
 
-/// 验证模块可被安全解释（结构层面）。
+/// 验证模块可被安全解释（结构层面，不校验宿主槽位）。
 pub fn verify_bytecode(module: &Module) -> Result<(), BytecodeVerifyError> {
+    verify_bytecode_inner(module, None)
+}
+
+/// 封存映像用：结构验证 + 禁止残留 `CallNative` + `CallHost` 槽位越界检查。
+pub fn verify_bytecode_with_host(
+    module: &Module,
+    host_slot_count: u32,
+) -> Result<(), BytecodeVerifyError> {
+    verify_bytecode_inner(module, Some(host_slot_count))
+}
+
+fn verify_bytecode_inner(
+    module: &Module,
+    host_slot_count: Option<u32>,
+) -> Result<(), BytecodeVerifyError> {
     if module.functions.is_empty() {
         return Err(BytecodeVerifyError::EmptyModule);
     }
@@ -62,7 +86,7 @@ pub fn verify_bytecode(module: &Module) -> Result<(), BytecodeVerifyError> {
     let func_count = module.functions.len() as u32;
     let native_len = module.native_names.len();
     for (index, func) in module.functions.iter().enumerate() {
-        verify_function(index, func, func_count, native_len)?;
+        verify_function(index, func, func_count, native_len, host_slot_count)?;
     }
     Ok(())
 }
@@ -72,6 +96,7 @@ fn verify_function(
     func: &FuncProto,
     func_count: u32,
     native_len: usize,
+    host_slot_count: Option<u32>,
 ) -> Result<(), BytecodeVerifyError> {
     if func.code.is_empty() {
         return Err(BytecodeVerifyError::EmptyFunction { index: func_index });
@@ -148,10 +173,23 @@ fn verify_function(
                 let idx = read_u16(func, func_index, &mut ip, at)?;
                 let _argc = read_u8(func, func_index, &mut ip, at)?;
                 if op == Op::CallHost {
-                    // 槽位合法性在装载 prepare_host_slots 后由运行时检查；
-                    // 此处只保证操作数完整。
-                    let _ = idx;
+                    if let Some(len) = host_slot_count {
+                        if u32::from(idx) >= len {
+                            return Err(BytecodeVerifyError::HostSlotOob {
+                                func: func_index,
+                                offset: at,
+                                slot: idx,
+                                len,
+                            });
+                        }
+                    }
                 } else if op == Op::CallNative {
+                    if host_slot_count.is_some() {
+                        return Err(BytecodeVerifyError::ResidualCallNative {
+                            func: func_index,
+                            offset: at,
+                        });
+                    }
                     let in_strings = (idx as usize) < func.strings.len();
                     let in_natives = (idx as usize) < native_len;
                     if !in_strings && !in_natives {
@@ -345,5 +383,46 @@ mod tests {
             native_names: Vec::new(),
         };
         verify_bytecode(&m).unwrap();
+    }
+
+    #[test]
+    fn rejects_host_slot_oob() {
+        let mut f = FuncProto::new("main", 0);
+        f.emit(Op::LoadNull);
+        f.emit(Op::CallHost);
+        f.emit_u16(99);
+        f.emit_u8(1);
+        f.emit(Op::Return);
+        let m = Module {
+            functions: vec![f],
+            entry: 0,
+            native_names: Vec::new(),
+        };
+        let err = verify_bytecode_with_host(&m, 2).unwrap_err();
+        assert!(matches!(
+            err,
+            BytecodeVerifyError::HostSlotOob { slot: 99, len: 2, .. }
+        ));
+    }
+
+    #[test]
+    fn sealed_rejects_residual_call_native() {
+        let mut f = FuncProto::new("main", 0);
+        let si = f.add_string("print");
+        f.emit(Op::LoadNull);
+        f.emit(Op::CallNative);
+        f.emit_u16(si);
+        f.emit_u8(1);
+        f.emit(Op::Return);
+        let m = Module {
+            functions: vec![f],
+            entry: 0,
+            native_names: vec!["print".into()],
+        };
+        let err = verify_bytecode_with_host(&m, 1).unwrap_err();
+        assert!(matches!(
+            err,
+            BytecodeVerifyError::ResidualCallNative { .. }
+        ));
     }
 }
