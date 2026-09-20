@@ -119,6 +119,8 @@ pub struct Heap {
     /// 分配计数，用于触发阈值。
     pub allocs_since_gc: usize,
     pub gc_threshold: usize,
+    /// 进程内累计分配次数（不因 GC 回落，供 VM 预算）。
+    pub total_allocs: u64,
 }
 
 impl Heap {
@@ -128,11 +130,13 @@ impl Heap {
             free: Vec::new(),
             allocs_since_gc: 0,
             gc_threshold: 256,
+            total_allocs: 0,
         }
     }
 
     pub fn alloc(&mut self, obj: GcObject) -> GcHandle {
         self.allocs_since_gc += 1;
+        self.total_allocs = self.total_allocs.saturating_add(1);
         if let Some(idx) = self.free.pop() {
             let slot = &mut self.slots[idx as usize];
             slot.obj = obj;

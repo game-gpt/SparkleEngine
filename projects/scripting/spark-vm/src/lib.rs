@@ -42,6 +42,14 @@ pub enum VmError {
     BadNativeArg { name: &'static str },
     /// 堆句柄无效。
     BadHandle,
+    /// 指令步数预算耗尽。
+    StepLimitExceeded,
+    /// 宿主调用次数预算耗尽。
+    HostCallLimitExceeded,
+    /// 脚本调用深度预算耗尽。
+    CallDepthExceeded,
+    /// 堆分配次数预算耗尽。
+    AllocationLimitExceeded,
 }
 
 impl VmError {
@@ -60,6 +68,10 @@ impl VmError {
             Self::ArityMismatch { .. } => "spark.vm.arity_mismatch",
             Self::BadNativeArg { .. } => "spark.vm.bad_native_arg",
             Self::BadHandle => "spark.vm.bad_handle",
+            Self::StepLimitExceeded => "spark.vm.step_limit",
+            Self::HostCallLimitExceeded => "spark.vm.host_call_limit",
+            Self::CallDepthExceeded => "spark.vm.call_depth_limit",
+            Self::AllocationLimitExceeded => "spark.vm.allocation_limit",
         }
     }
 
@@ -86,7 +98,11 @@ impl VmError {
             | Self::CallOverflow
             | Self::BadReturn
             | Self::DivByZero
-            | Self::BadHandle => ErrorArgs::new(),
+            | Self::BadHandle
+            | Self::StepLimitExceeded
+            | Self::HostCallLimitExceeded
+            | Self::CallDepthExceeded
+            | Self::AllocationLimitExceeded => ErrorArgs::new(),
         }
     }
 
@@ -393,8 +409,18 @@ pub struct Vm {
     pub natives: HashMap<String, NativeFn>,
     /// 宿主槽位 → 短名（与编译期 `HostSchema` 插入顺序一致）。
     pub host_slot_names: Vec<String>,
-    /// 单次 `interpret` 步数上限（RGSS 宿主可调）。
+    /// 单次 `interpret` 步数上限。
     pub step_limit: u64,
+    /// 单次 `interpret` 宿主调用（`CallNative` / `CallHost` / `Send` 内建以外）上限。
+    pub host_call_limit: u64,
+    /// 脚本调用帧深度上限。
+    pub call_depth_limit: u16,
+    /// 单次 `interpret` 期间允许的堆分配次数上限（相对入口时的 `heap.total_allocs`）。
+    pub allocation_limit: u64,
+    /// 当前 `interpret` 已发生的宿主调用次数。
+    host_calls: u64,
+    /// 当前 `interpret` 入口时的堆分配计数快照。
+    allocs_at_entry: u64,
     /// CallNative / Send / CallHost 调用计数（诊断用）。
     pub call_hits: HashMap<String, u32>,
 }
@@ -412,6 +438,11 @@ impl Vm {
             natives: HashMap::new(),
             host_slot_names: Vec::new(),
             step_limit: 5_000_000,
+            host_call_limit: 100_000,
+            call_depth_limit: 256,
+            allocation_limit: 1_000_000,
+            host_calls: 0,
+            allocs_at_entry: 0,
             call_hits: HashMap::new(),
         }
     }
@@ -489,6 +520,10 @@ impl Vm {
     }
 
     fn invoke_native(&mut self, name: &str, args: Vec<Value>) -> Result<Value, VmError> {
+        self.host_calls += 1;
+        if self.host_calls > self.host_call_limit {
+            return Err(VmError::HostCallLimitExceeded);
+        }
         if !self.natives.contains_key(name) {
             // 未注册 native 默认空实现，便于逐步补齐 RGSS API。
             self.natives.insert(
@@ -526,6 +561,8 @@ impl Vm {
         }
         self.frames.clear();
         self.stack.clear();
+        self.host_calls = 0;
+        self.allocs_at_entry = self.heap.total_allocs;
         self.stack.extend_from_slice(args);
         let need = self.module.functions[func].locals as usize;
         while self.stack.len() < need {
@@ -603,7 +640,11 @@ impl Vm {
                         eprintln!("rgss play: call_hit {name}={n}");
                     }
                 }
-                return Err(VmError::CallOverflow);
+                return Err(VmError::StepLimitExceeded);
+            }
+            if self.heap.total_allocs.saturating_sub(self.allocs_at_entry) > self.allocation_limit
+            {
+                return Err(VmError::AllocationLimitExceeded);
             }
             if self.frames.is_empty() {
                 return Ok(self.stack.pop().unwrap_or(Value::Null));
@@ -859,7 +900,7 @@ impl Vm {
                             argc = arity;
                         }
                     }
-                    if self.frames.len() > 256 {
+                    if self.frames.len() as u16 >= self.call_depth_limit {
                         let stack: Vec<_> = self
                             .frames
                             .iter()
@@ -877,7 +918,7 @@ impl Vm {
                             "rgss play: call depth overflow top={}",
                             stack.join(" <- ")
                         );
-                        return Err(VmError::CallOverflow);
+                        return Err(VmError::CallDepthExceeded);
                     }
                     self.stack.remove(callee_idx);
                     let base = self.stack.len() - arity as usize;
@@ -1113,7 +1154,7 @@ impl Vm {
                         } else if call_args.len() > arity_usize {
                             call_args.truncate(arity_usize);
                         }
-                        if self.frames.len() > 256 {
+                        if self.frames.len() as u16 >= self.call_depth_limit {
                             let stack: Vec<_> = self
                                 .frames
                                 .iter()
@@ -1131,7 +1172,7 @@ impl Vm {
                                 "rgss play: send depth overflow top={}",
                                 stack.join(" <- ")
                             );
-                            return Err(VmError::CallOverflow);
+                            return Err(VmError::CallDepthExceeded);
                         }
                         let base = self.stack.len();
                         self.stack.extend(call_args);
@@ -1422,5 +1463,67 @@ mod tests {
         let v = vm.run(&mut host).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
         assert_eq!(vm.call_hits.get("host:0:double"), Some(&1));
+    }
+
+    #[test]
+    fn host_call_limit_is_enforced() {
+        let mut f = FuncProto::new("__main", 0);
+        f.emit(Op::CallHost);
+        f.emit_u16(0);
+        f.emit_u8(0);
+        f.emit(Op::Return);
+        let mut vm = Vm::new(Module {
+            functions: vec![f],
+            entry: 0,
+            native_names: vec!["ping".into()],
+        });
+        vm.prepare_host_slots(["ping"]);
+        vm.host_call_limit = 0;
+        vm.register_native("ping", |_ctx, _args| Ok(Value::Null));
+        let err = vm.run(&mut BufHost(String::new())).unwrap_err();
+        assert!(matches!(err, VmError::HostCallLimitExceeded));
+    }
+
+    #[test]
+    fn step_limit_is_enforced() {
+        let mut f = FuncProto::new("__main", 0);
+        // Jump 操作数读完后 ip=3，相对 -3 回到 Jump。
+        f.emit(Op::Jump);
+        f.emit_i16(-3);
+        f.emit(Op::Return);
+        let mut vm = Vm::new(Module {
+            functions: vec![f],
+            entry: 0,
+            native_names: Vec::new(),
+        });
+        vm.step_limit = 10;
+        let err = vm.run(&mut BufHost(String::new())).unwrap_err();
+        assert!(matches!(err, VmError::StepLimitExceeded), "got {err:?}");
+    }
+
+    #[test]
+    fn call_depth_limit_is_enforced() {
+        let mut recur = FuncProto::new("recur", 0);
+        let slot = recur.add_const_func(0);
+        recur.emit(Op::LoadConst);
+        recur.emit_u16(slot);
+        recur.emit(Op::Call);
+        recur.emit_u8(0);
+        recur.emit(Op::Return);
+        let mut main = FuncProto::new("__main", 0);
+        let slot = main.add_const_func(0);
+        main.emit(Op::LoadConst);
+        main.emit_u16(slot);
+        main.emit(Op::Call);
+        main.emit_u8(0);
+        main.emit(Op::Return);
+        let mut vm = Vm::new(Module {
+            functions: vec![recur, main],
+            entry: 1,
+            native_names: Vec::new(),
+        });
+        vm.call_depth_limit = 3;
+        let err = vm.run(&mut BufHost(String::new())).unwrap_err();
+        assert!(matches!(err, VmError::CallDepthExceeded));
     }
 }

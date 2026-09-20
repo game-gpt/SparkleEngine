@@ -15,7 +15,7 @@ use crate::command_buffer::ScriptCommandBuffer;
 use crate::event_inbox::ScriptEventInbox;
 use crate::EngineError;
 
-/// 每领域每帧（或每次回调）的资源预算（初版仅记录上限，耗尽策略后续补）。
+/// 每领域每帧（或每次回调）的资源预算。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptBudget {
     pub instruction_limit: u64,
@@ -81,9 +81,12 @@ impl ScriptDomain {
         self.lifecycle_exports.iter().any(|n| n.as_ref() == name)
     }
 
-    /// 将领域预算同步到 VM（指令上限）。
+    /// 将领域预算同步到 VM。
     pub fn apply_budget(&mut self) {
         self.runtime.vm.step_limit = self.budget.instruction_limit;
+        self.runtime.vm.host_call_limit = self.budget.host_call_limit;
+        self.runtime.vm.allocation_limit = self.budget.allocation_limit;
+        self.runtime.vm.call_depth_limit = self.budget.call_depth_limit;
     }
 
     /// 调用命名导出（生命周期或普通函数）。
@@ -257,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn custom_budget_sets_vm_step_limit() {
+    fn custom_budget_sets_vm_limits() {
         let host = HostSchema::new(1);
         let mut compiler = ScriptCompiler::new();
         let package = compiler
@@ -265,11 +268,16 @@ mod tests {
             .unwrap();
         let budget = ScriptBudget {
             instruction_limit: 1234,
-            ..ScriptBudget::default()
+            host_call_limit: 56,
+            allocation_limit: 78,
+            call_depth_limit: 9,
         };
         let domain =
             ScriptDomain::from_image("budget.mod", &package.image, &host, budget).unwrap();
         assert_eq!(domain.runtime.vm.step_limit, 1234);
+        assert_eq!(domain.runtime.vm.host_call_limit, 56);
+        assert_eq!(domain.runtime.vm.allocation_limit, 78);
+        assert_eq!(domain.runtime.vm.call_depth_limit, 9);
     }
 
     #[test]
