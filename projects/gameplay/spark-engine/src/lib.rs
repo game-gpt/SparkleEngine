@@ -357,8 +357,9 @@ impl SparkEngine {
             let lang = resolve_language(manifest.language.as_deref(), entry);
             let natives = self.compile_native_names();
             let host_schema = host_schema_from_names(&natives);
+            // 编译与装载必须共用同一份 schema（哈希校验）。
             let package = ScriptCompiler::new()
-                .compile_with_native_names(lang, &source, &natives)
+                .compile_source(lang, &source, &host_schema)
                 .map_err(EngineError::Script)?;
             let mut script_domain = ScriptDomain::from_image(
                 manifest.id.as_str(),
@@ -536,6 +537,33 @@ impl SparkEngine {
         Ok(())
     }
 
+    /// 驱动脚本领域一帧：生命周期导出 → 事件派发 → 取出命令缓冲。
+    ///
+    /// `fixed` 为 true 时优先调用 `fixed_update`，否则调用 `update`。
+    /// 命令缓冲仅收集返回，由宿主在同步点提交到 ECS（本层不拥有 `World`）。
+    pub fn tick_scripts(
+        &mut self,
+        fixed: bool,
+        host: &mut dyn HostHooks,
+    ) -> Result<Vec<(String, Vec<ScriptCommand>)>, EngineError> {
+        let phase = if fixed { "fixed_update" } else { "update" };
+        let ids: Vec<String> = self.mods.keys().cloned().collect();
+        for id in ids {
+            let Some(m) = self.mods.get_mut(&id) else {
+                continue;
+            };
+            if !m.enabled {
+                continue;
+            }
+            let Some(domain) = m.domain.as_mut() else {
+                continue;
+            };
+            let _ = domain.call_lifecycle(phase, &[], host)?;
+        }
+        self.dispatch_script_events(host)?;
+        Ok(self.drain_script_commands())
+    }
+
     fn compile_native_names(&self) -> Vec<&'static str> {
         let mut names: Vec<&'static str> = ENGINE_NATIVES.to_vec();
         for n in self.plugins.native_names() {
@@ -693,6 +721,88 @@ dependencies = ["core"]
             },
         );
         eng.fire_hook_std("init", &[]).unwrap();
+    }
+
+    #[test]
+    fn load_mod_dir_shares_host_schema() {
+        let root = std::env::temp_dir().join("spark_engine_mod_schema");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "schema_demo"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro on_load() {
+                return 1
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        let id = eng.load_mod_dir(&root).unwrap();
+        assert_eq!(id, "schema_demo");
+        let m = eng.get_mod(&id).unwrap();
+        let domain = m.domain.as_ref().unwrap();
+        assert!(domain.enabled);
+        assert!(domain.has_lifecycle("on_load"));
+        assert_eq!(
+            domain.runtime.vm.step_limit,
+            ScriptBudget::default().instruction_limit
+        );
+    }
+
+    #[test]
+    fn tick_scripts_calls_update_lifecycle() {
+        let source = r#"
+            micro update() {
+                return 9
+            }
+            return 0
+            "#;
+        let host = HostSchema::new(1);
+        let mut compiler = ScriptCompiler::new();
+        let package = compiler
+            .compile_source(ScriptLanguage::Valkyrie, source, &host)
+            .unwrap();
+        let mut domain = ScriptDomain::from_image(
+            "tick.mod",
+            &package.image,
+            &host,
+            ScriptBudget::default(),
+        )
+        .unwrap();
+        domain.command_buffer.spawn("marker");
+        let mut eng = SparkEngine::new(".");
+        eng.mods.insert(
+            "tick.mod".into(),
+            LoadedMod {
+                manifest: ModManifest {
+                    id: "tick.mod".into(),
+                    name: "Tick".into(),
+                    version: "0.0.1".into(),
+                    entry: None,
+                    language: None,
+                    dependencies: vec![],
+                },
+                root: PathBuf::from("."),
+                vfs: ModVfs::new("tick.mod", PathBuf::from(".")),
+                domain: Some(domain),
+                enabled: true,
+            },
+        );
+        let mut hooks = StdHost;
+        let cmds = eng.tick_scripts(false, &mut hooks).unwrap();
+        assert_eq!(cmds.len(), 1);
+        assert_eq!(cmds[0].0, "tick.mod");
+        assert_eq!(cmds[0].1.len(), 1);
     }
 
     #[test]
