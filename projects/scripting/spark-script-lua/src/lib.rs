@@ -1,15 +1,19 @@
-//! Oaks `oak-lua` 解析 → `spark-vm` 字节码。
+//! Oaks `oak-lua` 解析 → 公共 IR → `spark-vm` 字节码。
 //!
 //! 面向游戏脚本的 Lua 5.x **子集**（函数 / local / 控制流 / 算术）。
 //! 完整语义（table、元表、协程）不在本前端范围。
+//! 优先经 `spark-script-ir`；子集不覆盖时回退旧 lowering。
 
 mod compile;
+mod lower;
 
 use compile::compile_root;
+use lower::lower_root_to_hir;
 
 use oak_core::{Builder, SourceText};
 use oak_lua::{LuaBuilder, LuaLanguage, LuaRoot};
 use spark_diagnostics::{ErrorArg, ErrorArgs};
+use spark_script_ir::{emit_module_with_host, lower_module, HostEmitMode};
 use spark_vm::Module;
 
 #[derive(Debug)]
@@ -51,9 +55,22 @@ impl std::fmt::Display for LuaScriptError {
 impl std::error::Error for LuaScriptError {}
 
 /// 源码 → [`Module`]。
+///
+/// 优先走 HIR→MIR→字节码；子集不覆盖则回退旧路径。
 pub fn compile(source: &str, natives: &[&str]) -> Result<Module, LuaScriptError> {
     let root = parse(source)?;
-    compile_root(&root, natives).map_err(LuaScriptError::compile_opaque)
+    match lower_root_to_hir(&root, natives) {
+        Ok(hir) => {
+            let mir = lower_module(&hir).map_err(LuaScriptError::compile_opaque)?;
+            let host = if natives.is_empty() {
+                HostEmitMode::CallNativeByName
+            } else {
+                HostEmitMode::CallHostSlots(natives)
+            };
+            emit_module_with_host(&mir, host).map_err(LuaScriptError::compile_opaque)
+        }
+        Err(_) => compile_root(&root, natives).map_err(LuaScriptError::compile_opaque),
+    }
 }
 
 /// 解析为 AST 根。
@@ -72,7 +89,7 @@ pub fn parse(source: &str) -> Result<LuaRoot, LuaScriptError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use spark_vm::{StdHost, Vm};
+    use spark_vm::{Op, StdHost, Vm};
 
     #[test]
     fn arithmetic_main() {
@@ -83,13 +100,40 @@ mod tests {
     }
 
     #[test]
+    fn arithmetic_via_ir_has_no_call_native() {
+        let m = compile("return 40 + 2", &[]).unwrap();
+        assert!(m.functions.iter().all(|f| {
+            !f.code.iter().any(|&b| b == Op::CallNative as u8 || b == Op::CallHost as u8)
+        }));
+    }
+
+    #[test]
+    fn local_and_if_via_ir() {
+        let m = compile(
+            r#"
+            local x = 1
+            if x < 2 then
+                return 42
+            else
+                return 0
+            end
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        let v = vm.run(&mut StdHost).unwrap();
+        assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
     fn function_call() {
         let m = compile(
             r#"
-            function add(a, b)
-              return a + b
+            function double(n)
+                return n * 2
             end
-            return add(40, 2)
+            return double(21)
             "#,
             &[],
         )
