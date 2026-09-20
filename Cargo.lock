@@ -3345,6 +3345,7 @@ dependencies = [
  "oak-core",
  "oak-lua",
  "spark-diagnostics",
+ "spark-gc",
  "spark-script-ir",
  "spark-vm",
 ]

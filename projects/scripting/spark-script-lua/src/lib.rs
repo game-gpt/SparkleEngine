@@ -138,8 +138,48 @@ mod tests {
             &[],
         )
         .unwrap();
+        assert!(
+            m.functions.iter().any(|f| f.name == "double"),
+            "expected IR function proto"
+        );
         let mut vm = Vm::new(m);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn while_via_ir() {
+        let m = compile(
+            r#"
+            local n = 0
+            while n < 3 do
+                n = n + 1
+            end
+            return n
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(m);
+        let v = vm.run(&mut StdHost).unwrap();
+        assert_eq!(v.as_number(), Some(3.0));
+    }
+
+    #[test]
+    fn host_call_via_ir() {
+        use spark_gc::Value;
+        let m = compile("return ping(7)", &["ping"]).unwrap();
+        assert!(m
+            .functions
+            .iter()
+            .any(|f| f.code.iter().any(|&b| b == Op::CallHost as u8)));
+        let mut vm = Vm::new(m);
+        vm.prepare_host_slots(["ping"]);
+        vm.register_native("ping", |_ctx, args| {
+            let n = args.first().and_then(|v| v.as_number()).unwrap_or(0.0);
+            Ok(Value::Number(n + 1.0))
+        });
+        let v = vm.run(&mut StdHost).unwrap();
+        assert_eq!(v.as_number(), Some(8.0));
     }
 }
