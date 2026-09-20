@@ -252,6 +252,29 @@ impl ExecutableImage {
     pub fn clone_module(&self) -> Module {
         self.module.clone()
     }
+
+    /// 由解码器组装映像（调用方须已完成字节码验证）。
+    pub(crate) fn from_decoded(
+        format_version: u32,
+        package: PackageId,
+        language: LanguageProfile,
+        host_schema_hash: u64,
+        host_abi_version: u32,
+        host_slot_count: u32,
+        lifecycle_exports: Vec<Arc<str>>,
+        module: Module,
+    ) -> Self {
+        Self {
+            format_version,
+            package,
+            language,
+            host_schema_hash,
+            host_abi_version,
+            host_slot_count,
+            lifecycle_exports,
+            module,
+        }
+    }
 }
 
 #[cfg(test)]
