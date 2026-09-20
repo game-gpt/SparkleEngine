@@ -9,6 +9,7 @@
 //! Rust 宿主若直接需要能力，请 path 依赖对应 crate，勿把 Rust API 伪装成插件。
 
 mod api;
+mod command_buffer;
 mod domain;
 mod ecs_host;
 mod frame;
@@ -21,6 +22,7 @@ mod run;
 mod vfs;
 
 pub use api::{BuiltinApi, ENGINE_NATIVES};
+pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
 pub use ecs_host::{DrawBuffer3d, EcsHost3d, FrameSnapshot};
 pub use frame::{
@@ -369,9 +371,13 @@ impl SparkEngine {
                 &vfs,
             );
             self.plugins.install_all(&mut script_domain.runtime.vm);
-            // 过渡期：仍执行顶层以便 `register_hook`；正式模组应改用生命周期导出。
             let mut hooks = StdHost;
-            script_domain.eval_entry(&mut hooks)?;
+            // 有 `on_load` 则走生命周期；否则过渡期仍执行顶层（`register_hook` 等）。
+            if script_domain.has_lifecycle("on_load") {
+                let _ = script_domain.call_lifecycle("on_load", &[], &mut hooks)?;
+            } else {
+                script_domain.eval_entry(&mut hooks)?;
+            }
             domain = Some(script_domain);
         }
 
@@ -468,6 +474,20 @@ impl SparkEngine {
                 id: mod_id.into(),
             })?;
         m.vfs.resolve(rel).map_err(EngineError::from)
+    }
+
+    /// 帧同步点：按模组加载顺序取出并清空各领域命令缓冲。
+    pub fn drain_script_commands(&mut self) -> Vec<(String, Vec<ScriptCommand>)> {
+        let mut out = Vec::new();
+        for (id, m) in &mut self.mods {
+            if let Some(domain) = m.domain.as_mut() {
+                let cmds = domain.drain_commands();
+                if !cmds.is_empty() {
+                    out.push((id.clone(), cmds));
+                }
+            }
+        }
+        out
     }
 
     fn compile_native_names(&self) -> Vec<&'static str> {
