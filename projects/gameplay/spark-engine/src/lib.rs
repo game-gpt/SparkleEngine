@@ -19,6 +19,7 @@ mod hooks;
 mod loader;
 mod localization;
 mod manifest;
+mod query_view;
 mod registry;
 mod run;
 mod script_system;
@@ -37,6 +38,7 @@ pub use hooks::{HookBus, HookRef};
 pub use loader::{LoadedMod, ModLoader};
 pub use localization::LocalizationService;
 pub use manifest::{ManifestParseError, ModManifest};
+pub use query_view::ScriptQueryView;
 pub use registry::{DataRegistry, RegValue};
 pub use run::{run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
 pub use script_system::{
@@ -53,7 +55,8 @@ use std::rc::Rc;
 use spark_core::SparkError;
 use spark_gc::Value;
 use spark_script::{
-    HostFunction, HostFunctionId, HostSchema, ScriptCompiler, ScriptError, ScriptLanguage,
+    HostFunction, HostFunctionId, HostPhase, HostSchema, ScriptCompiler, ScriptError,
+    ScriptLanguage,
 };
 use spark_vm::{HostHooks, StdHost};
 
@@ -587,10 +590,32 @@ impl SparkEngine {
         fixed: bool,
         host: &mut dyn HostHooks,
     ) -> Result<Vec<(String, Vec<ScriptCommand>)>, EngineError> {
-        let phase = if fixed { "fixed_update" } else { "update" };
-        let ids: Vec<String> = self.mods.keys().cloned().collect();
-        for id in ids {
-            let Some(m) = self.mods.get_mut(&id) else {
+        let phase = if fixed {
+            HostPhase::FixedUpdate
+        } else {
+            HostPhase::Update
+        };
+        self.run_script_phase(phase, host)?;
+        self.dispatch_script_events(host)?;
+        Ok(self.drain_script_commands())
+    }
+
+    /// 按 [`HostPhase`] 调度已登记的脚本 System（同域串行）。
+    ///
+    /// 每个描述符调用其 `entry` 导出；调用后不自动提交命令（由宿主调用
+    /// [`Self::apply_script_commands_to_world`]）。
+    pub fn run_script_phase(
+        &mut self,
+        phase: HostPhase,
+        host: &mut dyn HostHooks,
+    ) -> Result<(), EngineError> {
+        let jobs: Vec<(String, String)> = self
+            .script_systems
+            .for_phase(phase)
+            .map(|s| (s.mod_id.to_string(), s.entry.to_string()))
+            .collect();
+        for (mod_id, entry) in jobs {
+            let Some(m) = self.mods.get_mut(&mod_id) else {
                 continue;
             };
             if !m.enabled {
@@ -599,10 +624,33 @@ impl SparkEngine {
             let Some(domain) = m.domain.as_mut() else {
                 continue;
             };
-            let _ = domain.call_lifecycle(phase, &[], host)?;
+            if !domain.enabled {
+                continue;
+            }
+            let has_entry = domain
+                .runtime
+                .vm
+                .module
+                .functions
+                .iter()
+                .any(|f| f.name == entry);
+            if has_entry {
+                let _ = domain.call(&entry, &[], host)?;
+            }
         }
+        Ok(())
+    }
+
+    /// 调度某一 phase 的脚本 System，派发事件，并把命令提交到 `world`。
+    pub fn run_script_systems(
+        &mut self,
+        phase: HostPhase,
+        world: &mut spark_ecs::World,
+        host: &mut dyn HostHooks,
+    ) -> Result<CommandApplyReport, EngineError> {
+        self.run_script_phase(phase, host)?;
         self.dispatch_script_events(host)?;
-        Ok(self.drain_script_commands())
+        Ok(self.apply_script_commands_to_world(world))
     }
 
     fn compile_native_names(&self) -> Vec<&'static str> {
@@ -871,6 +919,45 @@ entry = "main.vk"
                 .map(|t| t.name.as_ref()),
             Some("rock")
         );
+    }
+
+    #[test]
+    fn run_script_systems_applies_spawn_from_update() {
+        let root = std::env::temp_dir().join("spark_engine_mod_run_sys");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("mod.von"),
+            r#"id = "run_sys"
+version = "0.1.0"
+entry = "main.vk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("main.vk"),
+            r#"
+            micro on_load() {
+                return 0
+            }
+            micro update() {
+                queue_spawn("npc")
+                return 1
+            }
+            return 0
+            "#,
+        )
+        .unwrap();
+        let mut eng = SparkEngine::new(root.parent().unwrap());
+        eng.load_mod_dir(&root).unwrap();
+        let mut world = spark_ecs::World::new();
+        let mut hooks = StdHost;
+        let report = eng
+            .run_script_systems(HostPhase::Update, &mut world, &mut hooks)
+            .unwrap();
+        assert_eq!(report.spawned.len(), 1);
+        let view = ScriptQueryView::new(&world);
+        assert_eq!(view.entities_with_archetype("npc").len(), 1);
     }
 
     #[test]
