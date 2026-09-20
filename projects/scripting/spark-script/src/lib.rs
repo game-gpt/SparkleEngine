@@ -1,28 +1,54 @@
-//! Spark 脚本引擎门面：多语言前端归一到栈式 [`spark_vm`]。
+//! Spark 脚本编译门面与过渡期运行包装。
 //!
-//! | 前端 | Crate | 解析 |
-//! |------|-------|------|
-//! | Valkyrie | `spark-script-valkyrie` | Oaks `oak-valkyrie` Builder |
-//! | Lua | `spark-script-lua` | Oaks `oak-lua` |
-//! | Ruby（RPG Maker / RGSS 子集） | `spark-script-ruby` | Oaks `oak-ruby` Builder |
+//! **目标分层**（见工作区规划）：
+//! - [`ScriptCompiler`]：编译 → [`SparkObject`] / [`LinkedProgram`] / [`ExecutableImage`]
+//! - [`ScriptRuntime`]：装载映像并执行（持有 VM / JIT）
+//! - 语言前端最终只降低到公共 IR，不得直接发射 `spark-vm::Op`
 //!
-//! 游戏绑定经原生函数表注入。ECS 侧用 [`spark_vm::Vm::call_function`] 调脚本，
-//! 不把 World 塞进本 crate。
+//! **过渡期**：[`ScriptEngine`] 仍保留给 `spark-engine` 等调用方，内部改为
+//! 编译器 + 运行时组合；前端仍直接产出 [`spark_vm::Module`]。
+
+mod artifact;
+mod compiler;
+mod diagnostic;
+mod host_schema;
+mod ir;
+mod request;
+mod runtime;
 
 use spark_diagnostics::{ErrorArg, ErrorArgs, ErrorContext, SourceSpan};
-use spark_jit::JitEngine;
-use spark_vm::{HostHooks, Module, StdHost, Vm, VmError};
+use spark_vm::{HostHooks, Module, StdHost, VmError};
 
+pub use artifact::{
+    ExecutableImage, LinkError, LinkedProgram, SparkObject, VerifyError, ARTIFACT_FORMAT_VERSION,
+};
+pub use compiler::{compile_package_with_registry, CompiledPackage, ScriptCompiler};
+pub use diagnostic::{DiagnosticBatch, ScriptDiagnostic};
+pub use host_schema::{
+    CapabilityId, DeterminismClass, HostEffect, HostErrorModel, HostFunction, HostFunctionId,
+    HostPhase, HostSchema, SuspensionBehavior, ThreadAffinity,
+};
+pub use ir::hir::{
+    HirBinaryOp, HirExpr, HirFunction, HirModule, HirStmt, HirUnaryOp, SymbolId, Ty,
+};
+pub use ir::mir::{
+    BasicBlock, HostRef, MirFunction, MirInst, MirModule, MirTerminator, MirValue,
+};
+pub use request::{
+    CompilationRequest, DebugInfoLevel, LanguageFrontend, LanguageProfile, LanguageProfileId,
+    OptimizationLevel, PackageId, SourceFile,
+};
+pub use runtime::ScriptRuntime;
 pub use spark_script_valkyrie::{NativeParam, NativeRegistry, NativeSignature, TypeRef};
 
-/// 脚本源语言。
+/// 脚本源语言（过渡期枚举；正式路径请用 [`LanguageProfile`]）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScriptLanguage {
     /// Oaks Valkyrie（默认）。
     Valkyrie,
-    /// Lua 5.x 子集。
+    /// Spark Lua profile（`spark-lua-1`），不是完整 Lua 运行时声明。
     Lua,
-    /// RPG Maker / RGSS 风格 Ruby 子集。
+    /// Spark Ruby profile（`spark-ruby-1`）；RGSS 应使用 `rgss-compat` profile。
     Ruby,
 }
 
@@ -31,6 +57,8 @@ pub enum ScriptLanguage {
 pub enum ScriptStage {
     Parse,
     Compile,
+    Link,
+    Verify,
     Runtime,
 }
 
@@ -179,14 +207,24 @@ impl From<spark_script_ruby::RubyScriptError> for ScriptError {
     }
 }
 
-/// 脚本运行时：模块 + VM + JIT 热度特化。
+/// 过渡期门面：编译 + 运行揉在一起。新代码请拆用 [`ScriptCompiler`] / [`ScriptRuntime`]。
+///
+/// 字段仍公开以兼容 `spark-engine` 插件安装路径；语义上 `vm`/`jit` 属于运行时。
 pub struct ScriptEngine {
-    pub vm: Vm,
-    pub jit: JitEngine,
+    pub vm: spark_vm::Vm,
+    pub jit: spark_jit::JitEngine,
     pub language: ScriptLanguage,
 }
 
 impl ScriptEngine {
+    fn from_runtime(rt: ScriptRuntime) -> Self {
+        Self {
+            vm: rt.vm,
+            jit: rt.jit,
+            language: rt.language.frontend.into(),
+        }
+    }
+
     /// 默认按 Valkyrie 编译。
     pub fn compile(source: &str) -> Result<Self, ScriptError> {
         Self::compile_with(ScriptLanguage::Valkyrie, source, &[])
@@ -196,40 +234,35 @@ impl ScriptEngine {
         Self::compile_with(ScriptLanguage::Valkyrie, source, natives)
     }
 
-    /// 使用完整宿主签名编译（Valkyrie）；其它前端暂时只取函数名。
+    /// 使用完整宿主签名编译（经 [`HostSchema`]）。
     pub fn compile_with_registry(
         language: ScriptLanguage,
         source: &str,
         natives: &NativeRegistry,
     ) -> Result<Self, ScriptError> {
-        let module = compile_module_with_registry(language, source, natives)?;
-        Ok(Self {
-            vm: Vm::new(module),
-            jit: JitEngine::new(256),
-            language,
-        })
+        let package = compile_package_with_registry(language, source, natives)?;
+        let host = HostSchema::from_native_registry(natives);
+        let runtime = ScriptRuntime::from_image(&package.image, &host)?;
+        Ok(Self::from_runtime(runtime))
     }
 
-    /// 指定前端语言编译到同一 [`Module`] / VM。
+    /// 指定前端语言编译。
     pub fn compile_with(
         language: ScriptLanguage,
         source: &str,
         natives: &[&str],
     ) -> Result<Self, ScriptError> {
-        let module = compile_module(language, source, natives)?;
-        Ok(Self {
-            vm: Vm::new(module),
-            jit: JitEngine::new(256),
-            language,
-        })
+        let package = ScriptCompiler::new().compile_with_native_names(language, source, natives)?;
+        let host = stub_schema_from_names(natives);
+        let runtime = ScriptRuntime::from_image(&package.image, &host)?;
+        Ok(Self::from_runtime(runtime))
     }
 
     pub fn from_module(module: Module) -> Self {
-        Self {
-            vm: Vm::new(module),
-            jit: JitEngine::new(256),
-            language: ScriptLanguage::Valkyrie,
-        }
+        Self::from_runtime(ScriptRuntime::from_legacy_module(
+            module,
+            ScriptLanguage::Valkyrie,
+        ))
     }
 
     pub fn eval(&mut self) -> Result<spark_gc::Value, ScriptError> {
@@ -243,7 +276,7 @@ impl ScriptEngine {
         Ok(v)
     }
 
-    /// 供 ECS System 调用命名函数（Valkyrie `micro` / Lua `function` / Ruby `def`）。
+    /// 供 ECS System 调用命名函数。
     pub fn call(
         &mut self,
         name: &str,
@@ -256,7 +289,15 @@ impl ScriptEngine {
     }
 }
 
-/// 仅编译为 [`Module`]（不建 VM）。
+fn stub_schema_from_names(names: &[&str]) -> HostSchema {
+    let mut schema = HostSchema::new(1);
+    for name in names {
+        schema.insert(HostFunction::new(HostFunctionId::new("host", *name, 1)));
+    }
+    schema
+}
+
+/// 仅编译为 [`Module`]（不建 VM）。过渡期 API。
 pub fn compile_module(
     language: ScriptLanguage,
     source: &str,
@@ -276,7 +317,9 @@ pub fn compile_module_with_registry(
     natives: &NativeRegistry,
 ) -> Result<Module, ScriptError> {
     match language {
-        ScriptLanguage::Valkyrie => Ok(spark_script_valkyrie::compile_with_registry(source, natives)?),
+        ScriptLanguage::Valkyrie => {
+            Ok(spark_script_valkyrie::compile_with_registry(source, natives)?)
+        }
         ScriptLanguage::Lua | ScriptLanguage::Ruby => {
             let names = natives.name_list();
             compile_module(language, source, &names)
@@ -384,8 +427,22 @@ mod tests {
     }
 
     #[test]
+    fn compiler_produces_executable_image() {
+        let mut compiler = ScriptCompiler::new();
+        let package = compiler
+            .compile_with_native_names(ScriptLanguage::Valkyrie, "return 1 + 2", &[])
+            .unwrap();
+        assert_eq!(package.image.format_version, ARTIFACT_FORMAT_VERSION);
+        let host = HostSchema::new(1);
+        let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
+        let v = rt.eval().unwrap();
+        assert_eq!(v.as_number(), Some(3.0));
+    }
+
+    #[test]
     fn valkyrie_parse_error_propagates_span() {
-        let err = compile_module(ScriptLanguage::Valkyrie, "@@@", &[]).expect_err("bare attributes");
+        let err =
+            compile_module(ScriptLanguage::Valkyrie, "@@@", &[]).expect_err("bare attributes");
         assert_eq!(err.code(), "spark.script.parse");
         assert!(err.span().is_some());
         assert!(matches!(
