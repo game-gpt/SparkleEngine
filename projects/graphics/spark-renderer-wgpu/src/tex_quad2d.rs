@@ -212,8 +212,8 @@ impl TexQuad2dGpu {
             ([x0, y0], [x1, y0], [x1, y1], [x0, y1])
         } else {
             let (s, cos) = q.angle_rad.sin_cos();
-            let cx = (x0 + x1) * 0.5;
-            let cy = (y0 + y1) * 0.5;
+            let cx = x0 + q.pivot_x;
+            let cy = y0 + q.pivot_y;
             let rot = |px: f32, py: f32| -> [f32; 2] {
                 let dx = px - cx;
                 let dy = py - cy;
