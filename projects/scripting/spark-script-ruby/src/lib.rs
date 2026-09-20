@@ -168,6 +168,24 @@ mod tests {
     }
 
     #[test]
+    fn until_via_ir() {
+        let module = compile(
+            r#"
+            n = 0
+            until n >= 3
+              n = n + 1
+            end
+            return n
+            "#,
+            &[],
+        )
+        .unwrap();
+        let mut vm = Vm::new(module);
+        let value = vm.run(&mut StdHost).unwrap();
+        assert_eq!(value.as_number(), Some(3.0));
+    }
+
+    #[test]
     fn method_via_ir() {
         let module = compile(
             r#"
