@@ -65,7 +65,7 @@ impl ScriptCompiler {
         self.compile(&request)
     }
 
-    /// 过渡期：仅函数名列表（自动生成最小 schema 桩）。
+    /// 过渡期：仅函数名列表（自动生成最小 schema 桩，走正式缓存键）。
     pub fn compile_with_native_names(
         &mut self,
         language: ScriptLanguage,
@@ -73,9 +73,7 @@ impl ScriptCompiler {
         natives: &[&str],
     ) -> Result<CompiledPackage, ScriptError> {
         let host = stub_schema_from_names(natives);
-        let module = compile_module(language, source, natives)?;
-        let request = CompilationRequest::repl(language, source, host);
-        self.seal(&request, module)
+        self.compile_source(language, source, &host)
     }
 
     pub(crate) fn seal(
@@ -136,6 +134,19 @@ mod tests {
         assert_eq!(compiler.cache.hits, 1);
         assert_eq!(compiler.cache.len(), 1);
         assert_eq!(a.image.host_schema_hash, b.image.host_schema_hash);
+    }
+
+    #[test]
+    fn compile_with_native_names_uses_cache() {
+        let mut compiler = ScriptCompiler::new();
+        let _ = compiler
+            .compile_with_native_names(ScriptLanguage::Valkyrie, "return 40 + 2", &[])
+            .unwrap();
+        assert_eq!(compiler.cache.misses, 1);
+        let _ = compiler
+            .compile_with_native_names(ScriptLanguage::Valkyrie, "return 40 + 2", &[])
+            .unwrap();
+        assert_eq!(compiler.cache.hits, 1);
     }
 }
 

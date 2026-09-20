@@ -34,7 +34,7 @@ impl ArtifactCache {
         self.misses = 0;
     }
 
-    /// 缓存键：源码 + 语言契约 + 宿主 ABI + 制品格式。
+    /// 缓存键：源码 + 语言契约 + 宿主 ABI + 优化 / 确定性 + 制品格式。
     pub fn key_for(request: &CompilationRequest, source: &str) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         let mut h = DefaultHasher::new();
@@ -49,6 +49,9 @@ impl ArtifactCache {
             .hash(&mut h);
         request.host_schema.content_hash().hash(&mut h);
         request.host_schema.abi_version.hash(&mut h);
+        request.optimization.hash(&mut h);
+        request.determinism.hash(&mut h);
+        request.debug_info.hash(&mut h);
         ARTIFACT_FORMAT_VERSION.hash(&mut h);
         env!("CARGO_PKG_VERSION").hash(&mut h);
         for cap in &request.required_capabilities {
@@ -103,6 +106,34 @@ mod tests {
         assert_ne!(
             ArtifactCache::key_for(&req, "return 1"),
             ArtifactCache::key_for(&req, "return 2")
+        );
+    }
+
+    #[test]
+    fn optimization_change_changes_key() {
+        use crate::request::OptimizationLevel;
+        let host = HostSchema::new(1);
+        let mut a = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host.clone());
+        let mut b = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host);
+        a.optimization = OptimizationLevel::None;
+        b.optimization = OptimizationLevel::Aggressive;
+        assert_ne!(
+            ArtifactCache::key_for(&a, "return 1"),
+            ArtifactCache::key_for(&b, "return 1")
+        );
+    }
+
+    #[test]
+    fn determinism_change_changes_key() {
+        use crate::host_schema::DeterminismClass;
+        let host = HostSchema::new(1);
+        let mut a = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host.clone());
+        let mut b = CompilationRequest::repl(ScriptLanguage::Valkyrie, "return 1", host);
+        a.determinism = DeterminismClass::Deterministic;
+        b.determinism = DeterminismClass::Nondeterministic;
+        assert_ne!(
+            ArtifactCache::key_for(&a, "return 1"),
+            ArtifactCache::key_for(&b, "return 1")
         );
     }
 }
