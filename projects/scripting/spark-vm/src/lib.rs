@@ -687,18 +687,26 @@ impl Vm {
                     let a = self.pop()?;
                     match (&a, &b) {
                         (Value::Handle(h), Value::Number(n)) => {
-                            if let Ok(GcObject::Array(arr)) = self.heap.get(*h) {
-                                let times = (*n).max(0.0) as usize;
-                                let mut out = Vec::with_capacity(arr.len() * times);
-                                for _ in 0..times {
-                                    out.extend(arr.iter().cloned());
+                            match self.heap.get(*h) {
+                                Ok(GcObject::Array(arr)) => {
+                                    let times = (*n).max(0.0) as usize;
+                                    let mut out = Vec::with_capacity(arr.len() * times);
+                                    for _ in 0..times {
+                                        out.extend(arr.iter().cloned());
+                                    }
+                                    let nh = self.heap.alloc(GcObject::Array(out));
+                                    self.stack.push(Value::Handle(nh));
                                 }
-                                let nh = self.heap.alloc(GcObject::Array(out));
-                                self.stack.push(Value::Handle(nh));
-                            } else {
-                                let an = a.as_number().unwrap_or(0.0);
-                                let bn = b.as_number().unwrap_or(0.0);
-                                self.stack.push(Value::Number(an * bn));
+                                Ok(GcObject::String(s)) => {
+                                    let times = (*n).max(0.0) as usize;
+                                    let out = s.repeat(times);
+                                    self.stack.push(self.heap.alloc_string(out));
+                                }
+                                _ => {
+                                    let an = a.as_number().unwrap_or(0.0);
+                                    let bn = b.as_number().unwrap_or(0.0);
+                                    self.stack.push(Value::Number(an * bn));
+                                }
                             }
                         }
                         _ => {
@@ -812,6 +820,23 @@ impl Vm {
                         }
                     }
                     if self.frames.len() > 256 {
+                        let stack: Vec<_> = self
+                            .frames
+                            .iter()
+                            .rev()
+                            .take(10)
+                            .map(|f| {
+                                self.module
+                                    .functions
+                                    .get(f.func)
+                                    .map(|p| p.name.as_str())
+                                    .unwrap_or("?")
+                            })
+                            .collect();
+                        eprintln!(
+                            "rgss play: call depth overflow top={}",
+                            stack.join(" <- ")
+                        );
                         return Err(VmError::CallOverflow);
                     }
                     self.stack.remove(callee_idx);
@@ -933,6 +958,22 @@ impl Vm {
                                     self.stack.push(Value::Number(arr.len() as f64));
                                     continue;
                                 }
+                                "push" | "<<" => {
+                                    let val = args.first().cloned().unwrap_or(Value::Null);
+                                    if let Ok(GcObject::Array(arr)) = self.heap.get_mut(*h) {
+                                        arr.push(val.clone());
+                                    }
+                                    self.stack.push(recv);
+                                    continue;
+                                }
+                                "sum" => {
+                                    let mut total = 0.0;
+                                    for v in arr {
+                                        total += v.as_number().unwrap_or(0.0);
+                                    }
+                                    self.stack.push(Value::Number(total));
+                                    continue;
+                                }
                                 "min" => {
                                     let mut best: Option<f64> = None;
                                     for v in arr {
@@ -962,6 +1003,25 @@ impl Vm {
                                     };
                                     let v = arr.get(i).cloned().unwrap_or(Value::Null);
                                     self.stack.push(v);
+                                    continue;
+                                }
+                                "[]" if argc == 2 => {
+                                    // `arr[start, length]` 切片。
+                                    let start = args.first().and_then(|v| v.as_number()).unwrap_or(0.0) as isize;
+                                    let len = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0).max(0.0) as usize;
+                                    let start = if start < 0 {
+                                        (arr.len() as isize + start).max(0) as usize
+                                    } else {
+                                        start as usize
+                                    };
+                                    let end = (start + len).min(arr.len());
+                                    let slice = if start < arr.len() {
+                                        arr[start..end].to_vec()
+                                    } else {
+                                        Vec::new()
+                                    };
+                                    let nh = self.heap.alloc(GcObject::Array(slice));
+                                    self.stack.push(Value::Handle(nh));
                                     continue;
                                 }
                                 "[]=" if argc == 2 => {
@@ -1000,20 +1060,34 @@ impl Vm {
                     *self.call_hits.entry(format!("send:{fname}")).or_insert(0) += 1;
                     if let Some(fidx) = self.module.find_function(&fname) {
                         let arity = self.module.functions[fidx].arity;
-                        let call_args: Vec<Value> = if arity as usize == args.len() + 1 {
-                            let mut v = Vec::with_capacity(args.len() + 1);
-                            v.push(recv);
-                            v.extend(args);
-                            v
-                        } else if arity as usize == args.len() {
-                            args
-                        } else {
-                            return Err(VmError::ArityMismatch {
-                                expected: u16::from(arity),
-                                got: (args.len() + 1) as u16,
-                            });
-                        };
+                        let mut call_args: Vec<Value> = Vec::with_capacity(args.len() + 1);
+                        call_args.push(recv);
+                        call_args.extend(args);
+                        // 与 Call 一致：缺参垫 nil，多余实参丢弃。
+                        let arity_usize = arity as usize;
+                        if call_args.len() < arity_usize {
+                            call_args.resize(arity_usize, Value::Null);
+                        } else if call_args.len() > arity_usize {
+                            call_args.truncate(arity_usize);
+                        }
                         if self.frames.len() > 256 {
+                            let stack: Vec<_> = self
+                                .frames
+                                .iter()
+                                .rev()
+                                .take(10)
+                                .map(|f| {
+                                    self.module
+                                        .functions
+                                        .get(f.func)
+                                        .map(|p| p.name.as_str())
+                                        .unwrap_or("?")
+                                })
+                                .collect();
+                            eprintln!(
+                                "rgss play: send depth overflow top={}",
+                                stack.join(" <- ")
+                            );
                             return Err(VmError::CallOverflow);
                         }
                         let base = self.stack.len();
@@ -1040,6 +1114,25 @@ impl Vm {
                         };
                         self.natives.insert(fname, native);
                         self.stack.push(result?);
+                    } else if let Value::Handle(h) = &recv {
+                        // 无方法时：表字段读写（`sprite.x` / `sprite.x = 1`）。
+                        if let Some(field) = method.strip_suffix('=') {
+                            let val = args.last().cloned().unwrap_or(Value::Null);
+                            if let Ok(GcObject::Table(map)) = self.heap.get_mut(*h) {
+                                map.insert(field.to_string(), val.clone());
+                            }
+                            self.stack.push(val);
+                        } else if argc == 0 {
+                            let v = match self.heap.get(*h) {
+                                Ok(GcObject::Table(map)) => {
+                                    map.get(&method).cloned().unwrap_or(Value::Null)
+                                }
+                                _ => Value::Null,
+                            };
+                            self.stack.push(v);
+                        } else {
+                            self.stack.push(Value::Null);
+                        }
                     } else {
                         // 缺方法：RGSS 宿主阶段返回 nil，避免整包因缺 stub 立刻崩。
                         self.stack.push(Value::Null);
