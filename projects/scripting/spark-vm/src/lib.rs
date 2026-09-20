@@ -1526,4 +1526,30 @@ mod tests {
         let err = vm.run(&mut BufHost(String::new())).unwrap_err();
         assert!(matches!(err, VmError::CallDepthExceeded));
     }
+
+    #[test]
+    fn allocation_limit_is_enforced() {
+        let mut f = FuncProto::new("__main", 0);
+        let s = f.add_string("x");
+        // 循环：每次 LoadString 触发堆分配。
+        f.emit(Op::LoadString);
+        f.emit_u16(s);
+        f.emit(Op::Pop);
+        f.emit_u8(1);
+        f.emit(Op::Jump);
+        f.emit_i16(-8);
+        f.emit(Op::Return);
+        let mut vm = Vm::new(Module {
+            functions: vec![f],
+            entry: 0,
+            native_names: Vec::new(),
+        });
+        vm.allocation_limit = 5;
+        vm.step_limit = 1_000_000;
+        let err = vm.run(&mut BufHost(String::new())).unwrap_err();
+        assert!(
+            matches!(err, VmError::AllocationLimitExceeded),
+            "got {err:?}"
+        );
+    }
 }
