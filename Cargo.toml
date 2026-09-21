@@ -78,7 +78,7 @@ pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
 fontdue = "0.9"
 image = { version = "0.25", default-features = true }
-symphonia = { version = "0.5.5", features = [
+symphonia = { version = "0.6.1", features = [
     "aac",
     "adpcm",
     "alac",
