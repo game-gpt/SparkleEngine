@@ -99,6 +99,8 @@ fn symphonia_kind(e: &symphonia::core::errors::Error) -> &'static str {
         Unsupported(_) => "unsupported",
         LimitError(_) => "limit",
         ResetRequired => "reset_required",
+        // Symphonia 将 Error 标为 non_exhaustive。
+        _ => "other",
     }
 }
 

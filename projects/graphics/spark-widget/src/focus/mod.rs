@@ -307,11 +307,7 @@ mod tests {
         let first = button_widget().text("first").mount(&mut tree, root).unwrap();
         let second = button_widget()
             .text("second")
-            .focus_policy(FocusPolicy {
-                focusable: true,
-                tab_index: 5,
-                neighbors: Neighbors { up: Some(first), ..Neighbors::default() },
-            })
+            .focus_policy(FocusPolicy { focusable: true, tab_index: 5, neighbors: Neighbors { up: Some(first), ..Neighbors::default() } })
             .mount(&mut tree, root)
             .unwrap();
 

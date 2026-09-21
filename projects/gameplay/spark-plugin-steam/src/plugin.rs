@@ -188,7 +188,7 @@ mod tests {
         reg.register(Box::new(SteamPlugin::with_null_backend_app(1234, "u"))).unwrap();
         assert!(reg.contains("steam"));
 
-        let mut module = Module { functions: vec![], entry: 0, native_names: vec!["steam_app_id".into()] };
+        let mut module = Module { functions: vec![], entry: 0, native_names: vec!["plugin.steam_app_id".into()] };
         let mut f = FuncProto::new("on_load", 0);
         f.emit(Op::CallHost);
         f.emit_u16(0);
@@ -197,7 +197,7 @@ mod tests {
         module.functions.push(f);
 
         let mut vm = spark_vm::Vm::new(module);
-        vm.prepare_host_slots(["steam_app_id"]);
+        vm.prepare_host_slots(["plugin.steam_app_id"]);
         reg.install_all(&mut vm);
         let v = vm.run(&mut StdHost).unwrap();
         assert_eq!(v.as_number(), Some(1234.0));

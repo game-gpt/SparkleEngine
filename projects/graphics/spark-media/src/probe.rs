@@ -1,16 +1,15 @@
-//! 容器探测与轨元数据。
+//! 容器探测与轨元数据（Symphonia 0.6）。
 //!
-//! Symphonia 0.5 以音频编解码为主；无 `sample_rate` 的轨视为视频/其它轨候选，
-//! 宽高在容器未暴露时为 `0`（后续可由专用解码器补全）。
+//! 音频 / 视频 / 其它轨按 `CodecParameters` 枚举分类；视频宽高来自视频 codec 参数。
 
 use std::{fs::File, path::Path};
 
 use symphonia::{
     core::{
-        formats::FormatOptions,
+        codecs::CodecParameters,
+        formats::{FormatOptions, FormatReader, probe::Hint},
         io::{MediaSourceStream, MediaSourceStreamOptions},
         meta::MetadataOptions,
-        probe::Hint,
     },
     default::get_probe,
 };
@@ -95,31 +94,37 @@ pub(crate) fn classify_tracks<'a>(tracks: impl IntoIterator<Item = &'a symphonia
     let mut out = Vec::new();
     for track in tracks {
         let id = track.id;
-        let codec = format!("{:?}", track.codec_params.codec);
-        if let Some(rate) = track.codec_params.sample_rate {
-            let ch = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(1);
-            out.push(TrackInfo::Audio(AudioTrackInfo { track_id: id, codec, sample_rate: rate, channels: ch.max(1) }));
-        }
-        else if track.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL {
-            // 无采样率的已注册编解码轨 → 视频候选（Symphonia 不提供宽高字段）
-            let (numer, denom) = track.codec_params.time_base.map(|tb| (tb.numer, tb.denom)).unwrap_or((1, 1));
-            out.push(TrackInfo::Video(VideoTrackInfo {
-                track_id: id,
-                codec,
-                width: 0,
-                height: 0,
-                time_base_numer: numer,
-                time_base_denom: denom.max(1),
-            }));
-        }
-        else {
-            out.push(TrackInfo::Other { track_id: id, codec });
+        let (numer, denom) = track.time_base.map(|tb| (tb.numer.get(), tb.denom.get())).unwrap_or((1, 1));
+        match track.codec_params.as_ref() {
+            Some(CodecParameters::Audio(params)) => {
+                let codec = format!("{:?}", params.codec);
+                let rate = params.sample_rate.unwrap_or(0);
+                let ch = params.channels.as_ref().map(|c| c.count() as u16).unwrap_or(1).max(1);
+                out.push(TrackInfo::Audio(AudioTrackInfo { track_id: id, codec, sample_rate: rate, channels: ch }));
+            }
+            Some(CodecParameters::Video(params)) => {
+                let codec = format!("{:?}", params.codec);
+                out.push(TrackInfo::Video(VideoTrackInfo {
+                    track_id: id,
+                    codec,
+                    width: params.width.map(u32::from).unwrap_or(0),
+                    height: params.height.map(u32::from).unwrap_or(0),
+                    time_base_numer: numer,
+                    time_base_denom: denom.max(1),
+                }));
+            }
+            Some(other) => {
+                out.push(TrackInfo::Other { track_id: id, codec: format!("{other:?}") });
+            }
+            None => {
+                out.push(TrackInfo::Other { track_id: id, codec: "unknown".into() });
+            }
         }
     }
     MediaInfo { tracks: out, format: "symphonia".into() }
 }
 
-fn probe_mss(mss: MediaSourceStream, hint: Hint) -> Result<MediaInfo, MediaError> {
-    let probed = get_probe().format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())?;
-    Ok(classify_tracks(probed.format.tracks()))
+fn probe_mss(mss: MediaSourceStream<'static>, hint: Hint) -> Result<MediaInfo, MediaError> {
+    let format: Box<dyn FormatReader> = get_probe().probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())?;
+    Ok(classify_tracks(format.tracks()))
 }

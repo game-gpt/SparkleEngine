@@ -2,12 +2,49 @@ name: Rust
 
 on:
   push:
-    branches: [ master, dev ]
+    branches: [master, dev]
   pull_request:
-    branches: [ master, dev ]
+    branches: [master, dev]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
-  build:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - name: Install Linux audio deps
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: clippy
+      - name: Clippy workspace
+        # 覆盖整仓（default-members 只有 spark-wasm）。暂不 -D warnings，避免历史 lint 淹没真实 break。
+        run: cargo clippy --workspace --all-targets
+
+  test:
+    name: Test
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -16,11 +53,14 @@ jobs:
     steps:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7
+      - name: Install Linux audio deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
-          components: rustfmt, clippy
-      - name: Build
-        run: cargo build --release
-      - name: Tests
-        run: cargo test --release
+          shared-key: test
+      - name: Test workspace
+        # 必须 --workspace。裸 cargo test 只跑 default-members，Dependabot major bump 会假绿。
+        run: cargo test --workspace

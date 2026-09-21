@@ -1119,13 +1119,11 @@ mod tests {
         let mut runtime = UiRuntime::new();
         let root = runtime.tree.root();
         let col = column()
-            .child(
-                button_widget()
-                    .text("Go")
-                    .stop_click_propagation(true)
-                    .on_click(UiCommand::Custom(3))
-                    .layout(LayoutSpec { width: Size::Px(80.0), height: Size::Px(40.0), ..LayoutSpec::default() }),
-            )
+            .child(button_widget().text("Go").stop_click_propagation(true).on_click(UiCommand::Custom(3)).layout(LayoutSpec {
+                width: Size::Px(80.0),
+                height: Size::Px(40.0),
+                ..LayoutSpec::default()
+            }))
             .mount(&mut runtime.tree, root)
             .unwrap();
         run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);

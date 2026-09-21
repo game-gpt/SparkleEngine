@@ -1,13 +1,12 @@
-//! 解复用：按包拉取音视频轨。
+//! 解复用：按包拉取音视频轨（Symphonia 0.6）。
 
 use std::{fs::File, path::Path};
 
 use symphonia::{
     core::{
-        formats::{FormatOptions, FormatReader, SeekMode, SeekTo},
+        formats::{FormatOptions, FormatReader, SeekMode, SeekTo, probe::Hint},
         io::{MediaSourceStream, MediaSourceStreamOptions},
         meta::MetadataOptions,
-        probe::Hint,
         units::Time,
     },
     default::get_probe,
@@ -57,11 +56,10 @@ impl MediaReader {
         Self::open_mss(MediaSourceStream::new(Box::new(cursor), MediaSourceStreamOptions::default()), Hint::new())
     }
 
-    fn open_mss(mss: MediaSourceStream, hint: Hint) -> Result<Self, MediaError> {
-        let probed =
-            get_probe().format(&hint, mss, &FormatOptions { enable_gapless: true, ..Default::default() }, &MetadataOptions::default())?;
-        let info = classify_tracks(probed.format.tracks());
-        Ok(Self { format: probed.format, info })
+    fn open_mss(mss: MediaSourceStream<'static>, hint: Hint) -> Result<Self, MediaError> {
+        let format: Box<dyn FormatReader> = get_probe().probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())?;
+        let info = classify_tracks(format.tracks());
+        Ok(Self { format, info })
     }
 
     pub fn info(&self) -> &MediaInfo {
@@ -80,34 +78,29 @@ impl MediaReader {
     pub fn next_packet(&mut self, track_filter: Option<u32>) -> Result<Option<MediaPacket>, MediaError> {
         loop {
             let packet = match self.format.next_packet() {
-                Ok(p) => p,
+                Ok(Some(p)) => p,
+                Ok(None) => return Ok(None),
                 Err(symphonia::core::errors::Error::ResetRequired) => continue,
-                Err(symphonia::core::errors::Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    return Ok(None);
-                }
                 Err(e) => return Err(e.into()),
             };
             if let Some(id) = track_filter {
-                if packet.track_id() != id {
+                if packet.track_id != id {
                     continue;
                 }
             }
-            let track_id = packet.track_id();
+            let track_id = packet.track_id;
             let kind = self.kind_of(track_id);
-            return Ok(Some(MediaPacket {
-                track_id,
-                kind,
-                ts: packet.ts(),
-                dur: Some(packet.dur()).filter(|&d| d > 0),
-                data: packet.buf().to_vec(),
-            }));
+            let ts = packet.pts.get().max(0) as u64;
+            let dur = packet.dur.get();
+            return Ok(Some(MediaPacket { track_id, kind, ts, dur: Some(dur).filter(|&d| d > 0), data: packet.data.into_vec() }));
         }
     }
 
     /// 按秒粗略寻道（依赖容器 seek 支持）。
     pub fn seek_seconds(&mut self, seconds: f64) -> Result<(), MediaError> {
         let track_id = self.info.default_video().map(|v| v.track_id).or_else(|| self.info.default_audio().map(|a| a.track_id));
-        let seek = SeekTo::Time { time: Time::from(seconds), track_id };
+        let time = Time::try_from_secs_f64(seconds).unwrap_or(Time::ZERO);
+        let seek = SeekTo::Time { time, track_id };
         self.format.seek(SeekMode::Coarse, seek)?;
         Ok(())
     }

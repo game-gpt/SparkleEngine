@@ -338,12 +338,7 @@ fn resolve_axis_sizes(content: Size2, spec: &LayoutSpec, constraints: Constraint
     if !matches!(spec.width, Size::MaxContent) {
         size.width = size.width.clamp(
             constraints.min.width,
-            if constraints.max.width.is_finite() {
-                constraints.max.width
-            }
-            else {
-                size.width.max(constraints.min.width)
-            },
+            if constraints.max.width.is_finite() { constraints.max.width } else { size.width.max(constraints.min.width) },
         );
     }
     else {
@@ -352,12 +347,7 @@ fn resolve_axis_sizes(content: Size2, spec: &LayoutSpec, constraints: Constraint
     if !matches!(spec.height, Size::MaxContent) {
         size.height = size.height.clamp(
             constraints.min.height,
-            if constraints.max.height.is_finite() {
-                constraints.max.height
-            }
-            else {
-                size.height.max(constraints.min.height)
-            },
+            if constraints.max.height.is_finite() { constraints.max.height } else { size.height.max(constraints.min.height) },
         );
     }
     else {

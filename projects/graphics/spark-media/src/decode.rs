@@ -1,16 +1,14 @@
-//! 音频轨 → 交错 f32 PCM。
+//! 音频轨 → 交错 f32 PCM（Symphonia 0.6）。
 
 use std::{fs::File, path::Path};
 
 use symphonia::{
     core::{
-        audio::AudioBufferRef,
-        codecs::{CODEC_TYPE_NULL, DecoderOptions},
+        codecs::audio::AudioDecoderOptions,
         errors::Error as SymError,
-        formats::FormatOptions,
+        formats::{FormatOptions, FormatReader, probe::Hint},
         io::{MediaSourceStream, MediaSourceStreamOptions},
         meta::MetadataOptions,
-        probe::Hint,
     },
     default::{get_codecs, get_probe},
 };
@@ -58,74 +56,48 @@ impl AudioDecoder {
         Self::decode_mss(MediaSourceStream::new(Box::new(cursor), MediaSourceStreamOptions::default()), Hint::new(), track_id)
     }
 
-    fn decode_mss(mss: MediaSourceStream, hint: Hint, track_id: Option<u32>) -> Result<PcmAudio, MediaError> {
-        let probed =
-            get_probe().format(&hint, mss, &FormatOptions { enable_gapless: true, ..Default::default() }, &MetadataOptions::default())?;
-        let mut format = probed.format;
+    fn decode_mss(mss: MediaSourceStream<'static>, hint: Hint, track_id: Option<u32>) -> Result<PcmAudio, MediaError> {
+        let mut format: Box<dyn FormatReader> = get_probe().probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())?;
 
         let track = if let Some(id) = track_id {
-            format.tracks().iter().find(|t| t.id == id).ok_or(MediaError::NoAudioTrack)?.clone()
+            format.tracks().iter().find(|t| t.id == id).cloned().ok_or(MediaError::NoAudioTrack)?
         }
         else {
             format
-                .tracks()
-                .iter()
-                .find(|t| t.codec_params.codec != CODEC_TYPE_NULL && t.codec_params.sample_rate.is_some())
+                .default_track(symphonia::core::formats::TrackType::Audio)
                 .cloned()
+                .or_else(|| format.tracks().iter().find(|t| t.codec_params.as_ref().is_some_and(|p| p.is_audio())).cloned())
                 .ok_or(MediaError::NoAudioTrack)?
         };
 
-        let sample_rate = track.codec_params.sample_rate.ok_or(MediaError::NoAudioTrack)?;
-        let channels = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(1).max(1);
+        let audio_params = track.codec_params.as_ref().and_then(|p| p.audio()).cloned().ok_or(MediaError::NoAudioTrack)?;
 
-        let mut decoder = get_codecs().make(&track.codec_params, &DecoderOptions::default())?;
+        let sample_rate = audio_params.sample_rate.ok_or(MediaError::NoAudioTrack)?;
+        let channels = audio_params.channels.as_ref().map(|c| c.count() as u16).unwrap_or(1).max(1);
+
+        let mut decoder = get_codecs().make_audio_decoder(&audio_params, &AudioDecoderOptions::default())?;
 
         let mut samples = Vec::new();
         let track_id = track.id;
 
         loop {
             let packet = match format.next_packet() {
-                Ok(p) => p,
+                Ok(Some(p)) => p,
+                Ok(None) => break,
                 Err(SymError::ResetRequired) => continue,
-                Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
                 Err(e) => return Err(e.into()),
             };
-            if packet.track_id() != track_id {
+            if packet.track_id != track_id {
                 continue;
             }
             match decoder.decode(&packet) {
-                Ok(buf) => append_f32(&mut samples, &buf),
+                Ok(buf) => buf.copy_to_vec_interleaved(&mut samples),
                 Err(SymError::DecodeError(_)) => continue,
                 Err(e) => return Err(e.into()),
             }
         }
 
         Ok(PcmAudio { sample_rate, channels, samples })
-    }
-}
-
-fn append_f32(out: &mut Vec<f32>, buf: &AudioBufferRef<'_>) {
-    fn push_planes<T: Copy>(out: &mut Vec<f32>, planes: &[&[T]], map: impl Fn(T) -> f32) {
-        let frames = planes.first().map(|p| p.len()).unwrap_or(0);
-        out.reserve(frames * planes.len());
-        for i in 0..frames {
-            for plane in planes {
-                out.push(map(plane[i]));
-            }
-        }
-    }
-
-    match buf {
-        AudioBufferRef::F32(b) => push_planes(out, b.planes().planes(), |v| v),
-        AudioBufferRef::U8(b) => push_planes(out, b.planes().planes(), |v| v as f32 / 128.0 - 1.0),
-        AudioBufferRef::U16(b) => push_planes(out, b.planes().planes(), |v| v as f32 / 32768.0 - 1.0),
-        AudioBufferRef::U24(b) => push_planes(out, b.planes().planes(), |v| v.inner() as f32 / 8_388_608.0 - 1.0),
-        AudioBufferRef::U32(b) => push_planes(out, b.planes().planes(), |v| v as f32 / 2_147_483_648.0 - 1.0),
-        AudioBufferRef::S8(b) => push_planes(out, b.planes().planes(), |v| v as f32 / 128.0),
-        AudioBufferRef::S16(b) => push_planes(out, b.planes().planes(), |v| v as f32 / 32768.0),
-        AudioBufferRef::S24(b) => push_planes(out, b.planes().planes(), |v| v.inner() as f32 / 8_388_608.0),
-        AudioBufferRef::S32(b) => push_planes(out, b.planes().planes(), |v| v as f32 / 2_147_483_648.0),
-        AudioBufferRef::F64(b) => push_planes(out, b.planes().planes(), |v| v as f32),
     }
 }
 
