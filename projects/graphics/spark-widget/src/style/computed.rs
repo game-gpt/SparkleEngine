@@ -111,9 +111,8 @@ fn apply_kind_defaults(theme: &Theme, kind: WidgetKind, style: &mut ComputedStyl
             style.background = theme.colors.surface;
         }
         WidgetKind::Container | WidgetKind::Root | WidgetKind::Spacer => {
-            if style.background.a <= 0.0 {
-                style.background = Color::rgba(0.0, 0.0, 0.0, 0.0);
-            }
+            // 容器默认透明，避免全屏 column 用 surface 盖住下层装饰（标题远景等）。
+            style.background = Color::rgba(0.0, 0.0, 0.0, 0.0);
         }
         _ => {}
     }
