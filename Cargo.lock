@@ -3430,6 +3430,7 @@ dependencies = [
  "spark-input",
  "spark-renderer",
  "spark-shader",
+ "spark-texture",
  "tracing",
  "wgpu",
  "winit",

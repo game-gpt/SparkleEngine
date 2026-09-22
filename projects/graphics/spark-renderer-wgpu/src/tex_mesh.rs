@@ -6,7 +6,7 @@ use std::{cell::Cell, collections::HashMap};
 
 use bytemuck::{Pod, Zeroable};
 use spark_core::SparkError;
-use spark_renderer::{DrawList3d, MeshResidentKey, RgbaImage, TexMeshVertex, TextureId};
+use spark_renderer::{DrawList3d, MeshResidentKey, TexMeshVertex, TextureId, TextureUpload};
 use spark_shader::{BuiltinShader, create_builtin};
 use wgpu::util::DeviceExt;
 
@@ -342,9 +342,9 @@ impl TexMeshGpu {
         }
     }
 
-    pub fn ingest_uploads(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, uploads: &[(TextureId, RgbaImage)]) -> Result<(), SparkError> {
-        for (id, img) in uploads {
-            let texture = crate::mipmap::create_rgba_texture_with_mips(device, queue, "mesh3d-albedo", img.width, img.height, &img.rgba);
+    pub fn ingest_uploads(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, uploads: &[(TextureId, TextureUpload)]) -> Result<(), SparkError> {
+        for (id, upload) in uploads {
+            let texture = crate::texture_upload::create_texture_from_upload(device, queue, upload)?;
             let view = texture.create_view(&Default::default());
             let bind = self.make_tex_bind(device, &view);
             self.textures.insert(id.0, GpuTexture { texture, bind });

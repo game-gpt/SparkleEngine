@@ -42,8 +42,7 @@ pub fn downsample_rgba(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8
                 out[o + 1] = 0;
                 out[o + 2] = 0;
                 out[o + 3] = 0;
-            }
-            else {
+            } else {
                 out[o] = ((r / a) * 255.0).round().clamp(0.0, 255.0) as u8;
                 out[o + 1] = ((g / a) * 255.0).round().clamp(0.0, 255.0) as u8;
                 out[o + 2] = ((b / a) * 255.0).round().clamp(0.0, 255.0) as u8;
@@ -54,7 +53,9 @@ pub fn downsample_rgba(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8
     out
 }
 
-/// 创建带完整 mip 链的 `Rgba8UnormSrgb` 纹理并上传全部层级。
+/// 创建带完整 mip 链的 RGBA8 纹理并上传全部层级。
+///
+/// `format` 应为 `Rgba8Unorm` 或 `Rgba8UnormSrgb`。
 pub fn create_rgba_texture_with_mips(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -62,6 +63,7 @@ pub fn create_rgba_texture_with_mips(
     width: u32,
     height: u32,
     rgba: &[u8],
+    format: wgpu::TextureFormat,
 ) -> wgpu::Texture {
     let levels = mip_level_count(width, height);
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -70,7 +72,7 @@ pub fn create_rgba_texture_with_mips(
         mip_level_count: levels,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });

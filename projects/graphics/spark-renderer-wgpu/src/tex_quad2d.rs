@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 use spark_core::SparkError;
-use spark_renderer::{DrawList, RgbaImage, TexQuadCmd, TextureId};
+use spark_renderer::{DrawList, TexQuadCmd, TextureId, TextureUpload};
 use spark_shader::{BuiltinShader, create_builtin};
 
 #[repr(C)]
@@ -122,10 +122,10 @@ impl TexQuad2dGpu {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         uniform_buf: &wgpu::Buffer,
-        uploads: &[(TextureId, RgbaImage)],
+        uploads: &[(TextureId, TextureUpload)],
     ) -> Result<(), SparkError> {
-        for (id, img) in uploads {
-            let texture = crate::mipmap::create_rgba_texture_with_mips(device, queue, "tex-quad2d", img.width, img.height, &img.rgba);
+        for (id, upload) in uploads {
+            let texture = crate::texture_upload::create_texture_from_upload(device, queue, upload)?;
             let view = texture.create_view(&Default::default());
             let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("tex-quad2d-bg"),

@@ -14,6 +14,7 @@ mod shadow;
 mod skinned_mesh;
 mod tex_mesh;
 mod tex_quad2d;
+mod texture_upload;
 mod winit_map;
 
 /// 每帧最多新建/更新的驻留网格 VBO 数（分摊开局 remesh 洪峰，未上传的本帧跳过绘制）。
@@ -26,8 +27,9 @@ pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
     Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost, GameHost3d, Input, Key, MAX_SKIN_JOINTS, Mat4,
     MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, RgbaImage, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex,
-    TexQuadCmd, TextCmd, TextureId, Vec3, WindowConfig, alloc_texture_id,
+    TexQuadCmd, TextCmd, TextureId, TextureUpload, Vec3, WindowConfig, alloc_texture_id,
 };
+pub use texture_upload::{create_texture_from_upload, expected_mip_levels, map_texture_format};
 
 use std::{sync::Arc, time::Instant};
 
