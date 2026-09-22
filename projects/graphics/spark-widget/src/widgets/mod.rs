@@ -76,6 +76,11 @@ impl WidgetBuilder {
         self
     }
 
+    /// 点击派发 [`UiCommand::Action`]。
+    pub fn on_action(self, name: &'static str) -> Self {
+        self.on_click(crate::command::UiCommand::action(name))
+    }
+
     /// 勾选态（Checkbox / Toggle / Radio）。
     pub fn checked(mut self, checked: bool) -> Self {
         self.content.checked = checked;
