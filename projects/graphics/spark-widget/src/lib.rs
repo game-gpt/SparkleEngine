@@ -1,7 +1,8 @@
 //! Retained Widget 系统。
 //!
 //! 公共 API 为长期持有的 [`WidgetTree`] 与 [`UiRuntime`]。
-//! 每帧经 layout / event / update 后，由 paint traversal 写入 [`spark_renderer::DrawList`]。
+//! 每帧经 layout / event / update 后，由 paint traversal 写入 [`UiRenderBatch`]
+//!（权威类型在 `spark-renderer`），再可选刷入 [`spark_renderer::DrawList`] HUD 层。
 //!
 //! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
 //! UI 动效在 [`motion`]，不属于 `spark-animator`。
