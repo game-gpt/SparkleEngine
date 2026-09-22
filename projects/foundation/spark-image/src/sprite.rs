@@ -1,4 +1,4 @@
-//! 精灵与网格图集裁切。
+//! 精灵与网格图集裁切（只依赖纹理宽高，不持有 CPU 像素）。
 
 use spark_core::{ErrorArg, Rect, SparkError, Vec2, codes};
 
@@ -21,14 +21,27 @@ impl Sprite {
         self
     }
 
-    /// 校验精灵落在图像内。
-    pub fn validate(&self, image: &PixelImage) -> Result<(), SparkError> {
-        validate_region(image.width(), image.height(), self.region)
+    /// 校验精灵落在纹理尺寸内。
+    pub fn validate(&self, width: u32, height: u32) -> Result<(), SparkError> {
+        validate_region(width, height, self.region)
     }
 
-    /// 源矩形对应的归一化 UV。
-    pub fn uv(&self, image: &PixelImage) -> Result<Rect, SparkError> {
-        image.uv_rect(self.region)
+    /// 源矩形对应的归一化 UV（`[0,1]`，V 向下）。
+    pub fn uv(&self, width: u32, height: u32) -> Result<Rect, SparkError> {
+        validate_region(width, height, self.region)?;
+        let w = width as f32;
+        let h = height as f32;
+        Ok(Rect::new(self.region.x / w, self.region.y / h, self.region.w / w, self.region.h / h))
+    }
+
+    /// 过渡：相对 [`PixelImage`] 校验（请改用 [`Self::validate`]）。
+    pub fn validate_image(&self, image: &PixelImage) -> Result<(), SparkError> {
+        self.validate(image.width(), image.height())
+    }
+
+    /// 过渡：相对 [`PixelImage`] 取 UV（请改用 [`Self::uv`]）。
+    pub fn uv_image(&self, image: &PixelImage) -> Result<Rect, SparkError> {
+        self.uv(image.width(), image.height())
     }
 
     /// 以轴心对齐到目标点时的目标矩形（`dst_size` 为绘制宽高）。
@@ -87,22 +100,27 @@ impl SpriteSheet {
         self.sprite_at(col, row)
     }
 
-    /// 从图像尺寸推断格大小（无边距无间距时）。
-    pub fn from_image(image: &PixelImage, columns: u32, rows: u32) -> Result<Self, SparkError> {
+    /// 从纹理宽高推断格大小（无边距无间距时）。
+    pub fn from_size(width: u32, height: u32, columns: u32, rows: u32) -> Result<Self, SparkError> {
         if columns == 0 || rows == 0 {
             return Err(SparkError::new(codes::image_sprite_grid_invalid())
                 .arg("reason", ErrorArg::String("non_positive_grid".into()))
                 .arg("columns", ErrorArg::Unsigned(columns as u64))
                 .arg("rows", ErrorArg::Unsigned(rows as u64)));
         }
-        if image.width() % columns != 0 || image.height() % rows != 0 {
+        if width % columns != 0 || height % rows != 0 {
             return Err(SparkError::new(codes::image_sprite_grid_invalid())
                 .arg("reason", ErrorArg::String("not_divisible".into()))
-                .arg("img_w", ErrorArg::Unsigned(image.width() as u64))
-                .arg("img_h", ErrorArg::Unsigned(image.height() as u64))
+                .arg("img_w", ErrorArg::Unsigned(width as u64))
+                .arg("img_h", ErrorArg::Unsigned(height as u64))
                 .arg("columns", ErrorArg::Unsigned(columns as u64))
                 .arg("rows", ErrorArg::Unsigned(rows as u64)));
         }
-        Ok(Self::grid(columns, rows, image.width() / columns, image.height() / rows))
+        Ok(Self::grid(columns, rows, width / columns, height / rows))
+    }
+
+    /// 过渡：从 [`PixelImage`] 推断格大小（请改用 [`Self::from_size`]）。
+    pub fn from_image(image: &PixelImage, columns: u32, rows: u32) -> Result<Self, SparkError> {
+        Self::from_size(image.width(), image.height(), columns, rows)
     }
 }

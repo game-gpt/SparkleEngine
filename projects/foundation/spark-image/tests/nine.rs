@@ -6,7 +6,7 @@ use spark_image::*;
 fn nine_stretch_corners() {
     let img = PixelImage::solid(32, 32, Color::rgb(1.0, 1.0, 1.0)).unwrap();
     let nine = NineSlice::new(img.bounds(), Margin::uniform(8.0));
-    nine.validate(&img).unwrap();
+    nine.validate(img.width(), img.height()).unwrap();
     let quads = nine.layout(Rect::new(0.0, 0.0, 100.0, 60.0)).unwrap();
     // 3×3 全在
     assert_eq!(quads.len(), 9);

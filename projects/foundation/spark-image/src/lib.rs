@@ -1,8 +1,8 @@
-//! 像素图装载、精灵裁切与九宫格拉伸（CPU 侧）。
+//! 像素图装载（过渡）、精灵裁切与九宫格布局。
 //!
-//! 本 crate **不**碰 GPU：产出 RGBA 字节、源矩形与九宫格目标四边形，由 `spark-renderer-wgpu`
-//! 等后端上传纹理并批绘制。
-//! 上传纹理并批绘制。无游戏语义（无方块 / UI 皮肤产品名）。
+//! **几何**（[`Sprite`] / [`NineSlice`]）只依赖纹理宽高，不依赖 CPU 像素缓冲。
+//! **解码**（[`PixelImage`] + `image` crate）为过渡路径；目标管线是 formats →
+//! `spark-texture` 的 `TextureUpload`（见引擎纹理契约）。本 crate **不**碰 GPU。
 
 #![warn(missing_docs)]
 mod nine;

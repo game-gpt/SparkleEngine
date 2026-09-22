@@ -58,9 +58,15 @@ impl NineSlice {
         self
     }
 
-    pub fn validate(&self, image: &PixelImage) -> Result<(), SparkError> {
-        validate_region(image.width(), image.height(), self.source)?;
+    /// 校验源区落在纹理尺寸内，且边距合法。
+    pub fn validate(&self, width: u32, height: u32) -> Result<(), SparkError> {
+        validate_region(width, height, self.source)?;
         self.validate_margin()
+    }
+
+    /// 过渡：相对 [`PixelImage`] 校验（请改用 [`Self::validate`]）。
+    pub fn validate_image(&self, image: &PixelImage) -> Result<(), SparkError> {
+        self.validate(image.width(), image.height())
     }
 
     fn validate_margin(&self) -> Result<(), SparkError> {
