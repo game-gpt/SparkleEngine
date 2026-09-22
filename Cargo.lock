@@ -3302,15 +3302,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spark-image-formats"
-version = "0.0.0"
-dependencies = [
- "image",
- "spark-core",
- "spark-texture",
-]
-
-[[package]]
 name = "spark-input"
 version = "0.0.0"
 
@@ -3329,6 +3320,15 @@ version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-vm",
+]
+
+[[package]]
+name = "spark-jpeg"
+version = "0.0.0"
+dependencies = [
+ "image",
+ "spark-core",
+ "spark-texture",
 ]
 
 [[package]]
@@ -3415,6 +3415,15 @@ dependencies = [
  "spark-plugin",
  "spark-vm",
  "tracing",
+]
+
+[[package]]
+name = "spark-png"
+version = "0.0.0"
+dependencies = [
+ "image",
+ "spark-core",
+ "spark-texture",
 ]
 
 [[package]]
@@ -3563,6 +3572,15 @@ dependencies = [
  "spark-asset",
  "spark-core",
  "spark-geometry",
+]
+
+[[package]]
+name = "spark-webp"
+version = "0.0.0"
+dependencies = [
+ "image",
+ "spark-core",
+ "spark-texture",
 ]
 
 [[package]]

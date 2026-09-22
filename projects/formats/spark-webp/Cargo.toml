@@ -1,0 +1,19 @@
+[package]
+name = "spark-webp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark WebP 解码 → TextureUpload"
+keywords = ["spark", "webp", "texture", "format"]
+categories = ["game-development", "parsing"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-texture = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["webp"] }
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["webp"] }
