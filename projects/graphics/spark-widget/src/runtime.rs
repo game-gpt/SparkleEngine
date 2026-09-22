@@ -292,11 +292,13 @@ impl UiRuntime {
         self.state.dirty.mark_paint();
     }
 
-    /// 把整棵树画进 `DrawList`（每帧全量遍历；`dirty.paint` 留给日后增量）。
+    /// 兼容桥：把整棵树经 [`UiRenderBatch`] 刷进 `DrawList` HUD。
+    ///
+    /// 新代码请用 [`Self::paint_into`]，由宿主 `draw_ui` / 后端直读批次。
     pub fn paint(&mut self, draw: &mut DrawList) {
-        // DrawList 每帧重建：始终遍历绘制。`dirty.paint` 留给增量优化。
-        paint::paint_tree(&self.tree, &self.theme, &self.motion, self.textures.as_mut(), draw);
-        self.state.dirty.clear_paint();
+        let mut batch = crate::UiRenderBatch::new();
+        self.paint_into(&mut batch);
+        batch.flush_hud(draw);
     }
 
     /// 把整棵树写入 [`crate::UiRenderBatch`]（不碰世界 DrawList）。

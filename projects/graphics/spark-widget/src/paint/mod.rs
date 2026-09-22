@@ -1,4 +1,6 @@
-//! Paint traversal：retained 树 → [`UiRenderBatch`]（再可选刷入 DrawList）。
+//! Paint traversal：retained 树 → [`UiRenderBatch`]。
+//!
+//! [`paint_tree`] 是兼容桥（内部 flush 到 DrawList HUD）；正式路径用 [`paint_tree_into`]。
 
 mod batch;
 
@@ -16,7 +18,7 @@ use crate::{
     tree::WidgetTree,
 };
 
-/// 遍历树写入 [`UiRenderBatch`]，再刷入 `draw` 的 HUD 层。
+/// 兼容桥：遍历树写入批次后刷入 `draw` 的 HUD 层。
 pub fn paint_tree(
     tree: &WidgetTree,
     theme: &Theme,
