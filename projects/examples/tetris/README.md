@@ -1,12 +1,13 @@
 # tetris
 
-**Rust + Valkyrie** 混合示例（`spark.kind = hybrid`）。棋盘权威在 Rust；`assets/scripts` 仍为 Inspector / HUD 元数据。
+俄罗斯方块：棋盘权威在 Rust（`Board` / `PieceKind` / `TetrisApp`），可挂 Valkyrie HUD 元数据。入口同样是 `run_game`。
 
-```powershell
-cd projects/examples/tetris
-pnpm play
-# 或
-spark run
+```bash
+cargo run -p tetris
 ```
 
-操作：`←`/`→` 移动，`↑`/`X` 旋转，`↓` 软降，`Space` 硬降，`R` 重开，`Esc` 退出。
+下落、旋转、消行从 `TetrisApp` 与 `Board` 改起。Studio 中识别为 Hybrid 工程。
+
+```bash
+cargo test -p tetris
+```

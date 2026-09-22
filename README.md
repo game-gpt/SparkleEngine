@@ -1,43 +1,72 @@
 # Spark Engine
 
-通用 **2D 游戏元引擎**（Rust）。提供 ECS、时间、事件与 Wasm / Node 派发等基础设施， **不包含**任何具体游戏玩法。
+Spark 是一套用 Rust 编写的游戏引擎库：ECS、固定步时间、输入、2D/3D 绘制契约、Retained Widget、脚本编译与 VM，以及 Node.js /
+Wasm 宿主绑定。引擎层不携带具体玩法数据。
 
-呈现目标为现代 GPU API（wgpu：DX12 / Vulkan / Metal / WebGL2 方向）。 **不是**第三方引擎的 fork。
+产品 npm 包是 `@game-gpt/sparkle-engine`，命令行入口为 `spark`。窗口事件与 GPU 提交在 `spark-renderer-wgpu`；固定步帧编排与模组壳在
+`spark-engine`。
 
-产品 npm 面为 **`@game-gpt/sparkle-engine`**（唯一 CLI：`spark`）。
+## 环境与构建
 
-## 开发构建
-
-工具链见 `rust-toolchain.toml`。JS 侧用 pnpm workspace（仓库根）。
+- Rust 工具链：仓库根 `rust-toolchain.toml`
+- Node.js ≥ 18、pnpm
 
 ```bash
 pnpm install
 pnpm run build:ts
-node scripts/build/napi.mjs
 
-# Studio
-cargo run -p spark-studio
-# 或
-pnpm exec spark studio
+cargo run -p ping-pong          # 乒乓示例窗口
+cargo run -p spark-studio       # 编辑器
+# 或 pnpm exec spark studio
 
-# Wasm
+pnpm run build:napi             # 原生 .node（按需）
 rustup target add wasm32-unknown-unknown
-pnpm run build:wasm
+pnpm run build:wasm             # Wasm 平台袋（按需）
 ```
 
-## 目录布局
+## 模块导航
 
-```text
-projects/
-  foundation/   # 基础运行时
-  graphics/     # 渲染与媒体（含 spark-widget）
-  scripting/    # GC / VM / 脚本前端
-  gameplay/     # 模组壳、体裁引擎、spark-studio
-  bindings/     # spark-wasm / spark-napi
-  hosts/        # @game-gpt/sparkle-engine（唯一 bin：spark）
-  platforms/
-    native/     # @game-gpt/sparkle-engine-<os-cpu> 原生袋
-    wasm/       # @game-gpt/sparkle-engine-unknown-wasm32
+| 任务                  | crate                       |
+|-----------------------|-----------------------------|
+| 实体 / 组件 / 调度    | `spark-ecs`                 |
+| 固定步时钟            | `spark-time`                |
+| 键鼠帧状态            | `spark-input`               |
+| 绘制列表与 `GameHost` | `spark-renderer`            |
+| wgpu 窗口与提交       | `spark-renderer-wgpu`       |
+| Retained UI           | `spark-widget`              |
+| 脚本编译与执行        | `spark-script` → `spark-vm` |
+| 模组与帧循环          | `spark-engine`              |
+| Node 绑定             | `spark-napi`                |
+| Wasm ABI              | `spark-wasm`                |
+| glTF 导入             | `spark-gltf`                |
+
+各 crate 说明见 `projects/**/readme.md`。
+
+## 运行路径（示例）
+
+`ping-pong` 的 `main`：
+
+```rust
+use ping_pong::PingPongGame;
+use spark_engine::run_game;
+use spark_renderer::WindowConfig;
+
+run_game(
+    WindowConfig {
+        title: "ping-pong".into(),
+        width: 960,
+        height: 540,
+        clear_color: [0.05, 0.07, 0.10, 1.0],
+    },
+    PingPongGame::new(),
+)?;
 ```
 
-**禁止**仓库根 `packages/`。引擎 crate 与 Studio **不得**再声明 npm `bin`。
+`PingPongGame` 实现 `GameHost`：`update` 读 `FrameCtx.input`，`draw` 往 `DrawList` 填矩形。`run_game` 负责帧循环并调用
+`spark-renderer-wgpu` 开窗提交。
+
+## 说明
+
+- `spark-napi` 的 N-API 导出需 `--features node`；默认 feature 为空以便纯 Rust 测试。
+- `spark-jit` 当前做字节码特化，不是完整机器码后端。
+- Lua / Ruby 前端是语言子集，不是完整语言运行时。

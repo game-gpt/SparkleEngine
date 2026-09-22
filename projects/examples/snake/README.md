@@ -1,12 +1,16 @@
 # snake
 
-纯 **Valkyrie** Studio 验收示例（`spark.kind = valkyrie`）。脚本在 `assets/scripts`；在 VM Play 接通前由 native 宿主 `snake` 试玩。
+贪吃蛇：`SnakeApp` 实现 `GameHost`，`run_game` 开窗。方向键 / WASD 移动，R 重开，Esc 退出。
 
-```powershell
-cd projects/examples/snake
-pnpm play
-# 或
-spark run
+```bash
+cargo run -p snake
 ```
 
-操作：方向键 / WASD，`R` 重开，`Esc` 退出。
+| 内容                          | 位置               |
+|-------------------------------|--------------------|
+| 格子 `CELL` / `COLS` / `ROWS` | `src/lib.rs` 顶部  |
+| 移动与得分                    | `SnakeApp::update` |
+| 绘制与 HUD                    | `SnakeApp::draw`   |
+| 窗口尺寸                      | `src/main.rs`      |
+
+工程目录可带 Valkyrie 元数据；本 crate 是 native 试玩宿主。
