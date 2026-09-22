@@ -2782,17 +2782,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spark-image"
-version = "0.0.0"
-dependencies = [
- "spark-core",
- "spark-jpeg",
- "spark-png",
- "spark-webp",
- "tracing",
-]
-
-[[package]]
 name = "spark-input"
 version = "0.0.0"
 

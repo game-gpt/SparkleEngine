@@ -40,7 +40,6 @@ spark-debugger = { path = "projects/foundation/spark-debugger" }
 spark-shader = { path = "projects/graphics/spark-shader" }
 spark-font = { path = "projects/graphics/spark-font" }
 spark-texture = { path = "projects/graphics/spark-texture" }
-spark-image = { path = "projects/foundation/spark-image" }
 spark-png = { path = "projects/formats/spark-png" }
 spark-jpeg = { path = "projects/formats/spark-jpeg" }
 spark-webp = { path = "projects/formats/spark-webp" }
