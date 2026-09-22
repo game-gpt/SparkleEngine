@@ -66,23 +66,53 @@ impl AssetMeta {
 #[derive(Debug)]
 pub enum AssetMetaError {
     /// 旁车不存在；调用方应报告诊断，勿静默 `create` 覆盖旧引用。
-    Missing { asset: PathBuf },
+    Missing {
+        /// 资源路径（非旁车路径）。
+        asset: PathBuf,
+    },
     /// 旁车已存在，拒绝覆盖身份。
-    AlreadyExists { meta: PathBuf },
-    Io { path: PathBuf, cause: io::Error },
-    Parse { path: PathBuf, detail: String },
+    AlreadyExists {
+        /// 已存在的旁车路径。
+        meta: PathBuf,
+    },
+    /// 引用上的 GUID 与旁车不一致。
+    GuidMismatch {
+        /// 资源路径。
+        asset: PathBuf,
+        /// 引用中的 GUID。
+        expected: Uuid,
+        /// 旁车中的 GUID。
+        found: Uuid,
+    },
+    /// 读写 IO 失败。
+    Io {
+        /// 相关路径。
+        path: PathBuf,
+        /// 底层错误。
+        cause: io::Error,
+    },
+    /// JSON 解析/序列化失败。
+    Parse {
+        /// 相关路径。
+        path: PathBuf,
+        /// 细节（非面向用户文案权威）。
+        detail: String,
+    },
 }
 
 impl AssetMetaError {
+    /// 稳定错误码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Missing { .. } => "spark.asset.meta_missing",
             Self::AlreadyExists { .. } => "spark.asset.meta_already_exists",
+            Self::GuidMismatch { .. } => "spark.asset.guid_mismatch",
             Self::Io { .. } => "spark.asset.meta_io",
             Self::Parse { .. } => "spark.asset.meta_parse",
         }
     }
 
+    /// 类型化参数（供本地化与 Agent 诊断）。
     pub fn args(&self) -> ErrorArgs {
         match self {
             Self::Missing { asset } => {
@@ -91,6 +121,14 @@ impl AssetMetaError {
             Self::AlreadyExists { meta } => {
                 ErrorArgs::new().with("path", ErrorArg::String(Arc::from(meta.to_string_lossy().as_ref())))
             }
+            Self::GuidMismatch {
+                asset,
+                expected,
+                found,
+            } => ErrorArgs::new()
+                .with("path", ErrorArg::String(Arc::from(asset.to_string_lossy().as_ref())))
+                .with("expected", ErrorArg::String(Arc::from(expected.to_string())))
+                .with("found", ErrorArg::String(Arc::from(found.to_string()))),
             Self::Io { path, cause } => ErrorArgs::new()
                 .with("path", ErrorArg::String(Arc::from(path.to_string_lossy().as_ref())))
                 .with("kind", ErrorArg::String(Arc::from(io_kind_token(cause.kind())))),
