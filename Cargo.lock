@@ -2912,6 +2912,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "spark-prefab"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "spark-asset",
+ "spark-types",
+ "uuid",
+]
+
+[[package]]
 name = "spark-renderer"
 version = "0.0.0"
 dependencies = [

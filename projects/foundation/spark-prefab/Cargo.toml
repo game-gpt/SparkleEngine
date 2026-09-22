@@ -1,0 +1,20 @@
+[package]
+name = "spark-prefab"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark Prefab：声明式实体图、实例覆盖与嵌套（Agent 友好，无节点 UUID）"
+keywords = ["spark", "prefab", "ecs"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-types = { workspace = true }
+spark-asset = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+uuid = { workspace = true }
