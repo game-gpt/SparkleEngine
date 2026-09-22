@@ -13,7 +13,7 @@ pub trait HudCanvas {
     /// 填充轴对齐矩形。
     fn fill_rect(&mut self, rect: Rect, color: Color);
     /// 排队一行文字。
-    fn text(&mut self, x: f32, y: f32, size: f32, color: Color, text: &str);
+    fn text(&mut self, x: f32, y: f32, size: f32, color: Color, text: impl Into<String>);
     /// 纹理四边形（轴对齐）。
     fn tex_rect(&mut self, texture: TextureId, dest: Rect, uv: Rect, color: Color);
 }
@@ -23,7 +23,7 @@ impl HudCanvas for UiRenderBatch {
         Self::fill_rect(self, rect, color);
     }
 
-    fn text(&mut self, x: f32, y: f32, size: f32, color: Color, text: &str) {
+    fn text(&mut self, x: f32, y: f32, size: f32, color: Color, text: impl Into<String>) {
         Self::text(self, x, y, size, color, text);
     }
 
