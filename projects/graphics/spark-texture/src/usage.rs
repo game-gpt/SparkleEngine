@@ -1,5 +1,7 @@
 //! 纹理用途与设备能力。
 
+use crate::format::TextureFormat;
+
 /// 纹理用途标志（可按位组合）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TextureUsage(u32);
@@ -68,7 +70,7 @@ pub struct DeviceCaps {
 }
 
 impl DeviceCaps {
-    /// 保守兜底：仅未压缩 2D，最大 8192。
+    /// 保守兜底：仅未压缩 8-bit / 32-bit float 2D，最大 8192。
     pub const fn conservative() -> Self {
         Self {
             supports_bc: false,
@@ -78,6 +80,30 @@ impl DeviceCaps {
             supports_texture_arrays: false,
             supports_mip_generation: false,
             max_texture_dimension: 8192,
+        }
+    }
+
+    /// 当前能力是否覆盖该 GPU 格式。
+    pub const fn supports_format(self, format: TextureFormat) -> bool {
+        match format {
+            TextureFormat::R8Unorm
+            | TextureFormat::Rg8Unorm
+            | TextureFormat::Rgba8Unorm
+            | TextureFormat::Rgba8UnormSrgb
+            | TextureFormat::Rgba32Float => true,
+            TextureFormat::Rgba16Float => self.supports_float16,
+            TextureFormat::Bc1RgbaUnorm
+            | TextureFormat::Bc1RgbaUnormSrgb
+            | TextureFormat::Bc3RgbaUnorm
+            | TextureFormat::Bc3RgbaUnormSrgb
+            | TextureFormat::Bc5RgUnorm
+            | TextureFormat::Bc7RgbaUnorm
+            | TextureFormat::Bc7RgbaUnormSrgb => self.supports_bc,
+            TextureFormat::Etc2Rgba8Unorm | TextureFormat::Etc2Rgba8UnormSrgb => self.supports_etc2,
+            TextureFormat::Astc4x4Unorm
+            | TextureFormat::Astc4x4UnormSrgb
+            | TextureFormat::Astc6x6Unorm
+            | TextureFormat::Astc6x6UnormSrgb => self.supports_astc,
         }
     }
 }

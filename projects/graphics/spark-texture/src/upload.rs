@@ -7,7 +7,8 @@ use spark_core::{ErrorArg, SparkError, codes};
 use crate::{
     data::TextureData,
     desc::TextureDesc,
-    format::{AlphaMode, ColorSpace, TextureFormat},
+    format::{AlphaMode, ColorSpace, TextureDimension, TextureFormat},
+    usage::DeviceCaps,
 };
 
 /// 何时调度 GPU 创建 / 拷贝。
@@ -136,6 +137,37 @@ impl TextureUpload {
             MipmapPolicy::None | MipmapPolicy::Provided => {
                 self.data.validate_against(&self.desc)?;
             }
+        }
+        Ok(())
+    }
+
+    /// 相对设备能力校验（含 [`Self::validate`]）。
+    pub fn validate_for_device(&self, caps: &DeviceCaps) -> Result<(), SparkError> {
+        self.validate()?;
+        if !caps.supports_format(self.desc.format) {
+            return Err(SparkError::new(codes::texture_format_unsupported())
+                .arg("format", ErrorArg::String(Arc::from(format!("{:?}", self.desc.format))))
+                .arg("supports_bc", ErrorArg::Bool(caps.supports_bc))
+                .arg("supports_etc2", ErrorArg::Bool(caps.supports_etc2))
+                .arg("supports_astc", ErrorArg::Bool(caps.supports_astc))
+                .arg("supports_float16", ErrorArg::Bool(caps.supports_float16)));
+        }
+        let desc = &self.desc;
+        let max_edge = match desc.dimension {
+            TextureDimension::D1 => desc.width,
+            TextureDimension::D2 | TextureDimension::Cube => desc.width.max(desc.height),
+            TextureDimension::D3 => desc.width.max(desc.height).max(desc.depth_or_layers),
+        };
+        if max_edge > caps.max_texture_dimension {
+            return Err(SparkError::new(codes::texture_size_invalid())
+                .arg("reason", ErrorArg::String(Arc::from("exceeds_device_max")))
+                .arg("max_edge", ErrorArg::Unsigned(max_edge as u64))
+                .arg("max_texture_dimension", ErrorArg::Unsigned(caps.max_texture_dimension as u64)));
+        }
+        if desc.dimension == TextureDimension::D2 && desc.depth_or_layers > 1 && !caps.supports_texture_arrays {
+            return Err(SparkError::new(codes::texture_upload_invalid())
+                .arg("reason", ErrorArg::String(Arc::from("texture_arrays_unsupported")))
+                .arg("depth_or_layers", ErrorArg::Unsigned(desc.depth_or_layers as u64)));
         }
         Ok(())
     }

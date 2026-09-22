@@ -48,3 +48,32 @@ fn format_block_meta() {
     assert_eq!(TextureFormat::Bc7RgbaUnorm.block_extent(), (4, 4));
     assert_eq!(TextureFormat::Rgba8Unorm.bytes_per_block(), 4);
 }
+
+#[test]
+fn device_caps_rejects_bc_when_unsupported() {
+    let caps = DeviceCaps::conservative();
+    assert!(caps.supports_format(TextureFormat::Rgba8UnormSrgb));
+    assert!(!caps.supports_format(TextureFormat::Bc7RgbaUnorm));
+
+    let mut upload = TextureUpload::rgba8_srgb(4, 4, vec![0u8; 64]).unwrap().with_mipmap(MipmapPolicy::None);
+    upload.desc.format = TextureFormat::Bc7RgbaUnorm;
+    upload.desc.color_space = ColorSpace::Linear;
+    // 压缩数据长度：4×4 BC7 = 1 block × 16 bytes
+    upload.data = TextureData {
+        layout: TextureLayout::tightly_packed_2d(TextureFormat::Bc7RgbaUnorm, 4, 4),
+        bytes: std::sync::Arc::from(vec![0u8; 16]),
+    };
+    let err = upload.validate_for_device(&caps).unwrap_err();
+    assert_eq!(err.code, codes::texture_format_unsupported());
+}
+
+#[test]
+fn device_caps_rejects_oversized() {
+    let caps = DeviceCaps {
+        max_texture_dimension: 64,
+        ..DeviceCaps::conservative()
+    };
+    let upload = TextureUpload::rgba8_srgb(128, 1, vec![0u8; 128 * 4]).unwrap();
+    let err = upload.validate_for_device(&caps).unwrap_err();
+    assert_eq!(err.code, codes::texture_size_invalid());
+}
