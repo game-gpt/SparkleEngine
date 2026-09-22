@@ -36,6 +36,7 @@ spark-circuit = { path = "projects/foundation/spark-circuit" }
 spark-net = { path = "projects/foundation/spark-net" }
 spark-asset = { path = "projects/foundation/spark-asset" }
 spark-prefab = { path = "projects/foundation/spark-prefab" }
+spark-edit = { path = "projects/foundation/spark-edit" }
 spark-localization = { path = "projects/foundation/spark-localization" }
 spark-debugger = { path = "projects/foundation/spark-debugger" }
 spark-shader = { path = "projects/graphics/spark-shader" }

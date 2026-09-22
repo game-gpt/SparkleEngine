@@ -1,0 +1,26 @@
+[package]
+name = "spark-edit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark Edit Runtime：资源/Prefab 编辑事务、诊断与变更计划（CLI / MCP / Studio 共用）"
+keywords = ["spark", "edit", "shell"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-types = { workspace = true }
+spark-asset = { workspace = true }
+spark-prefab = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+oak-von = { workspace = true }
+
+[dev-dependencies]
+uuid = { workspace = true }
+
+[[bin]]
+name = "spark-shell"
+path = "src/bin/spark_shell.rs"

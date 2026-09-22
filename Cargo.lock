@@ -2674,6 +2674,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "spark-edit"
+version = "0.0.0"
+dependencies = [
+ "oak-von",
+ "serde",
+ "serde_json",
+ "spark-asset",
+ "spark-prefab",
+ "spark-types",
+ "uuid",
+]
+
+[[package]]
 name = "spark-engine"
 version = "0.0.0"
 dependencies = [
