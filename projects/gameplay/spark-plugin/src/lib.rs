@@ -7,7 +7,7 @@
 //!
 //! 插件只负责声明元信息，并把原生函数注册到 [`Vm`]。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use std::fmt;
 
 use spark_vm::Vm;
@@ -15,8 +15,11 @@ use spark_vm::Vm;
 /// 插件元信息（稳定 id，供注册表去重）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PluginInfo {
+    /// 全局唯一插件 id（如 `live2d`）。
     pub id: &'static str,
+    /// 插件版本字符串（展示 / 诊断用）。
     pub version: &'static str,
+    /// 一句话职责说明。
     pub description: &'static str,
 }
 
@@ -25,6 +28,7 @@ pub struct PluginInfo {
 /// 实现方持有内部状态（通常 `Rc<RefCell<_>>`），在 [`Plugin::install`] 里
 /// `register_native` 一批供脚本调用的函数。
 pub trait Plugin {
+    /// 返回稳定元信息。
     fn info(&self) -> PluginInfo;
 
     /// 本插件将注册的原生名（`'static`，供脚本前端编译期声明）。
@@ -37,11 +41,20 @@ pub trait Plugin {
 /// 插件注册表错误。`Display` 只输出稳定码。
 #[derive(Debug)]
 pub enum PluginError {
-    DuplicateId { id: String },
-    NotFound { id: String },
+    /// 同一 `id` 重复注册。
+    DuplicateId {
+        /// 冲突的插件 id。
+        id: String,
+    },
+    /// 按 id 查找失败。
+    NotFound {
+        /// 未找到的插件 id。
+        id: String,
+    },
 }
 
 impl PluginError {
+    /// 稳定错误码（`spark.plugin.*`）。
     pub fn code(&self) -> &'static str {
         match self {
             Self::DuplicateId { .. } => "spark.plugin.duplicate_id",
@@ -49,6 +62,7 @@ impl PluginError {
         }
     }
 
+    /// 类型化参数（含 `id`）。
     pub fn args(&self) -> spark_diagnostics::ErrorArgs {
         use spark_diagnostics::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
@@ -86,10 +100,12 @@ pub struct PluginRegistry {
 }
 
 impl PluginRegistry {
+    /// 空注册表。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 注册插件；`id` 冲突返回 [`PluginError::DuplicateId`]。
     pub fn register(&mut self, plugin: Box<dyn Plugin>) -> Result<(), PluginError> {
         let id = plugin.info().id;
         if self.plugins.iter().any(|p| p.info().id == id) {
@@ -100,18 +116,22 @@ impl PluginRegistry {
         Ok(())
     }
 
+    /// 已注册插件个数。
     pub fn len(&self) -> usize {
         self.plugins.len()
     }
 
+    /// 是否尚未注册任何插件。
     pub fn is_empty(&self) -> bool {
         self.plugins.is_empty()
     }
 
+    /// 全部插件元信息快照。
     pub fn infos(&self) -> Vec<PluginInfo> {
         self.plugins.iter().map(|p| p.info()).collect()
     }
 
+    /// 是否已注册给定 id。
     pub fn contains(&self, id: &str) -> bool {
         self.plugins.iter().any(|p| p.info().id == id)
     }

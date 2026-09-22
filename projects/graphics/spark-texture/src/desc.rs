@@ -7,33 +7,36 @@ use crate::{
     usage::TextureUsage,
 };
 
-/// 纹理逻辑描述。
+/// 纹理逻辑描述（不含像素字节；上传前须与 [`crate::TextureData`] 对齐）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextureDesc {
-    /// 维度。
+    /// 几何维度，决定其余尺寸字段语义。
     pub dimension: TextureDimension,
-    /// 宽（像素）。
+    /// 宽（像素），必须 `> 0`。
     pub width: u32,
-    /// 高（像素）；1D 时为 1。
+    /// 高（像素），必须 `> 0`；1D 时应为 1。
     pub height: u32,
-    /// 深度或数组层数 / Cube 为 6。
+    /// 深度切片数、数组层数，或 Cube 时固定为 6；必须 `> 0`。
     pub depth_or_layers: u32,
-    /// mip 级数（至少 1）。
+    /// mip 级数，至少为 1。
     pub mip_levels: u32,
-    /// MSAA 采样数。
+    /// MSAA 采样数，至少为 1；普通采样纹理为 1。
     pub sample_count: u32,
-    /// GPU 格式。
+    /// GPU 像素 / 块格式。
     pub format: TextureFormat,
-    /// 色彩空间标注。
+    /// 逻辑色彩空间（应与 `format.is_srgb()` 一致，除非刻意覆盖）。
     pub color_space: ColorSpace,
-    /// Alpha 模式。
+    /// Alpha 合成模式。
     pub alpha_mode: AlphaMode,
-    /// 用途。
+    /// 用途标志（须覆盖实际上传 / 绑定路径）。
     pub usage: TextureUsage,
 }
 
 impl TextureDesc {
-    /// 常见 2D 采样纹理描述（单 mip，调用方可再改 `mip_levels`）。
+    /// 构造常见 2D 采样纹理描述：单层、单 mip、`sample_count = 1`、`usage = sampled()`。
+    ///
+    /// `color_space` 由 `format.is_srgb()` 推导；调用方可再改 `mip_levels` / `usage` 等字段。
+    /// 本方法不校验尺寸；上传前请调用 [`Self::validate`]。
     pub fn d2(width: u32, height: u32, format: TextureFormat) -> Self {
         let color_space = if format.is_srgb() { ColorSpace::Srgb } else { ColorSpace::Linear };
         Self {
@@ -51,6 +54,9 @@ impl TextureDesc {
     }
 
     /// 校验尺寸与 mip / 采样数基本合法。
+    ///
+    /// 失败：`width|height|depth_or_layers == 0` → `texture_size_invalid`；
+    /// `mip_levels|sample_count == 0` 或 Cube 层数≠6 → `texture_upload_invalid`。
     pub fn validate(&self) -> Result<(), SparkError> {
         if self.width == 0 || self.height == 0 || self.depth_or_layers == 0 {
             return Err(SparkError::new(codes::texture_size_invalid())
@@ -72,16 +78,16 @@ impl TextureDesc {
     }
 }
 
-/// 仅尺寸与格式的轻量信息（Sprite / Widget 用，无像素）。
+/// 仅尺寸与格式的轻量信息（Sprite / Widget / 图集用，无像素）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TextureInfo {
-    /// 宽。
+    /// 宽（像素）。
     pub width: u32,
-    /// 高。
+    /// 高（像素）。
     pub height: u32,
-    /// 格式。
+    /// GPU 格式。
     pub format: TextureFormat,
-    /// mip 数。
+    /// mip 级数（至少 1）。
     pub mip_levels: u32,
 }
 

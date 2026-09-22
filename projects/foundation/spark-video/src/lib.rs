@@ -3,7 +3,7 @@
 //! 当前交付轨元数据与压缩包泵；像素帧解码留给渲染/硬件路径。
 //! **无**过场剧本或游戏镜头语义。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use std::{path::Path, time::Duration};
 
 use spark_types::{SparkError, codes};
@@ -17,6 +17,7 @@ pub struct VideoClip {
 }
 
 impl VideoClip {
+    /// 从路径打开容器；取默认视频轨，并记录同文件默认音频轨 ID（若有）。
     pub fn open(path: impl AsRef<Path>) -> Result<Self, SparkError> {
         let reader = MediaReader::open_path(path).map_err(SparkError::from)?;
         let video = reader.default_video().cloned().ok_or_else(|| SparkError::new(codes::video_no_track()))?;
@@ -24,6 +25,7 @@ impl VideoClip {
         Ok(Self { reader, video, audio_track_id })
     }
 
+    /// 从内存字节打开（与 [`Self::open`] 相同轨选择规则）。
     pub fn open_bytes(bytes: impl Into<Vec<u8>>) -> Result<Self, SparkError> {
         let reader = MediaReader::open_bytes(bytes).map_err(SparkError::from)?;
         let video = reader.default_video().cloned().ok_or_else(|| SparkError::new(codes::video_no_track()))?;
@@ -31,18 +33,22 @@ impl VideoClip {
         Ok(Self { reader, video, audio_track_id })
     }
 
+    /// 默认视频轨元数据。
     pub fn video_info(&self) -> &VideoTrackInfo {
         &self.video
     }
 
+    /// 同容器默认音频轨 ID；无音频轨时为 `None`。
     pub fn audio_track_id(&self) -> Option<u32> {
         self.audio_track_id
     }
 
+    /// 视频帧宽（像素）。
     pub fn width(&self) -> u32 {
         self.video.width
     }
 
+    /// 视频帧高（像素）。
     pub fn height(&self) -> u32 {
         self.video.height
     }
@@ -55,6 +61,7 @@ impl VideoClip {
         Duration::from_nanos(nanos.min(u64::MAX as u128) as u64)
     }
 
+    /// 按秒跳转（底层 `MediaReader::seek_seconds`）。
     pub fn seek_seconds(&mut self, seconds: f64) -> Result<(), SparkError> {
         self.reader.seek_seconds(seconds).map_err(SparkError::from)
     }
@@ -81,11 +88,14 @@ impl VideoClip {
 /// 占位：尚未像素解码的视频帧句柄（携带压缩包）。
 #[derive(Debug, Clone)]
 pub struct EncodedFrame {
+    /// 演示时间戳（由轨 time_base 换算）。
     pub pts: Duration,
+    /// 压缩媒体包。
     pub packet: MediaPacket,
 }
 
 impl VideoClip {
+    /// 取下一视频包并包装为 [`EncodedFrame`]（含 PTS）；EOS 返回 `None`。
     pub fn next_encoded_frame(&mut self) -> Result<Option<EncodedFrame>, SparkError> {
         let Some(packet) = self.next_video_packet()?
         else {

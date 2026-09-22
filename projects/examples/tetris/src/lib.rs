@@ -1,6 +1,6 @@
 //! 混合示例：Rust 棋盘权威 + 可玩主循环（Valkyrie HUD 元数据仍在 assets/scripts）。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod board;
 mod collision;
 mod pieces;
@@ -31,6 +31,10 @@ struct Active {
     y: i32,
 }
 
+/// 可玩俄罗斯方块宿主：持有棋盘权威、当前/下一块、得分与下落节奏，实现 [`GameHost`]。
+///
+/// 棋盘为 10×20；下落间隔初值 0.55 秒，随消行缩短，下限 0.12 秒。
+/// `Esc` 置退出标志；`game_over` 时仅响应 `R` 重开。
 #[derive(Debug)]
 pub struct TetrisApp {
     board: Board,
@@ -52,6 +56,7 @@ impl Default for TetrisApp {
 }
 
 impl TetrisApp {
+    /// 空盘、随机下一块并立刻生成当前块；生成失败则直接进入 `game_over`。
     pub fn new() -> Self {
         let mut rng = 0xC0FFEE_u64;
         let next = random_kind(&mut rng);

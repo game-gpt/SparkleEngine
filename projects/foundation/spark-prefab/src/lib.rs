@@ -5,7 +5,7 @@
 //! - 源文件用路径引用资源（[`spark_asset::AssetRef`]）
 //! - 实例只存 override 补丁，不复制整树
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 mod apply;
 mod document;

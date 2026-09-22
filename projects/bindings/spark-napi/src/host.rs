@@ -4,10 +4,14 @@ use spark_asset::{AssetCache, AssetKey, BytesLoader};
 use spark_edit::{EditCapabilities, EditMode, run_edit_plan_with};
 use spark_types::Vec2;
 
+/// 引擎身份信息（名称 / 版本 / npm 包名），供 JS 侧展示与探针。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineInfo {
+    /// 产品显示名。
     pub name: &'static str,
+    /// crate 版本（`CARGO_PKG_VERSION`）。
     pub version: &'static str,
+    /// npm 包名（与 [`crate::NPM_PACKAGE_NAME`] 一致）。
     pub npm_package: &'static str,
 }
 impl Default for EngineInfo {
@@ -19,14 +23,17 @@ impl Default for EngineInfo {
 /// JS 友好的同步 API 子集（无窗口 / 无 ECS 世界权威）。
 #[derive(Debug, Default)]
 pub struct SparkJsHost {
+    /// 进程内资产字节缓存。
     pub assets: AssetCache,
 }
 
 impl SparkJsHost {
+    /// 空宿主（默认资产缓存）。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 返回当前引擎身份信息。
     pub fn info(&self) -> EngineInfo {
         EngineInfo::default()
     }
@@ -43,6 +50,7 @@ impl SparkJsHost {
         Ok(id.0)
     }
 
+    /// 已缓存资产的字节长度；未知 id 返回 `None`。
     pub fn asset_len(&self, id: u32) -> Option<usize> {
         self.assets.bytes(spark_asset::AssetId(id)).map(|b| b.len())
     }

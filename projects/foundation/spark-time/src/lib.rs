@@ -1,6 +1,6 @@
 //! 固定时间步、缩放与暂停。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 /// 帧时钟：累积真实时间，按固定步吐出仿真 tick。
 #[derive(Debug, Clone)]
 pub struct Clock {
@@ -54,10 +54,12 @@ impl Clock {
         }
     }
 
+    /// 当前固定步长（秒）。可变模式下仍保留该值，供切回固定步使用。
     pub fn fixed_dt(&self) -> f32 {
         self.fixed_dt
     }
 
+    /// 设置固定步长（秒，下限 `1e-6`）。若正处于固定模式，同步更新 `delta_seconds`。
     pub fn set_fixed_dt(&mut self, dt: f32) {
         self.fixed_dt = dt.max(1e-6);
         if self.mode_fixed {
@@ -65,10 +67,12 @@ impl Clock {
         }
     }
 
+    /// 设置时间缩放（`< 0` 会被钳到 `0`）。与 `paused` 叠加：任一为停则 `begin_frame` 返回 0。
     pub fn set_scale(&mut self, scale: f32) {
         self.scale = scale.max(0.0);
     }
 
+    /// 硬暂停开关。为真时不再累积仿真时间，固定步与可变步均返回 0 子步。
     pub fn set_paused(&mut self, paused: bool) {
         self.paused = paused;
     }

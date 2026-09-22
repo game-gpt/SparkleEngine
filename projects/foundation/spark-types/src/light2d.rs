@@ -7,16 +7,21 @@ use std::collections::VecDeque;
 /// 线性 RGB，不含 alpha。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LightRgb {
+    /// 红通道（线性光，通常 ≥ 0）。
     pub r: f32,
+    /// 绿通道（线性光，通常 ≥ 0）。
     pub g: f32,
+    /// 蓝通道（线性光，通常 ≥ 0）。
     pub b: f32,
 }
 
 impl LightRgb {
+    /// 按通道构造。
     pub const fn new(r: f32, g: f32, b: f32) -> Self {
         Self { r, g, b }
     }
 
+    /// 取三通道最大值，用作传播/裁剪的标量强度。
     pub fn intensity(self) -> f32 {
         self.r.max(self.g).max(self.b)
     }
@@ -43,7 +48,9 @@ impl LightRgb {
 /// 传播时开放格与挡光格的亮度下降量。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LightFalloff {
+    /// 开放格每步衰减（线性通道减法）。
     pub open: f32,
+    /// 挡光格每步衰减（通常远大于 `open`）。
     pub blocked: f32,
     /// 新亮度必须高出这么多才继续入队。
     pub bump: f32,
@@ -69,6 +76,7 @@ pub struct LightGrid2d {
 }
 
 impl LightGrid2d {
+    /// 以地板色填满 `w×h` 格；`origin_*` 为世界格坐标原点（左上）。
     pub fn filled(origin_x: i32, origin_y: i32, w: i32, h: i32, floor: LightRgb) -> Self {
         let w = w.max(0);
         let h = h.max(0);
@@ -76,14 +84,17 @@ impl LightGrid2d {
         Self { origin_x, origin_y, w, h, floor, cells: vec![floor; n] }
     }
 
+    /// 缓冲宽度（格）。
     pub fn width(&self) -> i32 {
         self.w
     }
 
+    /// 缓冲高度（格）。
     pub fn height(&self) -> i32 {
         self.h
     }
 
+    /// 读取世界格亮度；越界返回地板色。
     pub fn get(&self, x: i32, y: i32) -> LightRgb {
         match self.index(x, y) {
             Some(i) => self.cells[i],

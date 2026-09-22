@@ -4,7 +4,7 @@
 //!
 //! 宿主侧基于 rodio 0.22：`MixerDeviceSink` + [`Player`]。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use std::{
     f32::consts::PI,
     num::{NonZeroU16, NonZeroU32},
@@ -28,14 +28,20 @@ fn nz_u32(v: u32) -> NonZeroU32 {
 }
 
 /// 一段短音描述（Hz / 毫秒 / 音量 0..=1）。
+///
+/// 实际播放时频率下限钳到约 20 Hz，音量钳到 `0..=1`（见 [`AudioBus::play_tone`]）。
 #[derive(Debug, Clone, Copy)]
 pub struct Tone {
+    /// 基频，单位 Hz（建议可听范围；过低会被播放路径抬高）。
     pub freq_hz: f32,
+    /// 持续时长，单位毫秒；`0` 仍会发出至少 1 个样本。
     pub duration_ms: u32,
+    /// 线性增益，约定 `0.0` 静音、`1.0` 满幅；越界在播放时钳制。
     pub volume: f32,
 }
 
 impl Tone {
+    /// 构造短音描述；字段语义见 [`Tone`] 各字段文档。
     pub const fn new(freq_hz: f32, duration_ms: u32, volume: f32) -> Self {
         Self { freq_hz, duration_ms, volume }
     }
@@ -44,7 +50,9 @@ impl Tone {
 /// 播放请求（事件式，由宿主在帧末 `flush`）。
 #[derive(Debug, Clone)]
 pub enum PlayRequest {
+    /// 程序化正弦短音。
     Tone(Tone),
+    /// 从路径解码并播放的音频文件（经 `spark-media` / Symphonia）。
     File(PathBuf),
 }
 
@@ -55,30 +63,37 @@ pub struct AudioQueue {
 }
 
 impl AudioQueue {
+    /// 空队列。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 追加一条播放请求（FIFO）。
     pub fn push(&mut self, req: PlayRequest) {
         self.pending.push(req);
     }
 
+    /// 入队一条 [`PlayRequest::Tone`]。
     pub fn play_tone(&mut self, tone: Tone) {
         self.push(PlayRequest::Tone(tone));
     }
 
+    /// 入队一条 [`PlayRequest::File`]；路径在 `flush` 时才解码。
     pub fn play_file(&mut self, path: impl Into<PathBuf>) {
         self.push(PlayRequest::File(path.into()));
     }
 
+    /// 待处理请求数。
     pub fn len(&self) -> usize {
         self.pending.len()
     }
 
+    /// 队列是否为空。
     pub fn is_empty(&self) -> bool {
         self.pending.is_empty()
     }
 
+    /// 丢弃全部待处理请求（不播放）。
     pub fn clear(&mut self) {
         self.pending.clear();
     }
@@ -119,6 +134,9 @@ impl AudioBus {
         Self { device: None, muted: true }
     }
 
+    /// 尝试打开系统默认输出设备；失败时降级为静默总线（`device == None` 且视为静音）。
+    ///
+    /// 成功时 `muted == false`；设备不可用时不返回错误，便于游戏在无声卡环境继续跑。
     pub fn try_open() -> Self {
         match DeviceSinkBuilder::open_default_sink() {
             Ok(mut device) => {
@@ -133,10 +151,14 @@ impl AudioBus {
         }
     }
 
+    /// 设置用户静音开关；为真时 [`Self::play_tone`] / [`Self::play_file`] 等立即空操作。
+    ///
+    /// 与「无设备」独立：即使已打开设备，静音也会吞掉播放请求。
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
     }
 
+    /// 当前是否静音：显式静音，或尚无可用输出设备时均为真。
     pub fn is_muted(&self) -> bool {
         self.muted || self.device.is_none()
     }

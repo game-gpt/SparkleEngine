@@ -1,35 +1,43 @@
 //! PNG → [`TextureUpload`]（及 RGBA8 编码）。
 //!
 //! 使用 image-rs 生态的 pure Rust [`png`] crate，**不**依赖 umbrella `image`，
-//! **不**依赖 `*-sys` / FFI。
+//! **不**依赖 `*-sys` / FFI。解码经 `normalize_to_color8` 后扩成 RGBA8。
+//!
+//! 解码错误：`io`、`image_decode`、`image_dimension_overflow`、`texture_data_length_mismatch`。
+//! 编码错误：`image_rgba_length_mismatch`、`image_encode`、`io`。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 use std::{io::Cursor, path::Path, sync::Arc};
 
 use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::TextureUpload;
 
-/// PNG 解码选项。
+/// PNG 解码选项：控制上传包的色彩空间标注与 GPU 格式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DecodeOptions {
-    /// `true` → `Rgba8UnormSrgb`；`false` → `Rgba8Unorm`。
+    /// `true` → [`spark_texture::TextureFormat::Rgba8UnormSrgb`]；
+    /// `false` → [`spark_texture::TextureFormat::Rgba8Unorm`]。
+    ///
+    /// 默认 `false`。与文件内 sRGB chunk 无关——由调用方显式选择。
     pub srgb: bool,
 }
 
 impl DecodeOptions {
-    /// sRGB（漫反射 / UI 常见）。
+    /// 标注为 sRGB（漫反射 / UI 常见）。
     pub const fn srgb() -> Self {
         Self { srgb: true }
     }
 
-    /// 线性（数据图等）。
+    /// 标注为线性（数据图、遮罩等）。
     pub const fn linear() -> Self {
         Self { srgb: false }
     }
 }
 
-/// 从路径读 PNG 并解码为 [`TextureUpload`]。
+/// 从路径读 PNG 并解码为 [`TextureUpload`]（RGBA8，单 mip，默认 CPU 生成 mip）。
+///
+/// 读盘失败 → `io`；解码失败透传 [`decode_memory`] 并附加 `path`。
 pub fn decode_path(path: impl AsRef<Path>, options: DecodeOptions) -> Result<TextureUpload, SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
@@ -40,12 +48,17 @@ pub fn decode_path(path: impl AsRef<Path>, options: DecodeOptions) -> Result<Tex
 }
 
 /// 从内存 PNG 字节解码为 [`TextureUpload`]。
+///
+/// 宽高单位像素；字节为行主序 RGBA8。`options.srgb` 决定格式与 `color_space`。
 pub fn decode_memory(bytes: &[u8], options: DecodeOptions) -> Result<TextureUpload, SparkError> {
     let (w, h, rgba) = decode_rgba8(bytes)?;
     TextureUpload::rgba8(w, h, rgba, options.srgb)
 }
 
-/// 解码为 RGBA8 原始字节（行主序）。
+/// 解码为 RGBA8 原始字节（行主序，长度 = `width * height * 4`）。
+///
+/// 支持输出色型：`Rgba` / `Rgb`（补 alpha=255）/ `Grayscale` / `GrayscaleAlpha`；
+/// 其余 → `image_decode`（`unsupported_color`）。
 pub fn decode_rgba8(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), SparkError> {
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
@@ -77,7 +90,10 @@ pub fn decode_rgba8(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), SparkError> {
     Ok((width, height, rgba))
 }
 
-/// 将 RGBA8 编码为 PNG 字节。
+/// 将 RGBA8（行主序，长度须为 `width * height * 4`）编码为 PNG 字节。
+///
+/// 长度不符 → `image_rgba_length_mismatch`；尺寸溢出 → `image_dimension_overflow`；
+/// 写头 / 写像素失败 → `image_encode`。
 pub fn encode_rgba8(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, SparkError> {
     let need = (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(4)).ok_or_else(|| {
         SparkError::new(codes::image_dimension_overflow())
@@ -110,7 +126,9 @@ pub fn encode_rgba8(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, Spa
     Ok(out)
 }
 
-/// 写成 PNG 文件。
+/// 将 RGBA8 编码并写入 PNG 文件。
+///
+/// 编码失败透传 [`encode_rgba8`]；写盘失败 → `io`（`op=write`）。
 pub fn encode_path(path: impl AsRef<Path>, width: u32, height: u32, rgba: &[u8]) -> Result<(), SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));

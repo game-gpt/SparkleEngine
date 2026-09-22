@@ -8,7 +8,7 @@ use spark_vm::{NativeCtx, Vm, VmError};
 
 use crate::{backend::NullSteamBackend, runtime::SteamRuntime};
 
-/// 脚本侧原生名。
+/// 脚本侧原生名（与 [`SteamPlugin::install`] 注册表一一对应）。
 pub const STEAM_NATIVES: &[&str] = &[
     "steam_is_available",
     "steam_app_id",
@@ -25,23 +25,31 @@ pub const STEAM_NATIVES: &[&str] = &[
     "steam_overlay_open_url",
 ];
 
+/// 把 [`SteamRuntime`] 上的后端能力注册为 VM 原生函数的插件。
+///
+/// `PluginInfo::id` 为 `"steam"`；参数类型错误返回 `BadNativeArg`，
+/// 后端 `Err` 亦映射为 `BadNativeArg { name: "backend" }`。
 pub struct SteamPlugin {
     runtime: Rc<RefCell<SteamRuntime>>,
 }
 
 impl SteamPlugin {
+    /// 使用已有共享运行时构造（可与宿主其它系统共用同一后端）。
     pub fn new(runtime: Rc<RefCell<SteamRuntime>>) -> Self {
         Self { runtime }
     }
 
+    /// 使用默认 [`NullSteamBackend`]（AppID `0`，用户名 `"offline"`）。
     pub fn with_null_backend() -> Self {
         Self::new(SteamRuntime::new(Box::new(NullSteamBackend::default())))
     }
 
+    /// 使用指定 AppID / 用户名的 [`NullSteamBackend`]。
     pub fn with_null_backend_app(app_id: u32, user_name: impl Into<String>) -> Self {
         Self::new(SteamRuntime::new(Box::new(NullSteamBackend::new(app_id, user_name))))
     }
 
+    /// 借用内部共享运行时句柄。
     pub fn runtime(&self) -> &Rc<RefCell<SteamRuntime>> {
         &self.runtime
     }

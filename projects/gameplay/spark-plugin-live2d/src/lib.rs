@@ -5,7 +5,7 @@
 //!
 //! Rust 游戏逻辑若直接驱动 Live2D，请依赖后端 crate，**不必**走本插件。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod backend;
 mod plugin;
 mod runtime;

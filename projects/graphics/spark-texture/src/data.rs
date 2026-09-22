@@ -26,7 +26,9 @@ pub struct TextureLayout {
 }
 
 impl TextureLayout {
-    /// 单层单 mip、紧凑行主序布局（适用于未压缩格式）。
+    /// 单层单 mip、紧凑行主序布局（适用于未压缩或按块紧凑的压缩格式）。
+    ///
+    /// `row_pitch = ceil(width/block_w) * bytes_per_block`；`slice_pitch` 覆盖整张 2D 面。
     pub fn tightly_packed_2d(format: TextureFormat, width: u32, height: u32) -> Self {
         let (bw, bh) = format.block_extent();
         let bpb = format.bytes_per_block();
@@ -43,7 +45,9 @@ impl TextureLayout {
         }
     }
 
-    /// 期望的紧凑单层单 mip 字节数。
+    /// 期望的紧凑单层单 mip 字节数：`ceil(w/bw) * ceil(h/bh) * bytes_per_block`。
+    ///
+    /// 乘法溢出时返回 `None`（调用方应转为 `image_dimension_overflow`）。
     pub fn expected_tight_bytes(&self, width: u32, height: u32) -> Option<usize> {
         let blocks_x = width.div_ceil(self.block_width) as usize;
         let blocks_y = height.div_ceil(self.block_height) as usize;
@@ -62,11 +66,16 @@ pub struct TextureData {
 
 impl TextureData {
     /// 从 RGBA8（或同 stride 的未压缩）构造单 mip 2D 数据并校验长度。
+    ///
+    /// 固定使用 `Rgba8UnormSrgb` 布局推算；长度须为 `width * height * 4`。
     pub fn from_rgba8(width: u32, height: u32, rgba: impl Into<Arc<[u8]>>) -> Result<Self, SparkError> {
         Self::from_uncompressed(TextureFormat::Rgba8UnormSrgb, width, height, rgba)
     }
 
-    /// 未压缩单 mip 2D。
+    /// 未压缩单 mip 2D：按 `format` 的每像素字节紧凑打包。
+    ///
+    /// 压缩格式请改用显式 [`TextureLayout`]；否则返回 `texture_upload_invalid`。
+    /// 宽高为 0 → `texture_size_invalid`；长度不符 → `texture_data_length_mismatch`。
     pub fn from_uncompressed(format: TextureFormat, width: u32, height: u32, bytes: impl Into<Arc<[u8]>>) -> Result<Self, SparkError> {
         if format.is_compressed() {
             return Err(SparkError::new(codes::texture_upload_invalid())
@@ -92,7 +101,10 @@ impl TextureData {
         Ok(Self { layout, bytes })
     }
 
-    /// 相对 [`TextureDesc`] 做轻量一致性检查（单层、mip 偏移数量）。
+    /// 相对 [`TextureDesc`] 做轻量一致性检查（mip / 层偏移数量与非空字节）。
+    ///
+    /// `mip_offsets.len()` 须等于 `desc.mip_levels`；层偏移在非 D3 时须匹配 `depth_or_layers`
+    ///（或退化为单元素）。空字节缓冲 → `texture_data_length_mismatch`。
     pub fn validate_against(&self, desc: &TextureDesc) -> Result<(), SparkError> {
         if self.layout.mip_offsets.len() as u32 != desc.mip_levels {
             return Err(SparkError::new(codes::texture_layout_invalid())

@@ -2,7 +2,7 @@
 //!
 //! 解析只走 [`RubyBuilder`]。正式编译只经 `spark-ir`；不支持的构造必须报错。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod lower;
 
 use lower::lower_root_to_hir;
@@ -16,13 +16,25 @@ use spark_vm::Module;
 pub use oak_ruby::RubyRoot as ParsedRoot;
 pub use spark_ir::HostBindTable;
 
+/// Ruby 前端编译失败。
+///
+/// `Display` 输出稳定码，并可附带 `diagnostics` / `reason` 机器字段；自然语言不进权威内容。
 #[derive(Debug)]
 pub enum RubyScriptError {
-    Parse { args: ErrorArgs },
-    Compile { args: ErrorArgs },
+    /// Oaks 解析失败。
+    Parse {
+        /// 结构化参数（诊断条数、`reason` 令牌等）。
+        args: ErrorArgs,
+    },
+    /// 降到 IR / 发射字节码失败。
+    Compile {
+        /// 结构化参数（`reason` 等机器令牌）。
+        args: ErrorArgs,
+    },
 }
 
 impl RubyScriptError {
+    /// 构造解析失败：附带 Oaks 诊断条数。
     pub fn parse_failed(diag_count: u64) -> Self {
         Self::Parse {
             args: ErrorArgs::new()
@@ -31,14 +43,17 @@ impl RubyScriptError {
         }
     }
 
+    /// 构造编译失败：`reason` 为机器可读令牌。
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())) }
     }
 
+    /// 解析侧不透明失败（仅 `reason` 令牌）。
     pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Parse { args: ErrorArgs::new().with("reason", ErrorArg::String(detail.into())) }
     }
 
+    /// 编译侧不透明失败（写入 `reason`）。
     pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
         Self::compile_reason(detail)
     }

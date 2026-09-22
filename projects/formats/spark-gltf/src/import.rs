@@ -15,16 +15,24 @@ use crate::{
 /// glTF 导入错误。`Display` 只输出稳定码。
 #[derive(Debug)]
 pub enum GltfError {
+    /// `gltf` crate 解析失败。
     Gltf(gltf::Error),
+    /// 读外置 buffer / 文件失败。
     Io(std::io::Error),
-    Invalid { detail: String },
+    /// 语义不合法（`detail` 为机器令牌，如 `missing_bin_chunk`）。
+    Invalid {
+        /// 机器可读原因令牌。
+        detail: String,
+    },
 }
 
 impl GltfError {
+    /// 构造 [`GltfError::Invalid`]。
     pub fn invalid(detail: impl Into<String>) -> Self {
         Self::Invalid { detail: detail.into() }
     }
 
+    /// 稳定错误码（`spark.gltf.*`）。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Gltf(_) => "spark.gltf.parse",
@@ -33,6 +41,7 @@ impl GltfError {
         }
     }
 
+    /// 类型化参数（`reason` / `kind` 等）。
     pub fn args(&self) -> spark_diagnostics::ErrorArgs {
         use spark_diagnostics::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
@@ -89,16 +98,22 @@ impl From<std::io::Error> for GltfError {
 /// 导入后的 CPU 网格（三角列表，已展开索引）。
 #[derive(Debug, Clone)]
 pub struct ImportedMesh {
+    /// 网格 / 图元名（多图元时带 `#index` 后缀）。
     pub name: String,
+    /// 展开后的蒙皮顶点（三角列表顺序）。
     pub vertices: Vec<SkinnedVertex>,
+    /// 模型局部空间 AABB（由 POSITION 推算）。
     pub local_aabb: Aabb3,
 }
 
 /// glTF 文档的 Spark 侧投影。
 #[derive(Debug, Clone)]
 pub struct GltfAsset {
+    /// 首个 skin 导入的骨架；无 skin 时为 `None`。
     pub skeleton: Option<Skeleton>,
+    /// 落在骨架关节上的动画剪辑。
     pub clips: Vec<SkinnedAnimationClip>,
+    /// 全部网格图元。
     pub meshes: Vec<ImportedMesh>,
 }
 

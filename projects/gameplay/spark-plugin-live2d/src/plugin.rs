@@ -15,11 +15,13 @@ use crate::{
 pub const LIVE2D_NATIVES: &[&str] =
     &["live2d_load", "live2d_unload", "live2d_set_param", "live2d_get_param", "live2d_update", "live2d_start_motion"];
 
+/// Live2D 脚本插件：把 [`LIVE2D_NATIVES`] 注册进 VM。
 pub struct Live2dPlugin {
     runtime: Rc<RefCell<Live2dRuntime>>,
 }
 
 impl Live2dPlugin {
+    /// 使用调用方提供的共享运行时。
     pub fn new(runtime: Rc<RefCell<Live2dRuntime>>) -> Self {
         Self { runtime }
     }
@@ -29,6 +31,7 @@ impl Live2dPlugin {
         Self::new(Live2dRuntime::new(Box::new(NullLive2dBackend::default())))
     }
 
+    /// 借出共享运行时（便于宿主直接调后端）。
     pub fn runtime(&self) -> &Rc<RefCell<Live2dRuntime>> {
         &self.runtime
     }

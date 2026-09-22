@@ -10,10 +10,15 @@ fn model_invalid() -> ErrorCode {
 
 /// Cubism / 其它运行时的可替换后端。
 pub trait Live2dBackend: Send {
+    /// 从路径加载模型，返回不透明句柄。
     fn load(&mut self, path: &str) -> Result<Live2dModelId, SparkError>;
+    /// 卸载模型；未知 id 应返回错误。
     fn unload(&mut self, id: Live2dModelId) -> Result<(), SparkError>;
+    /// 设置命名参数（如 `ParamAngleX`）。
     fn set_param(&mut self, id: Live2dModelId, name: &str, value: f32) -> Result<(), SparkError>;
+    /// 读取命名参数；缺失时后端可返回 0。
     fn get_param(&self, id: Live2dModelId, name: &str) -> Result<f32, SparkError>;
+    /// 推进模型内部状态（秒）。
     fn update(&mut self, id: Live2dModelId, dt: f32) -> Result<(), SparkError>;
     /// 播放动作（名称由资源约定）；默认可空实现。
     fn start_motion(&mut self, id: Live2dModelId, group: &str, index: i32) -> Result<(), SparkError> {

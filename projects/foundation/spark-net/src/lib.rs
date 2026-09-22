@@ -3,7 +3,7 @@
 //! 提供不可靠/可靠通道抽象、包序号、简易客户端预测与权威确认。
 //! **不**定义游戏 RPC 枚举或具体传输实现（UDP/WebRTC 由宿主注入）。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod channel;
 mod prediction;
 mod transport;
@@ -16,18 +16,22 @@ use std::{fmt, sync::Arc};
 
 use spark_types::{ErrorArg, ErrorArgs, SparkError};
 
-/// 网络层结构化错误。`Display` 只输出稳定码。
+/// 网络层结构化错误。`Display` 只输出稳定码，不含自然语言句子。
 #[derive(Debug)]
 pub enum NetError {
+    /// 下层 [`SparkError`] 透传（如诊断码包装）。
     Spark(SparkError),
+    /// 目标对端未处于已连接状态；携带该 [`PeerId`]。
     NotConnected(PeerId),
-    /// `detail` 必须是机器令牌，不是自然语言。
+    /// 实现内部故障。`detail` 必须是机器令牌，不是自然语言。
     Internal {
+        /// 机器可读原因令牌（如 `queue_full`），供聚合与日志字段。
         detail: String,
     },
 }
 
 impl NetError {
+    /// 稳定错误码（如 `spark.net.not_connected`），供程序分支与遥测。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Spark(_) => "spark.net.spark",
@@ -36,10 +40,12 @@ impl NetError {
         }
     }
 
+    /// 构造 [`NetError::Internal`]；`detail` 应为短令牌而非用户文案。
     pub fn internal(detail: impl Into<String>) -> Self {
         Self::Internal { detail: detail.into() }
     }
 
+    /// 结构化参数表：对端 ID、内部原因等，供日志 `ErrorArgs` 渲染。
     pub fn args(&self) -> ErrorArgs {
         match self {
             Self::Spark(e) => e.args.clone(),

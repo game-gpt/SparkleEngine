@@ -5,7 +5,7 @@
 //! 3D 路径支持 `MeshResidentKey` 网格驻留、`TexMeshCmd` 纹理网格与 `SkinnedMeshCmd` 蒙皮网格。
 //! **winit 止于此 crate**：游戏只看见 `spark-renderer` / `spark-input` 类型。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod bloom;
 mod dyn_ubo;
 mod game3d;

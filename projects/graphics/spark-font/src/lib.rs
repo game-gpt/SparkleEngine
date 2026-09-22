@@ -2,7 +2,7 @@
 //!
 //! 本 crate **不**碰 GPU：`spark-renderer-wgpu` 只消费 `GlyphCache` 的图集字节与 UV，自行上传纹理。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -15,11 +15,17 @@ use spark_types::{ErrorArg, SparkError, codes};
 /// 单个已栅格字形在图集中的布局信息。
 #[derive(Debug, Clone, Copy)]
 pub struct GlyphInfo {
+    /// 图集 UV 左上（`0..=1`）。
     pub uv_min: [f32; 2],
+    /// 图集 UV 右下（`0..=1`）。
     pub uv_max: [f32; 2],
+    /// 栅格宽度（像素）。
     pub width: f32,
+    /// 栅格高度（像素）。
     pub height: f32,
+    /// 基线以上偏移（fontdue `ymin`，像素；绘制时加到基线 y）。
     pub bearing_y: f32,
+    /// 水平步进（像素），含字距。
     pub advance: f32,
 }
 
@@ -88,10 +94,12 @@ impl GlyphCache {
         }
     }
 
+    /// 图集宽高（像素）。
     pub fn atlas_size(&self) -> (u32, u32) {
         (self.atlas_w, self.atlas_h)
     }
 
+    /// 图集原始字节（单通道 R，行主序，长度 = 宽×高）。
     pub fn atlas_bytes(&self) -> &[u8] {
         &self.atlas
     }
@@ -103,6 +111,9 @@ impl GlyphCache {
         d
     }
 
+    /// 按字符与像素字号取字形；首次访问时栅格化并写入图集。
+    ///
+    /// 图集满时返回 `None`（已打 `spark.font.atlas_full` 日志），调用方应缩小字号或换缓存。
     pub fn glyph(&mut self, ch: char, px: f32) -> Option<&GlyphInfo> {
         let key = (ch, px.round() as u32);
         if self.glyphs.contains_key(&key) {
@@ -145,6 +156,7 @@ impl GlyphCache {
         self.glyphs.get(&key)
     }
 
+    /// 测量字符串水平宽度（像素）：对各字符 `advance` 求和；缺失字形跳过。
     pub fn measure(&mut self, text: &str, px: f32) -> f32 {
         let mut w = 0.0f32;
         for ch in text.chars() {

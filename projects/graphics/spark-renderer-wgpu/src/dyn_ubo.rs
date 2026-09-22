@@ -8,6 +8,7 @@ pub fn uniform_stride(device: &wgpu::Device, element_size: u64) -> u64 {
     element_size.div_ceil(align) * align
 }
 
+/// 单槽 bind 声明用的 `min_binding_size`（即元素字节数；`0` 时返回 `None`）。
 pub fn binding_size(element_size: u64) -> Option<NonZeroU64> {
     NonZeroU64::new(element_size)
 }

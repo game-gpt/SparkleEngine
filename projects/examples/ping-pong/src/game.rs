@@ -9,10 +9,17 @@ use crate::{ball::Ball, paddle::Paddle};
 const COURT_W: f32 = 960.0;
 const COURT_H: f32 = 540.0;
 
+/// 双人乒乓对局宿主：球场 960×540 逻辑像素，实现 [`GameHost`]。
+///
+/// 左拍 `W`/`S`、右拍方向键；球出左右边得分并交替发球。
+/// `Esc` 置退出标志。公开字段便于嵌入方读拍/球状态。
 #[derive(Debug)]
 pub struct PingPongGame {
+    /// 左侧球拍（玩家一）。
     pub left: Paddle,
+    /// 右侧球拍（玩家二）。
     pub right: Paddle,
+    /// 当前在场上的球。
     pub ball: Ball,
     score_l: u32,
     score_r: u32,
@@ -27,6 +34,7 @@ impl Default for PingPongGame {
 }
 
 impl PingPongGame {
+    /// 双方拍居中、球向右开球、比分归零。
     pub fn new() -> Self {
         Self {
             left: Paddle::left(COURT_H),

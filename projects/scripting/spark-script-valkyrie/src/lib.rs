@@ -2,7 +2,7 @@
 //!
 //! 解析只走 [`ValkyrieBuilder`]。正式编译只经 `spark-ir`；不支持的构造必须报错。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod lower;
 mod native_sig;
 
@@ -16,15 +16,30 @@ use spark_vm::Module;
 
 pub use native_sig::{NativeParam, TypeRef};
 
+/// Valkyrie 脚本前端失败：解析或编译任一阶段。
+///
+/// `Display` 输出稳定错误码（`spark.script.valkyrie.parse` / `.compile`），
+/// 人类可读细节在 `args` 的 `reason` 等机器令牌中，不经 Locale。
 #[derive(Debug)]
 pub enum ValkyrieScriptError {
     /// 解析失败。`args.reason` 为机器令牌（非用户 Locale 句子）。
-    Parse { args: ErrorArgs, span: Option<SourceSpan> },
-    /// 编译失败。
-    Compile { args: ErrorArgs, span: Option<SourceSpan> },
+    Parse {
+        /// 诊断参数表（含 `reason`、`diagnostics` 计数，可选 `span`）。
+        args: ErrorArgs,
+        /// 首个可定位语法错误的源码跨度；未知时为 `None`。
+        span: Option<SourceSpan>,
+    },
+    /// 编译失败（降低 / IR / 发射）。
+    Compile {
+        /// 诊断参数表；至少含 `reason` 令牌字符串。
+        args: ErrorArgs,
+        /// 若有源码定位则附带；当前多数路径为 `None`。
+        span: Option<SourceSpan>,
+    },
 }
 
 impl ValkyrieScriptError {
+    /// 构造解析失败：`diagnostics` 为 Oaks 诊断条数；`span` 来自首个可映射的 [`OakErrorKind`]。
     pub fn parse_failed(diag_count: u64, span: Option<SourceSpan>) -> Self {
         let mut args = ErrorArgs::new()
             .with("reason", ErrorArg::String(std::sync::Arc::from("parse_failed")))
@@ -35,20 +50,24 @@ impl ValkyrieScriptError {
         Self::Parse { args, span }
     }
 
+    /// 构造编译失败，`reason` 写入 `args`（不透明令牌或降低错误串）。
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())), span: None }
     }
 
+    /// [`compile_reason`] 的别名，用于把不透明细节直接当成 `reason`。
     pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
         Self::compile_reason(detail)
     }
 
+    /// 错误关联的源码跨度（解析或编译变体上的 `span` 字段）。
     pub fn span(&self) -> Option<SourceSpan> {
         match self {
             Self::Parse { span, .. } | Self::Compile { span, .. } => *span,
         }
     }
 
+    /// 诊断上下文：目标固定为 `spark-script-valkyrie`，有 span 则附带。
     pub fn context(&self) -> ErrorContext {
         let mut ctx = ErrorContext::new().target("spark-script-valkyrie");
         if let Some(span) = self.span() {

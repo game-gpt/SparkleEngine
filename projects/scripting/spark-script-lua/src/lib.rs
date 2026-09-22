@@ -4,7 +4,7 @@
 //! 完整语义（table、元表、协程）不在本前端范围。
 //! 正式编译只经 `spark-ir`；不支持的构造必须报错。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod lower;
 
 use lower::lower_root_to_hir;
@@ -15,13 +15,25 @@ use spark_diagnostics::{ErrorArg, ErrorArgs};
 use spark_ir::{HostBindTable, HostEmitMode, emit_module_with_host, lower_module};
 use spark_vm::Module;
 
+/// Lua 前端编译失败。
+///
+/// `Display` 只输出稳定错误码（`spark.script.lua.*`），自然语言细节放在 `args` 里供诊断管线消费。
 #[derive(Debug)]
 pub enum LuaScriptError {
-    Parse { args: ErrorArgs },
-    Compile { args: ErrorArgs },
+    /// Oaks 解析失败。
+    Parse {
+        /// 结构化参数（如 `diagnostics` 计数、`reason` 令牌）。
+        args: ErrorArgs,
+    },
+    /// 降到 IR / 发射字节码失败。
+    Compile {
+        /// 结构化参数（`reason` 等机器令牌，非 Locale 句子）。
+        args: ErrorArgs,
+    },
 }
 
 impl LuaScriptError {
+    /// 构造解析失败：附带 Oaks 诊断条数。
     pub fn parse_failed(diag_count: u64) -> Self {
         Self::Parse {
             args: ErrorArgs::new()
@@ -30,6 +42,7 @@ impl LuaScriptError {
         }
     }
 
+    /// 构造编译失败：`reason` 为机器可读令牌。
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())) }
     }

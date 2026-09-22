@@ -1,6 +1,6 @@
 //! 贪吃蛇：Valkyrie 项目的 native 试玩宿主（脚本仍为 Inspector 元数据，VM Play 接通前由此运行）。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use spark_types::{Color, Rect};
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
@@ -38,6 +38,9 @@ impl Dir {
     }
 }
 
+/// 贪吃蛇试玩：实现 [`GameHost`]，在 native 窗口内跑格点逻辑与简易 HUD。
+///
+/// 方向键 / WASD 转向，`R` 死后重开，`Esc` 退出。脚本 VM 接通前由此作为示例宿主。
 #[derive(Debug)]
 pub struct SnakeApp {
     body: Vec<(i32, i32)>,
@@ -59,6 +62,7 @@ impl Default for SnakeApp {
 }
 
 impl SnakeApp {
+    /// 开局：三段蛇身朝右，随机放置食物。
     pub fn new() -> Self {
         let rng = 0x5A11E_u64;
         let mut app = Self {

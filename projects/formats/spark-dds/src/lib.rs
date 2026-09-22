@@ -1,12 +1,17 @@
 //! DDS → [`TextureUpload`]。
 //!
-//! 自研最小解析（无 umbrella `image` / `*-sys`）。首切：
+//! 自研最小解析（无 umbrella `image` / `*-sys`）。首切支持：
 //! - 传统 FourCC：`DXT1` / `DXT5`
 //! - DX10：`BC1` / `BC3` / `BC5` / `BC7`（UNORM / SRGB）与 `R8G8B8A8_UNORM` / `_SRGB`
+//! - 未压缩 32-bit RGBA/BGRA（带 alpha 掩码）按字节原样当作 [`TextureFormat::Rgba8Unorm`]
 //!
-//! 不支持：体积纹理、立方体、复杂 mip 链之外的奇异标志（多 mip 按连续块数据读取）。
+//! 不支持：体积纹理、立方体、纹理数组、复杂 mip 链之外的奇异标志（多 mip 按连续块数据读取）。
+//!
+//! 错误：`io`（读盘）、`image_decode`（魔数 / 截断 / 头字段）、`texture_size_invalid`（零尺寸）、
+//! `texture_format_unsupported`（未映射 FourCC / DXGI）、`texture_upload_invalid`（非 2D / 数组）、
+//! `texture_data_length_mismatch` / `image_dimension_overflow`（mip 载荷不足或尺寸溢出）。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 use std::{path::Path, sync::Arc};
 
@@ -38,7 +43,9 @@ const DXGI_BC5_UNORM: u32 = 83;
 const DXGI_BC7_UNORM: u32 = 98;
 const DXGI_BC7_UNORM_SRGB: u32 = 99;
 
-/// 从路径读 DDS。
+/// 从路径读取 DDS 文件并解码为可上传包。
+///
+/// 读盘失败 → `io`（附 `path` / `op=read`）；解析失败透传 [`decode_memory`] 的错误码并附加 `path`。
 pub fn decode_path(path: impl AsRef<Path>) -> Result<TextureUpload, SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
@@ -48,7 +55,10 @@ pub fn decode_path(path: impl AsRef<Path>) -> Result<TextureUpload, SparkError> 
     decode_memory(&bytes).map_err(|e| e.arg("path", path_arg))
 }
 
-/// 从内存解析 DDS → [`TextureUpload`]。
+/// 从内存解析 DDS → [`TextureUpload`]（2D、单层、可含连续 mip）。
+///
+/// 不变式：返回包已 `validate()`；`mipmap` 在 `mip_map_count > 1` 时为 [`MipmapPolicy::Provided`]，否则 [`MipmapPolicy::None`]。
+/// 宽高单位为像素；压缩格式按块对齐裁切各级长度。
 pub fn decode_memory(bytes: &[u8]) -> Result<TextureUpload, SparkError> {
     if bytes.len() < 4 + DDS_HEADER_SIZE {
         return Err(decode_err("truncated", bytes.len()));

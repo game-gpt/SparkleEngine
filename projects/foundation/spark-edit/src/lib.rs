@@ -4,7 +4,7 @@
 //! 当前可执行格式为 VON 编辑计划（`EditPlan`）；Sparkle Script Edit profile 将绑定同一
 //! [`EditSession`]。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 mod capabilities;
 mod diagnostic;

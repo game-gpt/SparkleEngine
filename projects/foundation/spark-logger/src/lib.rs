@@ -3,7 +3,7 @@
 //! 正式 API：[`Logger::emit`] 结构化 [`LogEvent`]（稳定 event 码 + 字段）。
 //! 格式字符串宏 / [`Logger::log`] 保留为 **raw** 路径：非结构化、非本地化、不可作程序判断。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod event;
 
 pub use event::{EventId, LogEvent};
@@ -16,18 +16,24 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-/// 日志级别（数值越大越严重）。
+/// 日志级别（数值越大越严重；过滤时丢弃严格小于门槛的记录）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum Level {
+    /// 最细追踪（热路径细节）。
     Trace = 0,
+    /// 开发调试信息。
     Debug = 1,
+    /// 常规运行状态。
     Info = 2,
+    /// 可恢复异常或降级。
     Warn = 3,
+    /// 失败或不可继续的错误。
     Error = 4,
 }
 
 impl Level {
+    /// 级别短标签（`TRACE`/`DEBUG`/…），用于行首格式化。
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Trace => "TRACE",
@@ -39,16 +45,20 @@ impl Level {
     }
 }
 
-/// 单条日志记录。
+/// 单条已展平的日志记录（sink 最终看到的形态）。
 #[derive(Debug, Clone)]
 pub struct Record {
+    /// 本条级别。
     pub level: Level,
+    /// 来源模块或逻辑目标（通常为 `module_path!()` 或显式 target）。
     pub target: &'static str,
+    /// 已渲染的一行消息（结构化路径下为机器可读 `code_line`）。
     pub message: String,
 }
 
 /// 日志输出端。实现方可写 stderr、文件或环形缓冲。
 pub trait LogSink: Send + Sync {
+    /// 写出一条 [`Record`]；实现应尽量不 panic（文件写失败可静默）。
     fn log(&self, record: &Record);
 }
 
@@ -56,7 +66,7 @@ fn format_line(record: &Record) -> String {
     format!("[{}] [{}] {}", record.level.as_str(), record.target, record.message)
 }
 
-/// 默认 stderr sink。
+/// 默认 stderr sink（每条一行 `eprintln!`）。
 #[derive(Debug, Default)]
 pub struct StderrSink;
 
@@ -86,6 +96,7 @@ impl FileSink {
         Ok(Self { file: Mutex::new(file), path })
     }
 
+    /// 当前日志文件路径。
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -111,10 +122,12 @@ pub struct MemorySink {
 }
 
 impl MemorySink {
+    /// 创建容量为 `capacity` 的环形缓冲；至少为 1，满时丢弃最旧记录。
     pub fn new(capacity: usize) -> Self {
         Self { inner: Mutex::new(Vec::new()), capacity: capacity.max(1) }
     }
 
+    /// 克隆当前缓冲中的全部记录（从旧到新）。
     pub fn snapshot(&self) -> Vec<Record> {
         self.inner.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
@@ -138,6 +151,7 @@ pub struct Logger {
 }
 
 impl Logger {
+    /// 开始构建日志器（默认无 sink、级别未定，见 [`LoggerBuilder::build`]）。
     pub fn builder() -> LoggerBuilder {
         LoggerBuilder::default()
     }
@@ -169,27 +183,33 @@ impl Logger {
         self.log(Level::Debug, target, message);
     }
 
+    /// Raw：`Level::Trace`。
     pub fn trace(&self, target: &'static str, message: impl Into<String>) {
         self.log(Level::Trace, target, message);
     }
 
+    /// Raw：`Level::Debug`。
     pub fn debug(&self, target: &'static str, message: impl Into<String>) {
         self.log(Level::Debug, target, message);
     }
 
+    /// Raw：`Level::Info`。
     pub fn info(&self, target: &'static str, message: impl Into<String>) {
         self.log(Level::Info, target, message);
     }
 
+    /// Raw：`Level::Warn`。
     pub fn warn(&self, target: &'static str, message: impl Into<String>) {
         self.log(Level::Warn, target, message);
     }
 
+    /// Raw：`Level::Error`。
     pub fn error(&self, target: &'static str, message: impl Into<String>) {
         self.log(Level::Error, target, message);
     }
 }
 
+/// [`Logger`] 构建器：可选最低级别与若干 sink。
 #[derive(Default)]
 pub struct LoggerBuilder {
     min_level: Option<Level>,
@@ -197,16 +217,19 @@ pub struct LoggerBuilder {
 }
 
 impl LoggerBuilder {
+    /// 设置最低输出级别；低于此级的记录被丢弃。
     pub fn min_level(mut self, level: Level) -> Self {
         self.min_level = Some(level);
         self
     }
 
+    /// 追加一个 sink（可多次调用以扇出）。
     pub fn sink(mut self, sink: Arc<dyn LogSink>) -> Self {
         self.sinks.push(sink);
         self
     }
 
+    /// 追加默认 [`StderrSink`]。
     pub fn stderr(self) -> Self {
         self.sink(Arc::new(StderrSink))
     }
@@ -219,6 +242,7 @@ impl LoggerBuilder {
         }
     }
 
+    /// 完成构建：未设级别则默认为 [`Level::Info`]；无 sink 则自动挂 stderr。
     pub fn build(self) -> Logger {
         let sinks = if self.sinks.is_empty() { vec![Arc::new(StderrSink) as Arc<dyn LogSink>] } else { self.sinks };
         Logger { min_level: self.min_level.unwrap_or(Level::Info), sinks: Arc::new(sinks) }
@@ -275,6 +299,9 @@ pub fn install_std(file: Option<&Path>, min_level: Level) -> bool {
     ok
 }
 
+/// Raw 级别日志宏：写入全局 [`Logger`]，消息为 `format_args!` 展开字符串。
+///
+/// 支持 `log!(level, "…")` 与 `log!(level, target: "…", "…")`。
 #[macro_export]
 macro_rules! log {
     ($level:expr, target: $target:expr, $($arg:tt)*) => {{
@@ -285,6 +312,7 @@ macro_rules! log {
     }};
 }
 
+/// Raw [`Level::Trace`] 宏（经 [`log!`]）。
 #[macro_export]
 macro_rules! trace {
     (target: $target:expr, $($arg:tt)*) => {
@@ -295,6 +323,7 @@ macro_rules! trace {
     };
 }
 
+/// Raw [`Level::Debug`] 宏（经 [`log!`]）。
 #[macro_export]
 macro_rules! debug {
     (target: $target:expr, $($arg:tt)*) => {
@@ -305,6 +334,7 @@ macro_rules! debug {
     };
 }
 
+/// Raw [`Level::Info`] 宏（经 [`log!`]）。
 #[macro_export]
 macro_rules! info {
     (target: $target:expr, $($arg:tt)*) => {
@@ -315,6 +345,7 @@ macro_rules! info {
     };
 }
 
+/// Raw [`Level::Warn`] 宏（经 [`log!`]）。
 #[macro_export]
 macro_rules! warn {
     (target: $target:expr, $($arg:tt)*) => {
@@ -325,6 +356,7 @@ macro_rules! warn {
     };
 }
 
+/// Raw [`Level::Error`] 宏（经 [`log!`]）。
 #[macro_export]
 macro_rules! error {
     (target: $target:expr, $($arg:tt)*) => {

@@ -10,7 +10,7 @@
 //! #   → packages/spark-unknown-wasm32/spark_engine_bg.wasm
 //! ```
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 mod host;
 
 pub use host::SparkWasmHost;
@@ -20,6 +20,7 @@ use spark_types::Vec2;
 /// npm 平台包名（与 TS 包对齐）。
 pub const NPM_PLATFORM_PACKAGE: &str = "spark-unknown-wasm32";
 
+/// 计算二维向量长度（C ABI 探针，供 TS 冒烟测试）。
 #[unsafe(no_mangle)]
 pub extern "C" fn spark_vec2_length(x: f64, y: f64) -> f64 {
     Vec2::new(x as f32, y as f32).length() as f64

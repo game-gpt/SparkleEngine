@@ -3,7 +3,7 @@
 //! 当前不做机器码发射：对热点 `FuncProto` 做常量折叠与死跳消除，
 //! 写回模块，降低解释器派发开销。API 预留 stub 表供原生入口。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use std::collections::HashMap;
 
 use std::fmt;
@@ -13,11 +13,14 @@ use spark_vm::{FuncProto, Module, Op, Vm};
 /// JIT 结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]
 pub enum JitError {
+    /// 函数下标非法或无法特化。
     BadFunc,
+    /// 特化扫描时操作数被截断。
     TruncatedOperands,
 }
 
 impl JitError {
+    /// 稳定错误码（`spark.jit.*`）。
     pub fn code(&self) -> &'static str {
         match self {
             Self::BadFunc => "spark.jit.bad_func",
@@ -37,11 +40,15 @@ impl std::error::Error for JitError {}
 /// 已特化的函数记录。
 #[derive(Debug, Clone)]
 pub struct JitStub {
+    /// 模块内函数下标。
     pub func: usize,
+    /// 触发特化时的热度计数快照。
     pub specialized_from_hotness: u32,
 }
 
+/// 热点检测与字节码特化引擎（非机器码后端）。
 pub struct JitEngine {
+    /// 热度达到该阈值才特化（`Vm::hotness` 计数）。
     pub threshold: u32,
     stubs: HashMap<usize, JitStub>,
 }
@@ -53,10 +60,12 @@ impl Default for JitEngine {
 }
 
 impl JitEngine {
+    /// 以给定热度阈值构造；阈值越大，特化越晚。
     pub fn new(threshold: u32) -> Self {
         Self { threshold, stubs: HashMap::new() }
     }
 
+    /// 已特化函数表（下标 → stub）。
     pub fn stubs(&self) -> &HashMap<usize, JitStub> {
         &self.stubs
     }

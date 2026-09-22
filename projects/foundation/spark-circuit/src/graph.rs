@@ -21,19 +21,24 @@ impl Channel {
 /// `POWER` 通道上的额定聚合（无潮流求解）。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PowerBudget {
+    /// 可达电源额定之和。
     pub supply: f32,
+    /// 可达负载需求之和。
     pub demand: f32,
 }
 
 impl PowerBudget {
+    /// 供电是否覆盖需求（含 `1e-5` 浮点容差）。
     pub fn satisfied(self) -> bool {
         self.supply + 1e-5 >= self.demand
     }
 
+    /// 富余供电（不足时为 0）。
     pub fn surplus(self) -> f32 {
         (self.supply - self.demand).max(0.0)
     }
 
+    /// 缺口需求（有富余时为 0）。
     pub fn deficit(self) -> f32 {
         (self.demand - self.supply).max(0.0)
     }
@@ -42,16 +47,19 @@ impl PowerBudget {
 /// 电路图错误。`Display` 只输出稳定码。
 #[derive(Debug, PartialEq, Eq)]
 pub enum CircuitError {
+    /// 引用了未分配的节点 id。
     UnknownNode(NodeId),
 }
 
 impl CircuitError {
+    /// 稳定错误码（`spark.circuit.*`）。
     pub fn code(&self) -> &'static str {
         match self {
             Self::UnknownNode(_) => "spark.circuit.unknown_node",
         }
     }
 
+    /// 类型化参数（如 `node` 下标）。
     pub fn args(&self) -> ErrorArgs {
         match self {
             Self::UnknownNode(id) => ErrorArgs::new().with("node", ErrorArg::Unsigned(u64::from(*id))),
@@ -81,22 +89,27 @@ pub struct CircuitGraph {
 }
 
 impl CircuitGraph {
+    /// 空图。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 已分配节点数。
     pub fn node_count(&self) -> u32 {
         self.node_count
     }
 
+    /// 边或电源角色自上次清除后是否变更（调用方决定何时重算）。
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
 
+    /// 手动标脏（例如外部批量改图后）。
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
     }
 
+    /// 清除脏标记（不自动触发重算）。
     pub fn clear_dirty(&mut self) {
         self.dirty = false;
     }
@@ -293,6 +306,7 @@ impl CircuitGraph {
         Ok(())
     }
 
+    /// 读取节点供电额定。
     pub fn power_supply_of(&self, node: NodeId) -> Result<f32, CircuitError> {
         if node >= self.node_count {
             return Err(CircuitError::UnknownNode(node));
@@ -300,6 +314,7 @@ impl CircuitGraph {
         Ok(self.power_supply[node as usize])
     }
 
+    /// 读取节点用电需求。
     pub fn power_demand_of(&self, node: NodeId) -> Result<f32, CircuitError> {
         if node >= self.node_count {
             return Err(CircuitError::UnknownNode(node));

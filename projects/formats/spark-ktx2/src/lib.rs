@@ -3,8 +3,12 @@
 //! 使用 pure Rust [`ktx2`] 解析容器。**不**依赖 umbrella `image` / `*-sys`。
 //! 首切仅支持无超级压缩（`supercompression_scheme = None`）且 `vkFormat` 可映射的格式。
 //! BasisLZ / Zstd / ZLIB 与 `VK_FORMAT_UNDEFINED` 转码后置。
+//!
+//! 维度：`face_count == 6` → Cube（仅单层）；`pixel_depth > 0` → 3D；`pixel_height == 0` → 1D；否则 2D。
+//! 错误：`io`、`image_decode`、`texture_format_unsupported`、`texture_layout_invalid`、
+//! `texture_upload_invalid`（立方体数组）、以及描述 / 数据校验失败码。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 use std::{path::Path, sync::Arc};
 
@@ -14,7 +18,9 @@ use spark_texture::{
     TextureLayout, TextureUpload, TextureUsage, UploadPolicy,
 };
 
-/// 从路径读 KTX2。
+/// 从路径读取 KTX2 文件并解码为可上传包。
+///
+/// 读盘失败 → `io`；解析失败透传 [`decode_memory`] 并附加 `path`。
 pub fn decode_path(path: impl AsRef<Path>) -> Result<TextureUpload, SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
@@ -25,6 +31,13 @@ pub fn decode_path(path: impl AsRef<Path>) -> Result<TextureUpload, SparkError> 
 }
 
 /// 从内存解析 KTX2 → [`TextureUpload`]。
+///
+/// 不变式：返回包已 `validate()`。mip 策略：
+/// - 多级 → [`MipmapPolicy::Provided`]
+/// - 容器 `level_count == 0` 且未压缩 → [`MipmapPolicy::GenerateCpu`]
+/// - 否则 → [`MipmapPolicy::None`]
+///
+/// 宽高深度单位为像素；1D 时 `height` 强制为 1。
 pub fn decode_memory(bytes: &[u8]) -> Result<TextureUpload, SparkError> {
     let reader = ktx2::Reader::new(bytes).map_err(|e| {
         SparkError::new(codes::image_decode())

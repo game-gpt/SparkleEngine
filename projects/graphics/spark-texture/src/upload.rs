@@ -11,51 +11,51 @@ use crate::{
     usage::DeviceCaps,
 };
 
-/// 何时调度 GPU 创建 / 拷贝。
+/// 何时调度 GPU 创建 / 拷贝（由渲染后端解释，格式层只携带意图）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum UploadPolicy {
-    /// 本帧立即上传。
+    /// 本帧立即创建并拷贝（默认，小图 / 启动资源）。
     #[default]
     Immediate,
-    /// 延迟到预算允许。
+    /// 延迟到帧预算允许时再上传。
     Deferred,
-    /// 流式分块。
+    /// 按块流式上传（大图 / 流式关卡）。
     Streaming,
-    /// 稀疏驻留（后置）。
+    /// 稀疏驻留意图（能力后置；当前后端可降级为常驻）。
     Sparse,
 }
 
-/// 上传后是否保留 CPU 字节副本。
+/// 上传完成后是否仍保留 [`crate::TextureData`] 中的 CPU 字节。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum CpuCopyPolicy {
-    /// 保留（热重载 / 调试）。
+    /// 保留 CPU 副本（热重载、CPU 读回、调试用）。
     Keep,
-    /// 上传后可丢弃。
+    /// 上传成功后可丢弃 CPU 字节以省内存（默认）。
     #[default]
     Discard,
 }
 
-/// 期望显存驻留策略。
+/// 期望显存驻留策略（换出实现由后端决定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Residency {
-    /// 短期（过场等）。
+    /// 短期占用（过场、一次性特效）。
     Transient,
-    /// 常驻。
+    /// 会话内常驻（默认，UI / 主角贴图等）。
     #[default]
     Resident,
-    /// 可换出。
+    /// 允许按需换出 / 再流回。
     Streamable,
 }
 
-/// mip 来源策略。
+/// mip 链来源策略（须与 `desc.mip_levels` / `data.layout.mip_offsets` 一致）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum MipmapPolicy {
-    /// 仅上传数据中已有层级（由 `desc.mip_levels` / layout 决定）。
+    /// 只上传数据里已有的层级；不生成额外 mip。
     None,
-    /// 数据仅含 base 级；后端可在 CPU 生成其余 mip（未压缩 RGBA 路径）。
+    /// 数据仅含 base 级；后端可在 CPU 生成其余 mip（仅未压缩路径；默认）。
     #[default]
     GenerateCpu,
-    /// 数据已含完整 mip 链。
+    /// 数据已含完整 mip 链，`mip_offsets.len() == desc.mip_levels`。
     Provided,
 }
 
@@ -79,12 +79,18 @@ pub struct TextureUpload {
 }
 
 impl TextureUpload {
-    /// RGBA8 sRGB 单 mip；默认 CPU 生成 mip 链。
+    /// 构造 sRGB RGBA8 单 mip 上传包；默认 [`MipmapPolicy::GenerateCpu`]。
+    ///
+    /// 等价于 `rgba8(..., srgb = true)`。`rgba.len()` 须为 `width * height * 4`。
     pub fn rgba8_srgb(width: u32, height: u32, rgba: impl Into<Arc<[u8]>>) -> Result<Self, SparkError> {
         Self::rgba8(width, height, rgba, true)
     }
 
-    /// RGBA8 线性或 sRGB。
+    /// 构造 RGBA8 单 mip 2D 上传包。
+    ///
+    /// `srgb = true` → `Rgba8UnormSrgb` + `ColorSpace::Srgb`；否则线性格式。
+    /// 默认立即上传、丢弃 CPU 副本、常驻、[`MipmapPolicy::GenerateCpu`]。
+    /// 长度不符或尺寸为 0 时返回与 [`crate::TextureData::from_uncompressed`] 相同的错误。
     pub fn rgba8(width: u32, height: u32, rgba: impl Into<Arc<[u8]>>, srgb: bool) -> Result<Self, SparkError> {
         let format = if srgb { TextureFormat::Rgba8UnormSrgb } else { TextureFormat::Rgba8Unorm };
         let data = TextureData::from_uncompressed(format, width, height, rgba)?;
@@ -115,7 +121,10 @@ impl TextureUpload {
         self
     }
 
-    /// 校验描述与数据。
+    /// 校验描述与数据 / mip 策略是否自洽。
+    ///
+    /// `GenerateCpu`：禁止压缩格式，且 `mip_levels` 与 `mip_offsets` 须为单级；
+    /// `None` / `Provided`：走 [`crate::TextureData::validate_against`]。
     pub fn validate(&self) -> Result<(), SparkError> {
         self.desc.validate()?;
         match self.mipmap {
@@ -141,7 +150,10 @@ impl TextureUpload {
         Ok(())
     }
 
-    /// 相对设备能力校验（含 [`Self::validate`]）。
+    /// 在 [`Self::validate`] 之上再按 [`DeviceCaps`] 检查格式与尺寸上限。
+    ///
+    /// 失败：格式不受支持 → `texture_format_unsupported`；边长超限 → `texture_size_invalid`；
+    /// 2D 数组而设备无数组能力 → `texture_upload_invalid`。
     pub fn validate_for_device(&self, caps: &DeviceCaps) -> Result<(), SparkError> {
         self.validate()?;
         if !caps.supports_format(self.desc.format) {

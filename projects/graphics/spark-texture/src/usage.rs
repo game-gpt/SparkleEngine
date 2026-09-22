@@ -50,22 +50,22 @@ impl Default for TextureUsage {
     }
 }
 
-/// 渲染设备纹理相关能力（由后端填入，格式层按此选型）。
+/// 渲染设备纹理相关能力（由后端填入；格式插件 / 上传前用 [`DeviceCaps::supports_format`] 选型）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeviceCaps {
-    /// BC / DXT 族。
+    /// 是否支持 BC / DXT 族（BC1/3/5/7）。
     pub supports_bc: bool,
-    /// ETC2。
+    /// 是否支持 ETC2。
     pub supports_etc2: bool,
-    /// ASTC。
+    /// 是否支持 ASTC。
     pub supports_astc: bool,
-    /// 半精度浮点纹理。
+    /// 是否支持半精度浮点纹理（`Rgba16Float`）。
     pub supports_float16: bool,
-    /// 纹理数组。
+    /// 是否支持 2D 纹理数组（`depth_or_layers > 1`）。
     pub supports_texture_arrays: bool,
-    /// GPU 生成 mip。
+    /// 是否支持 GPU 侧自动生成 mip。
     pub supports_mip_generation: bool,
-    /// 单边最大尺寸。
+    /// 单边最大尺寸（像素）；超出则 `validate_for_device` 失败。
     pub max_texture_dimension: u32,
 }
 

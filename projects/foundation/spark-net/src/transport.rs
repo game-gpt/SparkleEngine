@@ -4,12 +4,17 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{NetError, channel::NetPacket};
 
+/// 对端标识（进程内或会话内唯一的 `u32`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PeerId(pub u32);
 
+/// 字节包收发抽象；具体 UDP/WebRTC 由宿主实现并注入。
 pub trait Transport {
+    /// 向 `to` 发送一包；失败时返回 [`NetError`]（如未连接）。
     fn send(&mut self, to: PeerId, packet: NetPacket) -> Result<(), NetError>;
+    /// 取出当前收件箱中全部包；每项为 `(发送方, 包)`。调用后收件箱清空。
     fn recv(&mut self) -> Vec<(PeerId, NetPacket)>;
+    /// 轮询底层（驱动 IO、超时等）；默认空操作。
     fn poll(&mut self) {}
 }
 
@@ -20,12 +25,14 @@ pub struct InMemoryBus {
 }
 
 impl InMemoryBus {
+    /// 取得（或登记）`id` 对应的传输端点；发往该 ID 的包进入其收件箱。
     pub fn endpoint(&mut self, id: PeerId) -> InMemoryTransport<'_> {
         self.inbox.entry(id).or_default();
         InMemoryTransport { id, bus: self }
     }
 }
 
+/// 挂在 [`InMemoryBus`] 上的一端；生命周期与总线借用绑定。
 pub struct InMemoryTransport<'a> {
     id: PeerId,
     bus: &'a mut InMemoryBus,

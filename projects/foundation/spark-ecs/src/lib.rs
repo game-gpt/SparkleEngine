@@ -2,7 +2,7 @@
 //!
 //! **Component** 为纯数据；系统为纯逻辑。界面树在 `spark-widget`，不进本 crate。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
@@ -13,6 +13,8 @@ pub trait Component: Send + Sync + 'static {}
 impl<T: Send + Sync + 'static> Component for T {}
 
 /// 稳定实体 ID：低 32 位槽位，高 32 位世代。
+///
+/// 销毁后槽位可复用但世代递增，旧句柄 [`World::is_alive`] 为 false。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Entity(u64);
 
@@ -21,18 +23,22 @@ impl Entity {
         Self(((generation as u64) << 32) | u64::from(index))
     }
 
+    /// 槽位索引（低 32 位）；同一槽位可跨世代复用。
     pub fn index(self) -> u32 {
         self.0 as u32
     }
 
+    /// 世代号（高 32 位）；每次销毁后该槽位世代 `wrapping_add(1)`。
     pub fn generation(self) -> u32 {
         (self.0 >> 32) as u32
     }
 
+    /// 打包为原始 `u64`（存档/网络用）；布局同内部表示。
     pub fn to_bits(self) -> u64 {
         self.0
     }
 
+    /// 从 [`Self::to_bits`] 还原；不校验是否仍存活。
     pub fn from_bits(bits: u64) -> Self {
         Self(bits)
     }
@@ -104,31 +110,35 @@ impl Archetype {
     }
 }
 
-/// 资源表（每类型至多一份）。
+/// 资源表（每类型至多一份，按 [`TypeId`] 索引）。
 #[derive(Default)]
 pub struct Resources {
     map: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 
 impl Resources {
+    /// 插入或覆盖类型 `T` 的唯一实例。
     pub fn insert<T: Send + Sync + 'static>(&mut self, value: T) {
         self.map.insert(TypeId::of::<T>(), Box::new(value));
     }
 
+    /// 取出并移除类型 `T`；不存在则 `None`。
     pub fn remove<T: Send + Sync + 'static>(&mut self) -> Option<T> {
         self.map.remove(&TypeId::of::<T>()).and_then(|b| b.downcast::<T>().ok().map(|b| *b))
     }
 
+    /// 只读借用类型 `T` 的资源。
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
         self.map.get(&TypeId::of::<T>()).and_then(|b| b.downcast_ref::<T>())
     }
 
+    /// 可变借用类型 `T` 的资源。
     pub fn get_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
         self.map.get_mut(&TypeId::of::<T>()).and_then(|b| b.downcast_mut::<T>())
     }
 }
 
-/// ECS 世界。
+/// ECS 世界：实体、Archetype 存储与 [`Resources`]。
 pub struct World {
     archetypes: Vec<Archetype>,
     locations: Vec<Option<EntityLoc>>,
@@ -136,6 +146,7 @@ pub struct World {
     free: Vec<u32>,
     archetype_index: HashMap<Vec<TypeId>, usize>,
     ctors: HashMap<TypeId, fn() -> Column>,
+    /// 全局单例资源表（与实体组件分离）。
     pub resources: Resources,
 }
 
@@ -146,6 +157,7 @@ impl Default for World {
 }
 
 impl World {
+    /// 创建空世界：仅含无组件 Archetype（索引 0）。
     pub fn new() -> Self {
         let mut world = Self {
             archetypes: vec![Archetype::empty()],
@@ -199,19 +211,23 @@ impl World {
         self.free.push(entity.index());
     }
 
+    /// 句柄是否仍指向存活实体（槽位占用且世代匹配）。
     pub fn is_alive(&self, entity: Entity) -> bool {
         let i = entity.index() as usize;
         matches!(self.locations.get(i), Some(Some(_))) && self.generations.get(i).copied() == Some(entity.generation())
     }
 
+    /// 当前存活实体个数（遍历槽位，O(n)）。
     pub fn entity_count(&self) -> usize {
         self.locations.iter().filter(|l| l.is_some()).count()
     }
 
+    /// [`Self::entity_count`] 的 `u64` 形式，便于与统计/遥测字段对齐。
     pub fn entity_count_hint(&self) -> u64 {
         self.entity_count() as u64
     }
 
+    /// 生成无组件实体，落入空 Archetype。
     pub fn spawn_empty(&mut self) -> Entity {
         let entity = self.alloc_entity();
         let row = self.archetypes[0].len() as u32;
@@ -220,6 +236,7 @@ impl World {
         entity
     }
 
+    /// 生成仅含单个组件 `T` 的实体。
     pub fn spawn<T: Component>(&mut self, component: T) -> Entity {
         self.register_ctor::<T>();
         let entity = self.alloc_entity();
@@ -235,6 +252,7 @@ impl World {
         entity
     }
 
+    /// 生成同时含 `A`、`B` 的实体（Archetype 键按 [`TypeId`] 排序）。
     pub fn spawn2<A: Component, B: Component>(&mut self, a: A, b: B) -> Entity {
         self.register_ctor::<A>();
         self.register_ctor::<B>();
@@ -255,6 +273,7 @@ impl World {
         entity
     }
 
+    /// 销毁实体并释放槽位；已死或无效句柄返回 `false`。
     pub fn despawn(&mut self, entity: Entity) -> bool {
         if !self.is_alive(entity) {
             return false;
@@ -279,6 +298,7 @@ impl World {
         if row < last { Some(arch.entities[row]) } else { None }
     }
 
+    /// 只读取组件；实体已死或缺少 `T` 时返回 `None`。
     pub fn get<T: Component>(&self, entity: Entity) -> Option<&T> {
         if !self.is_alive(entity) {
             return None;
@@ -289,6 +309,7 @@ impl World {
         arch.columns[col].vec::<T>().get(loc.row as usize)
     }
 
+    /// 可变取组件；实体已死或缺少 `T` 时返回 `None`。
     pub fn get_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
         if !self.is_alive(entity) {
             return None;
@@ -299,6 +320,9 @@ impl World {
         arch.columns[col].vec_mut::<T>().get_mut(loc.row as usize)
     }
 
+    /// 插入或覆盖组件 `T`：已有则原地写，否则迁移到含 `T` 的 Archetype。
+    ///
+    /// 实体已死返回 `false`；成功写入返回 `true`。
     pub fn insert<T: Component>(&mut self, entity: Entity, value: T) -> bool {
         if !self.is_alive(entity) {
             return false;
@@ -319,6 +343,7 @@ impl World {
         true
     }
 
+    /// 移除组件 `T` 并返回原值；已死或本无 `T` 则 `None`（会迁移 Archetype）。
     pub fn remove<T: Component>(&mut self, entity: Entity) -> Option<T> {
         if !self.is_alive(entity) {
             return None;
@@ -402,6 +427,7 @@ impl World {
         taken
     }
 
+    /// 遍历所有含 `T` 的实体，只读回调 `(entity, &T)`。
     pub fn for_each<T: Component>(&self, mut f: impl FnMut(Entity, &T)) {
         let tid = TypeId::of::<T>();
         for arch in &self.archetypes {
@@ -416,6 +442,7 @@ impl World {
         }
     }
 
+    /// 遍历所有含 `T` 的实体，可变回调 `(entity, &mut T)`。
     pub fn for_each_mut<T: Component>(&mut self, mut f: impl FnMut(Entity, &mut T)) {
         let tid = TypeId::of::<T>();
         for arch in &mut self.archetypes {
@@ -432,6 +459,7 @@ impl World {
         }
     }
 
+    /// 遍历同时含 `A` 与 `B` 的实体；`A`/`B` 同类型时跳过该 Archetype。
     pub fn for_each2_mut<A: Component, B: Component>(&mut self, mut f: impl FnMut(Entity, &mut A, &mut B)) {
         let ta = TypeId::of::<A>();
         let tb = TypeId::of::<B>();
@@ -475,19 +503,23 @@ fn two_mut<T>(slice: &mut [T], i: usize, j: usize) -> (&mut T, &mut T) {
 
 /// 系统：读写集供未来并行调度；当前顺序执行。
 pub trait System: Send {
+    /// 调试用名称；默认 `"system"`。
     fn name(&self) -> &str {
         "system"
     }
+    /// 在给定 [`World`] 上执行一帧逻辑。
     fn run(&mut self, world: &mut World);
+    /// 声明只读触及的组件/资源 [`TypeId`] 列表（并行预留；当前可为空）。
     fn reads(&self) -> &[TypeId] {
         &[]
     }
+    /// 声明可写触及的组件/资源 [`TypeId`] 列表（并行预留；当前可为空）。
     fn writes(&self) -> &[TypeId] {
         &[]
     }
 }
 
-/// 函数式系统包装。
+/// 函数式系统包装：把 `FnMut(&mut World)` 适配为 [`System`]。
 pub struct FunctionSystem<F> {
     name: &'static str,
     f: F,
@@ -497,6 +529,7 @@ impl<F> FunctionSystem<F>
 where
     F: FnMut(&mut World) + Send,
 {
+    /// 用静态名称与闭包构造；`name` 供调试与调度日志。
     pub fn new(name: &'static str, f: F) -> Self {
         Self { name, f }
     }
@@ -522,29 +555,35 @@ pub struct Schedule {
 }
 
 impl Schedule {
+    /// 空调度表。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 追加一个系统；返回 `self` 以便链式注册。
     pub fn add_system<S: System + 'static>(&mut self, system: S) -> &mut Self {
         self.systems.push(Box::new(system));
         self
     }
 
+    /// 以闭包形式追加系统（内部包成 [`FunctionSystem`]）。
     pub fn add_fn(&mut self, name: &'static str, f: impl FnMut(&mut World) + Send + 'static) -> &mut Self {
         self.add_system(FunctionSystem::new(name, f))
     }
 
+    /// 按注册顺序依次 `run` 全部系统。
     pub fn run(&mut self, world: &mut World) {
         for sys in &mut self.systems {
             sys.run(world);
         }
     }
 
+    /// 已注册系统个数。
     pub fn len(&self) -> usize {
         self.systems.len()
     }
 
+    /// 是否尚未注册任何系统。
     pub fn is_empty(&self) -> bool {
         self.systems.is_empty()
     }

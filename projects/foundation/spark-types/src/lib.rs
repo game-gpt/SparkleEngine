@@ -5,7 +5,7 @@
 //!
 //! 本 crate 原名不宜叫 `core`：它只承载跨层共享的类型与错误别名，不是「引擎内核」。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 pub use spark_diagnostics::{Diagnostic, ErrorArg, ErrorArgs, ErrorCode, ErrorContext, MessageKey, Severity, codes};
 
 mod light2d;

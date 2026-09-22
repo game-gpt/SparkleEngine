@@ -2,7 +2,7 @@
 //!
 //! WGSL 正文归本 crate；`spark-renderer-wgpu` 只消费编译结果与入口名，不内嵌着色器字符串。
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use std::sync::Arc;
 
 use spark_types::{ErrorArg, SparkError, codes};
@@ -38,6 +38,7 @@ pub enum BuiltinShader {
 }
 
 impl BuiltinShader {
+    /// wgpu / 调试用稳定标签（`spark-shader/...`），与磁盘文件名不必一一相同。
     pub const fn label(self) -> &'static str {
         match self {
             Self::SolidQuad => "spark-shader/solid-quad",
@@ -55,6 +56,7 @@ impl BuiltinShader {
         }
     }
 
+    /// 内嵌 WGSL 正文（编译期 `include_str!`）。
     pub const fn wgsl(self) -> &'static str {
         match self {
             Self::SolidQuad => include_str!("shaders/quad.wgsl"),
@@ -72,10 +74,12 @@ impl BuiltinShader {
         }
     }
 
+    /// 顶点着色器入口名。内建着色器统一为 `vs_main`。
     pub const fn vertex_entry(self) -> &'static str {
         "vs_main"
     }
 
+    /// 片元着色器入口名。内建着色器统一为 `fs_main`（深度-only 管线可忽略）。
     pub const fn fragment_entry(self) -> &'static str {
         "fs_main"
     }
@@ -84,7 +88,9 @@ impl BuiltinShader {
 /// 任意 WGSL 源（内建或游戏侧注入）。
 #[derive(Debug, Clone, Copy)]
 pub struct ShaderSource<'a> {
+    /// 调试 / `ShaderModuleDescriptor` 标签。
     pub label: &'a str,
+    /// WGSL 源码正文。
     pub wgsl: &'a str,
 }
 
