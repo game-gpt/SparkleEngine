@@ -156,6 +156,9 @@ impl DrawList {
     }
 
     /// 切换到 HUD 层：后续图元用屏幕像素，写入 `hud_*` 批次。
+    ///
+    /// **兼容旧路径**。新的屏幕装饰 / Widget 叠绘请写入 [`crate::UiRenderBatch`]
+    ///（经 [`crate::HudCanvas`]），由宿主 `draw_ui` 提交。
     pub fn begin_hud(&mut self) {
         self.layer = DrawLayer2d::Hud;
     }
