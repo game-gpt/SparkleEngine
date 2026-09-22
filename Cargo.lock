@@ -2642,6 +2642,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "spark-dds"
+version = "0.0.0"
+dependencies = [
+ "spark-core",
+ "spark-texture",
+]
+
+[[package]]
 name = "spark-debugger"
 version = "0.0.0"
 dependencies = [
