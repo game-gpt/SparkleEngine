@@ -17,3 +17,12 @@ pub use op::EditOp;
 pub use plan::EditPlan;
 pub use report::{ChangeKind, ChangeRecord, EditReport, TransactionState};
 pub use session::{EditMode, EditSession};
+
+use std::path::Path;
+
+/// 解析 VON 计划并在 `root` 上按 `mode` 执行（CLI / MCP / napi 共用入口）。
+pub fn run_edit_plan(root: impl AsRef<Path>, mode: EditMode, von: &str) -> Result<EditReport, String> {
+    let plan = EditPlan::from_von(von)?;
+    let mut session = EditSession::new(root.as_ref(), mode);
+    Ok(session.run(&plan))
+}

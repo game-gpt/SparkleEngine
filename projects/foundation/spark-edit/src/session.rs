@@ -3,8 +3,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use spark_asset::{AssetMetaStore, MetaValue};
-use spark_prefab::{PrefabDocument, save_registered};
+use spark_asset::{AssetIndex, AssetMetaStore, MetaValue};
+use spark_prefab::{PrefabDocument, save_registered, validate_prefab_file};
 
 use crate::diagnostic::{Diagnostic, Severity};
 use crate::op::EditOp;
@@ -139,6 +139,8 @@ impl EditSession {
         match op {
             EditOp::MetaCreate { path } => self.op_meta_create(path),
             EditOp::MetaLoad { path } => self.op_meta_load(path),
+            EditOp::AssetRename { from, to } => self.op_asset_rename(from, to),
+            EditOp::IndexScan => self.op_index_scan(),
             EditOp::PrefabEnsure { path, root } => self.op_prefab_ensure(path, root),
             EditOp::PrefabEnsureNode { path, id, parent } => self.op_prefab_ensure_node(path, id, parent.as_deref()),
             EditOp::PrefabEnsureComponent {
@@ -153,6 +155,7 @@ impl EditSession {
                 field,
                 value,
             } => self.op_prefab_set_field(path, node, component, field, value),
+            EditOp::PrefabValidate { path } => self.op_prefab_validate(path),
             EditOp::PrefabSave { path } => self.op_prefab_save(path),
         }
     }
@@ -198,6 +201,82 @@ impl EditSession {
                 format!("guid={}", meta.guid),
                 Some(path.into()),
             ),
+            Err(e) => self.push_err(e.code(), e.to_string(), Some(path.into())),
+        }
+    }
+
+    fn op_asset_rename(&mut self, from: &str, to: &str) {
+        let from_abs = self.resolve(from);
+        let to_abs = self.resolve(to);
+        match self.mode {
+            EditMode::Check => {
+                if !from_abs.is_file() && !AssetMetaStore::path(&from_abs).is_file() {
+                    self.push_err("spark.asset.meta_missing", "rename source missing", Some(from.into()));
+                } else if AssetMetaStore::path(&to_abs).is_file() {
+                    self.push_err(
+                        "spark.asset.meta_already_exists",
+                        "rename target meta exists",
+                        Some(to.into()),
+                    );
+                } else {
+                    self.push_info("spark.edit.rename_ok", "asset.rename would succeed", Some(from.into()));
+                }
+            }
+            EditMode::DryRun => {
+                if !from_abs.is_file() && !AssetMetaStore::path(&from_abs).is_file() {
+                    self.push_err("spark.asset.meta_missing", "rename source missing", Some(from.into()));
+                } else if AssetMetaStore::path(&to_abs).is_file() {
+                    self.push_err(
+                        "spark.asset.meta_already_exists",
+                        "rename target meta exists",
+                        Some(to.into()),
+                    );
+                } else {
+                    self.note_change(ChangeKind::Update, &from_abs);
+                    self.note_change(ChangeKind::Create, &to_abs);
+                    self.note_change(ChangeKind::WriteMeta, &AssetMetaStore::path(&to_abs));
+                }
+            }
+            EditMode::Apply => {
+                let mut index = match AssetIndex::scan(&self.root) {
+                    Ok(idx) => idx,
+                    Err(e) => {
+                        self.push_err(e.code(), e.to_string(), None);
+                        return;
+                    }
+                };
+                if index.guid_of(&from_abs).is_none() {
+                    if let Err(e) = index.register(&from_abs) {
+                        self.push_err(e.code(), e.to_string(), Some(from.into()));
+                        return;
+                    }
+                }
+                match index.rename(&from_abs, &to_abs) {
+                    Ok(()) => {
+                        self.note_change(ChangeKind::Update, &to_abs);
+                        self.note_change(ChangeKind::WriteMeta, &AssetMetaStore::path(&to_abs));
+                    }
+                    Err(e) => self.push_err(e.code(), e.to_string(), Some(from.into())),
+                }
+            }
+        }
+    }
+
+    fn op_index_scan(&mut self) {
+        match AssetIndex::scan(&self.root) {
+            Ok(index) => self.push_info(
+                "spark.edit.index_scanned",
+                format!("entries={}", index.len()),
+                Some(self.rel_display(&self.root)),
+            ),
+            Err(e) => self.push_err(e.code(), e.to_string(), None),
+        }
+    }
+
+    fn op_prefab_validate(&mut self, path: &str) {
+        let abs = self.resolve(path);
+        match validate_prefab_file(&abs) {
+            Ok(_) => self.push_info("spark.edit.prefab_valid", "prefab.validate ok", Some(path.into())),
             Err(e) => self.push_err(e.code(), e.to_string(), Some(path.into())),
         }
     }

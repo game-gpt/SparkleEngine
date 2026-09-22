@@ -98,3 +98,49 @@ fn apply_writes_prefab_and_meta() {
 
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn apply_rename_keeps_guid() {
+    let dir = std::env::temp_dir().join(format!("spark-edit-rename-{}", Uuid::now_v7()));
+    fs::create_dir_all(dir.join("assets")).unwrap();
+    let src = dir.join("assets/a.png");
+    fs::write(&src, b"png").unwrap();
+    let meta = AssetMetaStore::create(&src).unwrap();
+
+    let plan = EditPlan {
+        name: None,
+        ops: vec![EditOp::AssetRename {
+            from: "assets/a.png".into(),
+            to: "assets/b.png".into(),
+        }],
+    };
+    let mut session = EditSession::new(&dir, EditMode::Apply);
+    let report = session.run(&plan);
+    assert!(report.ok, "{:?}", report.diagnostics);
+    assert!(!src.exists());
+    let dst = dir.join("assets/b.png");
+    assert!(dst.is_file());
+    assert_eq!(AssetMetaStore::load(&dst).unwrap().guid, meta.guid);
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn index_scan_reports_count() {
+    let dir = std::env::temp_dir().join(format!("spark-edit-scan-{}", Uuid::now_v7()));
+    fs::create_dir_all(dir.join("assets")).unwrap();
+    let asset = dir.join("assets/c.png");
+    fs::write(&asset, b"x").unwrap();
+    AssetMetaStore::create(&asset).unwrap();
+
+    let plan = EditPlan {
+        name: None,
+        ops: vec![EditOp::IndexScan],
+    };
+    let mut session = EditSession::new(&dir, EditMode::Check);
+    let report = session.run(&plan);
+    assert!(report.ok, "{:?}", report.diagnostics);
+    assert!(report.diagnostics.iter().any(|d| d.code == "spark.edit.index_scanned"));
+
+    let _ = fs::remove_dir_all(&dir);
+}

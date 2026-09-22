@@ -19,6 +19,17 @@ pub enum EditOp {
         /// 资源路径。
         path: String,
     },
+    /// 移动资源文件与旁车，保持 GUID。
+    #[serde(rename = "asset.rename")]
+    AssetRename {
+        /// 原路径。
+        from: String,
+        /// 新路径。
+        to: String,
+    },
+    /// 扫描项目旁车索引（只读诊断）。
+    #[serde(rename = "index.scan")]
+    IndexScan,
     /// 确保 Prefab 文档存在（内存）；`root` 为根节点 ID。
     #[serde(rename = "prefab.ensure")]
     PrefabEnsure {
@@ -61,6 +72,12 @@ pub enum EditOp {
         field: String,
         /// 字段值。
         value: MetaValue,
+    },
+    /// 校验 Prefab（结构 + 嵌套环）。
+    #[serde(rename = "prefab.validate")]
+    PrefabValidate {
+        /// Prefab 路径。
+        path: String,
     },
     /// 校验并 `save_registered`（写 Prefab + `.meta`）。
     #[serde(rename = "prefab.save")]
