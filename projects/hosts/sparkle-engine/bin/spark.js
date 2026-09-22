@@ -15,12 +15,16 @@ function usage() {
   spark info
   spark run [--cwd <project-dir>]
   spark studio [--cwd <project-dir>] [--safe-mode] [--play]
+  spark shell --path <plan.edit.von> [--mode check|dry-run|apply] [--cwd <dir>] [--json]
+  spark shell --code <von-text> [--check|--dry-run|--apply] [--json]
+  spark script --path <plan.edit.von> ...
 
 Sparkle Engine CLI（@game-gpt/sparkle-engine）
 
 run     读取 package.json，启动游戏（rust/hybrid → cargo run -p <runTarget>；
-        无 runTarget 的 valkyrie → spark-studio --play）。
+        无 runTarget 的 script → spark-studio --play）。
 studio  打开该 npm 游戏项目的编辑器。--play 则跳过壳直接进对局。
+shell   运行 Edit Runtime（VON 编辑计划）。script 为同义入口。
 `);
 }
 
@@ -41,6 +45,25 @@ function findStudioBinary() {
 
     const root = engineRoot();
     const name = process.platform === "win32" ? "spark-studio.exe" : "spark-studio";
+    for (const profile of ["release", "debug"]) {
+        const candidate = path.join(root, "target", profile, name);
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    return null;
+}
+
+function findShellBinary() {
+    const env = (typeof process.env.SPARK_SHELL_BIN === "string" && process.env.SPARK_SHELL_BIN.trim()) || "";
+    if (env) {
+        const abs = path.resolve(env);
+        if (!fs.existsSync(abs)) {
+            throw new Error(`SPARK_SHELL_BIN 指向的文件不存在：${abs}`);
+        }
+        return abs;
+    }
+
+    const root = engineRoot();
+    const name = process.platform === "win32" ? "spark-shell.exe" : "spark-shell";
     for (const profile of ["release", "debug"]) {
         const candidate = path.join(root, "target", profile, name);
         if (fs.existsSync(candidate)) return candidate;
@@ -110,6 +133,25 @@ function runStudio(args) {
     process.exit(result.status ?? 1);
 }
 
+function runShell(args) {
+    const bin = findShellBinary();
+    if (!bin) {
+        console.error("找不到 spark-shell 二进制。请先在仓库根执行：cargo build -p spark-edit");
+        process.exit(1);
+    }
+    const result = spawnSync(bin, args, {
+        stdio: "inherit",
+        windowsHide: true,
+        env: process.env,
+        cwd: process.cwd(),
+    });
+    if (result.error) {
+        console.error(result.error);
+        process.exit(1);
+    }
+    process.exit(result.status ?? 1);
+}
+
 function runGame(args) {
     const { cwd, rest } = parseCwd(args);
     const pkgPath = path.join(cwd, "package.json");
@@ -157,6 +199,11 @@ function main() {
 
     if (cmd === "studio") {
         runStudio(argv.slice(1));
+        return;
+    }
+
+    if (cmd === "shell" || cmd === "script") {
+        runShell(argv.slice(1));
         return;
     }
 
