@@ -25,9 +25,9 @@ pub fn content_height(item_count: usize, row_height: f32) -> f32 {
     item_count as f32 * row_height.max(0.0)
 }
 
-/// 按当前滚动偏移同步 `ListView` 可见行（按 `row-{index}` key reconcile）。
+/// 按当前滚动偏移同步 `ListView` / `ScrollView` 可见行（按 `row-{index}` key reconcile）。
 ///
-/// 结构：`list` → 绝对定位内容板（总高度）→ 仅可见行（`offset_y = index * row_height`）。
+/// 结构：滚动容器 → 绝对定位内容板（总高度）→ 仅可见行（`offset_y = index * row_height`）。
 pub fn sync_visible_rows<F>(
     tree: &mut WidgetTree,
     list_id: WidgetId,
@@ -40,7 +40,7 @@ where
     F: FnMut(usize) -> WidgetBuilder,
 {
     let kind = tree.node(list_id).map(|n| n.kind)?;
-    if kind != WidgetKind::ListView {
+    if kind != WidgetKind::ListView && kind != WidgetKind::ScrollView {
         return None;
     }
     let scroll = tree.node(list_id).map(|n| n.scroll.clone())?;
@@ -74,7 +74,7 @@ where
         .children(rows);
 
     let panel_id = panel.reconcile(tree, list_id)?;
-    // ListView 只应有一块内容板。
+    // 滚动容器只应有一块内容板。
     let orphans = tree
         .node(list_id)
         .map(|n| {

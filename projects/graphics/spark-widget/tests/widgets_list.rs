@@ -5,7 +5,7 @@ use spark_types::Vec2;
 use spark_widget::{
     layout::{LayoutSpec, Size, UiMetrics, run_layout},
     text::EstimateMeasurer,
-    widgets::{label_widget, list_view},
+    widgets::{label_widget, list_view, scroll_view},
 };
 
 #[test]
@@ -67,4 +67,31 @@ fn sync_visible_rows_reuses_row_and_panel_ids() {
     assert_eq!(tree.child_by_key(panel, "row-0"), Some(row0));
     assert_eq!(tree.child_by_key(panel, "row-1"), Some(row1));
     assert_eq!(tree.node(row0).unwrap().content.text.as_deref(), Some("row-0-b"));
+}
+
+#[test]
+fn sync_visible_rows_works_on_scroll_view() {
+    let mut tree = WidgetTree::new();
+    let root = tree.root();
+    let list = scroll_view()
+        .layout(LayoutSpec {
+            width: Size::Px(100.0),
+            height: Size::Px(80.0),
+            ..LayoutSpec::vertical()
+        })
+        .mount(&mut tree, root)
+        .unwrap();
+    run_layout(
+        &mut tree,
+        Vec2::new(200.0, 200.0),
+        UiMetrics::new(1.0),
+        &mut EstimateMeasurer,
+    );
+    let range = sync_visible_rows(&mut tree, list, 30, 20.0, 0, |i| {
+        label_widget().text(format!("row-{i}"))
+    })
+    .unwrap();
+    assert_eq!(range.0, 0);
+    assert!(range.1 > 0);
+    assert!(tree.child_by_key(list, "list-content").is_some());
 }
