@@ -53,7 +53,7 @@ pub use response::EventResponse;
 pub use runtime::{UiFrame, UiLayer, UiRuntime};
 pub use scroll::{ScrollDirection, ScrollState, ensure_visible, find_scroll_ancestor};
 pub use state::{UiDirty, UiState};
-pub use style::{ComputedStyle, Style, Theme};
+pub use style::{ComputedStyle, MenuItemColors, Style, Theme};
 pub use text::{
     Clipboard, EstimateMeasurer, FontMeasurer, MemoryClipboard, TextEditAction, TextLayout, TextMeasurer, TextStyle, apply_text_input,
     measure_plain,

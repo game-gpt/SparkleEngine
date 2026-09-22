@@ -6,11 +6,16 @@ use crate::node::{WidgetKind, WidgetNode, WidgetStateFlags};
 
 use super::theme::Theme;
 
+/// 节点上可选覆盖的局部样式声明（未设则走主题）。
 #[derive(Debug, Clone, Default)]
 pub struct Style {
+    /// 背景色覆盖。
     pub background: Option<Color>,
+    /// 前景 / 文字色覆盖。
     pub foreground: Option<Color>,
+    /// 不透明度覆盖（`0..=1`）。
     pub opacity: Option<f32>,
+    /// 圆角半径覆盖。
     pub corner_radius: Option<f32>,
     /// 覆盖主题字号（Label / Button 文本）。
     pub font_size: Option<f32>,
@@ -18,14 +23,22 @@ pub struct Style {
     pub accent: Option<Color>,
 }
 
+/// 解析后的最终绘制样式（主题 + kind 默认 + 局部 + 伪态）。
 #[derive(Debug, Clone)]
 pub struct ComputedStyle {
+    /// 背景色。
     pub background: Color,
+    /// 前景 / 文字色。
     pub foreground: Color,
+    /// 边框色。
     pub border: Color,
+    /// 强调色。
     pub accent: Color,
+    /// 不透明度。
     pub opacity: f32,
+    /// 圆角半径。
     pub corner_radius: f32,
+    /// 字号。
     pub font_size: f32,
 }
 
@@ -116,13 +129,14 @@ fn apply_pseudo(theme: &Theme, state: &WidgetStateFlags, kind: WidgetKind, style
 
     match kind {
         WidgetKind::Button => {
-            // 透明底文字按钮（如原版标题菜单）：idle 保持字色，hover/focus 变金黄。
+            // 透明底文字按钮：idle 保持声明字色，hover/focus/pressed 走主题菜单色。
             let text_btn = style.background.a < 0.01;
             if text_btn {
                 if state.pressed {
-                    style.foreground = Color::rgb(0.85, 0.72, 0.12);
-                } else if state.hovered || state.focused {
-                    style.foreground = Color::rgb(1.0, 0.92, 0.25);
+                    style.foreground = theme.menu_item.pressed;
+                }
+                else if state.hovered || state.focused {
+                    style.foreground = theme.menu_item.hover;
                 }
             }
             else if state.pressed {

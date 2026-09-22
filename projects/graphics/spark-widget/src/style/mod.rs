@@ -4,4 +4,4 @@ mod computed;
 mod theme;
 
 pub use computed::{ComputedStyle, Style};
-pub use theme::Theme;
+pub use theme::{MenuItemColors, Theme};
