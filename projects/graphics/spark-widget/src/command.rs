@@ -81,9 +81,37 @@ impl UiCommandQueue {
         self.commands.drain(..)
     }
 
+    /// 取出并清空全部 [`UiCommand::Action`]，非 Action 命令保留在队列中。
+    pub fn drain_actions(&mut self) -> Vec<(&'static str, Option<u64>)> {
+        let mut kept = Vec::new();
+        let mut actions = Vec::new();
+        for cmd in self.commands.drain(..) {
+            match cmd {
+                UiCommand::Action { name, payload } => actions.push((name, payload)),
+                other => kept.push(other),
+            }
+        }
+        self.commands = kept;
+        actions
+    }
+
+    /// 若队列中存在名为 `name` 的 Action，取出第一条并返回其载荷。
+    pub fn take_action(&mut self, name: &str) -> Option<Option<u64>> {
+        let idx = self.commands.iter().position(|c| matches!(c, UiCommand::Action { name: n, .. } if *n == name))?;
+        match self.commands.remove(idx) {
+            UiCommand::Action { payload, .. } => Some(payload),
+            _ => None,
+        }
+    }
+
     /// 队列是否为空。
     pub fn is_empty(&self) -> bool {
         self.commands.is_empty()
+    }
+
+    /// 当前待消费条数。
+    pub fn len(&self) -> usize {
+        self.commands.len()
     }
 }
 
@@ -103,5 +131,32 @@ mod tests {
         assert_eq!(with.action_payload(), Some(3));
 
         assert_eq!(UiCommand::Custom(7).as_custom(), Some(7));
+    }
+
+    #[test]
+    fn drain_actions_keeps_non_actions() {
+        let mut q = UiCommandQueue::default();
+        q.push(UiCommand::action("a"));
+        q.push(UiCommand::CloseOverlay);
+        q.push(UiCommand::action_with("b", 2));
+        q.push(UiCommand::Custom(9));
+
+        let actions = q.drain_actions();
+        assert_eq!(actions, vec![("a", None), ("b", Some(2))]);
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.take_action("missing"), None);
+        // CloseOverlay / Custom 仍在
+        let rest: Vec<_> = q.drain().collect();
+        assert_eq!(rest.len(), 2);
+    }
+
+    #[test]
+    fn take_action_removes_first_match() {
+        let mut q = UiCommandQueue::default();
+        q.push(UiCommand::action_with("play", 1));
+        q.push(UiCommand::action_with("play", 2));
+        assert_eq!(q.take_action("play"), Some(Some(1)));
+        assert_eq!(q.take_action("play"), Some(Some(2)));
+        assert!(q.is_empty());
     }
 }
