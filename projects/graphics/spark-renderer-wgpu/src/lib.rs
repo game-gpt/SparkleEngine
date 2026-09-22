@@ -29,7 +29,9 @@ pub use spark_renderer::{
     MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, RgbaImage, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex,
     TexQuadCmd, TextCmd, TextureId, TextureUpload, Vec3, WindowConfig, alloc_texture_id,
 };
-pub use texture_upload::{create_texture_from_upload, expected_mip_levels, map_texture_format};
+pub use texture_upload::{
+    create_texture_from_upload, create_texture_from_upload_with_caps, device_caps_from_adapter, expected_mip_levels, map_texture_format,
+};
 
 use std::{sync::Arc, time::Instant};
 

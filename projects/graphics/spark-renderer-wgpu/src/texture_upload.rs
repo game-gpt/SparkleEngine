@@ -3,9 +3,26 @@
 use std::sync::Arc;
 
 use spark_core::{ErrorArg, SparkError, codes};
-use spark_texture::{MipmapPolicy, TextureDimension, TextureFormat, TextureUpload, TextureUsage};
+use spark_texture::{DeviceCaps, MipmapPolicy, TextureDimension, TextureFormat, TextureUpload, TextureUsage};
 
 use crate::mipmap::{create_rgba_texture_with_mips, mip_level_count};
+
+/// 从 `wgpu::Adapter` 探测 [`DeviceCaps`]（压缩族 / 数组 / 尺寸上限）。
+pub fn device_caps_from_adapter(adapter: &wgpu::Adapter) -> DeviceCaps {
+    let features = adapter.features();
+    let limits = adapter.limits();
+    DeviceCaps {
+        supports_bc: features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
+        supports_etc2: features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2),
+        supports_astc: features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC),
+        // WebGPU 核心含 `rgba16float` 纹理格式；半精度滤波另议。
+        supports_float16: true,
+        supports_texture_arrays: limits.max_texture_array_layers > 1,
+        // GPU mip 生成未接；当前靠 CPU 盒式。
+        supports_mip_generation: false,
+        max_texture_dimension: limits.max_texture_dimension_2d,
+    }
+}
 
 /// 将 Spark 纹理格式映射为 wgpu 格式。
 pub fn map_texture_format(format: TextureFormat) -> Result<wgpu::TextureFormat, SparkError> {
@@ -87,6 +104,25 @@ pub fn create_texture_from_upload(
     upload: &TextureUpload,
 ) -> Result<wgpu::Texture, SparkError> {
     upload.validate()?;
+    create_texture_from_upload_validated(device, queue, upload)
+}
+
+/// 先按 [`DeviceCaps`] 校验再上传（压缩格式选型入口）。
+pub fn create_texture_from_upload_with_caps(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    upload: &TextureUpload,
+    caps: &DeviceCaps,
+) -> Result<wgpu::Texture, SparkError> {
+    upload.validate_for_device(caps)?;
+    create_texture_from_upload_validated(device, queue, upload)
+}
+
+fn create_texture_from_upload_validated(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    upload: &TextureUpload,
+) -> Result<wgpu::Texture, SparkError> {
     let label = upload.debug_name.as_deref().unwrap_or("spark-texture");
     let wgpu_format = map_texture_format(upload.desc.format)?;
 
