@@ -1,5 +1,7 @@
 //! TabView：页签栏 + 页面切换。
 
+use std::collections::HashSet;
+
 use crate::{
     id::WidgetId,
     layout::{LayoutSpec, Size},
@@ -13,7 +15,7 @@ pub fn tab_view() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::TabView).layout(LayoutSpec { width: Size::Fill, height: Size::Fill, ..LayoutSpec::vertical() })
 }
 
-/// 根据 `selected` 重建 TabView 子树。
+/// 根据 `selected` 同步 TabView 子树（按 key reconcile，尽量保留页签 ID）。
 ///
 /// 结构：
 /// ```text
@@ -33,8 +35,6 @@ pub fn sync_tabs(tree: &mut WidgetTree, tab_view_id: WidgetId, selected: usize, 
         node.content.value = selected as f32;
     }
 
-    tree.clear_children(tab_view_id);
-
     let mut bar = row().key("tab-bar").layout(LayoutSpec { width: Size::Fill, height: Size::Px(36.0), gap: 4.0, ..LayoutSpec::horizontal() });
     for (index, (title, _)) in tabs.iter().enumerate() {
         let selected_tab = index == selected;
@@ -47,18 +47,36 @@ pub fn sync_tabs(tree: &mut WidgetTree, tab_view_id: WidgetId, selected: usize, 
                 .style(crate::style::Style { opacity: Some(if selected_tab { 1.0 } else { 0.75 }), ..crate::style::Style::default() }),
         );
     }
-    bar.mount(tree, tab_view_id)?;
 
     let mut pages = column().key("tab-pages").layout(LayoutSpec { width: Size::Fill, height: Size::Fill, ..LayoutSpec::vertical() });
     for (index, (_, page)) in tabs.iter().enumerate() {
         pages = pages.child(page.clone().key(format!("page-{index}")));
     }
-    let pages_id = pages.mount(tree, tab_view_id)?;
+
+    let bar_id = bar.reconcile(tree, tab_view_id)?;
+    let pages_id = pages.reconcile(tree, tab_view_id)?;
+
+    let keep: HashSet<WidgetId> = [bar_id, pages_id].into_iter().collect();
+    let orphans = tree
+        .node(tab_view_id)
+        .map(|n| n.children.iter().copied().filter(|id| !keep.contains(id)).collect::<Vec<_>>())
+        .unwrap_or_default();
+    for id in orphans {
+        tree.unmount(id);
+    }
+    tree.set_child_order(tab_view_id, &[bar_id, pages_id]);
 
     let page_ids = tree.node(pages_id).map(|n| n.children.clone()).unwrap_or_default();
     for (index, page_id) in page_ids.into_iter().enumerate() {
         if let Some(node) = tree.node_mut(page_id) {
             node.state.visible = index == selected;
+            node.state.selected = index == selected;
+        }
+    }
+    let tab_ids = tree.node(bar_id).map(|n| n.children.clone()).unwrap_or_default();
+    for (index, tab_id) in tab_ids.into_iter().enumerate() {
+        if let Some(node) = tree.node_mut(tab_id) {
+            node.state.selected = index == selected;
         }
     }
     Some(tab_view_id)
@@ -94,6 +112,7 @@ pub fn handle_tab_click(tree: &mut WidgetTree, clicked: WidgetId) -> Option<usiz
     for (i, page_id) in page_ids.into_iter().enumerate() {
         if let Some(node) = tree.node_mut(page_id) {
             node.state.visible = i == index;
+            node.state.selected = i == index;
         }
     }
     // 刷新页签按钮透明度。

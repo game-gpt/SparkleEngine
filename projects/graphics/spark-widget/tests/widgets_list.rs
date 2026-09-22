@@ -47,3 +47,24 @@ fn sync_only_mounts_visible_rows() {
     let panel = tree.node(list).unwrap().children[0];
     assert_eq!(tree.node(panel).unwrap().children.len(), range.1 - range.0);
 }
+
+#[test]
+fn sync_visible_rows_reuses_row_and_panel_ids() {
+    let mut tree = WidgetTree::new();
+    let root = tree.root();
+    let list = list_view()
+        .layout(LayoutSpec { width: Size::Px(100.0), height: Size::Px(80.0), ..LayoutSpec::vertical() })
+        .mount(&mut tree, root)
+        .unwrap();
+    run_layout(&mut tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+    sync_visible_rows(&mut tree, list, 20, 20.0, 0, |i| label_widget().text(format!("row-{i}"))).unwrap();
+    let panel = tree.child_by_key(list, "list-content").unwrap();
+    let row0 = tree.child_by_key(panel, "row-0").unwrap();
+    let row1 = tree.child_by_key(panel, "row-1").unwrap();
+
+    sync_visible_rows(&mut tree, list, 20, 20.0, 0, |i| label_widget().text(format!("row-{i}-b"))).unwrap();
+    assert_eq!(tree.child_by_key(list, "list-content"), Some(panel));
+    assert_eq!(tree.child_by_key(panel, "row-0"), Some(row0));
+    assert_eq!(tree.child_by_key(panel, "row-1"), Some(row1));
+    assert_eq!(tree.node(row0).unwrap().content.text.as_deref(), Some("row-0-b"));
+}
