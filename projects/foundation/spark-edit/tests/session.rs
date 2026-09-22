@@ -3,7 +3,9 @@
 use std::fs;
 
 use spark_asset::AssetMetaStore;
-use spark_edit::{EditMode, EditOp, EditPlan, EditSession, TransactionState};
+use spark_edit::{
+    EditCapabilities, EditMode, EditOp, EditPlan, EditSession, TransactionState, host_names, parse_edit_source,
+};
 use spark_prefab::PrefabDocument;
 use uuid::Uuid;
 
@@ -143,4 +145,51 @@ fn index_scan_reports_count() {
     assert!(report.diagnostics.iter().any(|d| d.code == "spark.edit.index_scanned"));
 
     let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn apply_denied_without_write_capability() {
+    let dir = std::env::temp_dir().join(format!("spark-edit-cap-{}", Uuid::now_v7()));
+    fs::create_dir_all(&dir).unwrap();
+    let plan = EditPlan {
+        name: None,
+        ops: vec![EditOp::IndexScan],
+    };
+    let mut session = EditSession::new(&dir, EditMode::Apply).with_capabilities(EditCapabilities::read_only());
+    let report = session.run(&plan);
+    assert!(!report.ok);
+    assert!(report.diagnostics.iter().any(|d| d.code == "spark.edit.capability_denied"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn host_calls_lower_to_ops() {
+    use std::collections::BTreeMap;
+    use spark_asset::MetaValue;
+    use spark_edit::EditHostScript;
+    use spark_edit::HostCall;
+
+    let script = EditHostScript {
+        profile: Some("spark-edit-1".into()),
+        transaction: Some("demo".into()),
+        calls: vec![
+            HostCall {
+                name: host_names::PREFAB_ENSURE.into(),
+                args: BTreeMap::from([
+                    ("path".into(), MetaValue::String("assets/player.von".into())),
+                    ("root".into(), MetaValue::String("player".into())),
+                ]),
+            },
+            HostCall {
+                name: host_names::PREFAB_SAVE.into(),
+                args: BTreeMap::from([("path".into(), MetaValue::String("assets/player.von".into()))]),
+            },
+        ],
+    };
+    let text = oak_von::to_string(&script).expect("ser");
+    let plan = parse_edit_source(&text).expect(&format!("parse host script from {text}"));
+    assert_eq!(plan.name.as_deref(), Some("demo"));
+    assert_eq!(plan.ops.len(), 2);
+    assert!(matches!(plan.ops[0], EditOp::PrefabEnsure { .. }));
+    assert!(matches!(plan.ops[1], EditOp::PrefabSave { .. }));
 }

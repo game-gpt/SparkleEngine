@@ -57,6 +57,11 @@ impl LanguageProfileId {
         Self::new("spark-valkyrie-1")
     }
 
+    /// Sparkle Script Edit profile（编辑自动化；绑定 `spark-edit`）。
+    pub fn spark_edit_1() -> Self {
+        Self::new("spark-edit-1")
+    }
+
     pub fn spark_lua_1() -> Self {
         Self::new("spark-lua-1")
     }

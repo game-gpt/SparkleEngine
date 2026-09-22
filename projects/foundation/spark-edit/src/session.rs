@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use spark_asset::{AssetIndex, AssetMetaStore, MetaValue};
 use spark_prefab::{PrefabDocument, save_registered, validate_prefab_file};
 
+use crate::capabilities::EditCapabilities;
 use crate::diagnostic::{Diagnostic, Severity};
 use crate::op::EditOp;
 use crate::plan::EditPlan;
@@ -47,25 +48,47 @@ impl EditMode {
 pub struct EditSession {
     root: PathBuf,
     mode: EditMode,
+    caps: EditCapabilities,
     prefabs: BTreeMap<String, PrefabDocument>,
     diagnostics: Vec<Diagnostic>,
     changes: Vec<ChangeRecord>,
 }
 
 impl EditSession {
-    /// 在项目根上打开会话。
+    /// 在项目根上打开会话（默认 [`EditCapabilities::project_edit`]）。
     pub fn new(root: impl Into<PathBuf>, mode: EditMode) -> Self {
         Self {
             root: root.into(),
             mode,
+            caps: EditCapabilities::project_edit(),
             prefabs: BTreeMap::new(),
             diagnostics: Vec::new(),
             changes: Vec::new(),
         }
     }
 
+    /// 覆盖能力集。
+    pub fn with_capabilities(mut self, caps: EditCapabilities) -> Self {
+        self.caps = caps;
+        self
+    }
+
     /// 执行计划并返回报告。
     pub fn run(&mut self, plan: &EditPlan) -> EditReport {
+        if self.mode == EditMode::Apply && !self.caps.allows_apply() {
+            self.push_err(
+                "spark.edit.capability_denied",
+                "apply requires write-assets / project-edit capability",
+                None,
+            );
+            return EditReport {
+                ok: false,
+                mode: self.mode.as_str().into(),
+                diagnostics: self.diagnostics.clone(),
+                changes: Vec::new(),
+                transaction: TransactionState::RolledBack,
+            };
+        }
         for op in &plan.ops {
             if self.has_error() {
                 break;

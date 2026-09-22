@@ -5,15 +5,16 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use spark_edit::{EditMode, EditPlan, EditSession};
+use spark_edit::{EditCapabilities, EditMode, EditSession, parse_edit_source};
 
 fn usage() -> ExitCode {
     eprintln!(
         "Usage:
   spark-shell --path <plan.edit.von> [--mode check|dry-run|apply] [--cwd <dir>] [--json]
-  spark-shell --code <von-text> [--mode ...] [--cwd <dir>] [--json]
+              [--capability read-project|project-edit|write-assets]
+  spark-shell --code <von-text> [--check|--dry-run|--apply] [--json] [--capability ...]
 
-Edit plans are VON documents with an `ops` list. Sparkle Script will target the same runtime."
+Edit sources are VON `ops` plans or Edit profile `calls` (spark-edit-1)."
     );
     ExitCode::from(2)
 }
@@ -29,6 +30,7 @@ fn main() -> ExitCode {
     let mut json = false;
     let mut path: Option<PathBuf> = None;
     let mut code: Option<String> = None;
+    let mut cap_tokens: Vec<String> = Vec::new();
 
     let mut i = 0;
     while i < args.len() {
@@ -109,6 +111,18 @@ fn main() -> ExitCode {
                 mode = EditMode::Apply;
                 i += 1;
             }
+            "--capability" => {
+                if i + 1 >= args.len() {
+                    eprintln!("--capability requires a token");
+                    return ExitCode::from(2);
+                }
+                cap_tokens.push(args[i + 1].clone());
+                i += 2;
+            }
+            a if a.starts_with("--capability=") => {
+                cap_tokens.push(a["--capability=".len()..].to_string());
+                i += 1;
+            }
             other => {
                 eprintln!("unknown argument: {other}");
                 return usage();
@@ -136,7 +150,16 @@ fn main() -> ExitCode {
         return usage();
     };
 
-    let plan = match EditPlan::from_von(&text) {
+    let caps = if cap_tokens.is_empty() {
+        match mode {
+            EditMode::Apply => EditCapabilities::project_edit(),
+            _ => EditCapabilities::read_only(),
+        }
+    } else {
+        EditCapabilities::from_tokens(&cap_tokens)
+    };
+
+    let plan = match parse_edit_source(&text) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("spark.edit.plan_parse: {e}");
@@ -144,7 +167,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut session = EditSession::new(cwd, mode);
+    let mut session = EditSession::new(cwd, mode).with_capabilities(caps);
     let report = session.run(&plan);
     if json {
         println!("{}", report.to_json());
