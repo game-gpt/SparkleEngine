@@ -26,7 +26,7 @@ pub use mipmap::{downsample_rgba, mip_level_count};
 pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
     Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost, GameHost3d, Input, Key, MAX_SKIN_JOINTS, Mat4,
-    MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, RgbaImage, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex,
+    MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex,
     TexQuadCmd, TextCmd, TextureId, TextureUpload, Vec3, WindowConfig, alloc_texture_id,
 };
 pub use texture_upload::{

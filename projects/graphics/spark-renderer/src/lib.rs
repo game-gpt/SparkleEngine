@@ -24,7 +24,7 @@ pub use frustum::{CullParams, Frustum};
 pub use particles::{Particle2d, ParticlePool2d};
 pub use spark_geometry::{Aabb3, Mat4, Vec3};
 pub use spark_input::{ButtonState, Input, Key, MouseBtn};
-pub use texture::{RgbaImage, TextureId, alloc_texture_id};
+pub use texture::{TextureId, alloc_texture_id};
 pub use texture_cache::TextureCache;
 pub use spark_texture::{
     AddressMode, AlphaMode, AtlasMetadata, ColorSpace, CpuCopyPolicy, DeviceCaps, FilterMode, MipmapPolicy, Residency, SamplerDesc,
