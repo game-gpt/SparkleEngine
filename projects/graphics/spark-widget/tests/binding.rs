@@ -58,3 +58,41 @@ fn bind_helpers_by_id_and_key() {
 
     assert!(!set_text_by_key(&mut tree, root, "missing", "x"));
 }
+
+#[test]
+fn absolute_and_style_bind_helpers() {
+    use spark_types::Color;
+    use spark_widget::layout::Layout;
+
+    let mut tree = WidgetTree::new();
+    let root = tree.root();
+    let id = label_widget()
+        .key("slot")
+        .text("x")
+        .mount(&mut tree, root)
+        .unwrap();
+
+    assert!(set_absolute_offset(&mut tree, id, 12.0, 34.0));
+    let n = tree.node(id).unwrap();
+    assert_eq!(n.layout.kind, Layout::Absolute);
+    assert_eq!(n.layout.offset_x, 12.0);
+    assert_eq!(n.layout.offset_y, 34.0);
+
+    assert!(set_absolute_bounds(&mut tree, id, 1.0, 2.0, 40.0, 50.0));
+    let n = tree.node(id).unwrap();
+    assert_eq!(n.layout.offset_x, 1.0);
+    assert_eq!(n.layout.offset_y, 2.0);
+    assert_eq!(n.layout.width, spark_widget::layout::Size::Px(40.0));
+    assert_eq!(n.layout.height, spark_widget::layout::Size::Px(50.0));
+
+    let gold = Color::rgb(1.0, 0.8, 0.2);
+    assert!(set_foreground(&mut tree, id, Some(gold)));
+    assert_eq!(tree.node(id).unwrap().style.foreground, Some(gold));
+    assert!(set_background_by_key(
+        &mut tree,
+        root,
+        "slot",
+        Some(Color::rgba(0.0, 0.0, 0.0, 0.5))
+    ));
+    assert!(tree.node(id).unwrap().style.background.is_some());
+}

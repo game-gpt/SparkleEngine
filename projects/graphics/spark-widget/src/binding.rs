@@ -1,9 +1,12 @@
 //! ViewModel 绑定：游戏状态 → Widget 树（不持 `&mut World`）。
 
+use spark_types::Color;
+
 use crate::{
     asset::UiImage,
     command::UiCommandQueue,
     id::WidgetId,
+    layout::{Layout, LayoutSpec, Size},
     tree::WidgetTree,
 };
 
@@ -79,6 +82,70 @@ pub fn set_image(tree: &mut WidgetTree, id: WidgetId, image: Option<UiImage>) ->
     true
 }
 
+/// 写入背景色覆盖。
+pub fn set_background(tree: &mut WidgetTree, id: WidgetId, color: Option<Color>) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.style.background = color;
+    true
+}
+
+/// 写入前景 / 文字色覆盖。
+pub fn set_foreground(tree: &mut WidgetTree, id: WidgetId, color: Option<Color>) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.style.foreground = color;
+    true
+}
+
+/// 绝对定位到 `(x, y)`，不改宽高。
+pub fn set_absolute_offset(tree: &mut WidgetTree, id: WidgetId, x: f32, y: f32) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.layout.kind = Layout::Absolute;
+    node.layout.offset_x = x;
+    node.layout.offset_y = y;
+    true
+}
+
+/// 绝对定位矩形（位置 + 像素宽高）。
+pub fn set_absolute_bounds(
+    tree: &mut WidgetTree,
+    id: WidgetId,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.layout = LayoutSpec::absolute_bounds(x, y, width, height);
+    true
+}
+
+/// 用完整 [`LayoutSpec`] 覆盖节点布局。
+pub fn set_layout(tree: &mut WidgetTree, id: WidgetId, layout: LayoutSpec) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.layout = layout;
+    true
+}
+
+/// 仅写入像素宽高（保留其余布局字段）。
+pub fn set_size_px(tree: &mut WidgetTree, id: WidgetId, width: f32, height: f32) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.layout.width = Size::Px(width);
+    node.layout.height = Size::Px(height);
+    true
+}
+
 /// 自 `root` 子树按 key 查找并写文案。
 pub fn set_text_by_key(
     tree: &mut WidgetTree,
@@ -128,4 +195,52 @@ pub fn set_image_by_key(
 ) -> bool {
     tree.find_by_key(root, key)
         .is_some_and(|id| set_image(tree, id, image))
+}
+
+/// 自 `root` 子树按 key 查找并写背景色。
+pub fn set_background_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    color: Option<Color>,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_background(tree, id, color))
+}
+
+/// 自 `root` 子树按 key 查找并写前景色。
+pub fn set_foreground_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    color: Option<Color>,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_foreground(tree, id, color))
+}
+
+/// 自 `root` 子树按 key 查找并绝对定位。
+pub fn set_absolute_offset_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    x: f32,
+    y: f32,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_absolute_offset(tree, id, x, y))
+}
+
+/// 自 `root` 子树按 key 查找并写绝对矩形。
+pub fn set_absolute_bounds_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_absolute_bounds(tree, id, x, y, width, height))
 }
