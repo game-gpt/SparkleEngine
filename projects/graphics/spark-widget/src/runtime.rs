@@ -299,6 +299,18 @@ impl UiRuntime {
         self.state.dirty.clear_paint();
     }
 
+    /// 把整棵树写入 [`crate::UiRenderBatch`]（不碰世界 DrawList）。
+    pub fn paint_into(&mut self, batch: &mut crate::UiRenderBatch) {
+        paint::paint_tree_into(
+            &self.tree,
+            &self.theme,
+            &self.motion,
+            self.textures.as_mut(),
+            batch,
+        );
+        self.state.dirty.clear_paint();
+    }
+
     /// 标记需要重新 layout（mount / 内容变化后调用）。
     pub fn invalidate_layout(&mut self) {
         self.state.dirty.mark_layout();
@@ -318,6 +330,16 @@ impl UiRuntime {
     /// 排空命令队列，供宿主 / 脚本消费。
     pub fn drain_commands(&mut self) -> impl Iterator<Item = crate::command::UiCommand> + '_ {
         self.commands.drain()
+    }
+
+    /// 取出全部 [`crate::UiCommand::Action`]，非 Action 留在队列。
+    pub fn drain_actions(&mut self) -> Vec<(&'static str, Option<u64>)> {
+        self.commands.drain_actions()
+    }
+
+    /// 取出第一条名为 `name` 的 Action 载荷。
+    pub fn take_action(&mut self, name: &str) -> Option<Option<u64>> {
+        self.commands.take_action(name)
     }
 
     /// 在根下挂载 overlay，并登记到 [`OverlayManager`]。
