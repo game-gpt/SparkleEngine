@@ -1,4 +1,4 @@
-//! Prefab 声明式源文档。
+//! Prefab 声明式源文档（serde 模型；磁盘载体为 VON）。
 
 use std::{
     collections::BTreeMap,
@@ -7,11 +7,11 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use spark_asset::AssetRef;
+use spark_asset::{AssetRef, MetaValue};
 
 use crate::error::PrefabError;
 
-/// Prefab JSON `schema` 字面量。
+/// Prefab 文档 `schema` 字面量。
 pub const PREFAB_SCHEMA: &str = "spark.prefab";
 
 /// 当前源格式版本。
@@ -36,9 +36,9 @@ pub struct PrefabNode {
     /// 显示名（可与 `nodeId` 不同）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// 组件：类型名 → 字段对象（声明式 JSON，非 ECS 运行时布局）。
+    /// 组件：类型名 → 字段表（声明式，非 ECS 运行时布局）。
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub components: BTreeMap<String, serde_json::Value>,
+    pub components: BTreeMap<String, MetaValue>,
     /// 子节点本地 ID 列表（有序）。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<String>,
@@ -95,8 +95,8 @@ impl PrefabDocument {
         Ok(())
     }
 
-    /// 确保组件槽存在（空对象）；已有则不动。
-    pub fn ensure_component(&mut self, node: &str, component: &str) -> Result<&mut serde_json::Value, PrefabError> {
+    /// 确保组件槽存在（空表）；已有则不动。
+    pub fn ensure_component(&mut self, node: &str, component: &str) -> Result<&mut MetaValue, PrefabError> {
         if !self.nodes.contains_key(node) {
             return Err(PrefabError::NodeMissing { node: node.into() });
         }
@@ -106,12 +106,12 @@ impl PrefabDocument {
             .expect("node just checked")
             .components
             .entry(component.into())
-            .or_insert_with(|| serde_json::json!({}));
+            .or_insert_with(|| MetaValue::Table(BTreeMap::new()));
         Ok(entry)
     }
 
     /// 设置组件整块值。
-    pub fn set_component(&mut self, node: &str, component: &str, value: serde_json::Value) -> Result<(), PrefabError> {
+    pub fn set_component(&mut self, node: &str, component: &str, value: MetaValue) -> Result<(), PrefabError> {
         if !self.nodes.contains_key(node) {
             return Err(PrefabError::NodeMissing { node: node.into() });
         }
@@ -123,37 +123,41 @@ impl PrefabDocument {
         Ok(())
     }
 
-    /// 从 JSON 文本解析。
+    /// 从 VON 文本解析。
     pub fn from_str(text: &str) -> Result<Self, PrefabError> {
-        serde_json::from_str(text).map_err(|e| PrefabError::Parse {
+        oak_von::from_str(text).map_err(|e| PrefabError::Parse {
             path: PathBuf::from("<memory>"),
             detail: e.to_string(),
         })
     }
 
-    /// 序列化为格式化 JSON（末尾换行，便于 Git）。
-    pub fn to_string_pretty(&self) -> Result<String, PrefabError> {
-        let text = serde_json::to_string_pretty(self).map_err(|e| PrefabError::Parse {
+    /// 序列化为 VON（末尾换行，便于 Git）。
+    pub fn to_von_string(&self) -> Result<String, PrefabError> {
+        let text = oak_von::to_string(self).map_err(|e| PrefabError::Parse {
             path: PathBuf::from("<memory>"),
             detail: e.to_string(),
         })?;
-        Ok(format!("{text}\n"))
+        if text.ends_with('\n') {
+            Ok(text)
+        } else {
+            Ok(format!("{text}\n"))
+        }
     }
 
-    /// 读盘。
+    /// 读盘（VON）。
     pub fn load(path: impl AsRef<Path>) -> Result<Self, PrefabError> {
         let path = path.as_ref();
         let text = fs::read_to_string(path).map_err(|e| PrefabError::Io {
             path: path.to_path_buf(),
             detail: e.to_string(),
         })?;
-        serde_json::from_str(&text).map_err(|e| PrefabError::Parse {
+        oak_von::from_str(&text).map_err(|e| PrefabError::Parse {
             path: path.to_path_buf(),
             detail: e.to_string(),
         })
     }
 
-    /// 写盘。
+    /// 写盘（VON）。
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), PrefabError> {
         let path = path.as_ref();
         if let Some(parent) = path.parent() {
@@ -164,7 +168,7 @@ impl PrefabDocument {
                 })?;
             }
         }
-        let text = self.to_string_pretty()?;
+        let text = self.to_von_string()?;
         fs::write(path, text).map_err(|e| PrefabError::Io {
             path: path.to_path_buf(),
             detail: e.to_string(),

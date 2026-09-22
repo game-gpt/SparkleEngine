@@ -1,23 +1,47 @@
 //! `with_overrides`：实例补丁应用到文档副本。
 
+use std::collections::BTreeMap;
+
+use spark_asset::MetaValue;
 use spark_prefab::{PrefabDocument, PrefabInstance};
-use serde_json::json;
 
 #[test]
 fn with_overrides_patches_fields() {
     let mut doc = PrefabDocument::new("player");
-    doc.ensure_component("player", "Transform")
-        .unwrap()
-        .as_object_mut()
-        .unwrap()
-        .insert("position".into(), json!([0, 0]));
+    doc.set_component(
+        "player",
+        "Transform",
+        MetaValue::Table(BTreeMap::from([(
+            "position".into(),
+            MetaValue::Array(vec![MetaValue::Int(0), MetaValue::Int(0)]),
+        )])),
+    )
+    .unwrap();
     doc.validate().unwrap();
 
     let mut inst = PrefabInstance::new("assets/player.prefab", "spawn");
-    inst.set_override("player/Transform.position", json!([100, 64]));
+    inst.set_override(
+        "player/Transform.position",
+        MetaValue::Array(vec![MetaValue::Int(100), MetaValue::Int(64)]),
+    );
 
     let patched = doc.with_overrides(&inst).unwrap();
-    assert_eq!(patched.nodes["player"].components["Transform"]["position"], json!([100, 64]));
-    // 源文档不变
-    assert_eq!(doc.nodes["player"].components["Transform"]["position"], json!([0, 0]));
+    match &patched.nodes["player"].components["Transform"] {
+        MetaValue::Table(t) => {
+            assert_eq!(
+                t["position"],
+                MetaValue::Array(vec![MetaValue::Int(100), MetaValue::Int(64)])
+            );
+        }
+        other => panic!("{other:?}"),
+    }
+    match &doc.nodes["player"].components["Transform"] {
+        MetaValue::Table(t) => {
+            assert_eq!(
+                t["position"],
+                MetaValue::Array(vec![MetaValue::Int(0), MetaValue::Int(0)])
+            );
+        }
+        other => panic!("{other:?}"),
+    }
 }

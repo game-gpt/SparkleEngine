@@ -14,7 +14,7 @@ publish = false
 spark-types = { workspace = true }
 spark-asset = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+oak-von = { workspace = true }
 
 [dev-dependencies]
 uuid = { workspace = true }

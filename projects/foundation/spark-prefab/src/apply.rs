@@ -1,6 +1,8 @@
 //! 将实例覆盖应用到 Prefab 文档副本（预览 / 展开用，不回写源 Prefab）。
 
-use serde_json::Value;
+use std::collections::BTreeMap;
+
+use spark_asset::MetaValue;
 
 use crate::document::PrefabDocument;
 use crate::error::PrefabError;
@@ -21,7 +23,7 @@ impl PrefabDocument {
     }
 }
 
-fn apply_one(doc: &mut PrefabDocument, key: &str, value: Value) -> Result<(), PrefabError> {
+fn apply_one(doc: &mut PrefabDocument, key: &str, value: MetaValue) -> Result<(), PrefabError> {
     let parsed = parse_override_path(key)?;
     let node_id = parsed
         .node_path
@@ -42,14 +44,13 @@ fn apply_one(doc: &mut PrefabDocument, key: &str, value: Value) -> Result<(), Pr
             target: key.into(),
         })?;
     match component {
-        Value::Object(map) => {
+        MetaValue::Table(map) => {
             map.insert(parsed.field, value);
         }
         other => {
-            // 组件不是对象时，升级为单字段对象。
-            let mut map = serde_json::Map::new();
+            let mut map = BTreeMap::new();
             map.insert(parsed.field, value);
-            *other = Value::Object(map);
+            *other = MetaValue::Table(map);
         }
     }
     Ok(())

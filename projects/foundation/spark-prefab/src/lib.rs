@@ -1,6 +1,7 @@
 //! Spark **Prefab**：声明式实体图、实例覆盖与嵌套。
 //!
 //! - 节点使用本地字符串 ID（非 UUID）
+//! - 源文件与旁车均为 **VON**（`oak-von` serde）
 //! - 源文件用路径引用资源（[`spark_asset::AssetRef`]）
 //! - 实例只存 override 补丁，不复制整树
 

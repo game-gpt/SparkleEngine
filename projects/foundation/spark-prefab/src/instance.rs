@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use spark_asset::AssetRef;
+use spark_asset::{AssetRef, MetaValue};
 
 use crate::document::PrefabDocument;
 use crate::error::PrefabError;
@@ -21,7 +21,7 @@ pub struct PrefabInstance {
     pub instance_id: String,
     /// 覆盖：键为 [`crate::r#override::OverridePath`] 源格式。
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub overrides: BTreeMap<String, serde_json::Value>,
+    pub overrides: BTreeMap<String, MetaValue>,
 }
 
 impl PrefabInstance {
@@ -36,7 +36,7 @@ impl PrefabInstance {
     }
 
     /// 设置或替换一条覆盖（幂等）。
-    pub fn set_override(&mut self, path: impl Into<String>, value: serde_json::Value) {
+    pub fn set_override(&mut self, path: impl Into<String>, value: MetaValue) {
         self.overrides.insert(path.into(), value);
     }
 

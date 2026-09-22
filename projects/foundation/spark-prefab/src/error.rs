@@ -14,7 +14,7 @@ pub enum PrefabError {
         /// 细节。
         detail: String,
     },
-    /// JSON 解析失败。
+    /// VON 解析失败。
     Parse {
         /// 相关路径或 `<memory>`。
         path: PathBuf,

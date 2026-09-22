@@ -1,27 +1,36 @@
 //! Prefab 文档读写与幂等 ensure。
 
+use std::collections::BTreeMap;
+
+use spark_asset::MetaValue;
 use spark_prefab::{PREFAB_SCHEMA, PrefabDocument, PrefabError};
-use serde_json::json;
 
 #[test]
-fn new_roundtrip_pretty_json() {
+fn new_roundtrip_von() {
     let mut doc = PrefabDocument::new("player");
     doc.ensure_child("player", "sprite").unwrap();
     doc.ensure_component("player", "Transform").unwrap();
     doc.set_component(
         "sprite",
         "Sprite",
-        json!({ "texture": "assets/player.png" }),
+        MetaValue::Table(BTreeMap::from([(
+            "texture".into(),
+            MetaValue::String("assets/player.png".into()),
+        )])),
     )
     .unwrap();
     doc.validate().unwrap();
 
-    let text = doc.to_string_pretty().unwrap();
+    let text = doc.to_von_string().unwrap();
     assert!(text.contains(PREFAB_SCHEMA));
+    assert!(!text.contains("\"schema\":"), "prefab source must be VON: {text}");
     let back = PrefabDocument::from_str(&text).unwrap();
     assert_eq!(back.root, "player");
     assert!(back.nodes["player"].children.contains(&"sprite".into()));
-    assert_eq!(back.nodes["sprite"].components["Sprite"]["texture"], "assets/player.png");
+    match &back.nodes["sprite"].components["Sprite"] {
+        MetaValue::Table(t) => assert_eq!(t["texture"], MetaValue::String("assets/player.png".into())),
+        other => panic!("expected table, got {other:?}"),
+    }
 }
 
 #[test]
