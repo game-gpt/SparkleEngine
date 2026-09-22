@@ -308,8 +308,8 @@ fn inspector_panel(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder 
         body.push(dim_label(""));
         let hint = match project.kind {
             ProjectKind::Rust => "组件字段来自 Rust 类型注册",
-            ProjectKind::Script => "组件字段来自 Sparkle Script（*.script）",
-            ProjectKind::Hybrid => "Rust 与 Sparkle Script 组件可挂载",
+            ProjectKind::Valkyrie => "组件字段来自 Valkyrie（*.script）",
+            ProjectKind::Hybrid => "Rust 与 Valkyrie 组件可挂载",
         };
         body.push(dim_label(hint));
         body.push(dim_label(""));
@@ -362,7 +362,7 @@ fn center_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder 
         CenterTab::Scene => {
             view_children.push(dim_label(match project.kind {
                 ProjectKind::Rust => "2D Scene — entities from native registration",
-                ProjectKind::Script => "2D Scene — entities from Sparkle Script",
+                ProjectKind::Valkyrie => "2D Scene — entities from Sparkle Script",
                 ProjectKind::Hybrid => "2D Scene — Rust register then Sparkle Script",
             }));
             view_children.push(dim_label("Gizmo / grid (viewport placeholder)"));
@@ -371,13 +371,8 @@ fn center_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder 
             if state.play == PlayMode::Edit {
                 view_children.push(dim_label("Press ▶ in the toolbar to enter Play Mode"));
             } else {
-                let hint = match project.kind {
-                    ProjectKind::Rust => format!("Running {} (embedded host)", project.name),
-                    ProjectKind::Script => "Running play host (Sparkle Script)".into(),
-                    ProjectKind::Hybrid => format!("Running {}", project.run_target.as_deref().unwrap_or("native")),
-                };
-                view_children.push(dim_label(hint));
-                view_children.push(dim_label("Esc stops Play Mode"));
+                view_children.push(dim_label("Game view is live (drawn over this panel)"));
+                view_children.push(dim_label("■ Stop or Esc returns to Edit · Scene tab keeps the editor chrome"));
             }
         }
         CenterTab::Script => match project.kind {
@@ -385,7 +380,7 @@ fn center_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder 
                 view_children.push(dim_label(project.cargo_manifest.as_deref().unwrap_or("Cargo.toml / src/")));
                 view_children.push(dim_label("Open sources in external IDE (embed later)"));
             }
-            ProjectKind::Script => {
+            ProjectKind::Valkyrie => {
                 view_children.push(dim_label(project.script_entry.as_deref().unwrap_or("assets/scripts/")));
                 view_children.push(dim_label("Double-click *.script in Project"));
             }

@@ -1,4 +1,4 @@
-//! Studio 宿主：`GameHost` + `UiRuntime`；Play 时嵌入示例对局。
+//! Studio 宿主：`GameHost` + `UiRuntime`；Play 时保留编辑器壳，Game 页签显示对局。
 
 use spark_types::Vec2;
 use spark_input::Key;
@@ -37,14 +37,15 @@ impl StudioApp {
         Self { ui: UiRuntime::new(), project, assets, state, play: None, exit: false, mounted: false, dirty_ui: true }
     }
 
-    /// `--play`：跳过编辑器，直接进入对局。
+    /// `--play`：跳过编辑器壳，直接进入对局全屏（仍可用 Esc 退出进程级 play）。
     pub fn with_immediate_play(mut self) -> Self {
         match PlaySession::start(&self.project) {
             Ok(session) => {
+                let label = session.label();
                 self.play = Some(session);
                 self.state.play = PlayMode::Play;
                 self.state.center = CenterTab::Game;
-                self.state.status = format!("Play：{}", self.project.name);
+                self.state.status = format!("Play：{label}");
             }
             Err(e) => {
                 self.state.status = format!("无法 Play：{e}");
@@ -63,10 +64,11 @@ impl StudioApp {
     fn start_play(&mut self) {
         match PlaySession::start(&self.project) {
             Ok(session) => {
+                let label = session.label();
                 self.play = Some(session);
                 self.state.play = PlayMode::Play;
                 self.state.center = CenterTab::Game;
-                self.state.status = format!("Play：正在运行 {}", self.project.name);
+                self.state.status = format!("Play：正在运行 {label}");
                 self.dirty_ui = true;
             }
             Err(e) => {
@@ -90,21 +92,34 @@ impl StudioApp {
         for cmd in cmds {
             match cmd {
                 UiCommand::Custom(CMD_PLAY) => {
-                    self.start_play();
+                    if self.play.is_none() {
+                        self.start_play();
+                    } else if self.state.play == PlayMode::Paused {
+                        self.state.play = PlayMode::Play;
+                        self.state.status = "Resumed".into();
+                        self.dirty_ui = true;
+                    } else {
+                        self.state.center = CenterTab::Game;
+                        self.dirty_ui = true;
+                    }
                 }
                 UiCommand::Custom(CMD_PAUSE) => {
-                    if self.state.play == PlayMode::Play {
+                    if self.play.is_some() && self.state.play == PlayMode::Play {
                         self.state.play = PlayMode::Paused;
                         self.state.status = "Paused".into();
                         self.dirty_ui = true;
                     }
                 }
                 UiCommand::Custom(CMD_STEP) => {
-                    self.state.status = "Step：单帧（占位）".into();
-                    self.dirty_ui = true;
+                    if self.play.is_some() {
+                        self.state.status = "Step：单帧（占位）".into();
+                        self.dirty_ui = true;
+                    }
                 }
                 UiCommand::Custom(CMD_STOP) => {
-                    self.stop_play();
+                    if self.play.is_some() {
+                        self.stop_play();
+                    }
                 }
                 UiCommand::Custom(CMD_TOOL_HAND) => {
                     self.state.tool = Tool::Hand;
@@ -155,8 +170,7 @@ impl StudioApp {
                     if let Some(eid) = parse_select_cmd(id) {
                         self.state.selected = eid;
                         self.dirty_ui = true;
-                    }
-                    else {
+                    } else {
                         self.state.status = format!("命令 {id}");
                         self.dirty_ui = true;
                     }
@@ -167,26 +181,8 @@ impl StudioApp {
             }
         }
     }
-}
 
-impl GameHost for StudioApp {
-    fn update(&mut self, frame: &FrameCtx<'_>) {
-        if self.play.is_some() {
-            if self.state.play == PlayMode::Paused {
-                return;
-            }
-            let stop = self.play.as_mut().map(|p| p.update(frame)).unwrap_or(false);
-            if stop || frame.input.key_pressed(Key::Escape) {
-                self.stop_play();
-            }
-            return;
-        }
-
-        if frame.input.key_pressed(Key::Escape) {
-            self.exit = true;
-            return;
-        }
-
+    fn tick_ui(&mut self, frame: &FrameCtx<'_>) {
         if !self.mounted || self.dirty_ui {
             self.remount();
         }
@@ -212,10 +208,59 @@ impl GameHost for StudioApp {
         self.ui.end_frame();
     }
 
-    fn draw(&mut self, draw: &mut DrawList) {
-        if let Some(play) = self.play.as_mut() {
-            play.draw(draw);
+    /// Game 页签且正在 Play / Pause：整窗绘制对局（Unity Game 视图占位）。
+    fn show_game_view(&self) -> bool {
+        self.play.is_some() && self.state.center == CenterTab::Game
+    }
+}
+
+impl GameHost for StudioApp {
+    fn update(&mut self, frame: &FrameCtx<'_>) {
+        // `--play`：从未挂载编辑器壳 → 全屏对局。
+        let immersive = self.play.is_some() && !self.mounted;
+
+        if immersive {
+            if self.state.play == PlayMode::Paused {
+                return;
+            }
+            let stop = self.play.as_mut().map(|p| p.update(frame)).unwrap_or(false);
+            if stop || frame.input.key_pressed(Key::Escape) {
+                self.exit = true;
+            }
             return;
+        }
+
+        if frame.input.key_pressed(Key::Escape) {
+            if self.play.is_some() {
+                self.stop_play();
+                self.tick_ui(frame);
+                return;
+            }
+            self.exit = true;
+            return;
+        }
+
+        // 先跑 UI（Stop / 切页签），再推进对局。
+        self.tick_ui(frame);
+
+        if self.state.play == PlayMode::Paused {
+            return;
+        }
+        if let Some(play) = self.play.as_mut() {
+            let stop = play.update(frame);
+            if stop {
+                self.stop_play();
+            }
+        }
+    }
+
+    fn draw(&mut self, draw: &mut DrawList) {
+        let immersive = self.play.is_some() && !self.mounted;
+        if immersive || self.show_game_view() {
+            if let Some(play) = self.play.as_mut() {
+                play.draw(draw);
+                return;
+            }
         }
         self.ui.paint(draw);
     }

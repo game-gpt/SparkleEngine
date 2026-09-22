@@ -15,15 +15,17 @@ pub enum PlaySession {
 
 impl PlaySession {
     pub fn start(project: &ProjectInfo) -> Result<Self, String> {
-        let target = project.run_target.as_deref().unwrap_or(project.name.as_str());
-        match target {
-            "ping-pong" => Ok(Self::PingPong(PingPongGame::new())),
-            "tetris" => Ok(Self::Tetris(TetrisApp::new())),
-            "snake" => Ok(Self::Snake(SnakeApp::new())),
-            other => match project.kind {
-                ProjectKind::Valkyrie if other == project.name => Ok(Self::Snake(SnakeApp::new())),
-                _ => Err(format!("尚不支持 Play 目标 `{other}`（已知：ping-pong / tetris / snake）")),
-            },
+        if let Some(session) = resolve_by_target(project) {
+            return Ok(session);
+        }
+        // 未声明 runTarget 时按项目名 / kind 兜底，避免 Play 按钮「点了没反应」。
+        if let Some(session) = resolve_by_name(&project.name) {
+            return Ok(session);
+        }
+        match project.kind {
+            ProjectKind::Valkyrie => Ok(Self::Snake(SnakeApp::new())),
+            ProjectKind::Hybrid => Ok(Self::Tetris(TetrisApp::new())),
+            ProjectKind::Rust => Ok(Self::PingPong(PingPongGame::new())),
         }
     }
 
@@ -52,4 +54,35 @@ impl PlaySession {
             Self::Snake(g) => g.draw(draw),
         }
     }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::PingPong(_) => "ping-pong",
+            Self::Tetris(_) => "tetris",
+            Self::Snake(_) => "snake",
+        }
+    }
+}
+
+fn resolve_by_target(project: &ProjectInfo) -> Option<PlaySession> {
+    let raw = project.run_target.as_deref()?;
+    resolve_token(raw)
+}
+
+fn resolve_by_name(name: &str) -> Option<PlaySession> {
+    resolve_token(name)
+}
+
+fn resolve_token(raw: &str) -> Option<PlaySession> {
+    let key = raw.trim().to_ascii_lowercase().replace('_', "-");
+    if key.contains("ping") || key == "ping-pong" || key == "pingpong" {
+        return Some(PlaySession::PingPong(PingPongGame::new()));
+    }
+    if key.contains("tetris") {
+        return Some(PlaySession::Tetris(TetrisApp::new()));
+    }
+    if key.contains("snake") {
+        return Some(PlaySession::Snake(SnakeApp::new()));
+    }
+    None
 }

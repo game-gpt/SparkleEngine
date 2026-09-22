@@ -6,14 +6,17 @@
 
 #![warn(missing_docs)]
 
+mod apply;
 mod document;
 mod error;
 mod instance;
 mod r#override;
+mod register;
 mod validate;
 
 pub use document::{PREFAB_SCHEMA, PREFAB_VERSION, PrefabDocument, PrefabNode};
 pub use error::PrefabError;
 pub use instance::PrefabInstance;
 pub use r#override::{OverridePath, parse_override_path};
+pub use register::{PrefabRegisterError, save_registered};
 pub use validate::{nested_ref, validate_prefab_file};
