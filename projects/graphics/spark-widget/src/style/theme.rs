@@ -26,18 +26,33 @@ impl Default for Theme {
     }
 }
 
-/// 透明底菜单文字按钮的 hover / pressed / idle 字色。
+/// 透明底菜单文字按钮的 hover / pressed / idle 字色与描边。
 #[derive(Debug, Clone)]
 pub struct MenuItemColors {
     /// 悬停或焦点时的字色（原版偏金黄）。
     pub hover: Color,
     /// 按下时的字色。
     pub pressed: Color,
+    /// 描边色（含 alpha）；透明菜单字在远景上保证可读。
+    pub outline: Color,
+    /// 描边像素偏移；空则不画描边。
+    pub outline_offsets: Vec<(f32, f32)>,
 }
 
 impl Default for MenuItemColors {
     fn default() -> Self {
-        Self { hover: Color::rgb(1.0, 0.92, 0.25), pressed: Color::rgb(0.85, 0.72, 0.12) }
+        Self {
+            hover: Color::rgb(1.0, 0.92, 0.25),
+            pressed: Color::rgb(0.85, 0.72, 0.12),
+            outline: Color::rgba(0.0, 0.0, 0.0, 0.85),
+            outline_offsets: vec![
+                (-1.0, 0.0),
+                (1.0, 0.0),
+                (0.0, -1.0),
+                (0.0, 1.0),
+                (1.0, 1.0),
+            ],
+        }
     }
 }
 

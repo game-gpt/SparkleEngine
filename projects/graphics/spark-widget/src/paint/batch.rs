@@ -85,6 +85,23 @@ impl UiRenderBatch {
         });
     }
 
+    /// 先按 `offsets` 画描边，再画正文（同一文案）。
+    pub fn text_outlined(
+        &mut self,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: Color,
+        outline: Color,
+        offsets: &[(f32, f32)],
+        text: &str,
+    ) {
+        for &(ox, oy) in offsets {
+            self.text(x + ox, y + oy, size, outline, text);
+        }
+        self.text(x, y, size, color, text);
+    }
+
     /// 纹理四边形（轴对齐）。
     pub fn tex_rect(&mut self, texture: TextureId, dest: Rect, uv: Rect, color: Color) {
         let Some(dest) = self.clip_against_stack(dest) else {

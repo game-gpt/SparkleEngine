@@ -128,3 +128,20 @@ fn paint_tree_into_batch_then_flush() {
     assert_eq!(batch.command_count(), 0);
     assert!(!draw.texts.is_empty());
 }
+
+#[test]
+fn text_outlined_emits_outline_then_fill() {
+    let mut batch = UiRenderBatch::new();
+    batch.text_outlined(
+        10.0,
+        20.0,
+        16.0,
+        Color::rgb(1.0, 1.0, 1.0),
+        Color::rgba(0.0, 0.0, 0.0, 0.8),
+        &[(-1.0, 0.0), (1.0, 0.0)],
+        "A",
+    );
+    assert_eq!(batch.texts.len(), 3);
+    assert!((batch.texts[0].pos.x - 9.0).abs() < f32::EPSILON);
+    assert!((batch.texts[2].pos.x - 10.0).abs() < f32::EPSILON);
+}

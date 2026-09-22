@@ -191,7 +191,7 @@ fn paint_button(
     batch: &mut UiRenderBatch,
     node: &WidgetNode,
     style: &ComputedStyle,
-    _theme: &Theme,
+    theme: &Theme,
     rect: Rect,
 ) {
     fill_if_opaque(batch, rect, style);
@@ -211,14 +211,14 @@ fn paint_button(
         );
         let x = rect.x + ((rect.w - measured.size.x) * 0.5).max(0.0);
         let y = rect.y + ((rect.h - measured.size.y) * 0.5).max(0.0);
-        // 透明底菜单字：描边阴影，贴近原版可读性。
-        if style.background.a < 0.01 {
-            let shadow = Color::rgba(0.0, 0.0, 0.0, 0.85 * style.opacity);
-            for (ox, oy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (1.0, 1.0)] {
-                batch.text(x + ox, y + oy, size, shadow, text);
-            }
+        let fg = with_alpha(style.foreground, style.opacity);
+        // 透明底菜单字：主题描边，贴近原版可读性。
+        if style.background.a < 0.01 && !theme.menu_item.outline_offsets.is_empty() {
+            let outline = with_alpha(theme.menu_item.outline, style.opacity);
+            batch.text_outlined(x, y, size, fg, outline, &theme.menu_item.outline_offsets, text);
+        } else {
+            batch.text(x, y, size, fg, text);
         }
-        batch.text(x, y, size, with_alpha(style.foreground, style.opacity), text);
     }
 }
 
