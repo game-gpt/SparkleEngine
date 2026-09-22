@@ -4,7 +4,7 @@
 
 use spark_ecs::{Schedule, World};
 use spark_input::Input;
-use spark_renderer::{Camera2d, DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d};
+use spark_renderer::{Camera2d, DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d, UiRenderBatch};
 
 use crate::{
     render2d::{RenderFrame2d, RenderSchedule2d},
@@ -60,6 +60,15 @@ impl Default for OsCursorVisible {
 pub struct DrawBuffer2d {
     /// 整帧 `DrawList`；宿主 `take` 后置 `None`。
     pub list: Option<DrawList>,
+}
+
+/// 由游戏 / UI 系统填充的 HUD 批次（系统写入，宿主在 `draw_ui` 相位取走）。
+///
+/// 与 [`DrawBuffer2d`] 并列：世界命令仍走 `DrawList`，Widget paint 可只写本缓冲。
+#[derive(Debug, Default)]
+pub struct UiBuffer2d {
+    /// 本帧 UI 批次；宿主 `take` 后置 `None`。
+    pub batch: Option<UiRenderBatch>,
 }
 
 /// 由游戏填充的 3D 绘制缓冲资源（系统写入，宿主在 draw 相位取走）。
@@ -171,6 +180,14 @@ impl GameHost for EcsHost2d {
         }
         if let Some(fallback) = self.draw_fallback.as_mut() {
             fallback(&mut self.world, draw);
+        }
+    }
+
+    fn draw_ui(&mut self, ui: &mut UiRenderBatch) {
+        if let Some(buf) = self.world.resources.get_mut::<UiBuffer2d>() {
+            if let Some(batch) = buf.batch.take() {
+                *ui = batch;
+            }
         }
     }
 

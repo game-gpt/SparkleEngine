@@ -42,7 +42,9 @@ pub use command_apply::{
 };
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
-pub use ecs_host::{AppExit, DrawBuffer2d, DrawBuffer3d, DrawScratch2d, EcsHost2d, EcsHost3d, FrameSnapshot, OsCursorVisible};
+pub use ecs_host::{
+    AppExit, DrawBuffer2d, DrawBuffer3d, DrawScratch2d, EcsHost2d, EcsHost3d, FrameSnapshot, OsCursorVisible, UiBuffer2d,
+};
 pub use event_inbox::{ScriptEvent, ScriptEventInbox};
 pub use frame::{FrameLoop, FrameLoopConfig, LoopedHost2d, LoopedHost3d, StepMode};
 pub use hooks::{HookBus, HookRef};
