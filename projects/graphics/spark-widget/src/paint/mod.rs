@@ -110,7 +110,7 @@ fn paint_widget(
     match node.kind {
         WidgetKind::Root | WidgetKind::Spacer => {}
         WidgetKind::Label => paint_label(batch, node, style, theme),
-        WidgetKind::Button => paint_button(batch, node, style, theme, rect),
+        WidgetKind::Button => paint_button(batch, textures, node, style, theme, rect),
         WidgetKind::Checkbox | WidgetKind::Toggle => paint_checkbox(batch, node, style, theme),
         WidgetKind::Radio => paint_radio(batch, node, style, theme),
         WidgetKind::Slider => paint_slider(batch, node, style, theme),
@@ -191,6 +191,7 @@ fn paint_label(batch: &mut UiRenderBatch, node: &WidgetNode, style: &ComputedSty
 
 fn paint_button(
     batch: &mut UiRenderBatch,
+    textures: &mut dyn UiTextureResolver,
     node: &WidgetNode,
     style: &ComputedStyle,
     theme: &Theme,
@@ -199,6 +200,33 @@ fn paint_button(
     fill_if_opaque(batch, rect, style);
     if node.state.focused {
         stroke_rect(batch, rect, with_alpha(style.border, style.opacity), 2.0);
+    }
+    // 图标按钮：有 `UiImage` 时居中贴图（选单 Play/Delete 等）。
+    if let Some(image) = node.content.image.as_ref() {
+        if let Some(resolved) = textures.resolve(image.asset) {
+            if resolved.is_drawable() {
+                if let Some(texture) = resolved.texture {
+                    let pref = image.preferred_size.unwrap_or(resolved.size);
+                    let iw = pref.x.min(rect.w).max(1.0);
+                    let ih = pref.y.min(rect.h).max(1.0);
+                    let ix = rect.x + ((rect.w - iw) * 0.5).max(0.0);
+                    let iy = rect.y + ((rect.h - ih) * 0.5).max(0.0);
+                    let tint = with_alpha(image.tint, style.opacity);
+                    // 悬停略提亮。
+                    let tint = if node.state.hovered {
+                        Color::rgba(
+                            (tint.r * 1.15).min(1.0),
+                            (tint.g * 1.15).min(1.0),
+                            (tint.b * 1.15).min(1.0),
+                            tint.a,
+                        )
+                    } else {
+                        tint
+                    };
+                    batch.tex_rect(texture, Rect::new(ix, iy, iw, ih), image.uv, tint);
+                }
+            }
+        }
     }
     if let Some(text) = node.content.text.as_deref() {
         let size = style.font_size;
