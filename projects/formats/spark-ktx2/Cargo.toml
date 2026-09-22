@@ -11,6 +11,6 @@ categories = ["game-development", "parsing"]
 publish = false
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 spark-texture = { workspace = true }
 ktx2 = { workspace = true }

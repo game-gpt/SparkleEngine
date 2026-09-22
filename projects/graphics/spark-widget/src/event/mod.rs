@@ -24,19 +24,19 @@ pub enum UiEvent {
 
 #[derive(Debug, Clone)]
 pub struct PointerEvent {
-    pub position: spark_core::Vec2,
+    pub position: spark_types::Vec2,
     pub target: Option<WidgetId>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ClickEvent {
-    pub position: spark_core::Vec2,
+    pub position: spark_types::Vec2,
     pub target: Option<WidgetId>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ScrollEvent {
-    pub delta: spark_core::Vec2,
+    pub delta: spark_types::Vec2,
     pub target: Option<WidgetId>,
 }
 

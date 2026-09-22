@@ -1,7 +1,7 @@
 //! UI 纹理解析：Widget 持 `AssetId`，宿主提供 GPU `TextureId` 与驻留状态。
 
 use spark_asset::AssetId;
-use spark_core::{Color, Rect, Vec2};
+use spark_types::{Color, Rect, Vec2};
 use spark_renderer::{SamplerDesc, TextureId, TextureState};
 
 /// 控件上的图片源（不持 GPU 资源）。

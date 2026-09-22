@@ -1,6 +1,6 @@
 //! 精灵与网格图集裁切（只依赖纹理宽高，不持有 CPU 像素）。
 
-use spark_core::{ErrorArg, Rect, SparkError, Vec2, codes};
+use spark_types::{ErrorArg, Rect, SparkError, Vec2, codes};
 
 use crate::region::validate_region;
 

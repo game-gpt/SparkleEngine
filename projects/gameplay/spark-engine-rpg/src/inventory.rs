@@ -1,6 +1,6 @@
 //! 堆叠背包（物品 ID 为不透明字符串）。
 
-use spark_core::{ErrorArg, ErrorCode, SparkError};
+use spark_types::{ErrorArg, ErrorCode, SparkError};
 
 fn inventory_full() -> ErrorCode {
     ErrorCode::new("spark.rpg", "inventory.full")

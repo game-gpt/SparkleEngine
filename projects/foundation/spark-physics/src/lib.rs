@@ -16,7 +16,7 @@ pub use world::{Contact, PhysicsConfig, PhysicsWorld};
 
 use std::{fmt, sync::Arc};
 
-use spark_core::{ErrorArg, ErrorArgs, SparkError};
+use spark_types::{ErrorArg, ErrorArgs, SparkError};
 
 /// 物理层结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]

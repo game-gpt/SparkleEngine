@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use spark_core::{Diagnostic, ErrorArg, ErrorArgs, MessageKey, SparkError};
+use spark_types::{Diagnostic, ErrorArg, ErrorArgs, MessageKey, SparkError};
 
 use crate::{
     message::{MessageArgs, MessageId, MessageRef, MessageValue, NamespaceId},

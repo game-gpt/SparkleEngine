@@ -1,8 +1,7 @@
 //! 可被 JS / 测试共用的宿主门面。
 
 use spark_asset::{AssetCache, AssetKey, BytesLoader};
-use spark_core::Vec2;
-use spark_geometry::Vec2Ext;
+use spark_types::Vec2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineInfo {

@@ -3,7 +3,7 @@
 Retained Widget 树：布局、事件、主题，经 `paint_tree` 写入 `DrawList`。
 
 ```rust
-use spark_core::{Color, Vec2};
+use spark_types::{Color, Vec2};
 use spark_renderer::DrawList;
 use spark_widget::{
     Theme, WidgetTree, paint_tree, run_layout,

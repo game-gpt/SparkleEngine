@@ -1,9 +1,8 @@
 //! 相交与最近点。
 
-use spark_core::{Rect, Vec2};
+use spark_types::{Rect, Vec2};
 
 use crate::{
-    Vec2Ext,
     circle::Circle,
     line::{LineSegment, Ray},
 };

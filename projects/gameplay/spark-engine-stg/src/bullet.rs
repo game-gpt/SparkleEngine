@@ -1,6 +1,6 @@
 //! 弹幕对象池。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BulletId(pub u32);

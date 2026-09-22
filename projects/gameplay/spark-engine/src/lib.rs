@@ -64,7 +64,7 @@ use std::{
     rc::Rc,
 };
 
-use spark_core::SparkError;
+use spark_types::SparkError;
 use spark_gc::Value;
 use spark_script::{
     ArtifactCache, CompilationRequest, DeterminismClass, ExecutableImage, HostFunction, HostFunctionId, HostPhase, HostSchema, PackageId,
@@ -272,7 +272,7 @@ impl From<EngineError> for SparkError {
         match e {
             EngineError::Spark(s) => s,
             other => {
-                let code = spark_core::ErrorCode::parse(&other.code());
+                let code = spark_types::ErrorCode::parse(&other.code());
                 let args = other.args();
                 SparkError::new(code).with_args(args)
             }

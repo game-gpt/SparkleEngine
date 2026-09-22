@@ -1,6 +1,6 @@
 //! 弹幕发射模式（几何发射，无具体弹种）。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 use crate::bullet::BulletPool;
 

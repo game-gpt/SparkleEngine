@@ -16,7 +16,7 @@ pub use probe::{AudioTrackInfo, MediaInfo, TrackInfo, VideoTrackInfo, probe_byte
 
 use std::{fmt, io, path::PathBuf, sync::Arc};
 
-use spark_core::{ErrorArg, ErrorArgs, SparkError};
+use spark_types::{ErrorArg, ErrorArgs, SparkError};
 
 /// 媒体层结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]
@@ -115,7 +115,7 @@ impl std::error::Error for MediaError {}
 
 impl From<MediaError> for SparkError {
     fn from(e: MediaError) -> Self {
-        SparkError::new(spark_core::ErrorCode::parse(e.code())).with_args(e.args())
+        SparkError::new(spark_types::ErrorCode::parse(e.code())).with_args(e.args())
     }
 }
 

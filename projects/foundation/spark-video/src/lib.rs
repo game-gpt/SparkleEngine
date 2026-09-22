@@ -6,7 +6,7 @@
 #![warn(missing_docs)]
 use std::{path::Path, time::Duration};
 
-use spark_core::{SparkError, codes};
+use spark_types::{SparkError, codes};
 use spark_media::{MediaPacket, MediaReader, PacketKind, VideoTrackInfo};
 
 /// 打开中的视频剪辑（可含同文件音频轨 ID，供上层 AV 同步）。

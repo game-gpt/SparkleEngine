@@ -12,7 +12,7 @@ pub use actor::{ActorBody, ControllerInput};
 pub use camera::Camera2d;
 pub use world::{SolidKind, SolidRect, TileWorld};
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 use spark_engine::SparkEngine;
 use std::path::PathBuf;
 

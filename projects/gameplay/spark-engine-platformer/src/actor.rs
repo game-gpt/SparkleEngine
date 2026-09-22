@@ -1,6 +1,6 @@
 //! 玩家 / 角色刚体。
 
-use spark_core::{Rect, Vec2};
+use spark_types::{Rect, Vec2};
 use spark_geometry::aabb_aabb;
 
 use crate::{

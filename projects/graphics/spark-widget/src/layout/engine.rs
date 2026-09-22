@@ -1,6 +1,6 @@
 //! measure / arrange 引擎。
 
-use spark_core::{Rect, Vec2};
+use spark_types::{Rect, Vec2};
 
 use crate::{
     id::WidgetId,

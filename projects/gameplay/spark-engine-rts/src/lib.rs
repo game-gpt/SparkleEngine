@@ -15,7 +15,7 @@ pub use fog::FogGrid;
 pub use selection::Selection;
 pub use unit::{PlayerId, UnitId, UnitPose, UnitRoster};
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 use spark_engine::SparkEngine;
 use std::path::PathBuf;
 

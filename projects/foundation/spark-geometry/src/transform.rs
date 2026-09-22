@@ -1,8 +1,7 @@
 //! 2D 仿射变换（平移 + 旋转 + 均匀缩放）。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
-use crate::Vec2Ext;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transform2 {

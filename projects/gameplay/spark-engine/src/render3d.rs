@@ -2,7 +2,7 @@
 //!
 //! Spark 负责顺序。游戏系统决定画什么。
 
-use spark_core::Color;
+use spark_types::Color;
 use spark_ecs::World;
 use spark_renderer::DrawList3d;
 

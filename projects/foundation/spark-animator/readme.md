@@ -4,7 +4,7 @@
 
 ```rust
 use spark_animator::{AnimationClip, AnimationFrame, SpriteFrame, sample_clip};
-use spark_core::Rect;
+use spark_types::Rect;
 
 fn sprite(index: u32) -> SpriteFrame {
     SpriteFrame::new(index, Rect::new(0.0, 0.0, 1.0, 1.0))

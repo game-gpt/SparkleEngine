@@ -23,7 +23,7 @@ license = "Apache-2.0"
 readme = "readme.md"
 
 [workspace.dependencies]
-spark-core = { path = "projects/foundation/spark-core" }
+spark-types = { path = "projects/foundation/spark-types" }
 spark-diagnostics = { path = "projects/foundation/spark-diagnostics" }
 spark-logger = { path = "projects/foundation/spark-logger" }
 spark-geometry = { path = "projects/foundation/spark-geometry" }

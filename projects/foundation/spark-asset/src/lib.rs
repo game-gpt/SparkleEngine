@@ -14,7 +14,7 @@ pub use handle::{AssetId, AssetKey};
 pub use hot_reload::HotReloadWatch;
 pub use loader::{AssetLoader, BytesLoader, LoadError, ReloadEvent};
 
-use spark_core::{ErrorArgs, SparkError};
+use spark_types::{ErrorArgs, SparkError};
 
 /// 资源层错误。自然语言不在此生成。
 #[derive(Debug)]

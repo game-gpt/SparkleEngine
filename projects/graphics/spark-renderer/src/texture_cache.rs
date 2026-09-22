@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use spark_core::SparkError;
+use spark_types::SparkError;
 
 use crate::{draw::DrawList, texture::TextureId};
 

@@ -2,7 +2,7 @@
 
 pub use spark_renderer::Camera2d;
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 /// 与旧壳相同的默认死区（世界单位）和插值速度。
 pub const DEADZONE: Vec2 = Vec2::new(2.0, 1.5);

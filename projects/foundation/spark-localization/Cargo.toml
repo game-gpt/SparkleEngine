@@ -11,7 +11,7 @@ categories = ["game-development", "internationalization"]
 publish = false
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 spark-asset = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

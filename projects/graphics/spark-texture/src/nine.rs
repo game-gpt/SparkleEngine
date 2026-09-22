@@ -1,6 +1,6 @@
 //! 九宫格（九切片）布局：四角固定，边与中心按模式拉伸或平铺。
 
-use spark_core::{ErrorArg, Rect, SparkError, codes};
+use spark_types::{ErrorArg, Rect, SparkError, codes};
 
 use crate::region::validate_region;
 

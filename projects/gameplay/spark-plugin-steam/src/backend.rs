@@ -1,6 +1,6 @@
 //! Steam 后端接口（与 steamworks / 其它实现解耦）。
 
-use spark_core::SparkError;
+use spark_types::SparkError;
 
 /// 可替换的 Steam 平台后端。
 pub trait SteamBackend: Send {

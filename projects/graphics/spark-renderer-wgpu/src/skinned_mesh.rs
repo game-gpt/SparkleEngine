@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
-use spark_core::SparkError;
+use spark_types::SparkError;
 use spark_geometry::Mat4;
 use spark_renderer::{DrawList3d, MAX_SKIN_JOINTS, MeshResidentKey, SkinnedMeshCmd, SkinnedVertex};
 use spark_shader::{BuiltinShader, create_builtin};

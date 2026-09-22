@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use spark_core::{Color, SparkError};
+use spark_types::{Color, SparkError};
 use spark_geometry::{Aabb3, Mat4, Vec3};
 use spark_texture::TextureUpload;
 

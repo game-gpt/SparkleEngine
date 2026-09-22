@@ -2,7 +2,7 @@
 //!
 //! 不含伤害数字或具体贴图。绘制时走当前 `DrawList` 图层，世界层会吃相机。
 
-use spark_core::{Color, Rect, Vec2};
+use spark_types::{Color, Rect, Vec2};
 
 use crate::draw::DrawList;
 

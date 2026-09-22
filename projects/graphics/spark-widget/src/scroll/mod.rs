@@ -1,6 +1,6 @@
 //! 滚动与虚拟化。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 use crate::{id::WidgetId, node::WidgetKind, tree::WidgetTree};
 

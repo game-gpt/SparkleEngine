@@ -7,7 +7,7 @@
 
 use std::{io::Cursor, path::Path, sync::Arc};
 
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::TextureUpload;
 
 /// PNG 解码选项。

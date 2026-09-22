@@ -3,7 +3,7 @@
 即时战略骨架：单位名册、框选、指令队列、迷雾。
 
 ```rust
-use spark_core::Vec2;
+use spark_types::Vec2;
 use spark_engine_rts::{Command, PlayerId, RtsEngine, UnitPose};
 
 let mut rts = RtsEngine::new(".", 32, 32, 1.0);

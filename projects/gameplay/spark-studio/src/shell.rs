@@ -1,6 +1,6 @@
 //! Unity-like 默认工作区（flex 近似停靠）。
 
-use spark_core::Color;
+use spark_types::Color;
 use spark_widget::{Insets, LayoutSpec, Size, Style, UiCommand, WidgetBuilder, button_widget, column, label_widget, panel, row, spacer_widget};
 
 use crate::{

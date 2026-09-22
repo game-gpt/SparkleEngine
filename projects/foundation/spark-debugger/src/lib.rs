@@ -2,7 +2,7 @@
 //! 不含游戏专用面板或远程调试协议产品。
 
 #![warn(missing_docs)]
-pub use spark_core::{Color, Rect, Vec2};
+pub use spark_types::{Color, Rect, Vec2};
 use spark_renderer::DrawList;
 
 /// 单帧性能与计数快照。

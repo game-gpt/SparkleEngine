@@ -1,6 +1,6 @@
 //! 像素区域校验（相对纹理宽高，不持有像素）。
 
-use spark_core::{ErrorArg, Rect, SparkError, codes};
+use spark_types::{ErrorArg, Rect, SparkError, codes};
 
 /// 校验 `region` 落在 `[0, width] × [0, height]` 内且宽高为正。
 pub(crate) fn validate_region(img_w: u32, img_h: u32, region: Rect) -> Result<(), SparkError> {

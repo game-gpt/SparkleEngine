@@ -5,7 +5,7 @@
 #![warn(missing_docs)]
 use std::sync::Arc;
 
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_types::{ErrorArg, SparkError, codes};
 use wgpu::Device;
 
 /// 引擎内建着色器（与 `src/shaders/*.wgsl` 一一对应）。

@@ -11,6 +11,6 @@ categories = ["game-development", "multimedia"]
 publish = false
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 symphonia = { workspace = true }
 tracing = { workspace = true }

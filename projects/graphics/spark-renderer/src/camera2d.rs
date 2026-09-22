@@ -2,7 +2,7 @@
 //!
 //! 不含关卡、角色或操作手感。`origin` 是视口左上角的世界坐标。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 /// 正交 2D 相机。`zoom` 为世界单位到像素的缩放，`1` 表示一比一。
 #[derive(Debug, Clone, Copy, PartialEq)]

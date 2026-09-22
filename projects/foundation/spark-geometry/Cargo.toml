@@ -11,4 +11,4 @@ categories = ["game-development", "mathematics"]
 publish = false
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }

@@ -27,8 +27,8 @@ impl CompileError {
         }
     }
 
-    pub fn args(&self) -> spark_core::ErrorArgs {
-        use spark_core::{ErrorArg, ErrorArgs};
+    pub fn args(&self) -> spark_types::ErrorArgs {
+        use spark_types::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
         match self {
             Self::CheckFailed { count } => ErrorArgs::new().with("count", ErrorArg::Unsigned(*count as u64)),

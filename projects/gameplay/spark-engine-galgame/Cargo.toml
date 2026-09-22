@@ -11,7 +11,7 @@ categories = ["game-development"]
 publish = false
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 spark-engine = { workspace = true }
 spark-plugin-live2d = { workspace = true }
 tracing = { workspace = true }

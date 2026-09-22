@@ -11,6 +11,6 @@ categories = ["game-development", "rendering"]
 publish = false
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 fontdue = { workspace = true }
 tracing = { workspace = true }

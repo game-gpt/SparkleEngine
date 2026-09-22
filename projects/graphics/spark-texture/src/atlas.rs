@@ -1,6 +1,6 @@
 //! 图集区域与精灵元数据（不持有 CPU 像素）。
 
-use spark_core::{Rect, Vec2};
+use spark_types::{Rect, Vec2};
 
 use crate::desc::TextureInfo;
 

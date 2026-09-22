@@ -1,6 +1,6 @@
 //! 物理世界步进。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 use spark_geometry::{aabb_aabb, circle_aabb, circle_circle};
 
 use crate::{

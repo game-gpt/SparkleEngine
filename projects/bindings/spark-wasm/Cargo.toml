@@ -15,6 +15,6 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 spark-geometry = { workspace = true }
 spark-asset = { workspace = true }

@@ -3,7 +3,7 @@
 //! Spark 负责顺序与 `DrawList` 生命周期。游戏系统只决定画什么。
 //! 允许 `&mut World`：图集上传和帧准备仍可能改资源，不在这里另开宿主。
 
-use spark_core::Color;
+use spark_types::Color;
 use spark_ecs::World;
 use spark_renderer::DrawList;
 

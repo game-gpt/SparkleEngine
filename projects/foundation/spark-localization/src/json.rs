@@ -42,8 +42,8 @@ impl JsonError {
         }
     }
 
-    pub fn args(&self) -> spark_core::ErrorArgs {
-        use spark_core::{ErrorArg, ErrorArgs};
+    pub fn args(&self) -> spark_types::ErrorArgs {
+        use spark_types::{ErrorArg, ErrorArgs};
         match self {
             Self::Locale(e) => e.args(),
             Self::Serde { line, column } => {

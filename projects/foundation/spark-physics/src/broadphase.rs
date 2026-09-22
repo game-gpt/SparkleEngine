@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use spark_core::Rect;
+use spark_types::Rect;
 
 use crate::body::BodyId;
 

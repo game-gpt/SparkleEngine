@@ -1,6 +1,6 @@
 //! `spark-texture` 集成测试。
 
-use spark_core::codes;
+use spark_types::codes;
 use spark_texture::*;
 
 #[test]
@@ -32,10 +32,10 @@ fn compressed_rejects_generate_cpu() {
 fn sprite_region_uv() {
     let info = TextureInfo { width: 64, height: 32, format: TextureFormat::Rgba8UnormSrgb, mip_levels: 1 };
     let region = SpriteRegion {
-        pixel_rect: spark_core::Rect::new(16.0, 0.0, 16.0, 16.0),
+        pixel_rect: spark_types::Rect::new(16.0, 0.0, 16.0, 16.0),
         uv_rect: None,
-        pivot: spark_core::Vec2::ZERO,
-        logical_size: spark_core::Vec2::new(16.0, 16.0),
+        pivot: spark_types::Vec2::ZERO,
+        logical_size: spark_types::Vec2::new(16.0, 16.0),
     };
     let uv = region.uv_for(info);
     assert!((uv.x - 0.25).abs() < 1e-5);
@@ -90,7 +90,7 @@ fn sheet_index() {
 
 #[test]
 fn nine_stretch_corners() {
-    use spark_core::Rect;
+    use spark_types::Rect;
     let nine = NineSlice::new(Rect::new(0.0, 0.0, 32.0, 32.0), Margin::uniform(8.0));
     nine.validate(32, 32).unwrap();
     let quads = nine.layout(Rect::new(0.0, 0.0, 100.0, 60.0)).unwrap();
@@ -104,7 +104,7 @@ fn nine_stretch_corners() {
 
 #[test]
 fn nine_tile_center() {
-    use spark_core::Rect;
+    use spark_types::Rect;
     let nine = NineSlice::new(Rect::new(0.0, 0.0, 30.0, 30.0), Margin::uniform(10.0)).with_mode(NineSliceMode::Tile);
     let quads = nine.layout(Rect::new(0.0, 0.0, 50.0, 50.0)).unwrap();
     assert!(quads.len() > 9);

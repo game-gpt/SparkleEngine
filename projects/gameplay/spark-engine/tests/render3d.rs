@@ -3,7 +3,7 @@ use spark_engine::*;
 
 use spark_renderer::Mat4;
 
-use spark_core::Color;
+use spark_types::Color;
 use spark_ecs::World;
 use spark_renderer::DrawList3d;
 #[test]

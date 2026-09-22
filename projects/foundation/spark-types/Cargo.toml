@@ -1,12 +1,12 @@
 [package]
-name = "spark-core"
+name = "spark-types"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 元引擎基础类型与工具"
-keywords = ["spark", "game-engine"]
+description = "Spark 公共基础类型：Vec2 / Rect / Color / SparkError"
+keywords = ["spark", "types", "math"]
 categories = ["game-development"]
 publish = false
 

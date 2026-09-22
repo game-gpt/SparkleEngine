@@ -1,6 +1,6 @@
 //! 局部样式与按伪态解析。
 
-use spark_core::Color;
+use spark_types::Color;
 
 use crate::node::{WidgetKind, WidgetNode, WidgetStateFlags};
 

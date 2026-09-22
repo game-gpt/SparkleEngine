@@ -1,7 +1,7 @@
 //! 自 `src/lib.rs` 迁出的原 `#[cfg(test)] mod tests`。
 use spark_engine_rts::*;
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 #[test]
 fn select_and_move() {

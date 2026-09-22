@@ -1,6 +1,6 @@
 //! UI 调试观察。
 
-use spark_core::Rect;
+use spark_types::Rect;
 
 use crate::{id::WidgetId, tree::WidgetTree};
 

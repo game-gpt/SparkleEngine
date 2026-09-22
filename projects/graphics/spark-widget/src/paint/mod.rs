@@ -1,6 +1,6 @@
 //! Paint traversal：retained 树 → DrawList。
 
-use spark_core::{Color, Rect, Vec2};
+use spark_types::{Color, Rect, Vec2};
 use spark_renderer::DrawList;
 
 use crate::{

@@ -3,7 +3,7 @@
 弹幕骨架：子弹池、发射器、关卡时钟。
 
 ```rust
-use spark_core::Vec2;
+use spark_types::Vec2;
 use spark_engine_stg::{EmitPattern, Emitter, StageClock, StgEngine};
 
 let mut stg = StgEngine::new(".", 256);

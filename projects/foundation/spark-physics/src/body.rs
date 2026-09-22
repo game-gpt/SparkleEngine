@@ -1,6 +1,6 @@
 //! 2D 刚体。
 
-use spark_core::{Rect, Vec2};
+use spark_types::{Rect, Vec2};
 use spark_geometry::Circle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

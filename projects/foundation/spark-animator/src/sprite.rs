@@ -1,6 +1,6 @@
 //! 2D 精灵帧。只描述图集中的一格，不接触绘制列表。
 
-use spark_core::Rect;
+use spark_types::Rect;
 
 /// 精灵动画的一帧。
 ///

@@ -19,7 +19,7 @@ default = []
 node = ["dep:napi", "dep:napi-derive"]
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 spark-asset = { workspace = true }
 spark-geometry = { workspace = true }
 napi = { workspace = true, optional = true }

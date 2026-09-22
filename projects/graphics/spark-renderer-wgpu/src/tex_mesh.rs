@@ -5,7 +5,7 @@
 use std::{cell::Cell, collections::HashMap};
 
 use bytemuck::{Pod, Zeroable};
-use spark_core::SparkError;
+use spark_types::SparkError;
 use spark_renderer::{DrawList3d, MeshResidentKey, TexMeshVertex, TextureId, TextureUpload};
 use spark_shader::{BuiltinShader, create_builtin};
 use wgpu::util::DeviceExt;

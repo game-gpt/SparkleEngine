@@ -142,7 +142,7 @@ impl GameHost for EcsHost2d {
 /// 绘制相位临时资源：供 `draw_schedule` 系统读取清屏色等。
 #[derive(Debug, Clone, Copy)]
 pub struct DrawScratch2d {
-    pub clear: spark_core::Color,
+    pub clear: spark_types::Color,
 }
 
 /// ECS 驱动的 3D 宿主。

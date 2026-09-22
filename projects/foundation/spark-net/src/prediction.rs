@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use spark_core::ErrorArgs;
+use spark_types::ErrorArgs;
 
 use crate::channel::Sequence;
 

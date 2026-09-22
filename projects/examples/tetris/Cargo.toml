@@ -16,7 +16,7 @@ name = "tetris"
 path = "src/main.rs"
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 spark-engine = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }

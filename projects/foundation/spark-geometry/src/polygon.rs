@@ -1,6 +1,6 @@
 //! 简单多边形（顶点顺时针或逆时针均可；点内检测用绕数）。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Polygon {

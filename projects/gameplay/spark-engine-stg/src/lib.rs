@@ -14,7 +14,7 @@ pub use collide::{Circle, collide_circles};
 pub use emitter::{EmitPattern, Emitter};
 pub use stage::StageClock;
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 use spark_engine::SparkEngine;
 use std::path::PathBuf;
 

@@ -14,7 +14,7 @@ use std::{
 };
 
 use rodio::{DeviceSinkBuilder, MixerDeviceSink, Player, buffer::SamplesBuffer, source::Source};
-use spark_core::SparkError;
+use spark_types::SparkError;
 
 /// 重新导出：游戏可预解码后缓存。
 pub use spark_media::{AudioDecoder, PcmAudio};

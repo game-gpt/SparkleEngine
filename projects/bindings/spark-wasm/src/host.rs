@@ -1,8 +1,7 @@
 //! 可测试的 Wasm 宿主门面（非导出；导出见 crate 根 `extern "C"`）。
 
 use spark_asset::AssetCache;
-use spark_core::Vec2;
-use spark_geometry::Vec2Ext;
+use spark_types::Vec2;
 
 #[derive(Debug, Default)]
 pub struct SparkWasmHost {

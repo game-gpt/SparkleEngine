@@ -10,7 +10,7 @@ use std::{
 };
 
 use fontdue::{Font, FontSettings};
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_types::{ErrorArg, SparkError, codes};
 
 /// 单个已栅格字形在图集中的布局信息。
 #[derive(Debug, Clone, Copy)]

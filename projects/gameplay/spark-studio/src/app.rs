@@ -1,6 +1,6 @@
 //! Studio 宿主：`GameHost` + `UiRuntime`；Play 时嵌入示例对局。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
 use spark_widget::{Insets, UiCommand, UiFrame, UiRuntime};

@@ -6,7 +6,7 @@ mod edit;
 pub use clipboard::{Clipboard, MemoryClipboard};
 pub use edit::{TextEditAction, apply_text_input};
 
-use spark_core::{Color, Vec2};
+use spark_types::{Color, Vec2};
 use spark_font::GlyphCache;
 
 /// 文本样式。

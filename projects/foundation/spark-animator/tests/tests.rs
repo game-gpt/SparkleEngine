@@ -3,7 +3,7 @@ use spark_animator::*;
 
 use std::collections::HashMap;
 
-use spark_core::Rect;
+use spark_types::Rect;
 use spark_ecs::{Schedule, World};
 use spark_geometry::{Quat, Vec3};
 

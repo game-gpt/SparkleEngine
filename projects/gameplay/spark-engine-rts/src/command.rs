@@ -1,6 +1,6 @@
 //! 单位指令队列（移动 / 攻击目标点 / 停止）。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 use crate::unit::{PlayerId, UnitId, UnitRoster};
 

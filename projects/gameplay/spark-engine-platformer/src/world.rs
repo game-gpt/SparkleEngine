@@ -1,6 +1,6 @@
 //! 固体碰撞世界。
 
-use spark_core::Rect;
+use spark_types::Rect;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SolidKind {

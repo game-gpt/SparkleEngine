@@ -1,8 +1,7 @@
 //! 圆。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
-use crate::Vec2Ext;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Circle {

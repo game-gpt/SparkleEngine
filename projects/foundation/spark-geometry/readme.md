@@ -3,7 +3,7 @@
 2D/3D 几何与变换：`Circle`、`Ray`、`Aabb3`、`Mat4` / `Quat` / `Trs`、矩形 AABB 相交等。
 
 ```rust
-use spark_core::{Rect, Vec2};
+use spark_types::{Rect, Vec2};
 use spark_geometry::{Circle, Ray, aabb_aabb, circle_circle, ray_circle};
 
 let a = Circle::new(Vec2::new(0.0, 0.0), 1.0);

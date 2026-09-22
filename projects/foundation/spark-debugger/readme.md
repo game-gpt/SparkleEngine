@@ -3,7 +3,7 @@
 调试叠加绘制与帧统计。
 
 ```rust
-use spark_core::{Color, Rect, Vec2};
+use spark_types::{Color, Rect, Vec2};
 use spark_debugger::DebugDraw;
 
 let mut d = DebugDraw::new();

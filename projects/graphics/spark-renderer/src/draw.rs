@@ -1,4 +1,4 @@
-use spark_core::{Color, Rect, SparkError, Vec2};
+use spark_types::{Color, Rect, SparkError, Vec2};
 use spark_texture::TextureUpload;
 
 use crate::{

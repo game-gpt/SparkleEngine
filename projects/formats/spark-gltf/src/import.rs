@@ -3,7 +3,7 @@
 use std::{fmt, path::Path};
 
 use spark_animator::{Skeleton, SkinnedAnimationClip};
-use spark_core::Color;
+use spark_types::Color;
 use spark_geometry::{Aabb3, Vec3};
 use spark_renderer::SkinnedVertex;
 

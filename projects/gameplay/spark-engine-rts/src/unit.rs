@@ -1,6 +1,6 @@
 //! 单位编制（无兵种数据表）。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 /// 玩家 / 控制方不透明 ID（游戏映射阵营）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

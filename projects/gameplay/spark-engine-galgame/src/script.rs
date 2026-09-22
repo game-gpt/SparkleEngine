@@ -1,6 +1,6 @@
 //! 对白与选项播放器。
 
-use spark_core::{ErrorArg, ErrorCode, SparkError};
+use spark_types::{ErrorArg, ErrorCode, SparkError};
 
 fn choice_invalid() -> ErrorCode {
     ErrorCode::new("spark.galgame", "script.choice_invalid")

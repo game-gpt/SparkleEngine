@@ -1,6 +1,6 @@
 //! Live2D 后端接口（与具体 SDK 解耦）。
 
-use spark_core::{ErrorArg, ErrorCode, SparkError};
+use spark_types::{ErrorArg, ErrorCode, SparkError};
 
 use crate::runtime::Live2dModelId;
 

@@ -45,8 +45,8 @@ impl LocaleParseError {
         }
     }
 
-    pub fn args(&self) -> spark_core::ErrorArgs {
-        use spark_core::{ErrorArg, ErrorArgs};
+    pub fn args(&self) -> spark_types::ErrorArgs {
+        use spark_types::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
         match self {
             Self::Empty => ErrorArgs::new(),

@@ -3,7 +3,7 @@
 后端无关的绘制契约与游戏宿主 trait。不含窗口、不含 GPU。
 
 ```rust
-use spark_core::{Color, Rect};
+use spark_types::{Color, Rect};
 use spark_renderer::{DrawList, FrameCtx, GameHost};
 
 struct MyHost;

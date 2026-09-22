@@ -11,7 +11,7 @@ categories = ["game-development", "gui"]
 publish = false
 
 [dependencies]
-spark-core = { workspace = true }
+spark-types = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 spark-font = { workspace = true }

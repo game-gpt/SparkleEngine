@@ -36,7 +36,7 @@ pub use texture_upload::{
 use std::{sync::Arc, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
-use spark_core::{Color, SparkError, codes};
+use spark_types::{Color, SparkError, codes};
 use spark_shader::{BuiltinShader, create_builtin};
 use winit::{
     application::ApplicationHandler,
@@ -108,7 +108,7 @@ impl GpuState {
             })
             .await
             .map_err(|_| {
-                SparkError::new(codes::gpu_adapter()).arg("reason", spark_core::ErrorArg::String(std::sync::Arc::from("no_adapter")))
+                SparkError::new(codes::gpu_adapter()).arg("reason", spark_types::ErrorArg::String(std::sync::Arc::from("no_adapter")))
             })?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {

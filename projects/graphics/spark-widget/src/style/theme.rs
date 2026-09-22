@@ -1,6 +1,6 @@
 //! 主题 tokens。
 
-use spark_core::Color;
+use spark_types::Color;
 
 #[derive(Debug, Clone)]
 pub struct Theme {

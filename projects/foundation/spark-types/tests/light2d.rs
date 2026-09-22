@@ -1,5 +1,5 @@
 //! 自 `src/light2d.rs` 迁出的原 `#[cfg(test)] mod tests`。
-use spark_core::*;
+use spark_types::*;
 
 #[test]
 fn sky_stops_at_blocker_and_light_spreads_through_open_cells() {

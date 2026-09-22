@@ -8,7 +8,7 @@ mod pieces;
 pub use board::Board;
 pub use pieces::PieceKind;
 
-use spark_core::{Color, Rect};
+use spark_types::{Color, Rect};
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
 

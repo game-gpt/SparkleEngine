@@ -1,6 +1,6 @@
 //! 乒乓对局逻辑与绘制。
 
-use spark_core::{Color, Rect};
+use spark_types::{Color, Rect};
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
 

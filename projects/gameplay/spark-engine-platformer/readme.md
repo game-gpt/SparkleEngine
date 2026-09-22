@@ -3,7 +3,7 @@
 平台跳跃骨架：固体台、角色体、`tick` 推进。
 
 ```rust
-use spark_core::{Rect, Vec2};
+use spark_types::{Rect, Vec2};
 use spark_engine_platformer::{ControllerInput, PlatformerEngine, SolidKind, SolidRect};
 
 let mut eng = PlatformerEngine::new(".");

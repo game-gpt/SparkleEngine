@@ -8,7 +8,7 @@
 use std::{io::Cursor, path::Path, sync::Arc};
 
 use image_webp::WebPDecoder;
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::TextureUpload;
 
 /// WebP 解码选项。

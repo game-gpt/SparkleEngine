@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::{DeviceCaps, MipmapPolicy, TextureDimension, TextureFormat, TextureUpload, TextureUsage};
 
 use crate::mipmap::{create_rgba_texture_with_mips, mip_level_count};

@@ -1,6 +1,6 @@
 //! 简易迷雾：未探索 / 可见（无战争迷雾渐变美术）。
 
-use spark_core::Vec2;
+use spark_types::Vec2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FogCell {

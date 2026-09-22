@@ -38,8 +38,8 @@ impl ManifestVonError {
         }
     }
 
-    pub fn args(&self) -> spark_core::ErrorArgs {
-        use spark_core::{ErrorArg, ErrorArgs};
+    pub fn args(&self) -> spark_types::ErrorArgs {
+        use spark_types::{ErrorArg, ErrorArgs};
         match self {
             Self::Locale(e) => e.args(),
             Self::MissingAssign { line } => ErrorArgs::new().with("line", ErrorArg::Unsigned(*line as u64)),

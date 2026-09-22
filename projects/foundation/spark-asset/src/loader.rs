@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use spark_core::{ErrorArg, ErrorArgs};
+use spark_types::{ErrorArg, ErrorArgs};
 
 use crate::handle::AssetKey;
 

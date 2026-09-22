@@ -37,12 +37,12 @@ impl LocaleLoadError {
         }
     }
 
-    pub fn args(&self) -> spark_core::ErrorArgs {
+    pub fn args(&self) -> spark_types::ErrorArgs {
         match self {
             Self::Load(e) => e.args(),
             Self::Json(e) => e.args(),
             Self::Compile(e) => e.args(),
-            Self::EmptyShards | Self::NoAvailableLocales => spark_core::ErrorArgs::new(),
+            Self::EmptyShards | Self::NoAvailableLocales => spark_types::ErrorArgs::new(),
         }
     }
 }

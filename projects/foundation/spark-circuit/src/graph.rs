@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use spark_core::{ErrorArg, ErrorArgs};
+use spark_types::{ErrorArg, ErrorArgs};
 
 /// 图内节点句柄（稠密从 0 递增）。
 pub type NodeId = u32;

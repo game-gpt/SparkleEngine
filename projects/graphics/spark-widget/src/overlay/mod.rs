@@ -1,6 +1,6 @@
 //! Overlay / Modal / Tooltip 层管理。
 
-use spark_core::{Rect, Vec2};
+use spark_types::{Rect, Vec2};
 
 use crate::{
     id::WidgetId,

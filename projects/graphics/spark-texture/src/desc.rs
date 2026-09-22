@@ -1,6 +1,6 @@
 //! 纹理逻辑描述（不含像素）。
 
-use spark_core::{ErrorArg, SparkError, codes};
+use spark_types::{ErrorArg, SparkError, codes};
 
 use crate::{
     format::{AlphaMode, ColorSpace, TextureDimension, TextureFormat},

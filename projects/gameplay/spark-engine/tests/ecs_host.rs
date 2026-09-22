@@ -1,7 +1,7 @@
 //! 自 `src/ecs_host.rs` 迁出的原 `#[cfg(test)] mod tests`。
 use spark_engine::*;
 
-use spark_core::Color;
+use spark_types::Color;
 use spark_ecs::{Schedule, World};
 use spark_input::Input;
 use spark_renderer::{DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d, Mat4, WindowConfig};

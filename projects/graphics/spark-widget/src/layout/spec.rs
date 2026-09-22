@@ -1,6 +1,6 @@
 //! 布局规格与计算结果。
 
-use spark_core::Rect;
+use spark_types::Rect;
 
 use super::{Align, FlexDirection, Justify, Size};
 

@@ -1,7 +1,7 @@
 //! 自 `src/render2d.rs` 迁出的原 `#[cfg(test)] mod tests`。
 use spark_engine::*;
 
-use spark_core::Color;
+use spark_types::Color;
 use spark_ecs::World;
 use spark_renderer::DrawList;
 #[test]
