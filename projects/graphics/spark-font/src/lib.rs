@@ -173,7 +173,15 @@ fn system_font_candidates() -> Vec<PathBuf> {
     // 用环境变量拼系统字体目录，避免写死盘符。
     if let Ok(windir) = std::env::var("WINDIR") {
         let fonts = PathBuf::from(windir).join("Fonts");
-        for name in ["msyh.ttc", "msyhbd.ttc", "simhei.ttf", "arial.ttf", "segoeui.ttf"] {
+        // 优先粗体：标题菜单字重更接近原版；再回退常规。
+        for name in [
+            "msyhbd.ttc",
+            "msyh.ttc",
+            "simhei.ttf",
+            "arialbd.ttf",
+            "arial.ttf",
+            "segoeui.ttf",
+        ] {
             out.push(fonts.join(name));
         }
     }
