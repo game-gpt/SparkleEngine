@@ -38,12 +38,31 @@ fn measure(tree: &mut WidgetTree, id: WidgetId, constraints: Constraints, metric
 
     let margin = node.layout.margin;
     let inner_constraints = apply_spec_limits(constraints.deflate(margin), &node.layout);
+    let content_constraints = content_measure_constraints(inner_constraints.deflate(node.layout.padding), &node.layout);
 
-    let content = measure_content(tree, &node, inner_constraints.deflate(node.layout.padding), metrics, measurer);
+    let content = measure_content(tree, &node, content_constraints, metrics, measurer);
     let padded = Size2::new(content.width + node.layout.padding.horizontal(), content.height + node.layout.padding.vertical());
     let sized = resolve_axis_sizes(padded, &node.layout, inner_constraints);
     let with_margin = Size2::new(sized.width + margin.horizontal(), sized.height + margin.vertical());
-    let desired = with_margin.clamp(constraints);
+    let desired = if matches!(node.layout.width, Size::MaxContent) || matches!(node.layout.height, Size::MaxContent) {
+        Size2::new(
+            if matches!(node.layout.width, Size::MaxContent) {
+                with_margin.width.max(constraints.min.width)
+            }
+            else {
+                with_margin.width.clamp(constraints.min.width, constraints.max.width)
+            },
+            if matches!(node.layout.height, Size::MaxContent) {
+                with_margin.height.max(constraints.min.height)
+            }
+            else {
+                with_margin.height.clamp(constraints.min.height, constraints.max.height)
+            },
+        )
+    }
+    else {
+        with_margin.clamp(constraints)
+    };
 
     if let Some(n) = tree.node_mut(id) {
         n.computed.desired = desired;
@@ -253,11 +272,17 @@ fn intrinsic_leaf(node: &WidgetNode, constraints: Constraints, metrics: UiMetric
         _ => 14.0,
     });
     let style = TextStyle { size: base * scale, ..TextStyle::default() };
+    let text_max_w = match node.layout.width {
+        Size::MaxContent => None,
+        Size::MinContent => Some((base * scale * 0.55).max(1.0)),
+        _ if constraints.max.width.is_finite() => Some(constraints.max.width),
+        _ => None,
+    };
     let measured = if text.is_empty() {
         Size2::default()
     }
     else {
-        let layout = measurer.measure(text, &style, Some(constraints.max.width));
+        let layout = measurer.measure(text, &style, text_max_w);
         Size2::new(layout.size.x, layout.size.y)
     };
 
@@ -309,12 +334,42 @@ fn resolve_axis_sizes(content: Size2, spec: &LayoutSpec, constraints: Constraint
     if let Some(max_h) = spec.max_height {
         size.height = size.height.min(max_h);
     }
-    size.clamp(constraints)
+    // MaxContent 允许超出父级 max（溢出）；其余轴仍受约束夹紧。
+    if !matches!(spec.width, Size::MaxContent) {
+        size.width = size.width.clamp(
+            constraints.min.width,
+            if constraints.max.width.is_finite() {
+                constraints.max.width
+            }
+            else {
+                size.width.max(constraints.min.width)
+            },
+        );
+    }
+    else {
+        size.width = size.width.max(constraints.min.width);
+    }
+    if !matches!(spec.height, Size::MaxContent) {
+        size.height = size.height.clamp(
+            constraints.min.height,
+            if constraints.max.height.is_finite() {
+                constraints.max.height
+            }
+            else {
+                size.height.max(constraints.min.height)
+            },
+        );
+    }
+    else {
+        size.height = size.height.max(constraints.min.height);
+    }
+    size
 }
 
 fn resolve_size(spec: Size, content: f32, max: f32, min: f32) -> f32 {
     let value = match spec {
         // Fill 在 measure 阶段不抢无限空间，arrange 时再伸展。
+        // MinContent / MaxContent 的内容已在 measure 阶段用对应约束算出。
         Size::Auto | Size::MinContent | Size::MaxContent | Size::Fill => content,
         Size::Px(v) => v,
         Size::Percent(p) => {
@@ -326,8 +381,32 @@ fn resolve_size(spec: Size, content: f32, max: f32, min: f32) -> f32 {
             }
         }
     };
-    let upper = if max.is_finite() { max } else { value.max(min) };
-    value.clamp(min, upper)
+    match spec {
+        Size::MaxContent | Size::MinContent => value.max(min),
+        _ => {
+            let upper = if max.is_finite() { max } else { value.max(min) };
+            value.clamp(min, upper)
+        }
+    }
+}
+
+/// 按 `width` / `height` 的 Min/MaxContent 调整传给内容的测量约束。
+fn content_measure_constraints(mut constraints: Constraints, spec: &LayoutSpec) -> Constraints {
+    match spec.width {
+        Size::MaxContent => constraints.max.width = f32::INFINITY,
+        Size::MinContent => {
+            constraints.max.width = constraints.max.width.min(8.0).max(constraints.min.width);
+        }
+        _ => {}
+    }
+    match spec.height {
+        Size::MaxContent => constraints.max.height = f32::INFINITY,
+        Size::MinContent => {
+            constraints.max.height = constraints.max.height.min(8.0).max(constraints.min.height);
+        }
+        _ => {}
+    }
+    constraints
 }
 
 fn apply_spec_limits(mut constraints: Constraints, spec: &LayoutSpec) -> Constraints {
@@ -770,5 +849,47 @@ mod tests {
         );
         let h2 = tree.node(id).unwrap().computed.desired.height;
         assert!(h2 > h1 * 1.5, "scaled={h2} base={h1}");
+    }
+
+    #[test]
+    fn max_content_label_does_not_wrap() {
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let id = label_widget()
+            .text("ABCDEFGHIJKLMNOP")
+            .layout(LayoutSpec { width: Size::MaxContent, height: Size::Auto, ..LayoutSpec::default() })
+            .mount(&mut tree, root)
+            .unwrap();
+        run_layout(&mut tree, Vec2::new(80.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+        let max_c = tree.node(id).unwrap().computed.desired;
+
+        if let Some(n) = tree.node_mut(id) {
+            n.layout.width = Size::Auto;
+        }
+        run_layout(&mut tree, Vec2::new(80.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+        let auto_c = tree.node(id).unwrap().computed.desired;
+
+        assert!(max_c.width > auto_c.width + 1.0, "max={} auto={}", max_c.width, auto_c.width);
+        assert!(max_c.height <= auto_c.height + 0.5, "max_h={} auto_h={}", max_c.height, auto_c.height);
+    }
+
+    #[test]
+    fn min_content_label_is_narrower_than_max_content() {
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let id = label_widget()
+            .text("HelloWorld")
+            .layout(LayoutSpec { width: Size::MinContent, height: Size::Auto, ..LayoutSpec::default() })
+            .mount(&mut tree, root)
+            .unwrap();
+        run_layout(&mut tree, Vec2::new(400.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+        let min_w = tree.node(id).unwrap().computed.desired.width;
+
+        if let Some(n) = tree.node_mut(id) {
+            n.layout.width = Size::MaxContent;
+        }
+        run_layout(&mut tree, Vec2::new(400.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+        let max_w = tree.node(id).unwrap().computed.desired.width;
+        assert!(min_w + 1.0 < max_w, "min={min_w} max={max_w}");
     }
 }
