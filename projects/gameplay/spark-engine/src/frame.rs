@@ -2,7 +2,7 @@
 //!
 //! 窗口事件泵与 GPU 提交由 `spark-renderer-wgpu` 承担；本模块只编排仿真相位。
 
-use spark_renderer::{DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d};
+use spark_renderer::{DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d, UiRenderBatch};
 use spark_time::Clock;
 
 /// 步进模式。
@@ -146,6 +146,10 @@ impl<H: GameHost> GameHost for LoopedHost2d<H> {
 
     fn draw(&mut self, draw: &mut DrawList) {
         self.inner.draw(draw);
+    }
+
+    fn draw_ui(&mut self, ui: &mut UiRenderBatch) {
+        self.inner.draw_ui(ui);
     }
 
     fn should_exit(&self) -> bool {
