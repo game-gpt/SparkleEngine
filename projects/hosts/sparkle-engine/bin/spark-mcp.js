@@ -91,7 +91,7 @@ function handle(msg) {
                         inputSchema: {
                             type: "object",
                             properties: {
-                                code: { type: "string", description: "VON edit plan text" },
+                                code: { type: "string", description: "VON edit plan or spark-edit-1 calls" },
                                 path: { type: "string", description: "Path to .edit.von plan file" },
                                 mode: {
                                     type: "string",
@@ -99,6 +99,13 @@ function handle(msg) {
                                     default: "dry-run",
                                 },
                                 cwd: { type: "string", description: "Project root" },
+                                capabilities: {
+                                    type: "array",
+                                    items: { type: "string" },
+                                    description:
+                                        "Defaults to read-only. apply requires project-edit or write-assets.",
+                                    default: ["read-project"],
+                                },
                             },
                         },
                     },
@@ -120,7 +127,45 @@ function handle(msg) {
             return;
         }
         const mode = args.mode || "dry-run";
+        const caps = Array.isArray(args.capabilities) ? args.capabilities.map(String) : ["read-project"];
+        const canWrite = caps.some((c) => {
+            const t = c.toLowerCase();
+            return t === "project-edit" || t === "write-assets" || t === "project_edit" || t === "write_assets";
+        });
+        if (mode === "apply" && !canWrite) {
+            send({
+                jsonrpc: "2.0",
+                id,
+                result: {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                ok: false,
+                                diagnostics: [
+                                    {
+                                        severity: "error",
+                                        code: "spark.edit.capability_denied",
+                                        message: "apply requires capabilities including project-edit or write-assets",
+                                    },
+                                ],
+                                changes: [],
+                                transaction: "rolled_back",
+                            }),
+                        },
+                    ],
+                    isError: true,
+                },
+            });
+            return;
+        }
         const shellArgs = ["--mode", mode, "--json"];
+        for (const c of caps) {
+            shellArgs.push("--capability", c);
+        }
+        if (mode === "apply" && canWrite && caps.length === 0) {
+            shellArgs.push("--capability", "project-edit");
+        }
         if (args.cwd) {
             shellArgs.push("--cwd", String(args.cwd));
         }

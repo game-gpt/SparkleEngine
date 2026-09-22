@@ -23,6 +23,8 @@ export interface SparkHostBindings {
     assetLen(id: number): number | null | undefined;
     /** 执行 VON 编辑计划，返回 JSON 报告字符串。mode: check | dry-run | apply */
     runEditPlan(root: string, mode: string, von: string): string;
+    /** 带能力 token（如 project-edit）的编辑入口。 */
+    runEditPlanWithCaps(root: string, mode: string, von: string, capabilities: string[]): string;
 }
 
 /** napi-rs 导出的构造器（类名 `JsSparkHost`）。 */
@@ -33,6 +35,7 @@ interface SparkAddon {
         loadBytes(root: string, key: string): number;
         assetLen(id: number): number | null | undefined;
         runEditPlan(root: string, mode: string, von: string): string;
+        runEditPlanWithCaps(root: string, mode: string, von: string, capabilities: string[]): string;
     };
 }
 
@@ -68,6 +71,8 @@ export function loadSpark(_options: LoadOptions = {}): SparkHostBindings {
         loadBytes: (root, key) => host.loadBytes(root, key),
         assetLen: (id) => host.assetLen(id),
         runEditPlan: (root, mode, von) => host.runEditPlan(root, mode, von),
+        runEditPlanWithCaps: (root, mode, von, capabilities) =>
+            host.runEditPlanWithCaps(root, mode, von, capabilities),
     };
     return _cached;
 }
