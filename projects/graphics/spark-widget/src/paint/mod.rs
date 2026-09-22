@@ -1,4 +1,8 @@
-//! Paint traversal：retained 树 → DrawList。
+//! Paint traversal：retained 树 → [`UiRenderBatch`]（再可选刷入 DrawList）。
+
+mod batch;
+
+pub use batch::UiRenderBatch;
 
 use spark_renderer::DrawList;
 use spark_types::{Color, Rect, Vec2};
@@ -12,10 +16,28 @@ use crate::{
     tree::WidgetTree,
 };
 
-/// 遍历树并写入绘制命令。
-pub fn paint_tree(tree: &WidgetTree, theme: &Theme, motion: &MotionManager, textures: &mut dyn UiTextureResolver, draw: &mut DrawList) {
-    draw.begin_hud();
-    paint_node(tree, theme, motion, textures, draw, tree.root());
+/// 遍历树写入 [`UiRenderBatch`]，再刷入 `draw` 的 HUD 层。
+pub fn paint_tree(
+    tree: &WidgetTree,
+    theme: &Theme,
+    motion: &MotionManager,
+    textures: &mut dyn UiTextureResolver,
+    draw: &mut DrawList,
+) {
+    let mut batch = UiRenderBatch::new();
+    paint_tree_into(tree, theme, motion, textures, &mut batch);
+    batch.flush_hud(draw);
+}
+
+/// 遍历树，只写入 UI 批次（不碰世界 [`DrawList`]）。
+pub fn paint_tree_into(
+    tree: &WidgetTree,
+    theme: &Theme,
+    motion: &MotionManager,
+    textures: &mut dyn UiTextureResolver,
+    batch: &mut UiRenderBatch,
+) {
+    paint_node(tree, theme, motion, textures, batch, tree.root());
 }
 
 fn paint_node(
@@ -23,11 +45,10 @@ fn paint_node(
     theme: &Theme,
     motion: &MotionManager,
     textures: &mut dyn UiTextureResolver,
-    draw: &mut DrawList,
+    batch: &mut UiRenderBatch,
     id: crate::id::WidgetId,
 ) {
-    let Some(node) = tree.node(id)
-    else {
+    let Some(node) = tree.node(id) else {
         return;
     };
     if !node.state.visible {
@@ -38,25 +59,25 @@ fn paint_node(
     let sample = motion.sample(id);
     style.opacity *= sample.opacity;
     let is_scroll = matches!(node.kind, WidgetKind::ScrollView | WidgetKind::ListView);
-    paint_widget(draw, theme, textures, node, &style, sample);
+    paint_widget(batch, theme, textures, node, &style, sample);
 
     if is_scroll {
         if let Some(clip) = node.computed.clip_rect.or(Some(node.computed.content_rect)) {
-            draw.push_clip(clip);
+            batch.push_clip(clip);
         }
     }
 
     for child in &node.children {
-        paint_node(tree, theme, motion, textures, draw, *child);
+        paint_node(tree, theme, motion, textures, batch, *child);
     }
 
     if is_scroll {
-        draw.pop_clip();
-        paint_scrollbar(draw, theme, node);
+        batch.pop_clip();
+        paint_scrollbar(batch, theme, node);
     }
 }
 
-fn paint_scrollbar(draw: &mut DrawList, theme: &Theme, node: &WidgetNode) {
+fn paint_scrollbar(batch: &mut UiRenderBatch, theme: &Theme, node: &WidgetNode) {
     let scroll = &node.scroll;
     if scroll.content_size.y <= scroll.viewport_size.y + 0.5 {
         return;
@@ -69,11 +90,14 @@ fn paint_scrollbar(draw: &mut DrawList, theme: &Theme, node: &WidgetNode) {
     let max_offset = (scroll.content_size.y - scroll.viewport_size.y).max(1.0);
     let t = (scroll.offset.y / max_offset).clamp(0.0, 1.0);
     let thumb_y = track.y + (track_h - thumb_h) * t;
-    draw.fill_rect(Rect::new(track.x + track.w - bar_w, thumb_y, bar_w, thumb_h), with_alpha(theme.colors.border, 0.9));
+    batch.fill_rect(
+        Rect::new(track.x + track.w - bar_w, thumb_y, bar_w, thumb_h),
+        with_alpha(theme.colors.border, 0.9),
+    );
 }
 
 fn paint_widget(
-    draw: &mut DrawList,
+    batch: &mut UiRenderBatch,
     theme: &Theme,
     textures: &mut dyn UiTextureResolver,
     node: &WidgetNode,
@@ -83,15 +107,15 @@ fn paint_widget(
     let rect = scaled_rect(node.computed.rect, sample.scale);
     match node.kind {
         WidgetKind::Root | WidgetKind::Spacer => {}
-        WidgetKind::Label => paint_label(draw, node, style, theme),
-        WidgetKind::Button => paint_button(draw, node, style, theme, rect),
-        WidgetKind::Checkbox | WidgetKind::Toggle => paint_checkbox(draw, node, style, theme),
-        WidgetKind::Radio => paint_radio(draw, node, style, theme),
-        WidgetKind::Slider => paint_slider(draw, node, style, theme),
-        WidgetKind::ProgressBar => paint_progress(draw, node, style, theme),
-        WidgetKind::TextField | WidgetKind::TextArea => paint_text_field(draw, node, style, theme),
-        WidgetKind::Separator => paint_separator(draw, node, style),
-        WidgetKind::Image => paint_image(draw, textures, node, style, rect),
+        WidgetKind::Label => paint_label(batch, node, style, theme),
+        WidgetKind::Button => paint_button(batch, node, style, theme, rect),
+        WidgetKind::Checkbox | WidgetKind::Toggle => paint_checkbox(batch, node, style, theme),
+        WidgetKind::Radio => paint_radio(batch, node, style, theme),
+        WidgetKind::Slider => paint_slider(batch, node, style, theme),
+        WidgetKind::ProgressBar => paint_progress(batch, node, style, theme),
+        WidgetKind::TextField | WidgetKind::TextArea => paint_text_field(batch, node, style, theme),
+        WidgetKind::Separator => paint_separator(batch, node, style),
+        WidgetKind::Image => paint_image(batch, textures, node, style, rect),
         WidgetKind::Container
         | WidgetKind::Panel
         | WidgetKind::ScrollView
@@ -105,9 +129,9 @@ fn paint_widget(
         | WidgetKind::TreeView
         | WidgetKind::TabView
         | WidgetKind::SplitView => {
-            fill_if_opaque(draw, rect, style);
+            fill_if_opaque(batch, rect, style);
             if node.state.focused {
-                stroke_rect(draw, rect, with_alpha(style.border, style.opacity), 2.0);
+                stroke_rect(batch, rect, with_alpha(style.border, style.opacity), 2.0);
             }
         }
     }
@@ -124,80 +148,101 @@ fn scaled_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(cx - w * 0.5, cy - h * 0.5, w, h)
 }
 
-fn paint_image(draw: &mut DrawList, textures: &mut dyn UiTextureResolver, node: &WidgetNode, style: &ComputedStyle, rect: Rect) {
-    fill_if_opaque(draw, rect, style);
-    let Some(image) = node.content.image.as_ref()
-    else {
+fn paint_image(
+    batch: &mut UiRenderBatch,
+    textures: &mut dyn UiTextureResolver,
+    node: &WidgetNode,
+    style: &ComputedStyle,
+    rect: Rect,
+) {
+    fill_if_opaque(batch, rect, style);
+    let Some(image) = node.content.image.as_ref() else {
         return;
     };
-    let Some(resolved) = textures.resolve(image.asset)
-    else {
+    let Some(resolved) = textures.resolve(image.asset) else {
         return;
     };
     if resolved.is_drawable() {
-        let Some(texture) = resolved.texture
-        else {
+        let Some(texture) = resolved.texture else {
             return;
         };
         let tint = with_alpha(image.tint, style.opacity);
         let _sampler = resolved.sampler;
-        draw.tex_rect(texture, rect, image.uv, tint);
+        batch.tex_rect(texture, rect, image.uv, tint);
         return;
     }
     if resolved.is_pending() {
         // 占位：半透明深灰，不阻塞布局；宿主完成上传后下一帧可 Resident。
-        draw.fill_rect(rect, with_alpha(Color::rgb(0.18, 0.18, 0.20), style.opacity * 0.55));
+        batch.fill_rect(rect, with_alpha(Color::rgb(0.18, 0.18, 0.20), style.opacity * 0.55));
     }
 }
 
-fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, _theme: &Theme) {
-    let Some(text) = node.content.text.as_deref()
-    else {
+fn paint_label(batch: &mut UiRenderBatch, node: &WidgetNode, style: &ComputedStyle, _theme: &Theme) {
+    let Some(text) = node.content.text.as_deref() else {
         return;
     };
     let size = style.font_size;
     let color = with_alpha(style.foreground, style.opacity);
     let rect = node.computed.content_rect;
-    draw.text(rect.x, rect.y + 2.0, size, color, text);
+    batch.text(rect.x, rect.y + 2.0, size, color, text);
 }
 
-fn paint_button(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, _theme: &Theme, rect: Rect) {
-    fill_if_opaque(draw, rect, style);
+fn paint_button(
+    batch: &mut UiRenderBatch,
+    node: &WidgetNode,
+    style: &ComputedStyle,
+    _theme: &Theme,
+    rect: Rect,
+) {
+    fill_if_opaque(batch, rect, style);
     if node.state.focused {
-        stroke_rect(draw, rect, with_alpha(style.border, style.opacity), 2.0);
+        stroke_rect(batch, rect, with_alpha(style.border, style.opacity), 2.0);
     }
     if let Some(text) = node.content.text.as_deref() {
         let size = style.font_size;
-        let measured = text::measure_plain(text, &TextStyle { size, color: style.foreground, ..TextStyle::default() }, Some(rect.w));
+        let measured = text::measure_plain(
+            text,
+            &TextStyle {
+                size,
+                color: style.foreground,
+                ..TextStyle::default()
+            },
+            Some(rect.w),
+        );
         let x = rect.x + ((rect.w - measured.size.x) * 0.5).max(0.0);
         let y = rect.y + ((rect.h - measured.size.y) * 0.5).max(0.0);
         // 透明底菜单字：描边阴影，贴近原版可读性。
         if style.background.a < 0.01 {
             let shadow = Color::rgba(0.0, 0.0, 0.0, 0.85 * style.opacity);
             for (ox, oy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (1.0, 1.0)] {
-                draw.text(x + ox, y + oy, size, shadow, text);
+                batch.text(x + ox, y + oy, size, shadow, text);
             }
         }
-        draw.text(x, y, size, with_alpha(style.foreground, style.opacity), text);
+        batch.text(x, y, size, with_alpha(style.foreground, style.opacity), text);
     }
 }
 
-fn paint_checkbox(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
+fn paint_checkbox(batch: &mut UiRenderBatch, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
     let box_size = 18.0;
     let rect = node.computed.content_rect;
     let box_rect = Rect::new(rect.x, rect.y + ((rect.h - box_size) * 0.5).max(0.0), box_size, box_size);
-    draw.fill_rect(box_rect, with_alpha(theme.colors.background, style.opacity));
-    stroke_rect(draw, box_rect, with_alpha(style.border, style.opacity), 1.0);
+    batch.fill_rect(box_rect, with_alpha(theme.colors.background, style.opacity));
+    stroke_rect(batch, box_rect, with_alpha(style.border, style.opacity), 1.0);
     if node.content.checked || node.state.checked {
         let inset = 4.0;
-        draw.fill_rect(
-            Rect::new(box_rect.x + inset, box_rect.y + inset, box_size - inset * 2.0, box_size - inset * 2.0),
+        batch.fill_rect(
+            Rect::new(
+                box_rect.x + inset,
+                box_rect.y + inset,
+                box_size - inset * 2.0,
+                box_size - inset * 2.0,
+            ),
             with_alpha(style.accent, style.opacity),
         );
     }
     if let Some(text) = node.content.text.as_deref() {
         let size = theme.typography.body_size;
-        draw.text(
+        batch.text(
             box_rect.x + box_size + 8.0,
             rect.y + ((rect.h - size) * 0.5).max(0.0),
             size,
@@ -206,50 +251,61 @@ fn paint_checkbox(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle,
         );
     }
     if node.state.focused {
-        stroke_rect(draw, node.computed.rect, with_alpha(style.border, style.opacity), 2.0);
+        stroke_rect(batch, node.computed.rect, with_alpha(style.border, style.opacity), 2.0);
     }
 }
 
-fn paint_radio(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
+fn paint_radio(batch: &mut UiRenderBatch, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
     // 首切：与 checkbox 相同视觉，后续再画圆。
-    paint_checkbox(draw, node, style, theme);
+    paint_checkbox(batch, node, style, theme);
 }
 
-fn paint_slider(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
+fn paint_slider(batch: &mut UiRenderBatch, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
     let rect = node.computed.content_rect;
     let track_h = 6.0;
     let track_y = rect.y + ((rect.h - track_h) * 0.5).max(0.0);
     let track = Rect::new(rect.x, track_y, rect.w, track_h);
-    draw.fill_rect(track, with_alpha(theme.colors.track, style.opacity));
+    batch.fill_rect(track, with_alpha(theme.colors.track, style.opacity));
 
     let t = value_t(&node.content);
     let fill_w = (track.w * t).max(0.0);
     if fill_w > 0.0 {
-        draw.fill_rect(Rect::new(track.x, track.y, fill_w, track.h), with_alpha(style.accent, style.opacity));
+        batch.fill_rect(
+            Rect::new(track.x, track.y, fill_w, track.h),
+            with_alpha(style.accent, style.opacity),
+        );
     }
 
     let thumb = 14.0;
     let thumb_x = track.x + fill_w - thumb * 0.5;
-    let thumb_rect = Rect::new(thumb_x.clamp(track.x, track.x + track.w - thumb), track_y + track_h * 0.5 - thumb * 0.5, thumb, thumb);
-    draw.fill_rect(thumb_rect, with_alpha(style.foreground, style.opacity));
+    let thumb_rect = Rect::new(
+        thumb_x.clamp(track.x, track.x + track.w - thumb),
+        track_y + track_h * 0.5 - thumb * 0.5,
+        thumb,
+        thumb,
+    );
+    batch.fill_rect(thumb_rect, with_alpha(style.foreground, style.opacity));
     if node.state.focused {
-        stroke_rect(draw, node.computed.rect, with_alpha(style.border, style.opacity), 2.0);
+        stroke_rect(batch, node.computed.rect, with_alpha(style.border, style.opacity), 2.0);
     }
 }
 
-fn paint_progress(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
+fn paint_progress(batch: &mut UiRenderBatch, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
     let rect = node.computed.content_rect;
-    draw.fill_rect(rect, with_alpha(theme.colors.track, style.opacity));
+    batch.fill_rect(rect, with_alpha(theme.colors.track, style.opacity));
     let t = value_t(&node.content);
     let fill_w = (rect.w * t).max(0.0);
     if fill_w > 0.0 {
-        draw.fill_rect(Rect::new(rect.x, rect.y, fill_w, rect.h), with_alpha(style.accent, style.opacity));
+        batch.fill_rect(
+            Rect::new(rect.x, rect.y, fill_w, rect.h),
+            with_alpha(style.accent, style.opacity),
+        );
     }
 }
 
-fn paint_text_field(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
-    fill_if_opaque(draw, node.computed.rect, style);
-    stroke_rect(draw, node.computed.rect, with_alpha(style.border, style.opacity), 1.0);
+fn paint_text_field(batch: &mut UiRenderBatch, node: &WidgetNode, style: &ComputedStyle, theme: &Theme) {
+    fill_if_opaque(batch, node.computed.rect, style);
+    stroke_rect(batch, node.computed.rect, with_alpha(style.border, style.opacity), 1.0);
     let text = node.content.text.as_deref().unwrap_or("");
     let composition = node.content.composition.as_str();
     let size = theme.typography.body_size;
@@ -265,53 +321,61 @@ fn paint_text_field(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyl
             let (lo, hi) = if a < cursor { (a, cursor) } else { (cursor, a) };
             let x0 = text_x + lo as f32 * char_w;
             let x1 = text_x + hi as f32 * char_w;
-            draw.fill_rect(Rect::new(x0, text_y, (x1 - x0).max(1.0), size), with_alpha(theme.colors.accent, style.opacity * 0.35));
+            batch.fill_rect(
+                Rect::new(x0, text_y, (x1 - x0).max(1.0), size),
+                with_alpha(theme.colors.accent, style.opacity * 0.35),
+            );
         }
     }
 
     let before: String = text.chars().take(cursor).collect();
     let after: String = text.chars().skip(cursor).collect();
-    draw.text(text_x, text_y, size, with_alpha(style.foreground, style.opacity), &before);
+    batch.text(text_x, text_y, size, with_alpha(style.foreground, style.opacity), &before);
     let mut x = text_x + before.chars().count() as f32 * char_w;
     if !composition.is_empty() {
         let comp_w = composition.chars().count() as f32 * char_w;
-        draw.text(x, text_y, size, with_alpha(theme.colors.accent, style.opacity), composition);
-        draw.fill_rect(Rect::new(x, text_y + size - 2.0, comp_w.max(1.0), 2.0), with_alpha(theme.colors.accent, style.opacity));
+        batch.text(x, text_y, size, with_alpha(theme.colors.accent, style.opacity), composition);
+        batch.fill_rect(
+            Rect::new(x, text_y + size - 2.0, comp_w.max(1.0), 2.0),
+            with_alpha(theme.colors.accent, style.opacity),
+        );
         x += comp_w;
     }
     if !after.is_empty() {
-        draw.text(x, text_y, size, with_alpha(style.foreground, style.opacity), &after);
+        batch.text(x, text_y, size, with_alpha(style.foreground, style.opacity), &after);
     }
 
     if node.state.focused {
-        stroke_rect(draw, node.computed.rect, with_alpha(theme.colors.accent, style.opacity), 2.0);
+        stroke_rect(batch, node.computed.rect, with_alpha(theme.colors.accent, style.opacity), 2.0);
         let caret_x = if composition.is_empty() {
             text_x + cursor as f32 * char_w
-        }
-        else {
+        } else {
             text_x + (before.chars().count() + composition.chars().count()) as f32 * char_w
         };
-        draw.fill_rect(Rect::new(caret_x, text_y, 1.5, size), with_alpha(theme.colors.accent, style.opacity));
+        batch.fill_rect(
+            Rect::new(caret_x, text_y, 1.5, size),
+            with_alpha(theme.colors.accent, style.opacity),
+        );
     }
 }
 
-fn paint_separator(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle) {
-    draw.fill_rect(node.computed.rect, with_alpha(style.background, style.opacity));
+fn paint_separator(batch: &mut UiRenderBatch, node: &WidgetNode, style: &ComputedStyle) {
+    batch.fill_rect(node.computed.rect, with_alpha(style.background, style.opacity));
 }
 
-fn fill_if_opaque(draw: &mut DrawList, rect: Rect, style: &ComputedStyle) {
+fn fill_if_opaque(batch: &mut UiRenderBatch, rect: Rect, style: &ComputedStyle) {
     let color = with_alpha(style.background, style.opacity);
     if color.a > 0.001 {
-        draw.fill_rect(rect, color);
+        batch.fill_rect(rect, color);
     }
 }
 
-fn stroke_rect(draw: &mut DrawList, rect: Rect, color: Color, thickness: f32) {
+fn stroke_rect(batch: &mut UiRenderBatch, rect: Rect, color: Color, thickness: f32) {
     let t = thickness.max(1.0);
-    draw.fill_rect(Rect::new(rect.x, rect.y, rect.w, t), color);
-    draw.fill_rect(Rect::new(rect.x, rect.y + rect.h - t, rect.w, t), color);
-    draw.fill_rect(Rect::new(rect.x, rect.y, t, rect.h), color);
-    draw.fill_rect(Rect::new(rect.x + rect.w - t, rect.y, t, rect.h), color);
+    batch.fill_rect(Rect::new(rect.x, rect.y, rect.w, t), color);
+    batch.fill_rect(Rect::new(rect.x, rect.y + rect.h - t, rect.w, t), color);
+    batch.fill_rect(Rect::new(rect.x, rect.y, t, rect.h), color);
+    batch.fill_rect(Rect::new(rect.x + rect.w - t, rect.y, t, rect.h), color);
 }
 
 fn with_alpha(mut color: Color, opacity: f32) -> Color {
@@ -324,10 +388,10 @@ fn value_t(content: &crate::node::WidgetContent) -> f32 {
     ((content.value - content.value_min) / span).clamp(0.0, 1.0)
 }
 
-/// 绘制上下文，供自定义 Widget 把命令写入同一 [`DrawList`]。
+/// 绘制上下文，供自定义 Widget 把命令写入同一 [`UiRenderBatch`]。
 pub struct PaintContext<'a> {
-    /// 本帧 HUD / GUI 绘制列表。
-    pub draw: &'a mut DrawList,
+    /// 本帧 UI 绘制批次。
+    pub batch: &'a mut UiRenderBatch,
     /// 当前主题（色板与字号）。
     pub theme: &'a Theme,
 }

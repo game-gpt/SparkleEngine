@@ -99,3 +99,32 @@ fn paint_image_pending_draws_placeholder() {
     assert!(draw.hud_tex_quads.is_empty(), "pending must not sample texture");
     assert!(!draw.hud_quads.is_empty(), "pending should draw placeholder fill");
 }
+
+#[test]
+fn paint_tree_into_batch_then_flush() {
+    let mut tree = WidgetTree::new();
+    let root = tree.root();
+    label_widget()
+        .text("batch")
+        .mount(&mut tree, root)
+        .unwrap();
+    run_layout(&mut tree, Vec2::new(200.0, 80.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+
+    let theme = Theme::default();
+    let motion = spark_widget::motion::MotionManager::new();
+    let mut batch = UiRenderBatch::new();
+    paint_tree_into(
+        &tree,
+        &theme,
+        &motion,
+        &mut spark_widget::asset::NullTextureResolver,
+        &mut batch,
+    );
+    assert!(batch.command_count() >= 1);
+    assert!(!batch.texts.is_empty());
+
+    let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+    batch.flush_hud(&mut draw);
+    assert_eq!(batch.command_count(), 0);
+    assert!(!draw.texts.is_empty());
+}
