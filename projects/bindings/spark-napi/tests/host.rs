@@ -8,3 +8,11 @@ fn info_and_geometry() {
     assert_eq!(info.npm_package, "@game-gpt/sparkle-engine");
     assert!((host.vec2_length(3.0, 4.0) - 5.0).abs() < 1e-5);
 }
+
+#[test]
+fn run_edit_plan_dry_run_json() {
+    let host = SparkJsHost::new();
+    let json = host.run_edit_plan(".", "dry-run", "ops = []").expect("run");
+    assert!(json.contains("\"ok\": true") || json.contains("\"ok\":true"));
+    assert!(json.contains("dry-run"));
+}

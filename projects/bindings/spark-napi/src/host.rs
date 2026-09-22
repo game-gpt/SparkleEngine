@@ -1,11 +1,11 @@
 //! 可被 JS / 测试共用的宿主门面。
 
 use spark_asset::{AssetCache, AssetKey, BytesLoader};
+use spark_edit::{EditMode, run_edit_plan};
 use spark_types::Vec2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EngineInfo {
-    pub name: &'static str,
+pub struct EngineInfo {    pub name: &'static str,
     pub version: &'static str,
     pub npm_package: &'static str,
 }
@@ -45,5 +45,14 @@ impl SparkJsHost {
 
     pub fn asset_len(&self, id: u32) -> Option<usize> {
         self.assets.bytes(spark_asset::AssetId(id)).map(|b| b.len())
+    }
+
+    /// 运行 VON 编辑计划，返回 JSON 报告（供 MCP / JS Agent）。
+    ///
+    /// `mode`：`check` | `dry-run` | `apply`。解析失败返回 `Err`。
+    pub fn run_edit_plan(&self, root: &str, mode: &str, von: &str) -> Result<String, String> {
+        let mode = EditMode::parse(mode).ok_or_else(|| "spark.edit.bad_mode".to_string())?;
+        let report = run_edit_plan(root, mode, von)?;
+        Ok(report.to_json())
     }
 }

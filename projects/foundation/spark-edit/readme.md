@@ -13,3 +13,14 @@ cargo run -p spark-edit --bin spark-shell -- --dry-run --json --code "ops = []"
 `spark shell` 与 `spark script` 同义，转发到 `spark-shell`。
 
 `--mode check|dry-run|apply` 可用 `--check` / `--dry-run` / `--apply` 简写。
+
+MCP / Agent 应只暴露少量工具，内部调用同一入口：
+
+- Rust：`spark_edit::run_edit_plan`
+- N-API / JS：`loadSpark().runEditPlan(root, mode, von)`（需重建 napi）
+- CLI：`spark shell --code … --json`
+- 极简 MCP stdio：`node projects/hosts/sparkle-engine/bin/spark-mcp.js`（工具名 `spark_script`）
+
+```bash
+cargo test -p spark-edit
+```

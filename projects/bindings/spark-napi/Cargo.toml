@@ -21,6 +21,7 @@ node = ["dep:napi", "dep:napi-derive"]
 [dependencies]
 spark-types = { workspace = true }
 spark-asset = { workspace = true }
+spark-edit = { workspace = true }
 spark-geometry = { workspace = true }
 napi = { workspace = true, optional = true }
 napi-derive = { workspace = true, optional = true }

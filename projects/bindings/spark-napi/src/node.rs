@@ -45,4 +45,12 @@ impl JsSparkHost {
     pub fn asset_len(&self, id: u32) -> Option<u32> {
         self.inner.asset_len(id).map(|n| n as u32)
     }
+
+    /// 执行 VON 编辑计划，返回 JSON 字符串报告。
+    #[napi]
+    pub fn run_edit_plan(&self, root: String, mode: String, von: String) -> Result<String> {
+        self.inner
+            .run_edit_plan(&root, &mode, &von)
+            .map_err(|e| Error::from_reason(e))
+    }
 }

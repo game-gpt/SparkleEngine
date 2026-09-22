@@ -2871,6 +2871,7 @@ dependencies = [
  "napi",
  "napi-derive",
  "spark-asset",
+ "spark-edit",
  "spark-geometry",
  "spark-types",
 ]
