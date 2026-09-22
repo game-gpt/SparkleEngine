@@ -27,7 +27,7 @@ pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
     Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost, GameHost3d, Input, Key, MAX_SKIN_JOINTS, Mat4,
     MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, TexQuadCmd,
-    TextCmd, TextureId, TextureUpload, UiRenderBatch, Vec3, WindowConfig, alloc_texture_id, compose_ui_hud,
+    TextCmd, TextureId, TextureUpload, UiRenderBatch, Vec3, WindowConfig, alloc_texture_id,
 };
 pub use texture_upload::{
     create_texture_from_upload, create_texture_from_upload_with_caps, device_caps_from_adapter, expected_mip_levels, map_texture_format,
@@ -401,12 +401,15 @@ impl GpuState {
         let _ = &self.glyph_view;
     }
 
-    fn render(&mut self, list: &DrawList) -> Result<(), SparkError> {
+    fn render(&mut self, list: &DrawList, ui: &UiRenderBatch) -> Result<(), SparkError> {
         let sw = self.config.width as f32;
         let sh = self.config.height as f32;
         self.queue.write_buffer(&self.uniform_buf, 0, bytemuck::bytes_of(&Uniforms { screen: [sw, sh], _pad: [0.0, 0.0] }));
 
-        let mut solids = Vec::with_capacity((list.quads.len() + list.hud_quads.len()) * 6);
+        // 世界纯色 → DrawList HUD 纯色（兼容）→ UI 批次纯色。
+        let mut solids = Vec::with_capacity(
+            (list.quads.len() + list.hud_quads.len() + ui.quads.len()) * 6,
+        );
         for q in &list.quads {
             push_solid_quad(&mut solids, q);
         }
@@ -414,14 +417,21 @@ impl GpuState {
         for q in &list.hud_quads {
             push_solid_quad(&mut solids, q);
         }
+        for q in &ui.quads {
+            push_solid_quad(&mut solids, q);
+        }
 
         let mut glyphs = Vec::new();
         for t in &list.texts {
             push_text_glyphs(&mut glyphs, &mut self.glyph_cache, t);
         }
+        for t in &ui.texts {
+            push_text_glyphs(&mut glyphs, &mut self.glyph_cache, t);
+        }
         self.upload_atlas_if_needed();
 
-        self.tex_quads.prepare_frame(&self.device, &self.queue, &self.uniform_buf, list)?;
+        self.tex_quads
+            .prepare_frame(&self.device, &self.queue, &self.uniform_buf, list, &ui.tex_quads)?;
 
         self.ensure_solid_cap(solids.len() as u64)?;
         self.ensure_glyph_cap(glyphs.len() as u64)?;
@@ -721,8 +731,8 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         self.host.draw(&mut draw);
         let mut ui = UiRenderBatch::new();
         self.host.draw_ui(&mut ui);
-        compose_ui_hud(&mut draw, &mut ui);
-        if let Err(e) = gpu.render(&draw) {
+        // UI 批次直读提交，不再并入 DrawList。
+        if let Err(e) = gpu.render(&draw, &ui) {
             tracing::error!(event = "spark.renderer.render_failed", ?e);
             event_loop.exit();
             return;

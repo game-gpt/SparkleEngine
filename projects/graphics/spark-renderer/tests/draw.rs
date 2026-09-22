@@ -37,7 +37,8 @@ fn ui_batch_flush_merges_into_hud_only() {
     let mut ui = UiRenderBatch::new();
     ui.fill_rect(Rect::new(10.0, 10.0, 8.0, 8.0), Color::rgb(0.0, 1.0, 0.0));
     ui.text(12.0, 12.0, 14.0, Color::rgb(1.0, 1.0, 1.0), "ok");
-    compose_ui_hud(&mut world, &mut ui);
+    // 兼容桥仍可用；正式路径由后端直读 `ui`。
+    world.extend_hud(&mut ui);
 
     assert_eq!(world.quads.len(), 1);
     assert_eq!(world.hud_quads.len(), 1);

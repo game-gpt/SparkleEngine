@@ -269,6 +269,7 @@ impl TexQuad2dGpu {
         queue: &wgpu::Queue,
         uniform_buf: &wgpu::Buffer,
         list: &DrawList,
+        ui_tex_quads: &[TexQuadCmd],
     ) -> Result<(), SparkError> {
         self.ingest_uploads(device, queue, uniform_buf, &list.texture_uploads)?;
         self.frame_ranges.clear();
@@ -276,7 +277,9 @@ impl TexQuad2dGpu {
 
         Self::append_cmds_ordered(&self.textures, &list.tex_quads, &mut all_verts, &mut self.frame_ranges);
         self.world_vert_end = all_verts.len() as u32;
+        // DrawList 上残留的 HUD 纹理（兼容旧游戏路径）+ UI 批次纹理。
         Self::append_cmds_ordered(&self.textures, &list.hud_tex_quads, &mut all_verts, &mut self.frame_ranges);
+        Self::append_cmds_ordered(&self.textures, ui_tex_quads, &mut all_verts, &mut self.frame_ranges);
 
         if !all_verts.is_empty() {
             self.ensure_cap(device, all_verts.len() as u64);

@@ -100,10 +100,11 @@ pub trait GameHost {
     fn update(&mut self, frame: &FrameCtx<'_>);
     /// 将本帧 2D 命令写入 [`DrawList`]（世界 / HUD / 纹理上传）。
     fn draw(&mut self, draw: &mut DrawList);
-    /// 可选：单独填充 UI 批次（不经世界层）。默认空实现。
-    ///
-    /// 宿主循环可在 `draw` 之后调用 [`UiRenderBatch::flush_hud`]，或由后端直读批次。
-    fn draw_ui(&mut self, _ui: &mut UiRenderBatch) {}
+/// 可选：单独填充 UI 批次（不经世界层）。默认空实现。
+///
+/// 2D wgpu 宿主在 `draw` 之后调用本方法，并把批次与 [`DrawList`] **分开**提交；
+/// 不要再把 UI 命令写进 `DrawList::hud_*`。
+fn draw_ui(&mut self, _ui: &mut UiRenderBatch) {}
     /// 返回 `true` 时宿主循环应退出。默认永不退出。
     fn should_exit(&self) -> bool {
         false
@@ -114,7 +115,11 @@ pub trait GameHost {
     }
 }
 
-/// 将 `ui` 刷入 `draw` 的 HUD 层（世界命令保持不变）。
+/// 兼容桥：把 `ui` 刷入 `draw` 的 HUD 层。
+///
+/// 新的 2D 宿主循环应把 [`UiRenderBatch`] 与 [`DrawList`] **分开**交给后端；
+/// 本函数仅供测试或尚未切分的游戏临时合并。
+#[deprecated(note = "pass UiRenderBatch to the GPU backend instead of merging into DrawList")]
 pub fn compose_ui_hud(draw: &mut DrawList, ui: &mut UiRenderBatch) {
     ui.flush_hud(draw);
 }
