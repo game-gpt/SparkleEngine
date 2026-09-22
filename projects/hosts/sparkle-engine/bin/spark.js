@@ -18,6 +18,7 @@ function usage() {
   spark shell --path <plan.edit.von> [--mode check|dry-run|apply] [--cwd <dir>] [--json]
   spark shell --code <von-text> [--check|--dry-run|--apply] [--json]
   spark script --path <plan.edit.von> ...
+  spark mcp
 
 Sparkle Engine CLI（@game-gpt/sparkle-engine）
 
@@ -25,6 +26,7 @@ run     读取 package.json，启动游戏（rust/hybrid → cargo run -p <runTa
         无 runTarget 的 script → spark-studio --play）。
 studio  打开该 npm 游戏项目的编辑器。--play 则跳过壳直接进对局。
 shell   运行 Edit Runtime（VON 编辑计划）。script 为同义入口。
+mcp     启动极简 MCP stdio（仅 spark_script → spark-shell）。
 `);
 }
 
@@ -205,6 +207,21 @@ function main() {
     if (cmd === "shell" || cmd === "script") {
         runShell(argv.slice(1));
         return;
+    }
+
+    if (cmd === "mcp") {
+        const mcp = path.join(__dirname, "spark-mcp.js");
+        const result = spawnSync(process.execPath, [mcp, ...argv.slice(1)], {
+            stdio: "inherit",
+            windowsHide: true,
+            env: process.env,
+            cwd: process.cwd(),
+        });
+        if (result.error) {
+            console.error(result.error);
+            process.exit(1);
+        }
+        process.exit(result.status ?? 1);
     }
 
     if (cmd === "run") {
