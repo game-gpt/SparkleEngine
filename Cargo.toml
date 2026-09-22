@@ -102,6 +102,7 @@ symphonia = { version = "0.6.1", features = [
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+uuid = { version = "1", features = ["v7", "serde"] }
 rodio = { version = "0.22", default-features = true }
 gltf = { version = "1.4", default-features = false, features = ["utils", "names"] }
 base64 = "0.23"
