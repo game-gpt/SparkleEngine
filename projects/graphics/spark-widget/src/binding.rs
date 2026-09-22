@@ -109,6 +109,33 @@ pub fn set_foreground(tree: &mut WidgetTree, id: WidgetId, color: Option<Color>)
     true
 }
 
+/// 写入不透明度覆盖（`0..=1`）。
+pub fn set_opacity(tree: &mut WidgetTree, id: WidgetId, opacity: Option<f32>) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.style.opacity = opacity;
+    true
+}
+
+/// 写入圆角半径覆盖。
+pub fn set_corner_radius(tree: &mut WidgetTree, id: WidgetId, radius: Option<f32>) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.style.corner_radius = radius;
+    true
+}
+
+/// 写入字号覆盖。
+pub fn set_font_size(tree: &mut WidgetTree, id: WidgetId, size: Option<f32>) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.style.font_size = size;
+    true
+}
+
 /// 绝对定位到 `(x, y)`，不改宽高。
 pub fn set_absolute_offset(tree: &mut WidgetTree, id: WidgetId, x: f32, y: f32) -> bool {
     let Some(node) = tree.node_mut(id) else {
@@ -234,6 +261,39 @@ pub fn set_foreground_by_key(
         .is_some_and(|id| set_foreground(tree, id, color))
 }
 
+/// 自 `root` 子树按 key 查找并写不透明度。
+pub fn set_opacity_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    opacity: Option<f32>,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_opacity(tree, id, opacity))
+}
+
+/// 自 `root` 子树按 key 查找并写圆角。
+pub fn set_corner_radius_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    radius: Option<f32>,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_corner_radius(tree, id, radius))
+}
+
+/// 自 `root` 子树按 key 查找并写字号。
+pub fn set_font_size_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    size: Option<f32>,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_font_size(tree, id, size))
+}
+
 /// 自 `root` 子树按 key 查找并绝对定位。
 pub fn set_absolute_offset_by_key(
     tree: &mut WidgetTree,
@@ -258,4 +318,16 @@ pub fn set_absolute_bounds_by_key(
 ) -> bool {
     tree.find_by_key(root, key)
         .is_some_and(|id| set_absolute_bounds(tree, id, x, y, width, height))
+}
+
+/// 自 `root` 子树按 key 查找并写像素宽高。
+pub fn set_size_px_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    width: f32,
+    height: f32,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_size_px(tree, id, width, height))
 }

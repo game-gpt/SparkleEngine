@@ -36,9 +36,11 @@ pub use accessibility::{AccessibilityNode, AccessibilityTree, Role};
 pub use asset::{MapTextureResolver, NullTextureResolver, ResolvedTexture, UiImage, UiTextureResolver};
 pub use binding::{
     set_absolute_bounds, set_absolute_bounds_by_key, set_absolute_offset, set_absolute_offset_by_key,
-    set_background, set_background_by_key, set_checked, set_checked_by_key, set_disabled, set_disabled_by_key,
-    set_foreground, set_foreground_by_key, set_image, set_image_by_key, set_layout, set_selected, set_selected_by_key,
-    set_size_px, set_text, set_text_by_key, set_value, set_value_by_key, set_visible, set_visible_by_key, NullViewModel,
+    set_background, set_background_by_key, set_checked, set_checked_by_key, set_corner_radius,
+    set_corner_radius_by_key, set_disabled, set_disabled_by_key, set_font_size, set_font_size_by_key,
+    set_foreground, set_foreground_by_key, set_image, set_image_by_key, set_layout, set_opacity,
+    set_opacity_by_key, set_selected, set_selected_by_key, set_size_px, set_size_px_by_key, set_text,
+    set_text_by_key, set_value, set_value_by_key, set_visible, set_visible_by_key, NullViewModel,
     UiViewModel,
 };
 pub use command::{UiCommand, UiCommandQueue};

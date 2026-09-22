@@ -120,4 +120,16 @@ fn absolute_and_style_bind_helpers() {
         Some(Color::rgba(0.0, 0.0, 0.0, 0.5))
     ));
     assert!(tree.node(id).unwrap().style.background.is_some());
+
+    assert!(set_opacity(&mut tree, id, Some(0.5)));
+    assert_eq!(tree.node(id).unwrap().style.opacity, Some(0.5));
+    assert!(set_font_size_by_key(&mut tree, root, "slot", Some(18.0)));
+    assert_eq!(tree.node(id).unwrap().style.font_size, Some(18.0));
+    assert!(set_corner_radius(&mut tree, id, Some(4.0)));
+    assert_eq!(tree.node(id).unwrap().style.corner_radius, Some(4.0));
+    assert!(set_size_px_by_key(&mut tree, root, "slot", 64.0, 32.0));
+    assert_eq!(
+        tree.node(id).unwrap().layout.width,
+        spark_widget::layout::Size::Px(64.0)
+    );
 }
