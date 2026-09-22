@@ -8,6 +8,7 @@
 mod cache;
 mod handle;
 mod hot_reload;
+mod index;
 mod loader;
 mod meta;
 mod reference;
@@ -15,6 +16,7 @@ mod reference;
 pub use cache::AssetCache;
 pub use handle::{AssetId, AssetKey};
 pub use hot_reload::HotReloadWatch;
+pub use index::{AssetIndex, AssetIndexError};
 pub use loader::{AssetLoader, BytesLoader, LoadError, ReloadEvent};
 pub use meta::{ASSET_META_FORMAT, AssetMeta, AssetMetaError, AssetMetaStore};
 pub use reference::AssetRef;
@@ -27,6 +29,7 @@ pub enum AssetError {
     Spark(SparkError),
     Load(LoadError),
     Meta(AssetMetaError),
+    Index(AssetIndexError),
 }
 
 impl AssetError {
@@ -35,6 +38,7 @@ impl AssetError {
             Self::Spark(e) => e.code.to_string(),
             Self::Load(e) => e.code().to_string(),
             Self::Meta(e) => e.code().to_string(),
+            Self::Index(e) => e.code().to_string(),
         }
     }
 
@@ -43,6 +47,7 @@ impl AssetError {
             Self::Spark(e) => e.args.clone(),
             Self::Load(e) => e.args(),
             Self::Meta(e) => e.args(),
+            Self::Index(e) => e.args(),
         }
     }
 }
@@ -53,6 +58,7 @@ impl std::fmt::Display for AssetError {
             Self::Spark(e) => e.fmt(f),
             Self::Load(e) => e.fmt(f),
             Self::Meta(e) => e.fmt(f),
+            Self::Index(e) => e.fmt(f),
         }
     }
 }
@@ -63,6 +69,7 @@ impl std::error::Error for AssetError {
             Self::Spark(e) => Some(e),
             Self::Load(e) => Some(e),
             Self::Meta(e) => Some(e),
+            Self::Index(e) => Some(e),
         }
     }
 }
@@ -82,5 +89,11 @@ impl From<LoadError> for AssetError {
 impl From<AssetMetaError> for AssetError {
     fn from(value: AssetMetaError) -> Self {
         Self::Meta(value)
+    }
+}
+
+impl From<AssetIndexError> for AssetError {
+    fn from(value: AssetIndexError) -> Self {
+        Self::Index(value)
     }
 }

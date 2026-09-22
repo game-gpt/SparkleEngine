@@ -5,6 +5,7 @@
 旁车 `.meta`（[`AssetMetaStore`]）保存资源 GUID（UUID v7）与可选导入设置。路径引用由 Agent / 脚本使用；GUID 仅由工具生成。`load` 在缺失旁车时返回 `spark.asset.meta_missing`，不会静默换发新身份。
 
 [`AssetRef`] 以路径为源格式（JSON 字符串）；工具 `resolve` 后可写成带 `guid` 的对象。
+[`AssetIndex`] 扫描旁车建立 GUID ↔ 路径映射，`rename` 移动文件与 `.meta` 且保持 GUID。
 
 ```rust
 use spark_asset::{AssetCache, BytesLoader};
