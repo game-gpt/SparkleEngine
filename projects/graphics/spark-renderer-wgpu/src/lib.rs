@@ -27,7 +27,7 @@ pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
     Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost, GameHost3d, Input, Key, MAX_SKIN_JOINTS, Mat4,
     MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, TexQuadCmd,
-    TextCmd, TextureId, TextureUpload, Vec3, WindowConfig, alloc_texture_id,
+    TextCmd, TextureId, TextureUpload, UiRenderBatch, Vec3, WindowConfig, alloc_texture_id, compose_ui_hud,
 };
 pub use texture_upload::{
     create_texture_from_upload, create_texture_from_upload_with_caps, device_caps_from_adapter, expected_mip_levels, map_texture_format,
@@ -719,6 +719,9 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         );
         let mut draw = DrawList::new(clear);
         self.host.draw(&mut draw);
+        let mut ui = UiRenderBatch::new();
+        self.host.draw_ui(&mut ui);
+        compose_ui_hud(&mut draw, &mut ui);
         if let Err(e) = gpu.render(&draw) {
             tracing::error!(event = "spark.renderer.render_failed", ?e);
             event_loop.exit();
