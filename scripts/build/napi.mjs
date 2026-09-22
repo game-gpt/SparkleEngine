@@ -113,7 +113,7 @@ if (!existsSync(pkgJsonPath)) {
         `${JSON.stringify(
             {
                 name: pkgName,
-                version: "0.1.0",
+                version: "0.0.0",
                 private: true,
                 description: `Prebuilt Node-API addon for \`@game-gpt/sparkle-engine\` (${plat.short}). Platform artifact only.`,
                 license: "Apache-2.0",

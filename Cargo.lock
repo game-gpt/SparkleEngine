@@ -2357,7 +2357,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "ping-pong"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-engine",
@@ -3099,7 +3099,7 @@ dependencies = [
 
 [[package]]
 name = "snake"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-engine",
@@ -3121,7 +3121,7 @@ dependencies = [
 
 [[package]]
 name = "spark-animator"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-ecs",
@@ -3130,7 +3130,7 @@ dependencies = [
 
 [[package]]
 name = "spark-asset"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "tracing",
@@ -3138,7 +3138,7 @@ dependencies = [
 
 [[package]]
 name = "spark-audio"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "rodio",
  "spark-core",
@@ -3148,21 +3148,21 @@ dependencies = [
 
 [[package]]
 name = "spark-circuit"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
 ]
 
 [[package]]
 name = "spark-core"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-diagnostics",
 ]
 
 [[package]]
 name = "spark-debugger"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-renderer",
@@ -3170,18 +3170,18 @@ dependencies = [
 
 [[package]]
 name = "spark-diagnostics"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "spark-ecs"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
 ]
 
 [[package]]
 name = "spark-engine"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-diagnostics",
@@ -3202,7 +3202,7 @@ dependencies = [
 
 [[package]]
 name = "spark-engine-galgame"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-engine",
@@ -3212,7 +3212,7 @@ dependencies = [
 
 [[package]]
 name = "spark-engine-platformer"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-engine",
@@ -3223,7 +3223,7 @@ dependencies = [
 
 [[package]]
 name = "spark-engine-rpg"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-engine",
@@ -3232,7 +3232,7 @@ dependencies = [
 
 [[package]]
 name = "spark-engine-rts"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-engine",
@@ -3241,7 +3241,7 @@ dependencies = [
 
 [[package]]
 name = "spark-engine-stg"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-engine",
@@ -3251,14 +3251,14 @@ dependencies = [
 
 [[package]]
 name = "spark-event"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
 ]
 
 [[package]]
 name = "spark-font"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "fontdue",
  "spark-core",
@@ -3267,21 +3267,21 @@ dependencies = [
 
 [[package]]
 name = "spark-gc"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
 ]
 
 [[package]]
 name = "spark-geometry"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
 ]
 
 [[package]]
 name = "spark-gltf"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "base64 0.23.1",
  "gltf",
@@ -3294,7 +3294,7 @@ dependencies = [
 
 [[package]]
 name = "spark-image"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "image",
  "spark-core",
@@ -3303,11 +3303,11 @@ dependencies = [
 
 [[package]]
 name = "spark-input"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "spark-ir"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-diagnostics",
  "spark-gc",
@@ -3316,7 +3316,7 @@ dependencies = [
 
 [[package]]
 name = "spark-jit"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-vm",
@@ -3324,7 +3324,7 @@ dependencies = [
 
 [[package]]
 name = "spark-localization"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3334,14 +3334,14 @@ dependencies = [
 
 [[package]]
 name = "spark-logger"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-diagnostics",
 ]
 
 [[package]]
 name = "spark-media"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "symphonia 0.6.1",
@@ -3350,7 +3350,7 @@ dependencies = [
 
 [[package]]
 name = "spark-napi"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "napi",
  "napi-derive",
@@ -3361,7 +3361,7 @@ dependencies = [
 
 [[package]]
 name = "spark-net"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "tracing",
@@ -3369,7 +3369,7 @@ dependencies = [
 
 [[package]]
 name = "spark-physics"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-geometry",
@@ -3378,7 +3378,7 @@ dependencies = [
 
 [[package]]
 name = "spark-plugin"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-diagnostics",
  "spark-gc",
@@ -3388,7 +3388,7 @@ dependencies = [
 
 [[package]]
 name = "spark-plugin-live2d"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-gc",
@@ -3399,7 +3399,7 @@ dependencies = [
 
 [[package]]
 name = "spark-plugin-steam"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-gc",
@@ -3410,7 +3410,7 @@ dependencies = [
 
 [[package]]
 name = "spark-renderer"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-geometry",
@@ -3419,7 +3419,7 @@ dependencies = [
 
 [[package]]
 name = "spark-renderer-wgpu"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bytemuck",
  "pollster",
@@ -3436,7 +3436,7 @@ dependencies = [
 
 [[package]]
 name = "spark-script"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-diagnostics",
@@ -3451,7 +3451,7 @@ dependencies = [
 
 [[package]]
 name = "spark-script-lua"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "oak-core",
  "oak-lua",
@@ -3464,7 +3464,7 @@ dependencies = [
 
 [[package]]
 name = "spark-script-ruby"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "oak-core",
  "oak-ruby",
@@ -3477,7 +3477,7 @@ dependencies = [
 
 [[package]]
 name = "spark-script-valkyrie"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "oak-core",
  "oak-valkyrie",
@@ -3489,7 +3489,7 @@ dependencies = [
 
 [[package]]
 name = "spark-shader"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "wgpu",
@@ -3497,7 +3497,7 @@ dependencies = [
 
 [[package]]
 name = "spark-studio"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "ping-pong",
  "serde",
@@ -3515,14 +3515,14 @@ dependencies = [
 
 [[package]]
 name = "spark-time"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
 ]
 
 [[package]]
 name = "spark-video"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-media",
@@ -3531,7 +3531,7 @@ dependencies = [
 
 [[package]]
 name = "spark-vm"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-diagnostics",
@@ -3540,7 +3540,7 @@ dependencies = [
 
 [[package]]
 name = "spark-wasm"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-asset",
  "spark-core",
@@ -3549,7 +3549,7 @@ dependencies = [
 
 [[package]]
 name = "spark-widget"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-asset",
  "spark-core",
@@ -3957,7 +3957,7 @@ dependencies = [
 
 [[package]]
 name = "tetris"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "spark-core",
  "spark-engine",

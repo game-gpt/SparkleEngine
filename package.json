@@ -1,7 +1,7 @@
 {
     "name": "spark-engine",
     "private": true,
-    "description": "Spark Engine workspace. Product face is `@game-gpt/sparkle-engine` (CLI spark + N-API + Wasm).",
+    "description": "Spark Engine workspace. Product face is @game-gpt/sparkle-engine (CLI spark, N-API, Wasm).",
     "packageManager": "pnpm@9.15.4",
     "engines": {
         "node": ">=18"

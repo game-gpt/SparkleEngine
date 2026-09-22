@@ -1,7 +1,7 @@
 {
     "name": "@game-gpt/sparkle-engine",
-    "version": "0.1.0",
-    "description": "Sparkle Engine npm 入口：经 optionalDependencies 加载平台原生 .node；全项目唯一 CLI 为 spark",
+    "version": "0.0.0",
+    "description": "Spark Engine npm 入口：经 optionalDependencies 加载平台原生 .node；CLI 为 spark",
     "type": "commonjs",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",

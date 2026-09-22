@@ -1,7 +1,7 @@
 {
     "preferUnplugged": true,
     "description": "Prebuilt Node-API addon for @game-gpt/sparkle-engine (linux-arm64). Platform artifact only.",
-    "version": "0.1.0",
+    "version": "0.0.0",
     "files": [
         "sparkle-engine.linux-arm64-gnu.node",
         "README.md"

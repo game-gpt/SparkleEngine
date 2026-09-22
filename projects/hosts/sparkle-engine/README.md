@@ -1,37 +1,71 @@
 # `@game-gpt/sparkle-engine`
 
-Sparkle 元引擎的 **TypeScript 宿主包**（`projects/hosts/sparkle-engine`）。
-
-全仓库 **唯一** npm CLI：`spark`（本包 `bin`）。Rust crate `spark-engine` / `spark-studio` 及其它 npm 包 **不得** 再声明 `bin`。
+Spark Engine 的 npm 入口：加载当前平台的原生 N-API 插件（`.node`），并提供全仓库唯一 CLI `spark`。
 
 ## 安装
 
 ```bash
-pnpm add @game-gpt/sparkle-engine
+npm install @game-gpt/sparkle-engine
+# 或 pnpm add @game-gpt/sparkle-engine
 ```
 
-`optionalDependencies` 会按 `os` / `cpu` 拉取匹配的原生平台袋。浏览器 / WASI 请显式依赖 `@game-gpt/sparkle-engine-unknown-wasm32`。
+Node.js ≥ 18。对应平台的 optionalDependency（如 `@game-gpt/sparkle-engine-win32-x64`）会随安装拉下来；本机没有匹配平台时，需要自行构建原生袋。
 
-## CLI
-
-```bash
-# 在游戏项目目录（含 package.json）
-spark studio
-spark studio --cwd path/to/game
-
-spark info
-```
-
-`spark studio` 读取当前（或 `--cwd`）目录的 `package.json`，打开该 npm 游戏项目的编辑器。**不是** Launcher / 项目选择器。
-
-## 开发
-
-在仓库根：
+在本仓库开发：
 
 ```bash
 pnpm install
 pnpm run build:ts
-node scripts/build/napi.mjs
-pnpm exec spark info
-pnpm exec spark studio
+pnpm run build:napi    # 写入 projects/platforms/native/sparkle-engine-<short>/
 ```
+
+## JavaScript API
+
+```js
+const { loadSpark, currentNativePackage, listPlatformPackages } = require("@game-gpt/sparkle-engine");
+
+console.log(currentNativePackage());
+// → "@game-gpt/sparkle-engine-win32-x64" 等
+
+const spark = loadSpark();
+console.log(spark.info());
+// → { name, version, npmPackage }
+
+console.log(spark.vec2Length(3, 4)); // 5
+
+const id = spark.loadBytes("/path/to/assets", "a.txt");
+console.log(spark.assetLen(id));
+```
+
+- `loadSpark()`：`require` 当前平台 `.node`，构造 `JsSparkHost`，缓存单例。
+- 强制 Wasm：不要走 `loadSpark`，改用 `@game-gpt/sparkle-engine-unknown-wasm32` 的 `loadSpark`。
+- 覆盖二进制路径：环境变量 `SPARK_NATIVE_NODE` 指向某个 `.node` 文件。
+
+## CLI `spark`
+
+```bash
+pnpm exec spark info
+pnpm exec spark run [--cwd <game-project>]
+pnpm exec spark studio [--cwd <game-project>] [--play] [--safe-mode]
+```
+
+| 命令     | 行为                                                                                        |
+|----------|---------------------------------------------------------------------------------------------|
+| `info`   | 加载原生绑定并打印 `info()` JSON                                                            |
+| `run`    | 读项目 `package.json` 的 `spark.runTarget` → `cargo run -p …`；没有则 `spark-studio --play` |
+| `studio` | 启动 `spark-studio` 二进制（需先 `cargo build -p spark-studio`）                            |
+
+游戏项目目录须含 `package.json`。Studio 二进制也可通过 `SPARK_STUDIO_BIN` 指定。
+
+## 平台包
+
+| 包名                                      | 用途                           |
+|-------------------------------------------|--------------------------------|
+| `@game-gpt/sparkle-engine-win32-x64` 等   | 仅含预编译 `.node`             |
+| `@game-gpt/sparkle-engine-unknown-wasm32` | 浏览器 / Wasm 加载器 + `.wasm` |
+
+列表见 `listPlatformPackages()`。
+
+## 许可证
+
+Apache-2.0

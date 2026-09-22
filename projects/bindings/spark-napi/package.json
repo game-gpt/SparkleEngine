@@ -1,7 +1,7 @@
 {
     "name": "spark-napi",
     "private": true,
-    "version": "0.1.0",
+    "version": "0.0.0",
     "description": "Rust napi 构建辅助；请用仓库根 node scripts/build/napi.mjs 写入 projects/platforms/native/sparkle-engine-<short>",
     "license": "Apache-2.0",
     "scripts": {

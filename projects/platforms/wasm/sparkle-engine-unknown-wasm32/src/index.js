@@ -29,7 +29,7 @@ export async function loadSpark(options = {}) {
         return {
             info: () => ({
                 name: "Spark Engine",
-                version: "0.1.0",
+                version: "0.0.0",
                 npm_package: "spark-unknown-wasm32",
             }),
             vec2Length: (x, y) => vec2Length(x, y),
@@ -39,7 +39,7 @@ export async function loadSpark(options = {}) {
     return {
         info: () => ({
             name: "Spark Engine",
-            version: "0.1.0",
+            version: "0.0.0",
             npm_package: "spark-unknown-wasm32",
         }),
         vec2Length: (x, y) => Math.hypot(x, y),

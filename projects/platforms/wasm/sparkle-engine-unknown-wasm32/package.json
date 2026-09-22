@@ -1,6 +1,6 @@
 {
     "name": "@game-gpt/sparkle-engine-unknown-wasm32",
-    "version": "0.1.0",
+    "version": "0.0.0",
     "description": "Sparkle Engine Wasm platform bag (wasm32-unknown-unknown) for browser / WASI / npm",
     "type": "module",
     "main": "./dist/index.js",
