@@ -78,6 +78,7 @@ impl FrameLoop {
                 dt: self.clock.delta_seconds,
                 screen_w: frame.screen_w,
                 screen_h: frame.screen_h,
+                dpi_scale: frame.dpi_scale,
                 timing: frame.timing,
             };
             host.update(&stepped);
@@ -92,6 +93,7 @@ impl FrameLoop {
                 dt: self.clock.delta_seconds,
                 screen_w: frame.screen_w,
                 screen_h: frame.screen_h,
+                dpi_scale: frame.dpi_scale,
                 timing: frame.timing,
             };
             host.update(&stepped);

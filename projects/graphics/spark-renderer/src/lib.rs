@@ -59,13 +59,29 @@ pub struct FrameTiming {
 }
 
 /// 每帧输入与时间。
+///
+/// **坐标契约（2D / 3D HUD）**：`screen_w` / `screen_h` 与 [`Input::mouse_pos`] 均为
+/// **物理像素**，与 wgpu surface / `DrawList` 一致。`dpi_scale` 为窗口 `scale_factor`
+///（如 1.0 / 1.5 / 2.0），供 UI 度量或诊断；不得与上述物理坐标混用另一套空间。
 pub struct FrameCtx<'a> {
     pub input: &'a Input,
     pub dt: f32,
+    /// 帧缓冲宽（物理像素）。
     pub screen_w: f32,
+    /// 帧缓冲高（物理像素）。
     pub screen_h: f32,
+    /// 窗口 DPI 缩放（`winit` `scale_factor`）。
+    pub dpi_scale: f32,
     /// 上一帧实测耗时；首帧或未测量后端为零。
     pub timing: FrameTiming,
+}
+
+impl FrameCtx<'_> {
+    /// 逻辑尺寸 = 物理尺寸 / `dpi_scale`（诊断与逻辑布局换算用）。
+    pub fn logical_size(&self) -> (f32, f32) {
+        let s = self.dpi_scale.max(0.01);
+        (self.screen_w / s, self.screen_h / s)
+    }
 }
 
 /// 2D 游戏宿主：更新逻辑并填充绘制列表。

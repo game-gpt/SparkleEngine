@@ -15,8 +15,12 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct FrameSnapshot {
     pub dt: f32,
+    /// 物理像素宽（与 `Input::mouse_pos` 同空间）。
     pub screen_w: f32,
+    /// 物理像素高。
     pub screen_h: f32,
+    /// 窗口 DPI 缩放。
+    pub dpi_scale: f32,
     pub input: Input,
 }
 
@@ -45,7 +49,13 @@ pub struct DrawBuffer3d {
 }
 
 fn insert_frame_snapshot(world: &mut World, frame: &FrameCtx<'_>) {
-    let snap = FrameSnapshot { dt: frame.dt, screen_w: frame.screen_w, screen_h: frame.screen_h, input: frame.input.clone() };
+    let snap = FrameSnapshot {
+        dt: frame.dt,
+        screen_w: frame.screen_w,
+        screen_h: frame.screen_h,
+        dpi_scale: frame.dpi_scale,
+        input: frame.input.clone(),
+    };
     world.resources.insert(snap);
 }
 

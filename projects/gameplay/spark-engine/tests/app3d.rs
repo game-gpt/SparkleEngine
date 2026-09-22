@@ -1,5 +1,4 @@
-//! 自 `src/app3d.rs` 迁出的原 `#[cfg(test)] mod tests`。
-use spark_engine::*;
+//! �?`src/app3d.rs` 迁出的原 `#[cfg(test)] mod tests`�?use spark_engine::*;
 
 use spark_types::Color;
 use spark_input::Input;
@@ -27,7 +26,7 @@ fn plugin_builds_3d_host() {
     app.add_plugin(&Paint);
     let mut host = app.into_host();
     let input = Input::default();
-    host.update(&FrameCtx { input: &input, dt: 0.016, screen_w: 800.0, screen_h: 600.0, timing: Default::default() });
+    host.update(&FrameCtx { input: &input, dt: 0.016, screen_w: 800.0, screen_h: 600.0, dpi_scale: 1.0, timing: Default::default() });
     let mut draw = DrawList3d::new(Color::rgb(0.0, 0.0, 0.0), Mat4::IDENTITY);
     host.draw(&mut draw);
     assert!((draw.clear.r - 2.0).abs() < 1e-5);
