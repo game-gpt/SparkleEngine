@@ -28,6 +28,13 @@ fn create_writes_uuid_v7_and_reload_keeps_guid() {
     let loaded = AssetMetaStore::load(&asset).unwrap();
     assert_eq!(loaded.guid, created.guid);
 
+    let text = fs::read_to_string(AssetMetaStore::path(&asset)).unwrap();
+    assert!(text.contains("format"), "{text}");
+    assert!(text.contains("guid"), "{text}");
+    // VON 用 `key = value`；JSON 对象字段是 `"key":`
+    assert!(!text.contains("\"format\":"), "expected VON assign form, got: {text}");
+    assert!(text.contains('='), "{text}");
+
     let again = AssetMetaStore::load_or_create(&asset).unwrap();
     assert_eq!(again.guid, created.guid);
 

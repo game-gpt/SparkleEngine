@@ -6,11 +6,11 @@ use spark_asset::{AssetMetaError, AssetMetaStore, AssetRef};
 use uuid::Uuid;
 
 #[test]
-fn path_ref_serializes_as_string() {
+fn path_ref_serializes_as_von_string() {
     let r = AssetRef::from_path("assets/player.png");
-    let json = serde_json::to_string(&r).unwrap();
-    assert_eq!(json, "\"assets/player.png\"");
-    let back: AssetRef = serde_json::from_str(&json).unwrap();
+    let von = oak_von::to_string(&r).unwrap();
+    assert!(von.contains("assets/player.png"));
+    let back: AssetRef = oak_von::from_str(&von).unwrap();
     assert_eq!(back.path(), "assets/player.png");
     assert!(back.guid().is_none());
 }
@@ -27,9 +27,9 @@ fn resolve_attaches_guid_from_meta() {
     assert_eq!(resolved.guid(), Some(created.guid));
     assert_eq!(resolved.path(), asset.to_string_lossy());
 
-    let obj = serde_json::to_value(&resolved).unwrap();
-    assert_eq!(obj["path"], asset.to_string_lossy().as_ref());
-    assert_eq!(obj["guid"], created.guid.to_string());
+    let von = oak_von::to_string(&resolved).unwrap();
+    let back: AssetRef = oak_von::from_str(&von).unwrap();
+    assert_eq!(back.guid(), Some(created.guid));
 
     let _ = fs::remove_dir_all(&dir);
 }

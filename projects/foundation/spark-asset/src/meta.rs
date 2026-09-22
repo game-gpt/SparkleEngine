@@ -1,5 +1,6 @@
 //! 资源旁车 `.meta`：持久化身份（GUID）与导入器配置。
 //!
+//! 旁车正文为 **VON**（经 `oak-von` serde），不是 JSON。
 //! Agent / 编辑脚本应通过路径引用资源；UUID v7 仅由本模块与上层工具生成。
 //! 缺失的 `.meta` **不会**在 `load` 时静默换发新 GUID（避免破坏既有引用）。
 
@@ -16,13 +17,15 @@ use serde::{Deserialize, Serialize};
 use spark_types::{ErrorArg, ErrorArgs};
 use uuid::Uuid;
 
-/// 当前 `.meta` JSON 格式版本。
+use crate::value::MetaValue;
+
+/// 当前 `.meta` 格式版本。
 pub const ASSET_META_FORMAT: u32 = 1;
 
-/// 旁车元数据正文。
+/// 旁车元数据正文（VON / serde）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AssetMeta {
-    /// 格式版本（字段名 `format`，与 JSON 对齐）。
+    /// 格式版本。
     pub format: u32,
     /// 资源持久化身份（UUID v7）。
     pub guid: Uuid,
@@ -40,10 +43,10 @@ pub struct AssetMeta {
     pub source_hash: Option<String>,
     /// 导入器设置（非玩法权威）。
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub settings: BTreeMap<String, serde_json::Value>,
+    pub settings: BTreeMap<String, MetaValue>,
     /// 可扩展属性（展示名、标签等不得影响身份）。
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub properties: BTreeMap<String, serde_json::Value>,
+    pub properties: BTreeMap<String, MetaValue>,
 }
 
 impl AssetMeta {
@@ -91,7 +94,7 @@ pub enum AssetMetaError {
         /// 底层错误。
         cause: io::Error,
     },
-    /// JSON 解析/序列化失败。
+    /// VON 解析/序列化失败。
     Parse {
         /// 相关路径。
         path: PathBuf,
@@ -184,7 +187,7 @@ impl AssetMetaStore {
         let asset = asset.as_ref();
         let meta_path = Self::path(asset);
         match fs::read_to_string(&meta_path) {
-            Ok(text) => serde_json::from_str(&text).map_err(|e| AssetMetaError::Parse {
+            Ok(text) => oak_von::from_str(&text).map_err(|e| AssetMetaError::Parse {
                 path: meta_path,
                 detail: e.to_string(),
             }),
@@ -198,7 +201,7 @@ impl AssetMetaStore {
         }
     }
 
-    /// 写入旁车（格式化 JSON，便于 Git 与人工检查）。
+    /// 写入旁车（VON，便于 Git 与人工检查）。
     pub fn save(asset: impl AsRef<Path>, meta: &AssetMeta) -> Result<(), AssetMetaError> {
         let meta_path = Self::path(asset.as_ref());
         if let Some(parent) = meta_path.parent() {
@@ -209,11 +212,16 @@ impl AssetMetaStore {
                 })?;
             }
         }
-        let text = serde_json::to_string_pretty(meta).map_err(|e| AssetMetaError::Parse {
+        let text = oak_von::to_string(meta).map_err(|e| AssetMetaError::Parse {
             path: meta_path.clone(),
             detail: e.to_string(),
         })?;
-        fs::write(&meta_path, format!("{text}\n")).map_err(|e| AssetMetaError::Io {
+        let body = if text.ends_with('\n') {
+            text
+        } else {
+            format!("{text}\n")
+        };
+        fs::write(&meta_path, body).map_err(|e| AssetMetaError::Io {
             path: meta_path,
             cause: e,
         })

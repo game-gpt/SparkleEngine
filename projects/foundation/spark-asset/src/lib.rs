@@ -1,7 +1,7 @@
 //! Spark **资源框架**（无游戏资产格式）。
 //!
 //! 提供 [`AssetId`]、内存缓存、[`AssetLoader`]、热重载事件、[`HotReloadWatch`] 轮询，
-//! 以及旁车 [`.meta`](meta) 持久化身份与路径优先的 [`AssetRef`]。
+//! 以及旁车 [`.meta`](meta)（VON）持久化身份与路径优先的 [`AssetRef`]。
 //! 具体纹理/音频解码由其它 crate / 游戏仓实现加载器。
 
 #![warn(missing_docs)]
@@ -12,6 +12,7 @@ mod index;
 mod loader;
 mod meta;
 mod reference;
+mod value;
 
 pub use cache::AssetCache;
 pub use handle::{AssetId, AssetKey};
@@ -20,6 +21,7 @@ pub use index::{AssetIndex, AssetIndexError};
 pub use loader::{AssetLoader, BytesLoader, LoadError, ReloadEvent};
 pub use meta::{ASSET_META_FORMAT, AssetMeta, AssetMetaError, AssetMetaStore};
 pub use reference::AssetRef;
+pub use value::MetaValue;
 
 use spark_types::{ErrorArgs, SparkError};
 
