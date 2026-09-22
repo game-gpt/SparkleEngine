@@ -134,8 +134,20 @@ fn paint_image(draw: &mut DrawList, textures: &mut dyn UiTextureResolver, node: 
     else {
         return;
     };
-    let tint = with_alpha(image.tint, style.opacity);
-    draw.tex_rect(resolved.texture, rect, image.uv, tint);
+    if resolved.is_drawable() {
+        let Some(texture) = resolved.texture
+        else {
+            return;
+        };
+        let tint = with_alpha(image.tint, style.opacity);
+        let _sampler = resolved.sampler;
+        draw.tex_rect(texture, rect, image.uv, tint);
+        return;
+    }
+    if resolved.is_pending() {
+        // 占位：半透明深灰，不阻塞布局；宿主完成上传后下一帧可 Resident。
+        draw.fill_rect(rect, with_alpha(Color::rgb(0.18, 0.18, 0.20), style.opacity * 0.55));
+    }
 }
 
 fn paint_label(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, _theme: &Theme) {

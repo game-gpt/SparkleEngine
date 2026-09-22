@@ -63,3 +63,39 @@ fn paint_image_emits_tex_quad() {
     assert!(!draw.hud_tex_quads.is_empty(), "image should emit hud tex quads");
     assert_eq!(draw.hud_tex_quads[0].texture, TextureId(99));
 }
+
+#[test]
+fn paint_image_pending_draws_placeholder() {
+    use spark_asset::AssetId;
+    use spark_widget::{
+        asset::{ResolvedTexture, UiImage, UiTextureResolver},
+        widgets::image_widget,
+    };
+
+    struct PendingResolver {
+        asset: AssetId,
+    }
+    impl UiTextureResolver for PendingResolver {
+        fn resolve(&mut self, asset: AssetId) -> Option<ResolvedTexture> {
+            if asset == self.asset { Some(ResolvedTexture::pending(Vec2::new(32.0, 32.0))) } else { None }
+        }
+    }
+
+    let mut tree = WidgetTree::new();
+    let root = tree.root();
+    let asset = AssetId(3);
+    image_widget()
+        .image(UiImage::new(asset).with_preferred_size(Vec2::new(32.0, 32.0)))
+        .layout(LayoutSpec { width: Size::Px(32.0), height: Size::Px(32.0), ..LayoutSpec::default() })
+        .mount(&mut tree, root)
+        .unwrap();
+    run_layout(&mut tree, Vec2::new(100.0, 100.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+
+    let mut textures = PendingResolver { asset };
+    let theme = Theme::default();
+    let motion = spark_widget::motion::MotionManager::new();
+    let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+    paint_tree(&tree, &theme, &motion, &mut textures, &mut draw);
+    assert!(draw.hud_tex_quads.is_empty(), "pending must not sample texture");
+    assert!(!draw.hud_quads.is_empty(), "pending should draw placeholder fill");
+}
