@@ -33,6 +33,7 @@ pnpm run build:wasm             # Wasm 平台袋（按需）
 | 键鼠帧状态            | `spark-input`               |
 | 绘制列表与 `GameHost` | `spark-renderer`            |
 | GPU 纹理描述与上传包  | `spark-texture`             |
+| 源图解码 → 上传包     | `spark-image-formats`       |
 | wgpu 窗口与提交       | `spark-renderer-wgpu`       |
 | Retained UI           | `spark-widget`              |
 | 脚本编译与执行        | `spark-script` → `spark-vm` |
