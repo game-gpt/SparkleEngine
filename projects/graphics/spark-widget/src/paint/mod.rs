@@ -1,7 +1,7 @@
 //! Paint traversal：retained 树 → DrawList。
 
-use spark_types::{Color, Rect, Vec2};
 use spark_renderer::DrawList;
+use spark_types::{Color, Rect, Vec2};
 
 use crate::{
     asset::UiTextureResolver,
@@ -171,6 +171,13 @@ fn paint_button(draw: &mut DrawList, node: &WidgetNode, style: &ComputedStyle, _
         let measured = text::measure_plain(text, &TextStyle { size, color: style.foreground, ..TextStyle::default() }, Some(rect.w));
         let x = rect.x + ((rect.w - measured.size.x) * 0.5).max(0.0);
         let y = rect.y + ((rect.h - measured.size.y) * 0.5).max(0.0);
+        // 透明底菜单字：描边阴影，贴近原版可读性。
+        if style.background.a < 0.01 {
+            let shadow = Color::rgba(0.0, 0.0, 0.0, 0.85 * style.opacity);
+            for (ox, oy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (1.0, 1.0)] {
+                draw.text(x + ox, y + oy, size, shadow, text);
+            }
+        }
         draw.text(x, y, size, with_alpha(style.foreground, style.opacity), text);
     }
 }

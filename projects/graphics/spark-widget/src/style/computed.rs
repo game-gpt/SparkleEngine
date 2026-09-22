@@ -47,7 +47,7 @@ impl ComputedStyle {
     pub fn resolve_for(theme: &Theme, node: &WidgetNode) -> Self {
         let mut style = Self::resolve(theme, &node.style);
         apply_kind_defaults(theme, node.kind, &mut style);
-        apply_pseudo(theme, &node.state, node.kind, &mut style);
+        // 局部字段覆盖 kind 默认，但必须在伪态之前，否则 hover / pressed 会被盖掉。
         if let Some(bg) = node.style.background {
             style.background = bg;
         }
@@ -66,6 +66,7 @@ impl ComputedStyle {
         if let Some(accent) = node.style.accent {
             style.accent = accent;
         }
+        apply_pseudo(theme, &node.state, node.kind, &mut style);
         style
     }
 }
@@ -115,7 +116,16 @@ fn apply_pseudo(theme: &Theme, state: &WidgetStateFlags, kind: WidgetKind, style
 
     match kind {
         WidgetKind::Button => {
-            if state.pressed {
+            // 透明底文字按钮（如原版标题菜单）：idle 保持字色，hover/focus 变金黄。
+            let text_btn = style.background.a < 0.01;
+            if text_btn {
+                if state.pressed {
+                    style.foreground = Color::rgb(0.85, 0.72, 0.12);
+                } else if state.hovered || state.focused {
+                    style.foreground = Color::rgb(1.0, 0.92, 0.25);
+                }
+            }
+            else if state.pressed {
                 style.background = multiply_rgb(theme.colors.accent, 0.75);
             }
             else if state.hovered {
