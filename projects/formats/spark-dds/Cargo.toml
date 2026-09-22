@@ -1,0 +1,15 @@
+[package]
+name = "spark-dds"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark DDS 容器解析 → TextureUpload（自研 DXGI/BCn 子集）"
+keywords = ["spark", "dds", "texture", "format"]
+categories = ["game-development", "parsing"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-texture = { workspace = true }

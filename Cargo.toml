@@ -45,6 +45,7 @@ spark-png = { path = "projects/formats/spark-png" }
 spark-jpeg = { path = "projects/formats/spark-jpeg" }
 spark-webp = { path = "projects/formats/spark-webp" }
 spark-ktx2 = { path = "projects/formats/spark-ktx2" }
+spark-dds = { path = "projects/formats/spark-dds" }
 spark-renderer = { path = "projects/graphics/spark-renderer" }
 spark-renderer-wgpu = { path = "projects/graphics/spark-renderer-wgpu" }
 spark-widget = { path = "projects/graphics/spark-widget" }
