@@ -26,8 +26,8 @@ pub use mipmap::{downsample_rgba, mip_level_count};
 pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
     Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost, GameHost3d, Input, Key, MAX_SKIN_JOINTS, Mat4,
-    MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex,
-    TexQuadCmd, TextCmd, TextureId, TextureUpload, Vec3, WindowConfig, alloc_texture_id,
+    MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd, TexMeshVertex, TexQuadCmd,
+    TextCmd, TextureId, TextureUpload, Vec3, WindowConfig, alloc_texture_id,
 };
 pub use texture_upload::{
     create_texture_from_upload, create_texture_from_upload_with_caps, device_caps_from_adapter, expected_mip_levels, map_texture_format,
@@ -36,8 +36,8 @@ pub use texture_upload::{
 use std::{sync::Arc, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
-use spark_types::{Color, SparkError, codes};
 use spark_shader::{BuiltinShader, create_builtin};
+use spark_types::{Color, SparkError, codes};
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
@@ -559,7 +559,8 @@ struct HostApp<H: GameHost> {
 
 impl<H: GameHost> HostApp<H> {
     fn log_pointer_metrics(&mut self, force: bool) {
-        let Some(gpu) = self.state.as_ref() else {
+        let Some(gpu) = self.state.as_ref()
+        else {
             return;
         };
         let now = Instant::now();
@@ -673,7 +674,8 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
             gpu.resize(size.width, size.height);
             gpu.window.request_redraw();
             drop(gpu);
-            self.log_pointer_metrics(true);
+            // 创建窗口时会连发多次 Resized；走节流日志，避免刷屏。
+            self.log_pointer_metrics(false);
             return;
         }
 
@@ -690,14 +692,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         let dpi_scale = self.scale.max(0.01);
 
         {
-            let frame = FrameCtx {
-                input: &self.input,
-                dt,
-                screen_w: sw,
-                screen_h: sh,
-                dpi_scale,
-                timing: Default::default(),
-            };
+            let frame = FrameCtx { input: &self.input, dt, screen_w: sw, screen_h: sh, dpi_scale, timing: Default::default() };
             self.host.update(&frame);
         }
         self.input.begin_frame();
@@ -736,15 +731,8 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
 pub fn run_window_2d<H: GameHost + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
     let event_loop = EventLoop::new().map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    let mut app = HostApp {
-        config,
-        host,
-        input: Input::default(),
-        state: None,
-        last: Instant::now(),
-        scale: 1.0,
-        last_metrics_log: Instant::now(),
-    };
+    let mut app =
+        HostApp { config, host, input: Input::default(), state: None, last: Instant::now(), scale: 1.0, last_metrics_log: Instant::now() };
     event_loop.run_app(&mut app).map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
 }
 
