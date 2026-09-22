@@ -1316,7 +1316,8 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
                 self.input.on_wheel(winit_map::wheel_lines(delta));
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.input.on_cursor(position.x as f32 / self.scale, position.y as f32 / self.scale);
+                // 与 surface / FrameCtx.screen_* 一致：物理像素（不再除以 scale）。
+                self.input.on_cursor(position.x as f32, position.y as f32);
             }
             WindowEvent::ModifiersChanged(m) => {
                 self.modifiers = m.state();
@@ -1370,7 +1371,14 @@ impl<H: GameHost3d> HostApp3d<H> {
 
         let t_update = Instant::now();
         {
-            let frame = FrameCtx { input: &self.input, dt, screen_w: sw, screen_h: sh, timing: prev_timing };
+            let frame = FrameCtx {
+                input: &self.input,
+                dt,
+                screen_w: sw,
+                screen_h: sh,
+                dpi_scale: self.scale.max(0.01),
+                timing: prev_timing,
+            };
             self.host.update(&frame);
         }
         let update_ms = t_update.elapsed().as_secs_f32() * 1000.0;

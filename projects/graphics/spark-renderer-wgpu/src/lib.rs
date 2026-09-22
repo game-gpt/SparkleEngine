@@ -551,7 +551,39 @@ struct HostApp<H: GameHost> {
     input: Input,
     state: Option<GpuState>,
     last: Instant,
+    /// 窗口 `scale_factor`（逻辑 ↔ 物理）。
     scale: f32,
+    /// 避免 resize / DPI 抖动时刷屏。
+    last_metrics_log: Instant,
+}
+
+impl<H: GameHost> HostApp<H> {
+    fn log_pointer_metrics(&mut self, force: bool) {
+        let Some(gpu) = self.state.as_ref() else {
+            return;
+        };
+        let now = Instant::now();
+        if !force && now.duration_since(self.last_metrics_log).as_secs_f32() < 2.0 {
+            return;
+        }
+        self.last_metrics_log = now;
+        let physical = gpu.window.inner_size();
+        let scale = self.scale.max(0.01);
+        let logical_w = physical.width as f32 / scale;
+        let logical_h = physical.height as f32 / scale;
+        let (cx, cy) = self.input.mouse_pos();
+        tracing::info!(
+            event = "spark.renderer.pointer_metrics",
+            logical_w,
+            logical_h,
+            physical_w = physical.width,
+            physical_h = physical.height,
+            dpi_scale = scale,
+            cursor_x = cx,
+            cursor_y = cy,
+            "2D window pointer metrics (physical cursor = surface pixels)"
+        );
+    }
 }
 
 impl<H: GameHost> ApplicationHandler for HostApp<H> {
@@ -577,6 +609,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
                 window.request_redraw();
                 self.state = Some(s);
                 self.last = Instant::now();
+                self.log_pointer_metrics(true);
             }
             Err(e) => {
                 tracing::error!(event = "spark.renderer.gpu_init_failed", ?e);
@@ -593,9 +626,10 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.scale = *scale_factor as f32;
+                self.log_pointer_metrics(true);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // 与 surface / uniform 一致：物理像素
+                // 与 surface / FrameCtx.screen_* / DrawList 一致：物理像素。
                 self.input.on_cursor(position.x as f32, position.y as f32);
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -638,6 +672,8 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         if let WindowEvent::Resized(size) = event {
             gpu.resize(size.width, size.height);
             gpu.window.request_redraw();
+            drop(gpu);
+            self.log_pointer_metrics(true);
             return;
         }
 
@@ -651,9 +687,17 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
 
         let sw = gpu.config.width as f32;
         let sh = gpu.config.height as f32;
+        let dpi_scale = self.scale.max(0.01);
 
         {
-            let frame = FrameCtx { input: &self.input, dt, screen_w: sw, screen_h: sh, timing: Default::default() };
+            let frame = FrameCtx {
+                input: &self.input,
+                dt,
+                screen_w: sw,
+                screen_h: sh,
+                dpi_scale,
+                timing: Default::default(),
+            };
             self.host.update(&frame);
         }
         self.input.begin_frame();
@@ -692,7 +736,15 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
 pub fn run_window_2d<H: GameHost + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
     let event_loop = EventLoop::new().map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    let mut app = HostApp { config, host, input: Input::default(), state: None, last: Instant::now(), scale: 1.0 };
+    let mut app = HostApp {
+        config,
+        host,
+        input: Input::default(),
+        state: None,
+        last: Instant::now(),
+        scale: 1.0,
+        last_metrics_log: Instant::now(),
+    };
     event_loop.run_app(&mut app).map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
 }
 
