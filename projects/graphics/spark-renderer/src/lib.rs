@@ -12,6 +12,7 @@ mod frustum;
 mod particles;
 mod texture;
 mod texture_cache;
+mod ui_batch;
 
 pub use camera2d::Camera2d;
 pub use camera3d::Camera3d;
@@ -31,6 +32,7 @@ pub use spark_texture::{
 };
 pub use texture::{TextureId, alloc_texture_id};
 pub use texture_cache::TextureCache;
+pub use ui_batch::UiRenderBatch;
 
 /// 启动窗口配置（后端无关字段）。
 #[derive(Debug, Clone)]
@@ -98,6 +100,10 @@ pub trait GameHost {
     fn update(&mut self, frame: &FrameCtx<'_>);
     /// 将本帧 2D 命令写入 [`DrawList`]（世界 / HUD / 纹理上传）。
     fn draw(&mut self, draw: &mut DrawList);
+    /// 可选：单独填充 UI 批次（不经世界层）。默认空实现。
+    ///
+    /// 宿主循环可在 `draw` 之后调用 [`UiRenderBatch::flush_hud`]，或由后端直读批次。
+    fn draw_ui(&mut self, _ui: &mut UiRenderBatch) {}
     /// 返回 `true` 时宿主循环应退出。默认永不退出。
     fn should_exit(&self) -> bool {
         false
@@ -106,6 +112,11 @@ pub trait GameHost {
     fn cursor_visible(&self) -> bool {
         true
     }
+}
+
+/// 将 `ui` 刷入 `draw` 的 HUD 层（世界命令保持不变）。
+pub fn compose_ui_hud(draw: &mut DrawList, ui: &mut UiRenderBatch) {
+    ui.flush_hud(draw);
 }
 
 /// 3D 游戏宿主：透视网格 + 可选 2D HUD。

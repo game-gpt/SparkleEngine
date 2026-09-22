@@ -27,3 +27,20 @@ fn clip_culls_and_intersects_quads() {
     assert!((draw.hud_quads[0].rect.w - 15.0).abs() < 1e-4);
     draw.pop_clip();
 }
+
+#[test]
+fn ui_batch_flush_merges_into_hud_only() {
+    let mut world = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+    world.fill_rect(Rect::new(1.0, 1.0, 2.0, 2.0), Color::rgb(1.0, 0.0, 0.0));
+    assert_eq!(world.quads.len(), 1);
+
+    let mut ui = UiRenderBatch::new();
+    ui.fill_rect(Rect::new(10.0, 10.0, 8.0, 8.0), Color::rgb(0.0, 1.0, 0.0));
+    ui.text(12.0, 12.0, 14.0, Color::rgb(1.0, 1.0, 1.0), "ok");
+    compose_ui_hud(&mut world, &mut ui);
+
+    assert_eq!(world.quads.len(), 1);
+    assert_eq!(world.hud_quads.len(), 1);
+    assert_eq!(world.texts.len(), 1);
+    assert!(ui.is_empty());
+}

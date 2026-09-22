@@ -236,4 +236,14 @@ impl DrawList {
             DrawLayer2d::Hud => self.hud_tex_quads.push(q),
         }
     }
+
+    /// 把 UI 批次刷入 HUD 层（追加，不改世界层命令）。
+    ///
+    /// 调用后 `batch` 的图元向量被抽空；裁剪栈由 [`crate::UiRenderBatch::flush_hud`] 清理。
+    pub fn extend_hud(&mut self, batch: &mut crate::UiRenderBatch) {
+        self.begin_hud();
+        self.hud_quads.append(&mut batch.quads);
+        self.hud_tex_quads.append(&mut batch.tex_quads);
+        self.texts.append(&mut batch.texts);
+    }
 }
