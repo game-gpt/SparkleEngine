@@ -1,0 +1,16 @@
+[package]
+name = "spark-ktx2"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark KTX2 容器解析 → TextureUpload（pure Rust `ktx2`）"
+keywords = ["spark", "ktx2", "texture", "format"]
+categories = ["game-development", "parsing"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-texture = { workspace = true }
+ktx2 = { workspace = true }

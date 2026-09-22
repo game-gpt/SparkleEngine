@@ -44,6 +44,7 @@ spark-image = { path = "projects/foundation/spark-image" }
 spark-png = { path = "projects/formats/spark-png" }
 spark-jpeg = { path = "projects/formats/spark-jpeg" }
 spark-webp = { path = "projects/formats/spark-webp" }
+spark-ktx2 = { path = "projects/formats/spark-ktx2" }
 spark-renderer = { path = "projects/graphics/spark-renderer" }
 spark-renderer-wgpu = { path = "projects/graphics/spark-renderer-wgpu" }
 spark-widget = { path = "projects/graphics/spark-widget" }
@@ -85,6 +86,7 @@ fontdue = "0.9"
 png = "0.18"
 jpeg-decoder = { version = "0.3", default-features = false }
 image-webp = "0.2"
+ktx2 = "0.5"
 symphonia = { version = "0.6.1", features = [
     "aac",
     "adpcm",
