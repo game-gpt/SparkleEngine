@@ -76,9 +76,14 @@ impl WidgetBuilder {
         self
     }
 
-    /// 点击派发 [`UiCommand::Action`]。
+    /// 点击派发无载荷的 [`UiCommand::Action`]。
     pub fn on_action(self, name: &'static str) -> Self {
         self.on_click(crate::command::UiCommand::action(name))
+    }
+
+    /// 点击派发带数值载荷的 [`UiCommand::Action`]。
+    pub fn on_action_with(self, name: &'static str, payload: u64) -> Self {
+        self.on_click(crate::command::UiCommand::action_with(name, payload))
     }
 
     /// 勾选态（Checkbox / Toggle / Radio）。

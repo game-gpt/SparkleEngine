@@ -9,8 +9,13 @@ pub enum UiCommand {
     CloseOverlay,
     /// 自定义数值载荷（兼容旧代码；新代码优先 [`Self::Action`]）。
     Custom(u64),
-    /// 稳定字符串动作名（如 `"title.single"`），便于类型安全映射。
-    Action(&'static str),
+    /// 稳定字符串动作名（如 `"title.single"`），可选数值载荷（列表索引等）。
+    Action {
+        /// 动作名。
+        name: &'static str,
+        /// 可选载荷（如角色/世界列表索引）。
+        payload: Option<u64>,
+    },
     /// 拖放完成：从 `source` 放到 `target`。
     Drop {
         /// 拖放源控件。
@@ -21,15 +26,31 @@ pub enum UiCommand {
 }
 
 impl UiCommand {
-    /// 构造 [`Self::Action`]。
+    /// 构造无载荷的 [`Self::Action`]。
     pub fn action(name: &'static str) -> Self {
-        Self::Action(name)
+        Self::Action { name, payload: None }
+    }
+
+    /// 构造带数值载荷的 [`Self::Action`]。
+    pub fn action_with(name: &'static str, payload: u64) -> Self {
+        Self::Action {
+            name,
+            payload: Some(payload),
+        }
     }
 
     /// 若为 [`Self::Action`] 则返回动作名。
     pub fn as_action(&self) -> Option<&'static str> {
         match self {
-            Self::Action(name) => Some(*name),
+            Self::Action { name, .. } => Some(*name),
+            _ => None,
+        }
+    }
+
+    /// 若为 [`Self::Action`] 则返回可选载荷。
+    pub fn action_payload(&self) -> Option<u64> {
+        match self {
+            Self::Action { payload, .. } => *payload,
             _ => None,
         }
     }
@@ -74,7 +95,13 @@ mod tests {
     fn action_helpers() {
         let cmd = UiCommand::action("title.single");
         assert_eq!(cmd.as_action(), Some("title.single"));
+        assert_eq!(cmd.action_payload(), None);
         assert_eq!(cmd.as_custom(), None);
+
+        let with = UiCommand::action_with("char.play", 3);
+        assert_eq!(with.as_action(), Some("char.play"));
+        assert_eq!(with.action_payload(), Some(3));
+
         assert_eq!(UiCommand::Custom(7).as_custom(), Some(7));
     }
 }
