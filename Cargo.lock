@@ -3302,6 +3302,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "spark-image-formats"
+version = "0.0.0"
+dependencies = [
+ "image",
+ "spark-core",
+ "spark-texture",
+]
+
+[[package]]
 name = "spark-input"
 version = "0.0.0"
 

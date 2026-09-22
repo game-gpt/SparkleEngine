@@ -41,6 +41,7 @@ spark-shader = { path = "projects/graphics/spark-shader" }
 spark-font = { path = "projects/graphics/spark-font" }
 spark-texture = { path = "projects/graphics/spark-texture" }
 spark-image = { path = "projects/foundation/spark-image" }
+spark-image-formats = { path = "projects/formats/spark-image-formats" }
 spark-renderer = { path = "projects/graphics/spark-renderer" }
 spark-renderer-wgpu = { path = "projects/graphics/spark-renderer-wgpu" }
 spark-widget = { path = "projects/graphics/spark-widget" }

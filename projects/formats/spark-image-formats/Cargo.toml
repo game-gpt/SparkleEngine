@@ -1,0 +1,19 @@
+[package]
+name = "spark-image-formats"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark 源图片格式解码：产出 TextureUpload（非 CPU PixelImage）"
+keywords = ["spark", "image", "png", "texture", "format"]
+categories = ["game-development", "parsing"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }
+spark-texture = { workspace = true }
+image = { workspace = true }
+
+[dev-dependencies]
+image = { workspace = true }
