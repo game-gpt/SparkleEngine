@@ -9,14 +9,27 @@ use crate::{
 };
 
 /// 单条已编译消息（作者糖已展开）。
+///
+/// 求值路径只读此枚举；不再保留模板糖原文。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompiledMessage {
+    /// 无插值的纯文本。
     Text(Arc<str>),
+    /// 按序求值的节点序列。
     Pattern(Arc<[MessageNode]>),
-    Select { argument: Arc<str>, kind: SelectKind, cases: BTreeMap<Arc<str>, Arc<[MessageNode]>> },
+    /// 按参数分支选择的消息。
+    Select {
+        /// 驱动分支的参数名。
+        argument: Arc<str>,
+        /// 分支语义（显式 / 基数 / 序数）。
+        kind: SelectKind,
+        /// 分支键 → 节点序列；须含 `other` 兜底（检查阶段强制）。
+        cases: BTreeMap<Arc<str>, Arc<[MessageNode]>>,
+    },
 }
 
 impl CompiledMessage {
+    /// 由作者侧定义编译；对 [`MessageDefinition::Text`] 再兜底展开模板糖。
     pub fn from_definition(def: &MessageDefinition) -> Self {
         match def {
             MessageDefinition::Text(text) => {
@@ -59,33 +72,41 @@ struct BundleKey {
 }
 
 impl LocalizationBundle {
+    /// 当前包格式版本号；写入 [`Self::format_version`]。
     pub const FORMAT_VERSION: u32 = 1;
 
+    /// 构造空包（版本号为 [`Self::FORMAT_VERSION`]，哈希为 0）。
     pub fn new() -> Self {
         Self { format_version: Self::FORMAT_VERSION, content_hash: 0, messages: BTreeMap::new() }
     }
 
+    /// 已编译消息条目数（命名空间 × 消息 × Locale）。
     pub fn len(&self) -> usize {
         self.messages.len()
     }
 
+    /// 是否无任何消息。
     pub fn is_empty(&self) -> bool {
         self.messages.is_empty()
     }
 
+    /// 插入或覆盖一条消息，并重算 [`Self::content_hash`]。
     pub fn insert(&mut self, namespace: NamespaceId, message: MessageName, locale: LocaleId, compiled: CompiledMessage) {
         self.messages.insert(BundleKey { namespace, message, locale }, compiled);
         self.rehash();
     }
 
+    /// 按命名空间 / 消息名 / Locale 精确查找。
     pub fn get(&self, namespace: &NamespaceId, message: &MessageName, locale: &LocaleId) -> Option<&CompiledMessage> {
         self.messages.get(&BundleKey { namespace: namespace.clone(), message: message.clone(), locale: locale.clone() })
     }
 
+    /// 字符串入口的精确查找（内部构造 [`NamespaceId`] / [`MessageName`]）。
     pub fn get_named(&self, namespace: &str, message: &str, locale: &LocaleId) -> Option<&CompiledMessage> {
         self.get(&NamespaceId::new(namespace), &MessageName::new(message), locale)
     }
 
+    /// 包内出现过的 Locale 去重列表（按标签序）。
     pub fn locales(&self) -> Vec<LocaleId> {
         let mut set = BTreeMap::new();
         for key in self.messages.keys() {
@@ -94,6 +115,7 @@ impl LocalizationBundle {
         set.into_keys().collect()
     }
 
+    /// 是否存在精确键。
     pub fn contains(&self, namespace: &NamespaceId, message: &MessageName, locale: &LocaleId) -> bool {
         self.get(namespace, message, locale).is_some()
     }

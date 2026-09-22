@@ -17,17 +17,24 @@ use crate::{
 /// 本 crate 只定义数据；总线发送由 `spark-engine` / 宿主完成。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocaleChanged {
+    /// 切换前 Locale。
     pub previous: LocaleId,
+    /// 切换后 Locale。
     pub current: LocaleId,
+    /// 新快照代数；单调递增由调用方保证。
     pub generation: u64,
 }
 
 /// 运行时不可变快照：读热路径只读此对象。
 #[derive(Debug, Clone)]
 pub struct LocaleSnapshot {
+    /// 已协商的当前 Locale。
     pub locale: LocaleId,
+    /// 查询回退链（当前 → … → 产品默认 → 根），仅含 `available` 中存在者。
     pub fallback_chain: Arc<[LocaleId]>,
+    /// 当前 Locale 的默认书写方向。
     pub direction: TextDirection,
+    /// 快照代数；与 [`LocaleChanged::generation`] 对齐。
     pub generation: u64,
     bundle: Arc<LocalizationBundle>,
 }
@@ -77,6 +84,7 @@ impl LocaleSnapshot {
         Self::from_bundle(locale, product_default, available, generation, bundle)
     }
 
+    /// 底层已编译语言包只读视图。
     pub fn bundle(&self) -> &LocalizationBundle {
         &self.bundle
     }
@@ -131,18 +139,22 @@ pub struct Localizer {
 }
 
 impl Localizer {
+    /// 持有给定快照。
     pub fn new(snapshot: LocaleSnapshot) -> Self {
         Self { snapshot: Arc::new(snapshot) }
     }
 
+    /// 克隆当前快照的 `Arc`（廉价共享）。
     pub fn snapshot(&self) -> Arc<LocaleSnapshot> {
         Arc::clone(&self.snapshot)
     }
 
+    /// 当前快照代数。
     pub fn generation(&self) -> u64 {
         self.snapshot.generation
     }
 
+    /// 当前已协商 Locale。
     pub fn locale(&self) -> &LocaleId {
         &self.snapshot.locale
     }
@@ -158,6 +170,7 @@ impl Localizer {
         LocaleChanged { previous, current, generation }
     }
 
+    /// 委托当前快照格式化消息。
     pub fn format(&self, message: &MessageRef, args: &MessageArgs) -> LocalizedText {
         self.snapshot.format(message, args)
     }

@@ -5,13 +5,13 @@
 //!
 //! 错误：`io`、`image_decode`、`image_dimension_overflow`、`texture_data_length_mismatch`。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 
 use std::{io::Cursor, path::Path, sync::Arc};
 
 use image_webp::WebPDecoder;
-use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::TextureUpload;
+use spark_types::{ErrorArg, SparkError, codes};
 
 /// WebP 解码选项：控制上传包的色彩空间标注与 GPU 格式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -41,9 +41,8 @@ impl DecodeOptions {
 pub fn decode_path(path: impl AsRef<Path>, options: DecodeOptions) -> Result<TextureUpload, SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
-    let bytes = std::fs::read(path).map_err(|e| {
-        SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e)
-    })?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e))?;
     decode_memory(&bytes, options).map_err(|e| e.arg("path", path_arg))
 }
 
@@ -82,7 +81,8 @@ pub fn decode_rgba8(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), SparkError> {
     })?;
     let rgba = if decoder.has_alpha() {
         buf
-    } else {
+    }
+    else {
         let n = (width as usize).checked_mul(height as usize).ok_or_else(|| {
             SparkError::new(codes::image_dimension_overflow())
                 .arg("width", ErrorArg::Unsigned(width as u64))

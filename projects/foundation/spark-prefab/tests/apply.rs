@@ -11,36 +11,24 @@ fn with_overrides_patches_fields() {
     doc.set_component(
         "player",
         "Transform",
-        MetaValue::Table(BTreeMap::from([(
-            "position".into(),
-            MetaValue::Array(vec![MetaValue::Int(0), MetaValue::Int(0)]),
-        )])),
+        MetaValue::Table(BTreeMap::from([("position".into(), MetaValue::Array(vec![MetaValue::Int(0), MetaValue::Int(0)]))])),
     )
     .unwrap();
     doc.validate().unwrap();
 
     let mut inst = PrefabInstance::new("assets/player.prefab", "spawn");
-    inst.set_override(
-        "player/Transform.position",
-        MetaValue::Array(vec![MetaValue::Int(100), MetaValue::Int(64)]),
-    );
+    inst.set_override("player/Transform.position", MetaValue::Array(vec![MetaValue::Int(100), MetaValue::Int(64)]));
 
     let patched = doc.with_overrides(&inst).unwrap();
     match &patched.nodes["player"].components["Transform"] {
         MetaValue::Table(t) => {
-            assert_eq!(
-                t["position"],
-                MetaValue::Array(vec![MetaValue::Int(100), MetaValue::Int(64)])
-            );
+            assert_eq!(t["position"], MetaValue::Array(vec![MetaValue::Int(100), MetaValue::Int(64)]));
         }
         other => panic!("{other:?}"),
     }
     match &doc.nodes["player"].components["Transform"] {
         MetaValue::Table(t) => {
-            assert_eq!(
-                t["position"],
-                MetaValue::Array(vec![MetaValue::Int(0), MetaValue::Int(0)])
-            );
+            assert_eq!(t["position"], MetaValue::Array(vec![MetaValue::Int(0), MetaValue::Int(0)]));
         }
         other => panic!("{other:?}"),
     }

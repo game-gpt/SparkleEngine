@@ -4,7 +4,7 @@
 //! 当前可执行格式为 VON 编辑计划（`EditPlan`）；Sparkle Script Edit profile 将绑定同一
 //! [`EditSession`]。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 
 mod capabilities;
 mod diagnostic;
@@ -32,12 +32,7 @@ pub fn run_edit_plan(root: impl AsRef<Path>, mode: EditMode, von: &str) -> Resul
 }
 
 /// 带能力门闩的执行入口（MCP 应用 `EditCapabilities::read_only()`）。
-pub fn run_edit_plan_with(
-    root: impl AsRef<Path>,
-    mode: EditMode,
-    von: &str,
-    caps: EditCapabilities,
-) -> Result<EditReport, String> {
+pub fn run_edit_plan_with(root: impl AsRef<Path>, mode: EditMode, von: &str, caps: EditCapabilities) -> Result<EditReport, String> {
     let plan = parse_edit_source(von)?;
     let mut session = EditSession::new(root.as_ref(), mode).with_capabilities(caps);
     Ok(session.run(&plan))

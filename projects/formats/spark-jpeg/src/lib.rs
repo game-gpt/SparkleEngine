@@ -6,13 +6,13 @@
 //! 支持像素格式：`RGB24`、`L8`；其余 → `image_decode`（`unsupported_pixel_format`）。
 //! 另可能返回 `io`、`image_dimension_overflow`、`texture_data_length_mismatch`。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 
 use std::{io::Cursor, path::Path, sync::Arc};
 
 use jpeg_decoder::{Decoder, PixelFormat};
-use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::TextureUpload;
+use spark_types::{ErrorArg, SparkError, codes};
 
 /// JPEG 解码选项：控制上传包的色彩空间标注与 GPU 格式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -42,9 +42,8 @@ impl DecodeOptions {
 pub fn decode_path(path: impl AsRef<Path>, options: DecodeOptions) -> Result<TextureUpload, SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
-    let bytes = std::fs::read(path).map_err(|e| {
-        SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e)
-    })?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e))?;
     decode_memory(&bytes, options).map_err(|e| e.arg("path", path_arg))
 }
 
@@ -116,10 +115,7 @@ pub fn decode_rgba8(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), SparkError> {
         other => {
             return Err(SparkError::new(codes::image_decode())
                 .arg("format", ErrorArg::String(Arc::from("jpeg")))
-                .arg(
-                    "reason",
-                    ErrorArg::String(Arc::from(format!("unsupported_pixel_format:{other:?}"))),
-                ));
+                .arg("reason", ErrorArg::String(Arc::from(format!("unsupported_pixel_format:{other:?}")))));
         }
     };
     Ok((width, height, rgba))

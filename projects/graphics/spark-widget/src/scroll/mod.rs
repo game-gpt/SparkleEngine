@@ -1,21 +1,33 @@
 //! 滚动与虚拟化。
+//!
+//! [`ScrollState`] 挂在 `ScrollView` / `ListView` 节点上；滚轮由事件路由写入偏移，
+//! [`ensure_visible`] 用于焦点或选中项滚入可视区。
 
 use spark_types::Vec2;
 
 use crate::{id::WidgetId, node::WidgetKind, tree::WidgetTree};
 
+/// 允许滚动的轴向。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScrollDirection {
+    /// 仅纵向。
     Vertical,
+    /// 仅横向。
     Horizontal,
+    /// 双轴均可。
     Both,
 }
 
+/// 滚动视口的运行时状态（偏移、内容尺寸、方向）。
 #[derive(Debug, Clone)]
 pub struct ScrollState {
+    /// 内容相对视口的滚动偏移（向右/下为正内容移动方向的相反约定：增大 = 内容上移/左移）。
     pub offset: Vec2,
+    /// 可滚动内容的逻辑尺寸。
     pub content_size: Vec2,
+    /// 视口逻辑尺寸（通常等于 content_rect）。
     pub viewport_size: Vec2,
+    /// 允许滚动的轴向。
     pub direction: ScrollDirection,
 }
 
@@ -26,6 +38,7 @@ impl Default for ScrollState {
 }
 
 impl ScrollState {
+    /// 将 `offset` 钳制到 `[0, content - viewport]`，并清零禁用轴向。
     pub fn clamp_offset(&mut self) {
         let max_x = (self.content_size.x - self.viewport_size.x).max(0.0);
         let max_y = (self.content_size.y - self.viewport_size.y).max(0.0);
@@ -45,6 +58,7 @@ impl ScrollState {
         }
     }
 
+    /// 应用滚轮增量（正 `delta` 通常对应内容上滚 / 偏移减小约定中的「向上」）。
     pub fn apply_wheel(&mut self, delta: f32) {
         match self.direction {
             ScrollDirection::Horizontal => self.offset.x -= delta,

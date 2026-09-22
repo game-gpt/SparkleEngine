@@ -121,11 +121,7 @@ impl AssetIndex {
         let asset = asset.as_ref().to_path_buf();
         if let Some(existing) = self.by_guid.get(&guid) {
             if existing != &asset {
-                return Err(AssetIndexError::DuplicateGuid {
-                    guid,
-                    first: existing.clone(),
-                    second: asset,
-                });
+                return Err(AssetIndexError::DuplicateGuid { guid, first: existing.clone(), second: asset });
             }
         }
         if let Some(old_guid) = self.by_path.insert(asset.clone(), guid) {
@@ -151,20 +147,11 @@ impl AssetIndex {
         let mut index = Self::new();
         let mut stack = vec![root.to_path_buf()];
         while let Some(dir) = stack.pop() {
-            let rd = fs::read_dir(&dir).map_err(|e| AssetIndexError::Walk {
-                root: dir.clone(),
-                detail: e.to_string(),
-            })?;
+            let rd = fs::read_dir(&dir).map_err(|e| AssetIndexError::Walk { root: dir.clone(), detail: e.to_string() })?;
             for entry in rd {
-                let entry = entry.map_err(|e| AssetIndexError::Walk {
-                    root: dir.clone(),
-                    detail: e.to_string(),
-                })?;
+                let entry = entry.map_err(|e| AssetIndexError::Walk { root: dir.clone(), detail: e.to_string() })?;
                 let path = entry.path();
-                let ft = entry.file_type().map_err(|e| AssetIndexError::Walk {
-                    root: path.clone(),
-                    detail: e.to_string(),
-                })?;
+                let ft = entry.file_type().map_err(|e| AssetIndexError::Walk { root: path.clone(), detail: e.to_string() })?;
                 if ft.is_dir() {
                     stack.push(path);
                     continue;
@@ -172,7 +159,8 @@ impl AssetIndex {
                 if !ft.is_file() {
                     continue;
                 }
-                let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+                let Some(name) = path.file_name().and_then(|s| s.to_str())
+                else {
                     continue;
                 };
                 if !name.ends_with(".meta") {
@@ -191,9 +179,7 @@ impl AssetIndex {
     pub fn rename(&mut self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), AssetIndexError> {
         let from = from.as_ref();
         let to = to.as_ref();
-        let guid = self.guid_of(from).ok_or_else(|| AssetMetaError::Missing {
-            asset: from.to_path_buf(),
-        })?;
+        let guid = self.guid_of(from).ok_or_else(|| AssetMetaError::Missing { asset: from.to_path_buf() })?;
         let from_meta = AssetMetaStore::path(from);
         let to_meta = AssetMetaStore::path(to);
         if to_meta.is_file() {
@@ -201,23 +187,14 @@ impl AssetIndex {
         }
         if let Some(parent) = to.parent() {
             if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).map_err(|e| AssetMetaError::Io {
-                    path: parent.to_path_buf(),
-                    cause: e,
-                })?;
+                fs::create_dir_all(parent).map_err(|e| AssetMetaError::Io { path: parent.to_path_buf(), cause: e })?;
             }
         }
         if from.is_file() {
-            fs::rename(from, to).map_err(|e| AssetMetaError::Io {
-                path: from.to_path_buf(),
-                cause: e,
-            })?;
+            fs::rename(from, to).map_err(|e| AssetMetaError::Io { path: from.to_path_buf(), cause: e })?;
         }
         if from_meta.is_file() {
-            fs::rename(&from_meta, &to_meta).map_err(|e| AssetMetaError::Io {
-                path: from_meta,
-                cause: e,
-            })?;
+            fs::rename(&from_meta, &to_meta).map_err(|e| AssetMetaError::Io { path: from_meta, cause: e })?;
         }
         self.by_path.remove(from);
         self.by_guid.insert(guid, to.to_path_buf());

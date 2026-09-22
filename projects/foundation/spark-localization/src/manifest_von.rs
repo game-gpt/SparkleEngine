@@ -12,19 +12,38 @@ use crate::{
 };
 
 /// VON 清单解析错误。
+///
+/// 稳定码见 [`Self::code`]；行号从 1 起。
 #[derive(Debug)]
 pub enum ManifestVonError {
+    /// Locale 标签解析失败。
     Locale(LocaleParseError),
-    MissingAssign { line: usize },
-    UnknownField { field: String, line: usize },
+    /// 非空行缺少 `=` 赋值。
+    MissingAssign {
+        /// 1-based 行号。
+        line: usize,
+    },
+    /// 未知顶层字段。
+    UnknownField {
+        /// 原始字段名。
+        field: String,
+        /// 1-based 行号。
+        line: usize,
+    },
+    /// `namespace = [...]` 元素不足 2 个（需 id 与 owner）。
     NamespaceArity,
+    /// 缺少必填 `product_default`。
     MissingProductDefault,
+    /// 期望字符串字面量或安全裸标识。
     ExpectedString,
+    /// 期望无符号整数。
     ExpectedInteger,
+    /// 期望 `[...]` 数组。
     ExpectedArray,
 }
 
 impl ManifestVonError {
+    /// 稳定机器码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Locale(e) => e.code(),
@@ -38,6 +57,7 @@ impl ManifestVonError {
         }
     }
 
+    /// 结构化参数（行号、字段名等）。
     pub fn args(&self) -> spark_types::ErrorArgs {
         use spark_types::{ErrorArg, ErrorArgs};
         match self {

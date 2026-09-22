@@ -6,4 +6,6 @@ use spark_types::Vec2;
 
 /// 与旧壳相同的默认死区（世界单位）和插值速度。
 pub const DEADZONE: Vec2 = Vec2::new(2.0, 1.5);
+
+/// 相机跟随指数插值系数（越大贴得越紧）。
 pub const FOLLOW_LERP: f32 = 8.0;

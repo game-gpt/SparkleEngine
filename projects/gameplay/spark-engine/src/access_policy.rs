@@ -17,10 +17,18 @@ pub enum ScriptAccessPolicy {
     Unrestricted,
     /// 已挂描述符：写集约束组件变更；读世界须声明至少一项 read 或 write。
     /// `archetypes` 非空时过滤 `query_*` 可见原型。
-    Declared { reads: HashSet<Arc<str>>, writes: HashSet<Arc<str>>, archetypes: HashSet<Arc<str>> },
+    Declared {
+        /// 声明为只读的组件名集合。
+        reads: HashSet<Arc<str>>,
+        /// 声明为可写的组件名集合（可覆盖只读）。
+        writes: HashSet<Arc<str>>,
+        /// 允许出现在 `query_*` 中的脚本原型名；空集表示不按原型过滤。
+        archetypes: HashSet<Arc<str>>,
+    },
 }
 
 impl ScriptAccessPolicy {
+    /// 由 [`ScriptSystemDescriptor`] 的访问与原型声明构造 `Declared` 策略。
     pub fn from_descriptor(desc: &ScriptSystemDescriptor) -> Self {
         let mut reads = HashSet::new();
         let mut writes = HashSet::new();

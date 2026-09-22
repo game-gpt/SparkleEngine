@@ -15,18 +15,24 @@ use crate::{
 };
 
 /// 资产装载 / 编译错误。
+///
+/// 稳定错误码经 [`Self::code`] 暴露；嵌套错误转发底层码，本层不另造用户句子。
 #[derive(Debug)]
 pub enum LocaleLoadError {
+    /// `spark-asset` 读键失败（透传 [`LoadError`]）。
     Load(LoadError),
+    /// JSON 字节无法落到 [`LocalizationDocument`]。
     Json(JsonError),
+    /// 文档编译或检查失败。
     Compile(CompileError),
-    /// 清单缺少分片。
+    /// 清单 `shards` 为空，没有可装载语言包路径。
     EmptyShards,
-    /// 装载后无可用 Locale。
+    /// 装载后协商集合为空（清单与包均无可用 Locale）。
     NoAvailableLocales,
 }
 
 impl LocaleLoadError {
+    /// 稳定机器码；嵌套变体转发源错误码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Load(e) => e.code(),
@@ -37,6 +43,7 @@ impl LocaleLoadError {
         }
     }
 
+    /// 结构化参数表，供本地化渲染；无用户可见句子权威。
     pub fn args(&self) -> spark_types::ErrorArgs {
         match self {
             Self::Load(e) => e.args(),
@@ -126,10 +133,12 @@ pub struct MemoryLocaleLoader {
 }
 
 impl MemoryLocaleLoader {
+    /// 构造空装载器。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 登记逻辑键对应的 JSON 字节；同键后写覆盖。
     pub fn insert(&mut self, key: impl Into<String>, bytes: impl AsRef<[u8]>) {
         let slice: Arc<[u8]> = Arc::from(bytes.as_ref());
         self.files.insert(key.into(), slice);

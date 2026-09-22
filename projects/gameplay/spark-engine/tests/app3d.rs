@@ -1,8 +1,9 @@
-//! �?`src/app3d.rs` 迁出的原 `#[cfg(test)] mod tests`�?use spark_engine::*;
+//! 自 `src/app3d.rs` 迁出的原 `#[cfg(test)] mod tests`。
+use spark_engine::*;
 
-use spark_types::Color;
 use spark_input::Input;
 use spark_renderer::{FrameCtx, GameHost3d, Mat4};
+use spark_types::Color;
 
 use spark_renderer::DrawList3d;
 struct Paint;

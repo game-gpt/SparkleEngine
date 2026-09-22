@@ -4,7 +4,7 @@
 //! 单位句柄、框选、指令队列、编制、迷雾格子。
 //! **禁止**阵营科技树、具体兵种表、地图战役——那些属于游戏仓。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 mod command;
 mod fog;
 mod selection;
@@ -15,20 +15,26 @@ pub use fog::FogGrid;
 pub use selection::Selection;
 pub use unit::{PlayerId, UnitId, UnitPose, UnitRoster};
 
-use spark_types::Vec2;
 use spark_engine::SparkEngine;
+use spark_types::Vec2;
 use std::path::PathBuf;
 
 /// RTS 会话：模组引擎 + 单位/指令/视野。
 pub struct RtsEngine {
+    /// 底层模组 / 帧循环宿主。
     pub engine: SparkEngine,
+    /// 存活单位编制。
     pub roster: UnitRoster,
+    /// 当前框选集合。
     pub selection: Selection,
+    /// 每单位一条当前指令。
     pub commands: CommandQueue,
+    /// 迷雾格子。
     pub fog: FogGrid,
 }
 
 impl RtsEngine {
+    /// `map_w` / `map_h` 为格子数，`cell` 为格子边长（世界单位）。
     pub fn new(mods_root: impl Into<PathBuf>, map_w: u32, map_h: u32, cell: f32) -> Self {
         Self {
             engine: SparkEngine::new(mods_root),

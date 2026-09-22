@@ -1,9 +1,10 @@
-//! �?`src/ecs_host.rs` 迁出的原 `#[cfg(test)] mod tests`�?use spark_engine::*;
+//! 自 `src/ecs_host.rs` 迁出的原 `#[cfg(test)] mod tests`。
+use spark_engine::*;
 
-use spark_types::Color;
 use spark_ecs::{Schedule, World};
 use spark_input::Input;
 use spark_renderer::{DrawList, DrawList3d, FrameCtx, GameHost, GameHost3d, Mat4, WindowConfig};
+use spark_types::Color;
 fn frame_ctx(input: &Input) -> FrameCtx<'_> {
     FrameCtx { input, dt: 1.0 / 60.0, screen_w: 1280.0, screen_h: 720.0, dpi_scale: 1.0, timing: Default::default() }
 }
@@ -17,7 +18,7 @@ fn host_2d_schedule_fills_draw_buffer() {
         let list = DrawList::new(Color::rgb(0.2, 0.3, 0.4));
         w.resources.get_mut::<DrawBuffer2d>().unwrap().list = Some(list);
     });
-    // 仿真 schedule 空；绘制�?draw_schedule
+    // 仿真 schedule 空；绘制走 draw_schedule
     let mut host = EcsHost2d::new(world, Schedule::new()).with_draw_schedule(schedule);
     let input = Input::default();
     host.update(&frame_ctx(&input));

@@ -16,12 +16,15 @@ struct WatchEntry {
 }
 
 /// 轮询已登记资源的修改时间，变化时驱动 [`AssetCache::notify_changed`]。
+///
+/// 单位：依赖文件系统 `modified()` 时间戳；分辨率随平台变化。
 #[derive(Debug, Default)]
 pub struct HotReloadWatch {
     watched: HashMap<AssetKey, WatchEntry>,
 }
 
 impl HotReloadWatch {
+    /// 空监视表。
     pub fn new() -> Self {
         Self::default()
     }
@@ -33,6 +36,7 @@ impl HotReloadWatch {
         self.watch_path(key, path);
     }
 
+    /// 登记 `(key, path)`；以当前 mtime（若可得）为基线，下次 `poll` 才报变更。
     pub fn watch_path(&mut self, key: impl Into<AssetKey>, path: impl Into<PathBuf>) {
         let key = key.into();
         let path = path.into();
@@ -40,19 +44,24 @@ impl HotReloadWatch {
         self.watched.insert(key, WatchEntry { path, mtime });
     }
 
+    /// 取消监视；曾登记返回 `true`。
     pub fn unwatch(&mut self, key: &AssetKey) -> bool {
         self.watched.remove(key).is_some()
     }
 
+    /// 监视条目数。
     pub fn len(&self) -> usize {
         self.watched.len()
     }
 
+    /// 是否无监视项。
     pub fn is_empty(&self) -> bool {
         self.watched.is_empty()
     }
 
     /// 扫描 mtime；有变化则重载缓存。返回本轮事件（带真实路径）。
+    ///
+    /// 任一条 `notify_changed` 失败则整轮返回错误；已成功写入缓存的变更不会回滚。
     pub fn poll(&mut self, cache: &mut AssetCache, loader: &dyn AssetLoader) -> Result<Vec<ReloadEvent>, AssetError> {
         let mut changed = Vec::new();
         for (key, entry) in self.watched.iter_mut() {

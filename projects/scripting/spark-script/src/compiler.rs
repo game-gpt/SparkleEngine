@@ -14,19 +14,25 @@ use crate::{
 /// 编译产物（目标 → 链接 → 映像）。
 #[derive(Debug, Clone)]
 pub struct CompiledPackage {
+    /// 可重定位目标（可写出 `.spko`）。
     pub object: SparkObject,
+    /// 已链接程序（槽位与生命周期已固定）。
     pub program: LinkedProgram,
+    /// 已验证可执行映像（可写出 `.spkx` 或装载运行时）。
     pub image: ExecutableImage,
 }
 
 /// 编译器：驱动前端与制品管线，不执行脚本。
 #[derive(Debug, Default)]
 pub struct ScriptCompiler {
+    /// 本会话累计诊断（当前管线主要经 [`ScriptError`] 返回致命错误）。
     pub diagnostics: crate::diagnostic::DiagnosticBatch,
+    /// 按请求指纹缓存完整 [`CompiledPackage`]。
     pub cache: ArtifactCache,
 }
 
 impl ScriptCompiler {
+    /// 空编译器（诊断批次与缓存均为默认）。
     pub fn new() -> Self {
         Self::default()
     }
@@ -134,6 +140,7 @@ fn script_verify_error(err: VerifyError) -> ScriptError {
 }
 
 impl LanguageFrontend {
+    /// 制品与诊断用的稳定前端标签（`valkyrie` / `lua` / `ruby`）。
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Valkyrie => "valkyrie",

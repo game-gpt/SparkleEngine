@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use spark_types::{Color, SparkError};
 use spark_geometry::{Aabb3, Mat4, Vec3};
 use spark_texture::TextureUpload;
+use spark_types::{Color, SparkError};
 
 use crate::{
     draw::DrawList,
@@ -19,15 +19,23 @@ pub struct MeshId(pub u64);
 /// GPU 驻留键：`id` 稳定，`revision` 在 CPU 顶点变更时递增。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MeshResidentKey {
+    /// 跨帧稳定网格身份；后端用其查找已上传的 GPU 缓冲。
     pub id: MeshId,
+    /// CPU 侧顶点内容修订号；变更后递增以触发重新上传，未变则可跳过上传。
     pub revision: u32,
 }
 
+/// 顶点色三角网格顶点（模型局部空间，列主序 `model` 再乘 `view_proj`）。
+///
+/// `pos` / `normal` 为世界变换前的局部坐标；`color` 为线性 RGBA，与光照结果相乘。
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct MeshVertex {
+    /// 局部空间位置（世界单位，经 `MeshCmd::model` 变换）。
     pub pos: [f32; 3],
+    /// 局部空间单位法线（经 model 的法线矩阵；参与前向漫反射）。
     pub normal: [f32; 3],
+    /// 顶点色 RGBA（线性浮点，与材质/光照相乘）。
     pub color: [f32; 4],
 }
 
@@ -37,6 +45,7 @@ impl MeshVertex {
         Self::with_normal(x, y, z, 0.0, 1.0, 0.0, color)
     }
 
+    /// 指定局部位置、法线与顶点色；法线应近似单位化。
     pub fn with_normal(x: f32, y: f32, z: f32, nx: f32, ny: f32, nz: f32, color: Color) -> Self {
         Self { pos: [x, y, z], normal: [nx, ny, nz], color: color.to_array() }
     }
@@ -46,9 +55,13 @@ impl MeshVertex {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct TexMeshVertex {
+    /// 局部空间位置（世界单位）。
     pub pos: [f32; 3],
+    /// 局部空间单位法线。
     pub normal: [f32; 3],
+    /// 归一化 UV，`[0,1]` 对应整张绑定纹理（可越界，由采样器 wrapping 解释）。
     pub uv: [f32; 2],
+    /// 与纹素相乘的顶点色 RGBA。
     pub color: [f32; 4],
 }
 
@@ -58,6 +71,7 @@ impl TexMeshVertex {
         Self::with_normal(x, y, z, 0.0, 1.0, 0.0, u, v, color)
     }
 
+    /// 指定局部位置、法线、UV 与顶点色。
     pub fn with_normal(x: f32, y: f32, z: f32, nx: f32, ny: f32, nz: f32, u: f32, v: f32, color: Color) -> Self {
         Self { pos: [x, y, z], normal: [nx, ny, nz], uv: [u, v], color: color.to_array() }
     }
@@ -68,10 +82,15 @@ impl TexMeshVertex {
 pub struct FrameLights3d {
     /// 从表面指向太阳的单位方向。
     pub sun_dir: Vec3,
+    /// 太阳直射色（线性 RGB，强度含在颜色分量里）。
     pub sun_color: Color,
+    /// 环境光色（无方向项，加在漫反射上）。
     pub ambient: Color,
+    /// 距离雾目标色；与片段世界距离及 `fog_density` 混合。
     pub fog_color: Color,
+    /// 指数雾密度（世界距离尺度，越大雾越浓）。
     pub fog_density: f32,
+    /// 观察点（世界空间），供雾与部分着色器使用。
     pub eye: Vec3,
     /// ACES 前曝光倍率（典型 0.9–1.4）。
     pub exposure: f32,
@@ -97,12 +116,15 @@ pub const MAX_SHADOW_CASCADES: usize = 3;
 /// 太阳正交阴影（1..3 级联）；`enabled=false` 时着色器跳过采样。
 #[derive(Debug, Clone, Copy)]
 pub struct ShadowParams3d {
+    /// 是否启用阴影采样；关闭时后端跳过阴影 pass / 采样。
     pub enabled: bool,
     /// 有效级联数，钳制到 `1..=MAX_SHADOW_CASCADES`。
     pub cascade_count: u32,
+    /// 每级联的光空间 `proj * view`（世界 → 阴影 clip）。
     pub light_view_proj: [Mat4; MAX_SHADOW_CASCADES],
     /// 相对 `focus`（通常为相机眼）的世界距离：级联 `i` 覆盖到 `split_end[i]`。
     pub split_end: [f32; MAX_SHADOW_CASCADES],
+    /// 深度偏移（光空间），减轻阴影痤疮；典型约 `0.001`–`0.003`。
     pub bias: f32,
     /// 阴影压暗强度 0..1。
     pub strength: f32,
@@ -152,33 +174,49 @@ impl ShadowParams3d {
     }
 }
 
+/// 不透明 / 半透明 / 自发光等共用的顶点色网格绘制命令。
+///
+/// 顶点为局部空间三角列表；`model` 为局部→世界。入批哪条 `Vec` 由 [`DrawList3d`] 的 push API 决定。
 #[derive(Debug, Clone)]
 pub struct MeshCmd {
+    /// 局部 → 世界变换（列主序）。
     pub model: Mat4,
+    /// 三角列表顶点（每 3 个一点；空切片不会被 push）。
     pub vertices: Arc<[MeshVertex]>,
+    /// 可选 GPU 驻留键；`None` 表示每帧即时上传。
     pub resident: Option<MeshResidentKey>,
+    /// 局部空间 AABB，供视锥 / 距离剔除；`None` 时剔除阶段默认保留。
     pub local_aabb: Option<Aabb3>,
     /// 是否参与太阳阴影深度 pass；远景代理可关以省级联开销。
     pub casts_shadow: bool,
 }
 
 impl MeshCmd {
+    /// 将 `local_aabb` 变换到世界空间；无局部盒时返回 `None`。
     pub fn world_aabb(&self) -> Option<Aabb3> {
         self.local_aabb.map(|a| a.transformed(self.model))
     }
 }
 
+/// 纹理三角网格绘制命令（Opaque / Transparent / Emissive 批次共用结构）。
 #[derive(Debug, Clone)]
 pub struct TexMeshCmd {
+    /// 局部 → 世界变换。
     pub model: Mat4,
+    /// 采样纹理句柄（须已通过本列表的 `create_texture*` / `queue_texture_upload` 入队）。
     pub texture: TextureId,
+    /// 带 UV 的三角列表顶点。
     pub vertices: Arc<[TexMeshVertex]>,
+    /// 可选 GPU 驻留键。
     pub resident: Option<MeshResidentKey>,
+    /// 局部空间 AABB（裁剪用）。
     pub local_aabb: Option<Aabb3>,
+    /// 是否投射太阳阴影；半透明 / 自发光 push 路径强制为 `false`。
     pub casts_shadow: bool,
 }
 
 impl TexMeshCmd {
+    /// 将 `local_aabb` 变换到世界空间；无局部盒时返回 `None`。
     pub fn world_aabb(&self) -> Option<Aabb3> {
         self.local_aabb.map(|a| a.transformed(self.model))
     }
@@ -191,15 +229,22 @@ pub const MAX_SKIN_JOINTS: usize = 64;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct SkinnedVertex {
+    /// 绑定姿势下的局部位置。
     pub pos: [f32; 3],
+    /// 绑定姿势下的局部法线。
     pub normal: [f32; 3],
+    /// 归一化 UV。
     pub uv: [f32; 2],
+    /// 顶点色 RGBA。
     pub color: [f32; 4],
+    /// 影响关节索引（相对 `SkinnedMeshCmd::joint_palette`）。
     pub joints: [u32; 4],
+    /// 对应权重；四者之和宜为 `1`。
     pub weights: [f32; 4],
 }
 
 impl SkinnedVertex {
+    /// 组装蒙皮顶点；`color` 写入线性 RGBA 数组。
     pub fn new(pos: [f32; 3], normal: [f32; 3], uv: [f32; 2], color: Color, joints: [u32; 4], weights: [f32; 4]) -> Self {
         Self { pos, normal, uv, color: color.to_array(), joints, weights }
     }
@@ -208,16 +253,22 @@ impl SkinnedVertex {
 /// 不透明蒙皮网格绘制命令（Opaque；透明/自发光后置）。
 #[derive(Debug, Clone)]
 pub struct SkinnedMeshCmd {
+    /// 网格根节点局部 → 世界。
     pub model: Mat4,
+    /// 蒙皮三角列表顶点。
     pub vertices: Arc<[SkinnedVertex]>,
     /// `global * inverse_bind`；长度 ≤ [`MAX_SKIN_JOINTS`]。
     pub joint_palette: Arc<[Mat4]>,
+    /// 可选漫反射纹理；`None` 时仅用顶点色。
     pub texture: Option<TextureId>,
+    /// 可选 GPU 驻留键。
     pub resident: Option<MeshResidentKey>,
+    /// 局部空间 AABB（通常为绑定姿势粗盒）。
     pub local_aabb: Option<Aabb3>,
 }
 
 impl SkinnedMeshCmd {
+    /// 将 `local_aabb` 变换到世界空间；无局部盒时返回 `None`。
     pub fn world_aabb(&self) -> Option<Aabb3> {
         self.local_aabb.map(|a| a.transformed(self.model))
     }
@@ -230,7 +281,9 @@ impl SkinnedMeshCmd {
 /// 清深度 → `view_model_meshes`（第一人称手臂/武器）→ bloom → HUD。
 #[derive(Debug)]
 pub struct DrawList3d {
+    /// 本帧清屏色（线性 RGBA，由后端写进 color attachment）。
     pub clear: Color,
+    /// 主相机 `proj * view`（世界 → clip）；Opaque / Transparent / 裁剪共用。
     pub view_proj: Mat4,
     /// 天空 / 天体专用 VP（通常为去平移的 `Camera3d::sky_view_proj`）。
     pub sky_view_proj: Mat4,
@@ -242,11 +295,13 @@ pub struct DrawList3d {
     pub sky_meshes: Vec<MeshCmd>,
     /// Sky 加性发光（方日光晕等）；测深 Always、不写深、additive。
     pub sky_emissive_meshes: Vec<MeshCmd>,
+    /// 不透明顶点色网格批次（写深度、前向光照）。
     pub meshes: Vec<MeshCmd>,
     /// 顶点色半透明（面罩等）；测深不写深。
     pub meshes_xlu: Vec<MeshCmd>,
     /// 顶点色自发光（灯条等）；测深不写深、additive。
     pub meshes_emissive: Vec<MeshCmd>,
+    /// 不透明纹理网格批次。
     pub tex_meshes: Vec<TexMeshCmd>,
     /// Transparent：树叶 / 玻璃等；深度测试开启、不写深度。
     pub tex_meshes_xlu: Vec<TexMeshCmd>,
@@ -262,10 +317,12 @@ pub struct DrawList3d {
     pub bloom_strength: f32,
     /// 单级太阳阴影参数。
     pub shadow: ShadowParams3d,
+    /// 叠在 3D 之上的 2D HUD（屏幕像素，见 [`DrawList`]）。
     pub hud: DrawList,
 }
 
 impl DrawList3d {
+    /// 新建空列表：指定清屏色与主 `view_proj`；天空 VP 初值与主相机相同，阴影关闭。
     pub fn new(clear: Color, view_proj: Mat4) -> Self {
         Self {
             clear,
@@ -315,20 +372,24 @@ impl DrawList3d {
         self.texture_uploads.push((id, upload));
     }
 
+    /// 推入不透明顶点色网格（写深度、投射阴影）；无驻留、无局部 AABB。
     pub fn mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {
         self.push_mesh(model, vertices, None, None, true);
     }
 
+    /// 同 [`Self::mesh`]，接受 `Vec`；空向量直接丢弃。
     pub fn mesh_vec(&mut self, model: Mat4, vertices: Vec<MeshVertex>) {
         if !vertices.is_empty() {
             self.mesh(model, Arc::<[MeshVertex]>::from(vertices));
         }
     }
 
+    /// 不透明顶点色网格，附带局部 AABB 供后续 [`Self::retain_visible`] 使用。
     pub fn mesh_culled(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, local_aabb: Aabb3) {
         self.push_mesh(model, vertices, None, Some(local_aabb), true);
     }
 
+    /// 不透明驻留网格：稳定 `key` 可跳过重复上传；`local_aabb` 可选。
     pub fn mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_mesh(model, vertices, Some(key), local_aabb, true);
     }
@@ -350,6 +411,7 @@ impl DrawList3d {
         self.push_mesh_xlu(model, vertices, None, None);
     }
 
+    /// 半透明驻留顶点色网格。
     pub fn mesh_xlu_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_mesh_xlu(model, vertices, Some(key), local_aabb);
     }
@@ -359,6 +421,7 @@ impl DrawList3d {
         self.push_mesh_emissive(model, vertices, None, None);
     }
 
+    /// 自发光驻留顶点色网格。
     pub fn mesh_emissive_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_mesh_emissive(model, vertices, Some(key), local_aabb);
     }
@@ -368,6 +431,7 @@ impl DrawList3d {
         self.push_view_model_mesh(model, vertices, None, None);
     }
 
+    /// 第一人称 view-model 驻留网格。
     pub fn view_model_mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_view_model_mesh(model, vertices, Some(key), local_aabb);
     }
@@ -377,6 +441,7 @@ impl DrawList3d {
         self.push_sky_mesh(model, vertices, None, None);
     }
 
+    /// 天空驻留网格（穹顶 / 天体）。
     pub fn sky_mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_sky_mesh(model, vertices, Some(key), local_aabb);
     }
@@ -386,6 +451,7 @@ impl DrawList3d {
         self.push_sky_atmosphere(model, vertices, None, None);
     }
 
+    /// 大气穹顶驻留网格。
     pub fn sky_atmosphere_mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_sky_atmosphere(model, vertices, Some(key), local_aabb);
     }
@@ -395,14 +461,17 @@ impl DrawList3d {
         self.push_sky_emissive(model, vertices, None, None);
     }
 
+    /// 天空加性发光驻留网格。
     pub fn sky_emissive_mesh_resident(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>, key: MeshResidentKey, local_aabb: Option<Aabb3>) {
         self.push_sky_emissive(model, vertices, Some(key), local_aabb);
     }
 
+    /// 推入不透明纹理网格（写深度、默认投射阴影）。
     pub fn tex_mesh(&mut self, model: Mat4, texture: TextureId, vertices: Arc<[TexMeshVertex]>) {
         self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Opaque, true);
     }
 
+    /// 不透明纹理驻留网格。
     pub fn tex_mesh_resident(
         &mut self,
         model: Mat4,
@@ -432,6 +501,7 @@ impl DrawList3d {
         self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Xlu, false);
     }
 
+    /// 半透明纹理驻留网格。
     pub fn tex_mesh_xlu_resident(
         &mut self,
         model: Mat4,
@@ -448,6 +518,7 @@ impl DrawList3d {
         self.push_tex_mesh(model, texture, vertices, None, None, TexPass::Emissive, false);
     }
 
+    /// 自发光纹理驻留网格。
     pub fn tex_mesh_emissive_resident(
         &mut self,
         model: Mat4,
@@ -464,6 +535,7 @@ impl DrawList3d {
         self.push_skinned_mesh(model, vertices, joint_palette, texture, None, None);
     }
 
+    /// 不透明蒙皮驻留网格。
     pub fn skinned_mesh_resident(
         &mut self,
         model: Mat4,
@@ -577,6 +649,9 @@ impl DrawList3d {
         self.skinned_meshes.push(SkinnedMeshCmd { model, vertices, joint_palette: palette, texture, resident, local_aabb });
     }
 
+    /// 按当前 `view_proj` 视锥与可选距离，剔除世界批次中不可见命令。
+    ///
+    /// 天空 / view-model / HUD 不参与；无 `local_aabb` 的命令一律保留。
     pub fn retain_visible(&mut self, cull: CullParams) {
         let frustum = Frustum::from_view_proj(&self.view_proj);
         let keep = |world: Aabb3| -> bool {
@@ -598,6 +673,9 @@ impl DrawList3d {
         self.skinned_meshes.retain(|m| m.world_aabb().map(keep).unwrap_or(true));
     }
 
+    /// 仅按到 `eye` 的粗距离剔除世界批次（不计视锥）。
+    ///
+    /// 距离为包围盒中心到眼的距离减去半对角；无 AABB 的命令保留。
     pub fn retain_within_distance(&mut self, eye: Vec3, max_distance: f32) {
         let max_d = max_distance.max(0.0);
         let keep = |world: Aabb3| -> bool {

@@ -4,7 +4,7 @@
 //! **默认**挂载 [`Live2dPlugin`]（占位后端可换），供模组脚本调用 `live2d_*` 原生函数。
 //! **禁止**具体剧本、角色立绘资源表——那些属于游戏仓 / 模组数据。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 mod flags;
 mod layers;
 mod script;
@@ -20,9 +20,13 @@ use spark_engine::SparkEngine;
 
 /// Galgame 会话（默认已注册 Live2D 脚本插件）。
 pub struct GalgameEngine {
+    /// 底层模组 / 帧循环宿主。
     pub engine: SparkEngine,
+    /// 对白与选项播放器（含回看历史）。
     pub script: ScriptPlayer,
+    /// 剧本旗标 / 数值变量表。
     pub flags: FlagStore,
+    /// 背景 / 立绘等图层槽。
     pub layers: LayerStack,
     live2d: Rc<RefCell<Live2dRuntime>>,
 }

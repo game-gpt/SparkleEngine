@@ -8,7 +8,7 @@
 //!
 //! 不提供立即模式控件公共 API。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 pub mod accessibility;
 pub mod asset;
 pub mod binding;

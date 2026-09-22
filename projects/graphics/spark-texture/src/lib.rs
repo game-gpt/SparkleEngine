@@ -3,7 +3,7 @@
 //! **不**解码源图片文件，**不**依赖 `image` / `wgpu`。
 //! 格式插件产出 [`TextureUpload`]；渲染后端消费后得到 GPU 句柄。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 
 mod atlas;
 mod data;

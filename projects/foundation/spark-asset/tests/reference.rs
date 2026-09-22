@@ -42,18 +42,12 @@ fn validate_detects_guid_mismatch() {
     fs::write(&asset, b"x").unwrap();
     let meta = AssetMetaStore::create(&asset).unwrap();
 
-    let wrong = AssetRef::Resolved {
-        path: asset.to_string_lossy().into_owned(),
-        guid: Uuid::nil(),
-    };
+    let wrong = AssetRef::Resolved { path: asset.to_string_lossy().into_owned(), guid: Uuid::nil() };
     let err = wrong.validate().unwrap_err();
     assert!(matches!(err, AssetMetaError::GuidMismatch { .. }));
     assert_eq!(err.code(), "spark.asset.guid_mismatch");
 
-    let ok = AssetRef::Resolved {
-        path: asset.to_string_lossy().into_owned(),
-        guid: meta.guid,
-    };
+    let ok = AssetRef::Resolved { path: asset.to_string_lossy().into_owned(), guid: meta.guid };
     assert_eq!(ok.validate().unwrap().guid, meta.guid);
 
     let _ = fs::remove_dir_all(&dir);

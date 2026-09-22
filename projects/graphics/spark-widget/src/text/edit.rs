@@ -5,16 +5,39 @@ use crate::{id::WidgetId, node::WidgetKind, tree::WidgetTree};
 /// 文本编辑动作。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextEditAction {
+    /// 插入字符占位（实际插入走 `typed` 参数）。
     Insert,
+    /// 删除光标前一字符，或删除选区。
     Backspace,
+    /// 删除光标处字符，或删除选区。
     Delete,
-    MoveLeft { select: bool },
-    MoveRight { select: bool },
+    /// 光标左移；`select` 为真时扩展选区。
+    MoveLeft {
+        /// 是否按住 Shift 扩展选区。
+        select: bool,
+    },
+    /// 光标右移；`select` 为真时扩展选区。
+    MoveRight {
+        /// 是否按住 Shift 扩展选区。
+        select: bool,
+    },
+    /// 全选。
     SelectAll,
-    Home { select: bool },
-    End { select: bool },
+    /// 移到行首；`select` 为真时扩展选区。
+    Home {
+        /// 是否按住 Shift 扩展选区。
+        select: bool,
+    },
+    /// 移到行尾；`select` 为真时扩展选区。
+    End {
+        /// 是否按住 Shift 扩展选区。
+        select: bool,
+    },
+    /// 复制选区到剪贴板。
     Copy,
+    /// 剪切选区到剪贴板。
     Cut,
+    /// 从剪贴板粘贴。
     Paste,
 }
 

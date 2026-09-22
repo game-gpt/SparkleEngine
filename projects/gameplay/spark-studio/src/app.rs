@@ -1,8 +1,11 @@
 //! Studio 宿主：`GameHost` + `UiRuntime`；Play 时保留编辑器壳，Game 页签显示对局。
+//!
+//! 不变式：编辑器壳与对局会话可并存；仅在 `--play` 浸入模式下从不挂载壳，
+//! Esc / Stop 才回到 Edit（浸入模式则退出进程级 Play）。
 
-use spark_types::Vec2;
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_types::Vec2;
 use spark_widget::{Insets, UiCommand, UiFrame, UiRuntime};
 
 use crate::{
@@ -16,6 +19,9 @@ use crate::{
     },
 };
 
+/// Studio 应用宿主：持有 Widget 运行时、项目元数据与可选 Play 会话。
+///
+/// 实现 [`GameHost`]：每帧先处理 UI 命令，再按 `PlayMode` 推进对局。
 pub struct StudioApp {
     ui: UiRuntime,
     project: ProjectInfo,
@@ -28,6 +34,7 @@ pub struct StudioApp {
 }
 
 impl StudioApp {
+    /// 打开项目：扫描 `assets/`、按 kind 选默认 Hierarchy 行，状态栏写打开信息。
     pub fn new(project: ProjectInfo) -> Self {
         let assets = list_asset_entries(&project.root);
         let mut state = EditorState::default();
@@ -94,11 +101,13 @@ impl StudioApp {
                 UiCommand::Custom(CMD_PLAY) => {
                     if self.play.is_none() {
                         self.start_play();
-                    } else if self.state.play == PlayMode::Paused {
+                    }
+                    else if self.state.play == PlayMode::Paused {
                         self.state.play = PlayMode::Play;
                         self.state.status = "Resumed".into();
                         self.dirty_ui = true;
-                    } else {
+                    }
+                    else {
                         self.state.center = CenterTab::Game;
                         self.dirty_ui = true;
                     }
@@ -170,7 +179,8 @@ impl StudioApp {
                     if let Some(eid) = parse_select_cmd(id) {
                         self.state.selected = eid;
                         self.dirty_ui = true;
-                    } else {
+                    }
+                    else {
                         self.state.status = format!("命令 {id}");
                         self.dirty_ui = true;
                     }

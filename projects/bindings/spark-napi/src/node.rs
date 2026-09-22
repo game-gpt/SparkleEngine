@@ -49,22 +49,12 @@ impl JsSparkHost {
     /// 执行 VON 编辑计划，返回 JSON 字符串报告。
     #[napi]
     pub fn run_edit_plan(&self, root: String, mode: String, von: String) -> Result<String> {
-        self.inner
-            .run_edit_plan(&root, &mode, &von)
-            .map_err(|e| Error::from_reason(e))
+        self.inner.run_edit_plan(&root, &mode, &von).map_err(|e| Error::from_reason(e))
     }
 
     /// 带能力 token 的编辑入口（如 `project-edit`）。
     #[napi]
-    pub fn run_edit_plan_with_caps(
-        &self,
-        root: String,
-        mode: String,
-        von: String,
-        capabilities: Vec<String>,
-    ) -> Result<String> {
-        self.inner
-            .run_edit_plan_with_caps(&root, &mode, &von, &capabilities)
-            .map_err(|e| Error::from_reason(e))
+    pub fn run_edit_plan_with_caps(&self, root: String, mode: String, von: String, capabilities: Vec<String>) -> Result<String> {
+        self.inner.run_edit_plan_with_caps(&root, &mode, &von, &capabilities).map_err(|e| Error::from_reason(e))
     }
 }

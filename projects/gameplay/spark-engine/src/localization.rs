@@ -18,6 +18,7 @@ impl Default for LocalizationService {
 }
 
 impl LocalizationService {
+    /// 以给定初始快照构造；下一 generation 取自快照 + 1。
     pub fn new(initial: LocaleSnapshot) -> Self {
         let next_generation = initial.generation.saturating_add(1);
         Self { localizer: Localizer::new(initial), pending: None, next_generation }
@@ -30,22 +31,27 @@ impl LocalizationService {
         Self::new(snap)
     }
 
+    /// 当前只读本地化器（格式化 / Locale 查询）。
     pub fn localizer(&self) -> &Localizer {
         &self.localizer
     }
 
+    /// 当前已提交快照的共享引用。
     pub fn snapshot(&self) -> std::sync::Arc<LocaleSnapshot> {
         self.localizer.snapshot()
     }
 
+    /// 当前快照 generation。
     pub fn generation(&self) -> u64 {
         self.localizer.generation()
     }
 
+    /// 当前生效 Locale。
     pub fn locale(&self) -> &LocaleId {
         self.localizer.locale()
     }
 
+    /// 按消息引用与参数格式化文案（走当前快照）。
     pub fn format(&self, message: &MessageRef, args: &MessageArgs) -> LocalizedText {
         self.localizer.format(message, args)
     }
@@ -61,6 +67,7 @@ impl LocalizationService {
         self.pending = Some(snapshot);
     }
 
+    /// 是否已有待提交快照。
     pub fn has_pending(&self) -> bool {
         self.pending.is_some()
     }

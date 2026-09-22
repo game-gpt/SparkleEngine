@@ -4,8 +4,7 @@ use std::path::Path;
 
 use spark_asset::{AssetMeta, AssetMetaError, AssetMetaStore};
 
-use crate::document::PrefabDocument;
-use crate::error::PrefabError;
+use crate::{document::PrefabDocument, error::PrefabError};
 
 /// 登记失败：旁车或 Prefab IO。
 #[derive(Debug)]

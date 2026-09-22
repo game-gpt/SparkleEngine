@@ -38,11 +38,7 @@ impl Vec2 {
     /// 单位向量；近零时 `None`。
     pub fn try_normalized(self) -> Option<Self> {
         let len = self.length();
-        if len < 1e-8 {
-            None
-        } else {
-            Some(Self::new(self.x / len, self.y / len))
-        }
+        if len < 1e-8 { None } else { Some(Self::new(self.x / len, self.y / len)) }
     }
 
     /// 点积。
@@ -105,11 +101,7 @@ impl Vec2 {
     pub fn clamp_length(self, max: f32) -> Self {
         let max = max.max(0.0);
         let d2 = self.length_squared();
-        if d2 <= max * max || d2 < 1e-12 {
-            self
-        } else {
-            self.mul_scalar(max / d2.sqrt())
-        }
+        if d2 <= max * max || d2 < 1e-12 { self } else { self.mul_scalar(max / d2.sqrt()) }
     }
 }
 

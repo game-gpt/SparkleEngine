@@ -2,7 +2,7 @@
 //!
 //! WGSL 正文归本 crate；`spark-renderer-wgpu` 只消费编译结果与入口名，不内嵌着色器字符串。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::sync::Arc;
 
 use spark_types::{ErrorArg, SparkError, codes};

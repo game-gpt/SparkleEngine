@@ -5,25 +5,129 @@
 use crate::{FuncProto, Module, Op, decode_op};
 
 /// 字节码验证错误。
+///
+/// 字段约定：`func` 为模块内函数下标，`offset` 为该函数 `code` 字节偏移（操作码处）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BytecodeVerifyError {
+    /// 模块没有任何函数原型。
     EmptyModule,
-    EntryOutOfBounds { entry: usize, len: usize },
-    EmptyFunction { index: usize },
-    UnknownOpcode { func: usize, offset: usize, op: u8 },
-    TruncatedOperand { func: usize, offset: usize },
-    JumpOffBoundary { func: usize, offset: usize, target: usize },
-    JumpOutOfBounds { func: usize, offset: usize, target: isize },
-    LocalOob { func: usize, offset: usize, slot: u16, locals: u16 },
-    ConstOob { func: usize, offset: usize, index: u16, len: usize },
-    StringOob { func: usize, offset: usize, index: u16, len: usize },
-    FuncOob { func: usize, offset: usize, index: u32, len: usize },
-    HostSlotOob { func: usize, offset: usize, slot: u16, len: u32 },
-    ResidualCallNative { func: usize, offset: usize },
-    MissingReturn { func: usize },
+    /// 入口下标越出 `functions` 长度。
+    EntryOutOfBounds {
+        /// 请求的入口下标。
+        entry: usize,
+        /// 当前函数表长度。
+        len: usize,
+    },
+    /// 某函数的 `code` 为空。
+    EmptyFunction {
+        /// 空函数在模块中的下标。
+        index: usize,
+    },
+    /// 遇到无法解码的操作码字节。
+    UnknownOpcode {
+        /// 所在函数下标。
+        func: usize,
+        /// 出错字节偏移。
+        offset: usize,
+        /// 原始操作码字节。
+        op: u8,
+    },
+    /// 操作数被截断（指令末尾不够读完操作数）。
+    TruncatedOperand {
+        /// 所在函数下标。
+        func: usize,
+        /// 该指令操作码偏移。
+        offset: usize,
+    },
+    /// 跳转目标落在某条指令中间，而非指令边界。
+    JumpOffBoundary {
+        /// 所在函数下标。
+        func: usize,
+        /// 跳转指令偏移。
+        offset: usize,
+        /// 计算出的目标字节偏移。
+        target: usize,
+    },
+    /// 跳转目标为负或越过 `code` 末尾（末尾本身允许，表示落到函数外）。
+    JumpOutOfBounds {
+        /// 所在函数下标。
+        func: usize,
+        /// 跳转指令偏移。
+        offset: usize,
+        /// 带符号的目标偏移（可为负）。
+        target: isize,
+    },
+    /// 局部槽下标 ≥ `FuncProto::locals`。
+    LocalOob {
+        /// 所在函数下标。
+        func: usize,
+        /// 指令偏移。
+        offset: usize,
+        /// 请求的局部槽。
+        slot: u16,
+        /// 该函数声明的局部槽数。
+        locals: u16,
+    },
+    /// 常量或全局名常量表下标越界。
+    ConstOob {
+        /// 所在函数下标。
+        func: usize,
+        /// 指令偏移。
+        offset: usize,
+        /// 请求的常量表下标。
+        index: u16,
+        /// 相关表长度（`consts` 或 `const_names`）。
+        len: usize,
+    },
+    /// 字符串池下标越界（亦可能用于残留 `CallNative` 名表检查）。
+    StringOob {
+        /// 所在函数下标。
+        func: usize,
+        /// 指令偏移。
+        offset: usize,
+        /// 请求的字符串下标。
+        index: u16,
+        /// 字符串池（或与 native 名表取 max）长度。
+        len: usize,
+    },
+    /// 常量中的 [`Value::Func`] 下标越出模块函数表。
+    FuncOob {
+        /// 所在函数下标。
+        func: usize,
+        /// 指令偏移。
+        offset: usize,
+        /// 常量里的函数下标。
+        index: u32,
+        /// 模块函数个数。
+        len: usize,
+    },
+    /// [`Op::CallHost`] 槽位 ≥ 宿主槽位数（仅 `verify_bytecode_with_host`）。
+    HostSlotOob {
+        /// 所在函数下标。
+        func: usize,
+        /// 指令偏移。
+        offset: usize,
+        /// 请求的宿主槽位。
+        slot: u16,
+        /// 允许的槽位个数。
+        len: u32,
+    },
+    /// 封存映像中仍残留 [`Op::CallNative`]（正式路径须已改写为 [`Op::CallHost`]）。
+    ResidualCallNative {
+        /// 所在函数下标。
+        func: usize,
+        /// `CallNative` 指令偏移。
+        offset: usize,
+    },
+    /// 函数体全程未见 [`Op::Return`]（结构化要求：至少一条返回）。
+    MissingReturn {
+        /// 缺少 `Return` 的函数下标。
+        func: usize,
+    },
 }
 
 impl BytecodeVerifyError {
+    /// 稳定错误码（`spark.vm.verify.*`），供诊断与本地化键使用。
     pub fn code(&self) -> &'static str {
         match self {
             Self::EmptyModule => "spark.vm.verify.empty_module",

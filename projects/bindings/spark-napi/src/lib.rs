@@ -7,7 +7,7 @@
 //! cargo build -p spark-napi --release --features node
 //! ```
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod host;
 
 #[cfg(feature = "node")]

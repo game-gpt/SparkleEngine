@@ -1,37 +1,34 @@
 //! Prefab 结构与嵌套图校验。
 
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::path::Path;
+use std::{
+    collections::{BTreeSet, HashMap, HashSet},
+    path::Path,
+};
 
 use spark_asset::AssetRef;
 
-use crate::document::{PREFAB_SCHEMA, PrefabDocument};
-use crate::error::PrefabError;
-use crate::r#override::{OverridePath, parse_override_path};
+use crate::{
+    document::{PREFAB_SCHEMA, PrefabDocument},
+    error::PrefabError,
+    r#override::{OverridePath, parse_override_path},
+};
 
 impl PrefabDocument {
     /// 校验本文件结构（不含跨文件嵌套环）。
     pub fn validate(&self) -> Result<(), PrefabError> {
         if self.schema != PREFAB_SCHEMA {
-            return Err(PrefabError::BadSchema {
-                found: self.schema.clone(),
-            });
+            return Err(PrefabError::BadSchema { found: self.schema.clone() });
         }
         for id in self.nodes.keys() {
             validate_node_id(id)?;
         }
         if !self.nodes.contains_key(&self.root) {
-            return Err(PrefabError::RootMissing {
-                root: self.root.clone(),
-            });
+            return Err(PrefabError::RootMissing { root: self.root.clone() });
         }
         for (id, node) in &self.nodes {
             for child in &node.children {
                 if !self.nodes.contains_key(child) {
-                    return Err(PrefabError::ChildMissing {
-                        parent: id.clone(),
-                        child: child.clone(),
-                    });
+                    return Err(PrefabError::ChildMissing { parent: id.clone(), child: child.clone() });
                 }
             }
         }
@@ -43,24 +40,18 @@ impl PrefabDocument {
     pub fn resolve_node_path(&self, path: &str) -> Result<Vec<String>, PrefabError> {
         let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
         if parts.is_empty() || parts[0] != self.root {
-            return Err(PrefabError::OverrideTargetMissing {
-                target: path.into(),
-            });
+            return Err(PrefabError::OverrideTargetMissing { target: path.into() });
         }
         let mut chain = Vec::new();
         let mut current = parts[0];
         chain.push(current.to_string());
         if !self.nodes.contains_key(current) {
-            return Err(PrefabError::OverrideTargetMissing {
-                target: path.into(),
-            });
+            return Err(PrefabError::OverrideTargetMissing { target: path.into() });
         }
         for part in &parts[1..] {
             let node = self.nodes.get(current).expect("checked");
             if !node.children.iter().any(|c| c == part) {
-                return Err(PrefabError::OverrideTargetMissing {
-                    target: path.into(),
-                });
+                return Err(PrefabError::OverrideTargetMissing { target: path.into() });
             }
             current = part;
             chain.push((*part).to_string());
@@ -73,13 +64,9 @@ impl PrefabDocument {
         let parsed = parse_override_path(key)?;
         self.resolve_node_path(&parsed.node_path)?;
         let node_id = parsed.node_path.rsplit('/').next().unwrap_or(parsed.node_path.as_str());
-        let node = self.nodes.get(node_id).ok_or_else(|| PrefabError::OverrideTargetMissing {
-            target: key.into(),
-        })?;
+        let node = self.nodes.get(node_id).ok_or_else(|| PrefabError::OverrideTargetMissing { target: key.into() })?;
         if !node.components.contains_key(&parsed.component) {
-            return Err(PrefabError::OverrideTargetMissing {
-                target: key.into(),
-            });
+            return Err(PrefabError::OverrideTargetMissing { target: key.into() });
         }
         Ok(parsed)
     }

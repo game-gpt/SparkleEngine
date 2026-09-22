@@ -67,9 +67,13 @@ where
     out
 }
 
+/// DOM 风格三阶段传播中的当前阶段。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
+    /// 根→目标的捕获阶段。
     Capture,
+    /// 目标节点自身。
     Target,
+    /// 目标→根的冒泡阶段。
     Bubble,
 }

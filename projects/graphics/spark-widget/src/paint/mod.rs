@@ -324,13 +324,16 @@ fn value_t(content: &crate::node::WidgetContent) -> f32 {
     ((content.value - content.value_min) / span).clamp(0.0, 1.0)
 }
 
-/// 绘制上下文，供自定义 Widget 使用。
+/// 绘制上下文，供自定义 Widget 把命令写入同一 [`DrawList`]。
 pub struct PaintContext<'a> {
+    /// 本帧 HUD / GUI 绘制列表。
     pub draw: &'a mut DrawList,
+    /// 当前主题（色板与字号）。
     pub theme: &'a Theme,
 }
 
 impl<'a> PaintContext<'a> {
+    /// 自定义绘制可用的光标位置占位（首切恒为原点）。
     pub fn cursor(&self) -> Vec2 {
         Vec2::ZERO
     }

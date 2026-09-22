@@ -19,6 +19,7 @@ pub enum PseudoKind {
 }
 
 impl PseudoKind {
+    /// 对应伪 Locale BCP 47 标签（`en-XA` / `en-XB` / `en-XC`）。
     pub fn locale_tag(self) -> &'static str {
         match self {
             Self::Accents => "en-XA",

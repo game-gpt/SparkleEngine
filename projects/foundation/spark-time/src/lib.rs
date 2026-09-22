@@ -1,6 +1,6 @@
 //! 固定时间步、缩放与暂停。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 /// 帧时钟：累积真实时间，按固定步吐出仿真 tick。
 #[derive(Debug, Clone)]
 pub struct Clock {

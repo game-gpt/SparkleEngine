@@ -3,9 +3,7 @@
 use std::fs;
 
 use spark_asset::AssetMetaStore;
-use spark_edit::{
-    EditCapabilities, EditMode, EditOp, EditPlan, EditSession, TransactionState, host_names, parse_edit_source,
-};
+use spark_edit::{EditCapabilities, EditMode, EditOp, EditPlan, EditSession, TransactionState, host_names, parse_edit_source};
 use spark_prefab::PrefabDocument;
 use uuid::Uuid;
 
@@ -14,13 +12,8 @@ fn parse_von_edit_plan() {
     let plan = EditPlan {
         name: Some("demo".into()),
         ops: vec![
-            EditOp::MetaCreate {
-                path: "assets/x.png".into(),
-            },
-            EditOp::PrefabEnsure {
-                path: "assets/player.von".into(),
-                root: "player".into(),
-            },
+            EditOp::MetaCreate { path: "assets/x.png".into() },
+            EditOp::PrefabEnsure { path: "assets/player.von".into(), root: "player".into() },
         ],
     };
     let text = oak_von::to_string(&plan).expect("ser");
@@ -38,23 +31,10 @@ fn dry_run_prefab_plan_does_not_write() {
     let plan = EditPlan {
         name: Some("player".into()),
         ops: vec![
-            EditOp::PrefabEnsure {
-                path: "assets/player.von".into(),
-                root: "player".into(),
-            },
-            EditOp::PrefabEnsureNode {
-                path: "assets/player.von".into(),
-                id: "sprite".into(),
-                parent: Some("player".into()),
-            },
-            EditOp::PrefabEnsureComponent {
-                path: "assets/player.von".into(),
-                node: "sprite".into(),
-                component: "Sprite".into(),
-            },
-            EditOp::PrefabSave {
-                path: "assets/player.von".into(),
-            },
+            EditOp::PrefabEnsure { path: "assets/player.von".into(), root: "player".into() },
+            EditOp::PrefabEnsureNode { path: "assets/player.von".into(), id: "sprite".into(), parent: Some("player".into()) },
+            EditOp::PrefabEnsureComponent { path: "assets/player.von".into(), node: "sprite".into(), component: "Sprite".into() },
+            EditOp::PrefabSave { path: "assets/player.von".into() },
         ],
     };
 
@@ -76,13 +56,8 @@ fn apply_writes_prefab_and_meta() {
     let plan = EditPlan {
         name: None,
         ops: vec![
-            EditOp::PrefabEnsure {
-                path: "assets/player.von".into(),
-                root: "player".into(),
-            },
-            EditOp::PrefabSave {
-                path: "assets/player.von".into(),
-            },
+            EditOp::PrefabEnsure { path: "assets/player.von".into(), root: "player".into() },
+            EditOp::PrefabSave { path: "assets/player.von".into() },
         ],
     };
 
@@ -109,13 +84,7 @@ fn apply_rename_keeps_guid() {
     fs::write(&src, b"png").unwrap();
     let meta = AssetMetaStore::create(&src).unwrap();
 
-    let plan = EditPlan {
-        name: None,
-        ops: vec![EditOp::AssetRename {
-            from: "assets/a.png".into(),
-            to: "assets/b.png".into(),
-        }],
-    };
+    let plan = EditPlan { name: None, ops: vec![EditOp::AssetRename { from: "assets/a.png".into(), to: "assets/b.png".into() }] };
     let mut session = EditSession::new(&dir, EditMode::Apply);
     let report = session.run(&plan);
     assert!(report.ok, "{:?}", report.diagnostics);
@@ -135,10 +104,7 @@ fn index_scan_reports_count() {
     fs::write(&asset, b"x").unwrap();
     AssetMetaStore::create(&asset).unwrap();
 
-    let plan = EditPlan {
-        name: None,
-        ops: vec![EditOp::IndexScan],
-    };
+    let plan = EditPlan { name: None, ops: vec![EditOp::IndexScan] };
     let mut session = EditSession::new(&dir, EditMode::Check);
     let report = session.run(&plan);
     assert!(report.ok, "{:?}", report.diagnostics);
@@ -151,10 +117,7 @@ fn index_scan_reports_count() {
 fn apply_denied_without_write_capability() {
     let dir = std::env::temp_dir().join(format!("spark-edit-cap-{}", Uuid::now_v7()));
     fs::create_dir_all(&dir).unwrap();
-    let plan = EditPlan {
-        name: None,
-        ops: vec![EditOp::IndexScan],
-    };
+    let plan = EditPlan { name: None, ops: vec![EditOp::IndexScan] };
     let mut session = EditSession::new(&dir, EditMode::Apply).with_capabilities(EditCapabilities::read_only());
     let report = session.run(&plan);
     assert!(!report.ok);
@@ -164,10 +127,9 @@ fn apply_denied_without_write_capability() {
 
 #[test]
 fn host_calls_lower_to_ops() {
-    use std::collections::BTreeMap;
     use spark_asset::MetaValue;
-    use spark_edit::EditHostScript;
-    use spark_edit::HostCall;
+    use spark_edit::{EditHostScript, HostCall};
+    use std::collections::BTreeMap;
 
     let script = EditHostScript {
         profile: Some("spark-edit-1".into()),

@@ -2,13 +2,17 @@
 
 use crate::{Mat4, Vec3};
 
+/// 轴对齐包围盒，半开语义由调用方约定；本实现点包含为闭区间。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Aabb3 {
+    /// 各轴最小角点。
     pub min: Vec3,
+    /// 各轴最大角点。
     pub max: Vec3,
 }
 
 impl Aabb3 {
+    /// 由两端点构造，并自动排序使 `min ≤ max` 分量成立。
     pub fn from_min_max(min: Vec3, max: Vec3) -> Self {
         Self {
             min: Vec3::new(min.x.min(max.x), min.y.min(max.y), min.z.min(max.z)),
@@ -16,6 +20,7 @@ impl Aabb3 {
         }
     }
 
+    /// 由中心与半尺寸（extents）构造：`[center - extents, center + extents]`。
     pub fn from_center_extents(center: Vec3, extents: Vec3) -> Self {
         Self { min: center - extents, max: center + extents }
     }
@@ -26,22 +31,27 @@ impl Aabb3 {
         Self { min, max: min + Vec3::new(1.0, 1.0, 1.0) }
     }
 
+    /// 几何中心。
     pub fn center(self) -> Vec3 {
         (self.min + self.max) * 0.5
     }
 
+    /// 半尺寸（中心到各面）。
     pub fn extents(self) -> Vec3 {
         (self.max - self.min) * 0.5
     }
 
+    /// 全尺寸 `max - min`。
     pub fn size(self) -> Vec3 {
         self.max - self.min
     }
 
+    /// 点是否在盒内（各轴闭区间）。
     pub fn contains_point(self, p: Vec3) -> bool {
         p.x >= self.min.x && p.x <= self.max.x && p.y >= self.min.y && p.y <= self.max.y && p.z >= self.min.z && p.z <= self.max.z
     }
 
+    /// 与另一 AABB 是否相交（含面接触）。
     pub fn intersects(self, o: Self) -> bool {
         self.min.x <= o.max.x
             && self.max.x >= o.min.x
@@ -51,11 +61,13 @@ impl Aabb3 {
             && self.max.z >= o.min.z
     }
 
+    /// 各方向外扩 `margin`（可为负表示内缩）。
     pub fn expand(self, margin: f32) -> Self {
         let m = Vec3::new(margin, margin, margin);
         Self { min: self.min - m, max: self.max + m }
     }
 
+    /// 包围二者的最小 AABB。
     pub fn union(self, o: Self) -> Self {
         Self {
             min: Vec3::new(self.min.x.min(o.min.x), self.min.y.min(o.min.y), self.min.z.min(o.min.z)),

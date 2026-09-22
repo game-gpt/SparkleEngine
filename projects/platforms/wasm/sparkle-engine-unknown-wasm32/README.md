@@ -13,7 +13,7 @@ ESM 包（`"type": "module"`）。Node ≥ 18；浏览器需能 `fetch` / 实例
 ## 用法
 
 ```js
-import { loadSpark, rustTarget, platformPackage } from "@game-gpt/sparkle-engine-unknown-wasm32";
+import {loadSpark, rustTarget, platformPackage} from "@game-gpt/sparkle-engine-unknown-wasm32";
 
 const spark = await loadSpark();
 console.log(spark.info());
@@ -23,9 +23,9 @@ console.log(spark.vec2Length(3, 4));
 可选：
 
 ```js
-await loadSpark({ wasmUrl: new URL("./spark_engine_bg.wasm", import.meta.url) });
+await loadSpark({wasmUrl: new URL("./spark_engine_bg.wasm", import.meta.url)});
 // 或传入已编译的 WebAssembly.Module
-await loadSpark({ module });
+await loadSpark({module});
 ```
 
 若 `.wasm` 尚未拷贝到位，加载器会回退到纯 JS 的 `Math.hypot` 实现，方便 TS 联调；正式环境请先构建 Wasm。

@@ -1,6 +1,6 @@
 //! 混合示例：Rust 棋盘权威 + 可玩主循环（Valkyrie HUD 元数据仍在 assets/scripts）。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod board;
 mod collision;
 mod pieces;
@@ -8,9 +8,9 @@ mod pieces;
 pub use board::Board;
 pub use pieces::PieceKind;
 
-use spark_types::{Color, Rect};
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_types::{Color, Rect};
 
 use crate::{
     collision::{fits, lock_piece},

@@ -14,6 +14,7 @@ use crate::{
 /// 每帧写入 `World` 资源的帧快照（不含生命周期引用）。
 #[derive(Debug, Clone)]
 pub struct FrameSnapshot {
+    /// 本仿真步 `dt`（秒；固定步时为固定值）。
     pub dt: f32,
     /// 物理像素宽（与 `Input::mouse_pos` 同空间）。
     pub screen_w: f32,
@@ -21,16 +22,19 @@ pub struct FrameSnapshot {
     pub screen_h: f32,
     /// 窗口 DPI 缩放。
     pub dpi_scale: f32,
+    /// 本帧输入快照（已 clone，可安全存入资源）。
     pub input: Input,
 }
 
 /// 进程退出请求（游戏系统写入，宿主在 `should_exit` 读取）。
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AppExit {
+    /// 为 true 时宿主应结束窗口泵。
     pub requested: bool,
 }
 
 impl AppExit {
+    /// 标记请求退出。
     pub fn request(&mut self) {
         self.requested = true;
     }
@@ -40,7 +44,10 @@ impl AppExit {
 ///
 /// 默认可见。标题菜单绘制 `Cursor_0` 时应写入 `false`，避免双光标。
 #[derive(Debug, Clone, Copy)]
-pub struct OsCursorVisible(pub bool);
+pub struct OsCursorVisible(
+    /// `true` = 显示 OS 光标。
+    pub bool,
+);
 
 impl Default for OsCursorVisible {
     fn default() -> Self {
@@ -51,12 +58,14 @@ impl Default for OsCursorVisible {
 /// 由游戏 / 渲染系统填充的 2D 绘制缓冲（系统写入，宿主在 draw 相位取走）。
 #[derive(Debug, Default)]
 pub struct DrawBuffer2d {
+    /// 整帧 `DrawList`；宿主 `take` 后置 `None`。
     pub list: Option<DrawList>,
 }
 
 /// 由游戏填充的 3D 绘制缓冲资源（系统写入，宿主在 draw 相位取走）。
 #[derive(Debug, Default)]
 pub struct DrawBuffer3d {
+    /// 整帧 `DrawList3d`；宿主 `take` 后置 `None`。
     pub list: Option<DrawList3d>,
 }
 
@@ -80,40 +89,49 @@ fn exit_requested(world: &World, host_exit: bool) -> bool {
 /// `update`：写入 [`FrameSnapshot`] 后跑仿真 [`Schedule`]。  
 /// `draw`：优先消费 [`DrawBuffer2d`]；否则跑 [`RenderSchedule2d`]；再否则旧 `draw_schedule` 或 `draw_fallback`。
 pub struct EcsHost2d {
+    /// ECS 世界（仿真与绘制共享）。
     pub world: World,
+    /// 每帧 update 相位跑的仿真调度。
     pub schedule: Schedule,
     /// 正式 2D 绘制调度。
     pub renderer: RenderSchedule2d,
     /// 兼容路径：往 [`DrawBuffer2d`] 写整帧列表。
     pub draw_schedule: Schedule,
+    /// 宿主侧强制退出标志（与 [`AppExit`] 资源 OR）。
     pub exit: bool,
     draw_fallback: Option<Box<dyn FnMut(&mut World, &mut DrawList) + Send>>,
 }
 
 impl EcsHost2d {
+    /// 以世界与仿真调度构造；绘制调度为空，无 fallback。
     pub fn new(world: World, schedule: Schedule) -> Self {
         Self { world, schedule, renderer: RenderSchedule2d::new(), draw_schedule: Schedule::new(), exit: false, draw_fallback: None }
     }
 
+    /// 替换正式 2D 绘制调度。
     pub fn with_renderer(mut self, renderer: RenderSchedule2d) -> Self {
         self.renderer = renderer;
         self
     }
 
+    /// 设置兼容绘制调度（在 `renderer` 为空时启用）。
     pub fn with_draw_schedule(mut self, schedule: Schedule) -> Self {
         self.draw_schedule = schedule;
         self
     }
 
+    /// 设置最后兜底绘制闭包（前述路径皆未产出列表时调用）。
     pub fn with_draw_fallback(mut self, f: impl FnMut(&mut World, &mut DrawList) + Send + 'static) -> Self {
         self.draw_fallback = Some(Box::new(f));
         self
     }
 
+    /// 可变访问世界。
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
 
+    /// 只读访问世界。
     pub fn world(&self) -> &World {
         &self.world
     }
@@ -161,17 +179,14 @@ impl GameHost for EcsHost2d {
     }
 
     fn cursor_visible(&self) -> bool {
-        self.world
-            .resources
-            .get::<OsCursorVisible>()
-            .map(|c| c.0)
-            .unwrap_or(true)
+        self.world.resources.get::<OsCursorVisible>().map(|c| c.0).unwrap_or(true)
     }
 }
 
 /// 绘制相位临时资源：供 `draw_schedule` 系统读取清屏色等。
 #[derive(Debug, Clone, Copy)]
 pub struct DrawScratch2d {
+    /// 本帧清屏色（自 `DrawList::clear` 拷贝）。
     pub clear: spark_types::Color,
 }
 
@@ -180,33 +195,43 @@ pub struct DrawScratch2d {
 /// `update`：写入 [`FrameSnapshot`] 后跑 [`Schedule`]。  
 /// `draw`：消费 [`DrawBuffer3d`]；否则跑 [`RenderSchedule3d`]；再否则 `draw_fallback`。
 pub struct EcsHost3d {
+    /// ECS 世界。
     pub world: World,
+    /// 每帧 update 相位跑的仿真调度。
     pub schedule: Schedule,
+    /// 正式 3D 绘制调度。
     pub renderer: RenderSchedule3d,
+    /// 宿主侧强制退出标志。
     pub exit: bool,
+    /// 是否抓取鼠标（`GameHost3d::cursor_grab`）。
     pub grab_cursor: bool,
     draw_fallback: Option<Box<dyn FnMut(&World, &mut DrawList3d) + Send>>,
 }
 
 impl EcsHost3d {
+    /// 以世界与仿真调度构造；默认抓取光标。
     pub fn new(world: World, schedule: Schedule) -> Self {
         Self { world, schedule, renderer: RenderSchedule3d::new(), exit: false, grab_cursor: true, draw_fallback: None }
     }
 
+    /// 替换正式 3D 绘制调度。
     pub fn with_renderer(mut self, renderer: RenderSchedule3d) -> Self {
         self.renderer = renderer;
         self
     }
 
+    /// 设置兜底绘制闭包。
     pub fn with_draw_fallback(mut self, f: impl FnMut(&World, &mut DrawList3d) + Send + 'static) -> Self {
         self.draw_fallback = Some(Box::new(f));
         self
     }
 
+    /// 可变访问世界。
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
 
+    /// 只读访问世界。
     pub fn world(&self) -> &World {
         &self.world
     }

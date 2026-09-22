@@ -7,14 +7,17 @@ use crate::skeleton::{MAX_JOINTS, Skeleton};
 /// 每关节局部 TRS（与 `Skeleton::joints` 对齐）。
 #[derive(Debug, Clone)]
 pub struct LocalPose {
+    /// 关节局部变换，下标与骨架关节一一对应。
     pub locals: Vec<Trs>,
 }
 
 impl LocalPose {
+    /// 从骨架 rest 姿态拷贝一份局部 TRS。
     pub fn rest(skeleton: &Skeleton) -> Self {
         Self { locals: skeleton.joints.iter().map(|j| j.rest_local).collect() }
     }
 
+    /// 当前姿态的关节数（等于 `locals.len()`）。
     pub fn joint_count(&self) -> usize {
         self.locals.len()
     }

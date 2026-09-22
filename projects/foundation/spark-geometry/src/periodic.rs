@@ -30,30 +30,41 @@ pub fn shortest_delta_1d(source: f32, target: f32, size: f32) -> f32 {
 /// 哪些轴启用周期。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PeriodicAxes {
+    /// X 轴是否回环。
     pub x: bool,
+    /// Y 轴是否回环。
     pub y: bool,
+    /// Z 轴是否回环。
     pub z: bool,
 }
 
 impl PeriodicAxes {
+    /// 三轴均不回环。
     pub const NONE: Self = Self { x: false, y: false, z: false };
+    /// 仅 XZ 回环（常见水平环世界）。
     pub const XZ: Self = Self { x: true, y: false, z: true };
+    /// 三轴均回环。
     pub const XYZ: Self = Self { x: true, y: true, z: true };
 }
 
 /// 各轴周期长度（米或格）；未启用的轴忽略对应分量。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PeriodSize {
+    /// X 周期长度；`≤ 0` 时该轴函数视为非周期。
     pub x: f32,
+    /// Y 周期长度。
     pub y: f32,
+    /// Z 周期长度。
     pub z: f32,
 }
 
 impl PeriodSize {
+    /// 三轴相同周期长度。
     pub fn uniform(s: f32) -> Self {
         Self { x: s, y: s, z: s }
     }
 
+    /// 仅 XZ 有长度，Y 置 0（配合 [`PeriodicAxes::XZ`]）。
     pub fn xz(sx: f32, sz: f32) -> Self {
         Self { x: sx, y: 0.0, z: sz }
     }

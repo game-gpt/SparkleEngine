@@ -42,7 +42,8 @@ pub fn downsample_rgba(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8
                 out[o + 1] = 0;
                 out[o + 2] = 0;
                 out[o + 3] = 0;
-            } else {
+            }
+            else {
                 out[o] = ((r / a) * 255.0).round().clamp(0.0, 255.0) as u8;
                 out[o + 1] = ((g / a) * 255.0).round().clamp(0.0, 255.0) as u8;
                 out[o + 2] = ((b / a) * 255.0).round().clamp(0.0, 255.0) as u8;

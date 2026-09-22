@@ -64,20 +64,15 @@ impl SparkJsHost {
     }
 
     /// 带显式能力 token 的编辑入口。
-    pub fn run_edit_plan_with_caps(
-        &self,
-        root: &str,
-        mode: &str,
-        von: &str,
-        capabilities: &[String],
-    ) -> Result<String, String> {
+    pub fn run_edit_plan_with_caps(&self, root: &str, mode: &str, von: &str, capabilities: &[String]) -> Result<String, String> {
         let mode = EditMode::parse(mode).ok_or_else(|| "spark.edit.bad_mode".to_string())?;
         let caps = if capabilities.is_empty() {
             match mode {
                 EditMode::Apply => EditCapabilities::project_edit(),
                 _ => EditCapabilities::read_only(),
             }
-        } else {
+        }
+        else {
             EditCapabilities::from_tokens(capabilities)
         };
         let report = run_edit_plan_with(root, mode, von, caps)?;

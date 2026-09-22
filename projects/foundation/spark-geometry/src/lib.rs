@@ -3,7 +3,7 @@
 //! 2D：[`Vec2`] / [`Rect`] 定义在 `spark-types`（含固有向量运算）；本 crate 提供形状、变换与相交。
 //! 3D：[`Vec3`] / [`Mat4`] / [`Quat`] / [`Trs`] / [`Aabb3`] / [`Ray3`] 供渲染与体素局部坐标共用。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 mod aabb3;
 mod circle;
 mod collide;

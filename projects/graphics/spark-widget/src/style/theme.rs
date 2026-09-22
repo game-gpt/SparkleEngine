@@ -37,10 +37,7 @@ pub struct MenuItemColors {
 
 impl Default for MenuItemColors {
     fn default() -> Self {
-        Self {
-            hover: Color::rgb(1.0, 0.92, 0.25),
-            pressed: Color::rgb(0.85, 0.72, 0.12),
-        }
+        Self { hover: Color::rgb(1.0, 0.92, 0.25), pressed: Color::rgb(0.85, 0.72, 0.12) }
     }
 }
 

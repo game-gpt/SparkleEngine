@@ -3,7 +3,7 @@
 //! 正式 API：[`Logger::emit`] 结构化 [`LogEvent`]（稳定 event 码 + 字段）。
 //! 格式字符串宏 / [`Logger::log`] 保留为 **raw** 路径：非结构化、非本地化、不可作程序判断。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod event;
 
 pub use event::{EventId, LogEvent};

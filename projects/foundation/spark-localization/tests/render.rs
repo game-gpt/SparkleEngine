@@ -1,6 +1,6 @@
 //! 自 `src/render.rs` 迁出的原 `#[cfg(test)] mod tests`。
-use spark_types::{ErrorArg, SparkError, codes};
 use spark_localization::{CompileOptions, LocaleId, LocaleSnapshot, LocalizationDocument, MessageDefinition, compile_documents, render_error};
+use spark_types::{ErrorArg, SparkError, codes};
 use std::sync::Arc;
 
 #[test]

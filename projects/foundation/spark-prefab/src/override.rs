@@ -15,31 +15,21 @@ pub struct OverridePath {
 
 /// 解析 `player/body/Transform.position`。
 pub fn parse_override_path(raw: &str) -> Result<OverridePath, PrefabError> {
-    let Some((left, field)) = raw.rsplit_once('.') else {
-        return Err(PrefabError::BadOverridePath {
-            target: raw.into(),
-        });
+    let Some((left, field)) = raw.rsplit_once('.')
+    else {
+        return Err(PrefabError::BadOverridePath { target: raw.into() });
     };
-    let Some((node_path, component)) = left.rsplit_once('/') else {
-        return Err(PrefabError::BadOverridePath {
-            target: raw.into(),
-        });
+    let Some((node_path, component)) = left.rsplit_once('/')
+    else {
+        return Err(PrefabError::BadOverridePath { target: raw.into() });
     };
     if node_path.is_empty() || component.is_empty() || field.is_empty() {
-        return Err(PrefabError::BadOverridePath {
-            target: raw.into(),
-        });
+        return Err(PrefabError::BadOverridePath { target: raw.into() });
     }
     if component.contains('.') || field.contains('/') {
-        return Err(PrefabError::BadOverridePath {
-            target: raw.into(),
-        });
+        return Err(PrefabError::BadOverridePath { target: raw.into() });
     }
-    Ok(OverridePath {
-        node_path: node_path.into(),
-        component: component.into(),
-        field: field.into(),
-    })
+    Ok(OverridePath { node_path: node_path.into(), component: component.into(), field: field.into() })
 }
 
 impl OverridePath {

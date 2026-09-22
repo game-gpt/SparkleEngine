@@ -3,11 +3,11 @@
 //! 当前交付轨元数据与压缩包泵；像素帧解码留给渲染/硬件路径。
 //! **无**过场剧本或游戏镜头语义。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::{path::Path, time::Duration};
 
-use spark_types::{SparkError, codes};
 use spark_media::{MediaPacket, MediaReader, PacketKind, VideoTrackInfo};
+use spark_types::{SparkError, codes};
 
 /// 打开中的视频剪辑（可含同文件音频轨 ID，供上层 AV 同步）。
 pub struct VideoClip {

@@ -1,16 +1,20 @@
 //! 编辑会话：按模式执行 [`EditPlan`]。
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use spark_asset::{AssetIndex, AssetMetaStore, MetaValue};
 use spark_prefab::{PrefabDocument, save_registered, validate_prefab_file};
 
-use crate::capabilities::EditCapabilities;
-use crate::diagnostic::{Diagnostic, Severity};
-use crate::op::EditOp;
-use crate::plan::EditPlan;
-use crate::report::{ChangeKind, ChangeRecord, EditReport, TransactionState};
+use crate::{
+    capabilities::EditCapabilities,
+    diagnostic::{Diagnostic, Severity},
+    op::EditOp,
+    plan::EditPlan,
+    report::{ChangeKind, ChangeRecord, EditReport, TransactionState},
+};
 
 /// 执行模式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,11 +80,7 @@ impl EditSession {
     /// 执行计划并返回报告。
     pub fn run(&mut self, plan: &EditPlan) -> EditReport {
         if self.mode == EditMode::Apply && !self.caps.allows_apply() {
-            self.push_err(
-                "spark.edit.capability_denied",
-                "apply requires write-assets / project-edit capability",
-                None,
-            );
+            self.push_err("spark.edit.capability_denied", "apply requires write-assets / project-edit capability", None);
             return EditReport {
                 ok: false,
                 mode: self.mode.as_str().into(),
@@ -98,20 +98,15 @@ impl EditSession {
         let ok = !self.has_error();
         let transaction = if !ok {
             TransactionState::RolledBack
-        } else {
+        }
+        else {
             match self.mode {
                 EditMode::Check => TransactionState::Checked,
                 EditMode::DryRun => TransactionState::Planned,
                 EditMode::Apply => TransactionState::Applied,
             }
         };
-        EditReport {
-            ok,
-            mode: self.mode.as_str().into(),
-            diagnostics: self.diagnostics.clone(),
-            changes: self.changes.clone(),
-            transaction,
-        }
+        EditReport { ok, mode: self.mode.as_str().into(), diagnostics: self.diagnostics.clone(), changes: self.changes.clone(), transaction }
     }
 
     fn has_error(&self) -> bool {
@@ -120,11 +115,7 @@ impl EditSession {
 
     fn resolve(&self, path: &str) -> PathBuf {
         let p = Path::new(path);
-        if p.is_absolute() {
-            p.to_path_buf()
-        } else {
-            self.root.join(p)
-        }
+        if p.is_absolute() { p.to_path_buf() } else { self.root.join(p) }
     }
 
     fn rel_display(&self, path: &Path) -> String {
@@ -134,28 +125,15 @@ impl EditSession {
     }
 
     fn push_err(&mut self, code: &str, message: impl Into<String>, path: Option<String>) {
-        self.diagnostics.push(Diagnostic {
-            severity: Severity::Error,
-            code: code.into(),
-            message: message.into(),
-            path,
-        });
+        self.diagnostics.push(Diagnostic { severity: Severity::Error, code: code.into(), message: message.into(), path });
     }
 
     fn push_info(&mut self, code: &str, message: impl Into<String>, path: Option<String>) {
-        self.diagnostics.push(Diagnostic {
-            severity: Severity::Info,
-            code: code.into(),
-            message: message.into(),
-            path,
-        });
+        self.diagnostics.push(Diagnostic { severity: Severity::Info, code: code.into(), message: message.into(), path });
     }
 
     fn note_change(&mut self, kind: ChangeKind, path: &Path) {
-        self.changes.push(ChangeRecord {
-            kind,
-            path: self.rel_display(path),
-        });
+        self.changes.push(ChangeRecord { kind, path: self.rel_display(path) });
     }
 
     fn exec_op(&mut self, op: &EditOp) {
@@ -166,18 +144,8 @@ impl EditSession {
             EditOp::IndexScan => self.op_index_scan(),
             EditOp::PrefabEnsure { path, root } => self.op_prefab_ensure(path, root),
             EditOp::PrefabEnsureNode { path, id, parent } => self.op_prefab_ensure_node(path, id, parent.as_deref()),
-            EditOp::PrefabEnsureComponent {
-                path,
-                node,
-                component,
-            } => self.op_prefab_ensure_component(path, node, component),
-            EditOp::PrefabSetField {
-                path,
-                node,
-                component,
-                field,
-                value,
-            } => self.op_prefab_set_field(path, node, component, field, value),
+            EditOp::PrefabEnsureComponent { path, node, component } => self.op_prefab_ensure_component(path, node, component),
+            EditOp::PrefabSetField { path, node, component, field, value } => self.op_prefab_set_field(path, node, component, field, value),
             EditOp::PrefabValidate { path } => self.op_prefab_validate(path),
             EditOp::PrefabSave { path } => self.op_prefab_save(path),
         }
@@ -189,23 +157,17 @@ impl EditSession {
         match self.mode {
             EditMode::Check => {
                 if meta_path.is_file() {
-                    self.push_err(
-                        "spark.asset.meta_already_exists",
-                        "sidecar already exists",
-                        Some(self.rel_display(&meta_path)),
-                    );
-                } else {
+                    self.push_err("spark.asset.meta_already_exists", "sidecar already exists", Some(self.rel_display(&meta_path)));
+                }
+                else {
                     self.push_info("spark.edit.meta_create_ok", "meta.create would succeed", Some(path.into()));
                 }
             }
             EditMode::DryRun => {
                 if meta_path.is_file() {
-                    self.push_err(
-                        "spark.asset.meta_already_exists",
-                        "sidecar already exists",
-                        Some(self.rel_display(&meta_path)),
-                    );
-                } else {
+                    self.push_err("spark.asset.meta_already_exists", "sidecar already exists", Some(self.rel_display(&meta_path)));
+                }
+                else {
                     self.note_change(ChangeKind::WriteMeta, &meta_path);
                 }
             }
@@ -219,11 +181,7 @@ impl EditSession {
     fn op_meta_load(&mut self, path: &str) {
         let abs = self.resolve(path);
         match AssetMetaStore::load(&abs) {
-            Ok(meta) => self.push_info(
-                "spark.edit.meta_loaded",
-                format!("guid={}", meta.guid),
-                Some(path.into()),
-            ),
+            Ok(meta) => self.push_info("spark.edit.meta_loaded", format!("guid={}", meta.guid), Some(path.into())),
             Err(e) => self.push_err(e.code(), e.to_string(), Some(path.into())),
         }
     }
@@ -235,26 +193,22 @@ impl EditSession {
             EditMode::Check => {
                 if !from_abs.is_file() && !AssetMetaStore::path(&from_abs).is_file() {
                     self.push_err("spark.asset.meta_missing", "rename source missing", Some(from.into()));
-                } else if AssetMetaStore::path(&to_abs).is_file() {
-                    self.push_err(
-                        "spark.asset.meta_already_exists",
-                        "rename target meta exists",
-                        Some(to.into()),
-                    );
-                } else {
+                }
+                else if AssetMetaStore::path(&to_abs).is_file() {
+                    self.push_err("spark.asset.meta_already_exists", "rename target meta exists", Some(to.into()));
+                }
+                else {
                     self.push_info("spark.edit.rename_ok", "asset.rename would succeed", Some(from.into()));
                 }
             }
             EditMode::DryRun => {
                 if !from_abs.is_file() && !AssetMetaStore::path(&from_abs).is_file() {
                     self.push_err("spark.asset.meta_missing", "rename source missing", Some(from.into()));
-                } else if AssetMetaStore::path(&to_abs).is_file() {
-                    self.push_err(
-                        "spark.asset.meta_already_exists",
-                        "rename target meta exists",
-                        Some(to.into()),
-                    );
-                } else {
+                }
+                else if AssetMetaStore::path(&to_abs).is_file() {
+                    self.push_err("spark.asset.meta_already_exists", "rename target meta exists", Some(to.into()));
+                }
+                else {
                     self.note_change(ChangeKind::Update, &from_abs);
                     self.note_change(ChangeKind::Create, &to_abs);
                     self.note_change(ChangeKind::WriteMeta, &AssetMetaStore::path(&to_abs));
@@ -287,11 +241,7 @@ impl EditSession {
 
     fn op_index_scan(&mut self) {
         match AssetIndex::scan(&self.root) {
-            Ok(index) => self.push_info(
-                "spark.edit.index_scanned",
-                format!("entries={}", index.len()),
-                Some(self.rel_display(&self.root)),
-            ),
+            Ok(index) => self.push_info("spark.edit.index_scanned", format!("entries={}", index.len()), Some(self.rel_display(&self.root))),
             Err(e) => self.push_err(e.code(), e.to_string(), None),
         }
     }
@@ -320,15 +270,13 @@ impl EditSession {
                     None
                 }
             }
-        } else if let Some(root) = root {
+        }
+        else if let Some(root) = root {
             self.prefabs.insert(path.into(), PrefabDocument::new(root));
             Some(())
-        } else {
-            self.push_err(
-                "spark.prefab.io",
-                "prefab file missing; use prefab.ensure first",
-                Some(path.into()),
-            );
+        }
+        else {
+            self.push_err("spark.prefab.io", "prefab file missing; use prefab.ensure first", Some(path.into()));
             None
         }
     }
@@ -340,7 +288,8 @@ impl EditSession {
         let abs = self.resolve(path);
         if abs.is_file() {
             let _ = self.load_or_open_prefab(path, None);
-        } else {
+        }
+        else {
             self.prefabs.insert(path.into(), PrefabDocument::new(root));
             if self.mode != EditMode::Check {
                 self.note_change(ChangeKind::Create, &abs);
@@ -352,7 +301,8 @@ impl EditSession {
         if self.load_or_open_prefab(path, None).is_none() {
             return;
         }
-        let Some(doc) = self.prefabs.get_mut(path) else {
+        let Some(doc) = self.prefabs.get_mut(path)
+        else {
             return;
         };
         doc.ensure_node(id);
@@ -370,7 +320,8 @@ impl EditSession {
         if self.load_or_open_prefab(path, None).is_none() {
             return;
         }
-        let Some(doc) = self.prefabs.get_mut(path) else {
+        let Some(doc) = self.prefabs.get_mut(path)
+        else {
             return;
         };
         if let Err(e) = doc.ensure_component(node, component) {
@@ -382,25 +333,20 @@ impl EditSession {
         }
     }
 
-    fn op_prefab_set_field(
-        &mut self,
-        path: &str,
-        node: &str,
-        component: &str,
-        field: &str,
-        value: &MetaValue,
-    ) {
+    fn op_prefab_set_field(&mut self, path: &str, node: &str, component: &str, field: &str, value: &MetaValue) {
         if self.load_or_open_prefab(path, None).is_none() {
             return;
         }
-        let Some(doc) = self.prefabs.get_mut(path) else {
+        let Some(doc) = self.prefabs.get_mut(path)
+        else {
             return;
         };
         if let Err(e) = doc.ensure_component(node, component) {
             self.push_err(e.code(), e.to_string(), Some(path.into()));
             return;
         }
-        let Some(comp) = doc.nodes.get_mut(node).and_then(|n| n.components.get_mut(component)) else {
+        let Some(comp) = doc.nodes.get_mut(node).and_then(|n| n.components.get_mut(component))
+        else {
             self.push_err("spark.prefab.node_missing", "component missing after ensure", Some(path.into()));
             return;
         };
@@ -423,7 +369,8 @@ impl EditSession {
         if self.load_or_open_prefab(path, None).is_none() {
             return;
         }
-        let Some(doc) = self.prefabs.get(path).cloned() else {
+        let Some(doc) = self.prefabs.get(path).cloned()
+        else {
             return;
         };
         if let Err(e) = doc.validate() {
@@ -437,11 +384,7 @@ impl EditSession {
                 self.push_info("spark.edit.prefab_save_ok", "prefab.save would succeed", Some(path.into()));
             }
             EditMode::DryRun => {
-                let kind = if abs.is_file() {
-                    ChangeKind::Update
-                } else {
-                    ChangeKind::Create
-                };
+                let kind = if abs.is_file() { ChangeKind::Update } else { ChangeKind::Create };
                 self.note_change(kind, &abs);
                 self.note_change(ChangeKind::WriteMeta, &meta_path);
             }

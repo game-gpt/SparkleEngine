@@ -3,10 +3,10 @@
 use std::{cell::Cell, collections::HashMap, sync::Arc, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
-use spark_types::{Color, SparkError, codes};
 use spark_font::GlyphCache;
 use spark_renderer::{DrawList, DrawList3d, FrameCtx, FrameLights3d, GameHost3d, Input, MeshCmd, MeshResidentKey, MeshVertex, WindowConfig};
 use spark_shader::{BuiltinShader, create_builtin};
+use spark_types::{Color, SparkError, codes};
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
@@ -1371,14 +1371,7 @@ impl<H: GameHost3d> HostApp3d<H> {
 
         let t_update = Instant::now();
         {
-            let frame = FrameCtx {
-                input: &self.input,
-                dt,
-                screen_w: sw,
-                screen_h: sh,
-                dpi_scale: self.scale.max(0.01),
-                timing: prev_timing,
-            };
+            let frame = FrameCtx { input: &self.input, dt, screen_w: sw, screen_h: sh, dpi_scale: self.scale.max(0.01), timing: prev_timing };
             self.host.update(&frame);
         }
         let update_ms = t_update.elapsed().as_secs_f32() * 1000.0;

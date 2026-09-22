@@ -1,7 +1,7 @@
 //! 产品入口：帧编排在本 crate，窗口泵在 `spark-renderer-wgpu`。
 
-use spark_types::SparkError;
 use spark_renderer::{GameHost, GameHost3d, WindowConfig};
+use spark_types::SparkError;
 
 use crate::frame::{FrameLoopConfig, LoopedHost2d, LoopedHost3d};
 

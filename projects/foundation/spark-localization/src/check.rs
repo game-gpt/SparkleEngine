@@ -12,15 +12,25 @@ use crate::{
 };
 
 /// 检查发现问题。
+///
+/// 种类本身是稳定分类；细节放在 [`CheckIssue::token`]，禁止用户句子。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckIssueKind {
+    /// 同一文档内重复消息键（当前实现主要作预留分类）。
     DuplicateKey,
+    /// 相对基线 Locale 缺失的消息键。
     MissingKey,
+    /// 相对基线 Locale 多出的消息键。
     ExtraKey,
+    /// 同键参数名集合与基线不一致。
     ArgumentMismatch,
+    /// 对比集中命名空间与基线不一致。
     NamespaceMismatch,
+    /// select / 复数分支缺少强制的 `other` 兜底。
     MissingSelectCase,
+    /// 消息引用形成环。
     Cycle,
+    /// 消息定义为空文本 / 空 pattern / 空分支表。
     EmptyMessage,
 }
 
@@ -29,24 +39,32 @@ pub enum CheckIssueKind {
 /// `token` 仅承载机器可读附加事实（标识符链、参数名列表等），禁止用户句子。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckIssue {
+    /// 问题分类。
     pub kind: CheckIssueKind,
+    /// 出问题的命名空间。
     pub namespace: NamespaceId,
+    /// 相关 Locale；命名空间级问题时可为 `None`。
     pub locale: Option<LocaleId>,
+    /// 相关消息名；命名空间级问题时可为 `None`。
     pub message: Option<MessageName>,
+    /// 机器可读附加事实（如 `a->b` 环路径、参数名差集）。
     pub token: Option<Arc<str>>,
 }
 
 /// 一组同命名空间、多 Locale 文档的检查报告。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CheckReport {
+    /// 按发现顺序累积的问题列表。
     pub issues: Vec<CheckIssue>,
 }
 
 impl CheckReport {
+    /// 无任何问题时为 `true`。
     pub fn is_ok(&self) -> bool {
         self.issues.is_empty()
     }
 
+    /// 问题条数（当前全部按错误计数，无分级）。
     pub fn error_count(&self) -> usize {
         self.issues.len()
     }

@@ -3,9 +3,9 @@
 use std::{fmt, path::Path};
 
 use spark_animator::{Skeleton, SkinnedAnimationClip};
-use spark_types::Color;
 use spark_geometry::{Aabb3, Vec3};
 use spark_renderer::SkinnedVertex;
+use spark_types::Color;
 
 use crate::{
     mesh::import_meshes,

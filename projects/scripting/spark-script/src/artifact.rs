@@ -21,15 +21,23 @@ pub const ARTIFACT_FORMAT_VERSION: u32 = 1;
 /// 可重定位目标（单个编译单元，尚未完成跨包链接）。
 #[derive(Debug, Clone)]
 pub struct SparkObject {
+    /// 磁盘 / 内存制品格式版本，须等于 [`ARTIFACT_FORMAT_VERSION`]。
     pub format_version: u32,
+    /// 产出本目标的 `spark-script` 包版本字符串。
     pub compiler_version: Arc<str>,
+    /// 本单元所属包身份（链接与缓存键）。
     pub package: PackageId,
+    /// 编译时语言前端 + profile 契约。
     pub language: LanguageProfile,
+    /// 编译期 [`HostSchema::content_hash`]；装载须与运行期 schema 一致。
     pub host_schema_hash: u64,
+    /// 编译期宿主 ABI 版本；与 schema 哈希一并校验。
     pub host_abi_version: u32,
     /// 本单元字节码（入口函数名必须为 `on_load`）。
     pub module: Module,
+    /// 本单元导出的函数名（含生命周期钩子）。
     pub exports: Vec<Arc<str>>,
+    /// 尚未解析的宿主导入名（短名或限定名）。
     pub imports: Vec<Arc<str>>,
 }
 
@@ -59,13 +67,19 @@ impl SparkObject {
 /// 已链接程序：稳定函数编号与宿主导入槽位，尚无运行状态。
 #[derive(Debug, Clone)]
 pub struct LinkedProgram {
+    /// 制品格式版本。
     pub format_version: u32,
+    /// 入口包身份（多目标链接时取 `entry_package`）。
     pub package: PackageId,
+    /// 入口包语言契约。
     pub language: LanguageProfile,
+    /// 链接时锁定的宿主 schema 指纹。
     pub host_schema_hash: u64,
+    /// 链接时锁定的宿主 ABI 版本。
     pub host_abi_version: u32,
     /// 链接时宿主函数槽位数（与 [`HostSchema`] 插入顺序一致）。
     pub host_slot_count: u32,
+    /// 合并后的字节码模块；`native_names` 已替换为 schema 限定名。
     pub module: Module,
     /// 导出生命周期名（若存在）。
     pub lifecycle_exports: Vec<Arc<str>>,
@@ -183,19 +197,70 @@ fn is_lifecycle_export(name: &str) -> bool {
 /// 链接错误。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LinkError {
-    AbiVersionMismatch { object: u32, host: u32 },
+    /// 目标与运行 / 链接用 schema 的 ABI 版本不一致。
+    ///
+    /// 稳定码：`spark.script.link.abi_mismatch`。
+    AbiVersionMismatch {
+        /// 制品内记录的 ABI 版本。
+        object: u32,
+        /// 当前 [`HostSchema::abi_version`]。
+        host: u32,
+    },
+    /// 宿主 schema 内容指纹不一致。
+    ///
+    /// 稳定码：`spark.script.link.host_schema_mismatch`。
     HostSchemaMismatch,
-    UnresolvedHost { name: Arc<str> },
-    HostBindFailed { detail: Arc<str> },
+    /// 导入名无法在 schema 中解析（未知或短名冲突）。
+    ///
+    /// 稳定码：`spark.script.link.unresolved_host`。
+    UnresolvedHost {
+        /// 失败的导入字符串。
+        name: Arc<str>,
+    },
+    /// 宿主绑定后处理失败（非残留 `CallNative` 的其它校验细节）。
+    ///
+    /// 稳定码：`spark.script.link.host_bind_failed`。
+    HostBindFailed {
+        /// 来自 `spark-vm` 的细节令牌。
+        detail: Arc<str>,
+    },
+    /// 多目标链接集合为空。
+    ///
+    /// 稳定码：`spark.script.link.empty_set`。
     EmptyLinkSet,
-    MissingEntryPackage { name: Arc<str> },
-    MergeFailed { detail: Arc<str> },
+    /// `entry_package` 不在链接集合中。
+    ///
+    /// 稳定码：`spark.script.link.missing_entry_package`。
+    MissingEntryPackage {
+        /// 缺失入口包的名字（不含版本）。
+        name: Arc<str>,
+    },
+    /// `Module::link_with_entry` 合并失败。
+    ///
+    /// 稳定码：`spark.script.link.merge_failed`。
+    MergeFailed {
+        /// 合并器返回的细节。
+        detail: Arc<str>,
+    },
+    /// 模块缺少入口函数下标。
+    ///
+    /// 稳定码：`spark.script.link.missing_entry_function`。
     MissingEntryFunction,
-    EntryMustBeOnLoad { name: Arc<str> },
+    /// 入口函数名不是强制的 `on_load`。
+    ///
+    /// 稳定码：`spark.script.link.entry_must_be_on_load`。
+    EntryMustBeOnLoad {
+        /// 实际入口函数名。
+        name: Arc<str>,
+    },
+    /// 字节码仍含未降低的 `CallNative`。
+    ///
+    /// 稳定码：`spark.script.link.residual_call_native`。
     ResidualCallNative,
 }
 
 impl LinkError {
+    /// 稳定错误码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::AbiVersionMismatch { .. } => "spark.script.link.abi_mismatch",
@@ -223,10 +288,12 @@ impl std::error::Error for LinkError {}
 /// 字节码验证错误（包装 `spark-vm` 验证器）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerifyError {
+    /// 委托 [`BytecodeVerifyError`]；稳定码透传其 `code()`。
     Bytecode(BytecodeVerifyError),
 }
 
 impl VerifyError {
+    /// 稳定错误码（透传底层验证器）。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Bytecode(e) => e.code(),
@@ -247,15 +314,23 @@ impl From<BytecodeVerifyError> for VerifyError {
         Self::Bytecode(value)
     }
 }
+
 /// 经过验证、可供 VM 装载的不可变映像。
 #[derive(Debug, Clone)]
 pub struct ExecutableImage {
+    /// 制品格式版本。
     pub format_version: u32,
+    /// 入口包身份。
     pub package: PackageId,
+    /// 入口包语言契约。
     pub language: LanguageProfile,
+    /// 验证时锁定的宿主 schema 指纹。
     pub host_schema_hash: u64,
+    /// 验证时锁定的宿主 ABI 版本。
     pub host_abi_version: u32,
+    /// 验证时声明的宿主槽位数（解码 `.spkx` 时再次校验）。
     pub host_slot_count: u32,
+    /// 已知生命周期导出名。
     pub lifecycle_exports: Vec<Arc<str>>,
     module: Module,
 }
@@ -287,6 +362,7 @@ impl ExecutableImage {
         Ok(())
     }
 
+    /// 只读访问内部 [`Module`]（不转移所有权）。
     pub fn module(&self) -> &Module {
         &self.module
     }

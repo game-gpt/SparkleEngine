@@ -12,8 +12,11 @@ use crate::{
 
 /// 运行时实例：VM + 可选 JIT。由映像创建，不解析源码。
 pub struct ScriptRuntime {
+    /// 已装载字节码的虚拟机。
     pub vm: Vm,
+    /// 热路径 JIT（调用后尝试优化）。
     pub jit: JitEngine,
+    /// 映像携带的语言契约（诊断 / 调试用）。
     pub language: LanguageProfile,
     host_schema_hash: u64,
     host_abi_version: u32,
@@ -34,10 +37,12 @@ impl ScriptRuntime {
         })
     }
 
+    /// 装载时锁定的宿主 schema 指纹。
     pub fn host_schema_hash(&self) -> u64 {
         self.host_schema_hash
     }
 
+    /// 装载时锁定的宿主 ABI 版本。
     pub fn host_abi_version(&self) -> u32 {
         self.host_abi_version
     }
@@ -53,6 +58,7 @@ impl ScriptRuntime {
         self.call_on_load(&mut host)
     }
 
+    /// 按导出函数名调用；成功后尝试 JIT 热路径优化。
     pub fn call(&mut self, name: &str, args: &[spark_gc::Value], host: &mut dyn HostHooks) -> Result<spark_gc::Value, ScriptError> {
         let v = self.vm.call_function(name, args, host)?;
         let _ = self.jit.optimize_hot(&mut self.vm);

@@ -14,23 +14,33 @@ use crate::{
 /// JSON 解析错误（稳定码；无用户句子）。
 #[derive(Debug)]
 pub enum JsonError {
+    /// `locale` 字段解析失败。
     Locale(LocaleParseError),
     /// serde_json 失败：只保留行列位置，不吞第三方 Display 句子。
     Serde {
+        /// 1-based 行号。
         line: u64,
+        /// 1-based 列号。
         column: u64,
     },
+    /// 富消息对象既无 `value` 也无 `select`。
     RichMessageIncomplete,
+    /// 节点对象缺少 `argument` / `message` / `select` 之一。
     NodeObjectIncomplete,
+    /// 未知 select `kind` 字符串。
     UnknownSelectKind {
+        /// 原始 kind 文本。
         kind: String,
     },
+    /// 未知 argument `format` 字符串。
     UnknownArgumentFormat {
+        /// 原始 format 文本。
         format: String,
     },
 }
 
 impl JsonError {
+    /// 稳定机器码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Locale(e) => e.code(),
@@ -42,6 +52,7 @@ impl JsonError {
         }
     }
 
+    /// 结构化参数（行列、kind、format 等）。
     pub fn args(&self) -> spark_types::ErrorArgs {
         use spark_types::{ErrorArg, ErrorArgs};
         match self {

@@ -5,19 +5,26 @@ use crate::{Mat4, Vec3};
 /// 旋转四元数。插值前应归一化；恒等为 `(0,0,0,1)`。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Quat {
+    /// 虚部 X。
     pub x: f32,
+    /// 虚部 Y。
     pub y: f32,
+    /// 虚部 Z。
     pub z: f32,
+    /// 实部 W。
     pub w: f32,
 }
 
 impl Quat {
+    /// 恒等旋转（无旋转）。
     pub const IDENTITY: Self = Self { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
 
+    /// 按分量构造；调用方负责归一化（若需要）。
     pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self { x, y, z, w }
     }
 
+    /// 绕任意轴旋转 `rad` 弧度；`axis` 会先归一化。
     pub fn from_axis_angle(axis: Vec3, rad: f32) -> Self {
         let axis = axis.normalized();
         let (s, c) = (rad * 0.5).sin_cos();
@@ -54,19 +61,23 @@ impl Quat {
         qy.mul(qx).mul(qz)
     }
 
+    /// 欧几里得范数（未归一化时用于诊断）。
     pub fn length(self) -> f32 {
         (self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w).sqrt()
     }
 
+    /// 归一化；长度过小时退回 [`Self::IDENTITY`]。
     pub fn normalized(self) -> Self {
         let len = self.length();
         if len <= 1e-8 { Self::IDENTITY } else { Self { x: self.x / len, y: self.y / len, z: self.z / len, w: self.w / len } }
     }
 
+    /// 共轭（单位四元数下等于逆）。
     pub fn conjugate(self) -> Self {
         Self { x: -self.x, y: -self.y, z: -self.z, w: self.w }
     }
 
+    /// 四元数点积（用于短弧判定与插值）。
     pub fn dot(self, o: Self) -> f32 {
         self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w
     }
@@ -81,6 +92,7 @@ impl Quat {
         }
     }
 
+    /// 旋转向量（内部先归一化本四元数）。
     pub fn rotate_vec3(self, v: Vec3) -> Vec3 {
         let q = self.normalized();
         let u = Vec3::new(q.x, q.y, q.z);
@@ -120,6 +132,7 @@ impl Quat {
         Self { x: a.x * w1 + b.x * w2, y: a.y * w1 + b.y * w2, z: a.z * w1 + b.z * w2, w: a.w * w1 + b.w * w2 }.normalized()
     }
 
+    /// 转为列主序旋转矩阵（无平移）。
     pub fn to_mat4(self) -> Mat4 {
         let q = self.normalized();
         let (x, y, z, w) = (q.x, q.y, q.z, q.w);
@@ -155,6 +168,7 @@ impl Quat {
         ])
     }
 
+    /// 分量数组 `[x, y, z, w]`。
     pub fn to_array(self) -> [f32; 4] {
         [self.x, self.y, self.z, self.w]
     }

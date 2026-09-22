@@ -2,7 +2,7 @@
 //!
 //! 约定：右手、Y-up、米、列主序。不含 GPU 上传与游戏 socket 强校验。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod import;
 mod mesh;
 mod skin;

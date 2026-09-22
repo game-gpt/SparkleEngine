@@ -4,7 +4,7 @@
 //! 3D：扫掠原语直接再导出 `spark-geometry`（[`aabb_sweep`] / [`aabb_sweep_resolve`]）。
 //! **不**提供行星重力模式、方块碰撞表或玩法材质。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 mod body;
 mod broadphase;
 mod world;
@@ -19,16 +19,22 @@ use std::{fmt, sync::Arc};
 use spark_types::{ErrorArg, ErrorArgs, SparkError};
 
 /// 物理层结构化错误。`Display` 只输出稳定码。
+///
+/// [`Self::Spark`] 透传底层 [`SparkError`] 的显示；[`Self::Internal`] 只暴露稳定码
+/// `spark.physics.internal`，细节进 [`Self::args`]。
 #[derive(Debug)]
 pub enum PhysicsError {
+    /// 透传的底层 Spark 错误。
     Spark(SparkError),
     /// `detail` 必须是机器令牌，不是自然语言。
     Internal {
+        /// 机器可读原因令牌（写入 `args.reason`）。
         detail: String,
     },
 }
 
 impl PhysicsError {
+    /// 稳定错误码（`spark.physics.*`）。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Spark(_) => "spark.physics.spark",
@@ -36,10 +42,12 @@ impl PhysicsError {
         }
     }
 
+    /// 构造内部错误；`detail` 应为机器令牌。
     pub fn internal(detail: impl Into<String>) -> Self {
         Self::Internal { detail: detail.into() }
     }
 
+    /// 结构化参数：`Spark` 克隆其 `args`；`Internal` 写入 `reason`。
     pub fn args(&self) -> ErrorArgs {
         match self {
             Self::Spark(e) => e.args.clone(),

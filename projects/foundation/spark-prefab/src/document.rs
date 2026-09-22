@@ -52,21 +52,8 @@ impl PrefabDocument {
     pub fn new(root_id: impl Into<String>) -> Self {
         let root = root_id.into();
         let mut nodes = BTreeMap::new();
-        nodes.insert(
-            root.clone(),
-            PrefabNode {
-                name: Some(root.clone()),
-                components: BTreeMap::new(),
-                children: Vec::new(),
-                prefab: None,
-            },
-        );
-        Self {
-            schema: PREFAB_SCHEMA.into(),
-            version: PREFAB_VERSION,
-            root,
-            nodes,
-        }
+        nodes.insert(root.clone(), PrefabNode { name: Some(root.clone()), components: BTreeMap::new(), children: Vec::new(), prefab: None });
+        Self { schema: PREFAB_SCHEMA.into(), version: PREFAB_VERSION, root, nodes }
     }
 
     /// 确保节点存在；已存在则返回可变借用。
@@ -83,9 +70,7 @@ impl PrefabDocument {
     /// 将 `child` 挂到 `parent` 的 children（幂等）。
     pub fn ensure_child(&mut self, parent: &str, child: &str) -> Result<(), PrefabError> {
         if !self.nodes.contains_key(parent) {
-            return Err(PrefabError::NodeMissing {
-                node: parent.into(),
-            });
+            return Err(PrefabError::NodeMissing { node: parent.into() });
         }
         self.ensure_node(child);
         let kids = &mut self.nodes.get_mut(parent).expect("parent just checked").children;
@@ -115,46 +100,26 @@ impl PrefabDocument {
         if !self.nodes.contains_key(node) {
             return Err(PrefabError::NodeMissing { node: node.into() });
         }
-        self.nodes
-            .get_mut(node)
-            .expect("node just checked")
-            .components
-            .insert(component.into(), value);
+        self.nodes.get_mut(node).expect("node just checked").components.insert(component.into(), value);
         Ok(())
     }
 
     /// 从 VON 文本解析。
     pub fn from_str(text: &str) -> Result<Self, PrefabError> {
-        oak_von::from_str(text).map_err(|e| PrefabError::Parse {
-            path: PathBuf::from("<memory>"),
-            detail: e.to_string(),
-        })
+        oak_von::from_str(text).map_err(|e| PrefabError::Parse { path: PathBuf::from("<memory>"), detail: e.to_string() })
     }
 
     /// 序列化为 VON（末尾换行，便于 Git）。
     pub fn to_von_string(&self) -> Result<String, PrefabError> {
-        let text = oak_von::to_string(self).map_err(|e| PrefabError::Parse {
-            path: PathBuf::from("<memory>"),
-            detail: e.to_string(),
-        })?;
-        if text.ends_with('\n') {
-            Ok(text)
-        } else {
-            Ok(format!("{text}\n"))
-        }
+        let text = oak_von::to_string(self).map_err(|e| PrefabError::Parse { path: PathBuf::from("<memory>"), detail: e.to_string() })?;
+        if text.ends_with('\n') { Ok(text) } else { Ok(format!("{text}\n")) }
     }
 
     /// 读盘（VON）。
     pub fn load(path: impl AsRef<Path>) -> Result<Self, PrefabError> {
         let path = path.as_ref();
-        let text = fs::read_to_string(path).map_err(|e| PrefabError::Io {
-            path: path.to_path_buf(),
-            detail: e.to_string(),
-        })?;
-        oak_von::from_str(&text).map_err(|e| PrefabError::Parse {
-            path: path.to_path_buf(),
-            detail: e.to_string(),
-        })
+        let text = fs::read_to_string(path).map_err(|e| PrefabError::Io { path: path.to_path_buf(), detail: e.to_string() })?;
+        oak_von::from_str(&text).map_err(|e| PrefabError::Parse { path: path.to_path_buf(), detail: e.to_string() })
     }
 
     /// 写盘（VON）。
@@ -162,16 +127,10 @@ impl PrefabDocument {
         let path = path.as_ref();
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).map_err(|e| PrefabError::Io {
-                    path: parent.to_path_buf(),
-                    detail: e.to_string(),
-                })?;
+                fs::create_dir_all(parent).map_err(|e| PrefabError::Io { path: parent.to_path_buf(), detail: e.to_string() })?;
             }
         }
         let text = self.to_von_string()?;
-        fs::write(path, text).map_err(|e| PrefabError::Io {
-            path: path.to_path_buf(),
-            detail: e.to_string(),
-        })
+        fs::write(path, text).map_err(|e| PrefabError::Io { path: path.to_path_buf(), detail: e.to_string() })
     }
 }

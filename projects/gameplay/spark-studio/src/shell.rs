@@ -92,14 +92,7 @@ fn fixed_bar(h: f32, pad_x: f32) -> LayoutSpec {
 }
 
 fn v_body(pad: f32, gap: f32) -> LayoutSpec {
-    LayoutSpec {
-        width: Size::Fill,
-        height: Size::Fill,
-        flex_grow: 1.0,
-        padding: Insets::all(pad),
-        gap,
-        ..LayoutSpec::vertical()
-    }
+    LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, padding: Insets::all(pad), gap, ..LayoutSpec::vertical() }
 }
 
 fn dim_label(text: impl Into<String>) -> WidgetBuilder {
@@ -152,23 +145,15 @@ fn play_ctrl(label: &str, cmd: u64, lit: bool) -> WidgetBuilder {
 }
 
 fn v_splitter() -> WidgetBuilder {
-    panel().layout(LayoutSpec {
-        width: Size::Px(1.0),
-        height: Size::Fill,
-        flex_grow: 0.0,
-        flex_shrink: 0.0,
-        ..LayoutSpec::vertical()
-    }).style(Style { background: Some(theme::splitter()), ..Style::default() })
+    panel()
+        .layout(LayoutSpec { width: Size::Px(1.0), height: Size::Fill, flex_grow: 0.0, flex_shrink: 0.0, ..LayoutSpec::vertical() })
+        .style(Style { background: Some(theme::splitter()), ..Style::default() })
 }
 
 fn h_splitter() -> WidgetBuilder {
-    panel().layout(LayoutSpec {
-        width: Size::Fill,
-        height: Size::Px(1.0),
-        flex_grow: 0.0,
-        flex_shrink: 0.0,
-        ..LayoutSpec::horizontal()
-    }).style(Style { background: Some(theme::splitter()), ..Style::default() })
+    panel()
+        .layout(LayoutSpec { width: Size::Fill, height: Size::Px(1.0), flex_grow: 0.0, flex_shrink: 0.0, ..LayoutSpec::horizontal() })
+        .style(Style { background: Some(theme::splitter()), ..Style::default() })
 }
 
 /// 侧栏停靠窗（Hierarchy / Inspector）：固定宽、吃满中栏高度。
@@ -192,14 +177,7 @@ fn side_dock(title: &str, width: f32, body: impl IntoIterator<Item = WidgetBuild
     }
 
     panel()
-        .layout(LayoutSpec {
-            width: Size::Px(width),
-            height: Size::Fill,
-            flex_grow: 0.0,
-            flex_shrink: 0.0,
-            gap: 0.0,
-            ..LayoutSpec::vertical()
-        })
+        .layout(LayoutSpec { width: Size::Px(width), height: Size::Fill, flex_grow: 0.0, flex_shrink: 0.0, gap: 0.0, ..LayoutSpec::vertical() })
         .style(Style { background: Some(theme::splitter()), ..Style::default() })
         .child(header)
         .child(content)
@@ -227,13 +205,7 @@ fn toolbar(state: &EditorState) -> WidgetBuilder {
     let playing = state.play != PlayMode::Edit;
 
     let left = row()
-        .layout(LayoutSpec {
-            height: Size::Fill,
-            flex_grow: 1.0,
-            gap: 4.0,
-            justify: Justify::Start,
-            ..LayoutSpec::horizontal()
-        })
+        .layout(LayoutSpec { height: Size::Fill, flex_grow: 1.0, gap: 4.0, justify: Justify::Start, ..LayoutSpec::horizontal() })
         .child(tool_toggle("Q Hand", CMD_TOOL_HAND, state.tool == Tool::Hand))
         .child(tool_toggle("W Move", CMD_TOOL_MOVE, state.tool == Tool::Move))
         .child(tool_toggle("E Rotate", CMD_TOOL_ROTATE, state.tool == Tool::Rotate))
@@ -256,13 +228,7 @@ fn toolbar(state: &EditorState) -> WidgetBuilder {
         .child(play_ctrl("Step", CMD_STEP, false));
 
     let right = row()
-        .layout(LayoutSpec {
-            height: Size::Fill,
-            flex_grow: 1.0,
-            gap: 8.0,
-            justify: Justify::End,
-            ..LayoutSpec::horizontal()
-        })
+        .layout(LayoutSpec { height: Size::Fill, flex_grow: 1.0, gap: 8.0, justify: Justify::End, ..LayoutSpec::horizontal() })
         .child(dim_label("Layers: Default"))
         .child(dim_label("Layout: Default"));
 
@@ -314,7 +280,8 @@ fn inspector_panel(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder 
         body.push(dim_label(hint));
         body.push(dim_label(""));
         body.push(menu_item("Add Component", CMD_EDIT_UNDO));
-    } else {
+    }
+    else {
         body.push(dim_label("No selection"));
         body.push(dim_label("Select an object in Hierarchy"));
     }
@@ -370,7 +337,8 @@ fn center_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder 
         CenterTab::Game => {
             if state.play == PlayMode::Edit {
                 view_children.push(dim_label("Press ▶ in the toolbar to enter Play Mode"));
-            } else {
+            }
+            else {
                 view_children.push(dim_label("Game view is live (drawn over this panel)"));
                 view_children.push(dim_label("■ Stop or Esc returns to Edit · Scene tab keeps the editor chrome"));
             }
@@ -390,20 +358,11 @@ fn center_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuilder 
         },
     }
 
-    let viewport = column()
-        .layout(v_body(12.0, 6.0))
-        .style(Style { background: Some(theme::viewport()), ..Style::default() })
-        .children(view_children);
+    let viewport =
+        column().layout(v_body(12.0, 6.0)).style(Style { background: Some(theme::viewport()), ..Style::default() }).children(view_children);
 
     panel()
-        .layout(LayoutSpec {
-            width: Size::Fill,
-            height: Size::Fill,
-            flex_grow: 1.0,
-            flex_shrink: 1.0,
-            gap: 0.0,
-            ..LayoutSpec::vertical()
-        })
+        .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::vertical() })
         .style(Style { background: Some(theme::splitter()), ..Style::default() })
         .child(tab_strip)
         .child(viewport)
@@ -432,18 +391,15 @@ fn bottom_dock(asset_lines: &[String], state: &EditorState) -> WidgetBuilder {
             body_kids.push(dim_label("Assets"));
             if asset_lines.is_empty() {
                 body_kids.push(dim_label("  (empty — create assets/ and set spark.startupScene)"));
-            } else {
+            }
+            else {
                 for line in asset_lines.iter().take(24) {
                     body_kids.push(dim_label(format!("  {line}")));
                 }
             }
         }
         BottomTab::Console => {
-            body_kids.push(dim_label(if state.status.is_empty() {
-                "Ready".into()
-            } else {
-                state.status.clone()
-            }));
+            body_kids.push(dim_label(if state.status.is_empty() { "Ready".into() } else { state.status.clone() }));
             body_kids.push(dim_label("Clear · Collapse · Error Pause (placeholder)"));
         }
         BottomTab::Problems => {
@@ -451,10 +407,7 @@ fn bottom_dock(asset_lines: &[String], state: &EditorState) -> WidgetBuilder {
         }
     }
 
-    let body = column()
-        .layout(v_body(8.0, 2.0))
-        .style(Style { background: Some(theme::panel()), ..Style::default() })
-        .children(body_kids);
+    let body = column().layout(v_body(8.0, 2.0)).style(Style { background: Some(theme::panel()), ..Style::default() }).children(body_kids);
 
     panel()
         .layout(LayoutSpec {
@@ -481,37 +434,19 @@ fn status_bar(state: &EditorState) -> WidgetBuilder {
         .style(Style { background: Some(theme::status()), ..Style::default() })
         .child(dim_label(mode))
         .child(dim_label("|"))
-        .child(dim_label(if state.status.is_empty() {
-            "Ready".into()
-        } else {
-            state.status.clone()
-        }))
+        .child(dim_label(if state.status.is_empty() { "Ready".into() } else { state.status.clone() }))
 }
 
 /// Unity Default：左右全高，中栏上下为 Scene + Project。
 pub fn build_shell(project: &ProjectInfo, state: &EditorState, asset_lines: &[String]) -> WidgetBuilder {
     let center_column = column()
-        .layout(LayoutSpec {
-            width: Size::Fill,
-            height: Size::Fill,
-            flex_grow: 1.0,
-            flex_shrink: 1.0,
-            gap: 0.0,
-            ..LayoutSpec::vertical()
-        })
+        .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::vertical() })
         .child(center_viewport(project, state))
         .child(h_splitter())
         .child(bottom_dock(asset_lines, state));
 
     let main = row()
-        .layout(LayoutSpec {
-            width: Size::Fill,
-            height: Size::Fill,
-            flex_grow: 1.0,
-            flex_shrink: 1.0,
-            gap: 0.0,
-            ..LayoutSpec::horizontal()
-        })
+        .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::horizontal() })
         .child(hierarchy_panel(project, state))
         .child(v_splitter())
         .child(center_column)
@@ -519,12 +454,7 @@ pub fn build_shell(project: &ProjectInfo, state: &EditorState, asset_lines: &[St
         .child(inspector_panel(project, state));
 
     column()
-        .layout(LayoutSpec {
-            width: Size::Fill,
-            height: Size::Fill,
-            gap: 0.0,
-            ..LayoutSpec::vertical()
-        })
+        .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, gap: 0.0, ..LayoutSpec::vertical() })
         .style(Style { background: Some(theme::bg()), ..Style::default() })
         .child(menu_bar(project))
         .child(toolbar(state))

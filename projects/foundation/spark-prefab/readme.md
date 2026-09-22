@@ -1,6 +1,7 @@
 # spark-prefab
 
-声明式 Prefab：**serde 领域模型**，磁盘载体为 **VON**（`oak-von`）。本地节点 ID、字段路径覆盖、嵌套引用。Agent 写路径与节点名；GUID 由 `spark-asset` 旁车（同为 VON）维护。
+声明式 Prefab： **serde 领域模型**，磁盘载体为 **VON**（`oak-von`）。本地节点 ID、字段路径覆盖、嵌套引用。Agent 写路径与节点名；GUID
+由 `spark-asset` 旁车（同为 VON）维护。
 
 ```rust
 use spark_prefab::{PrefabDocument, PrefabInstance};

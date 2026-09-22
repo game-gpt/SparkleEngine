@@ -1,6 +1,6 @@
 //! 自 `src/lib.rs` 迁出的原 `#[cfg(test)] mod tests`。
-use spark_types::{Rect, Vec2};
 use spark_engine_platformer::*;
+use spark_types::{Rect, Vec2};
 
 #[test]
 fn land_and_jump() {

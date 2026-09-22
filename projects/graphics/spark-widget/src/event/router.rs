@@ -1,7 +1,7 @@
 //! 命中与事件分发。
 
-use spark_types::Vec2;
 use spark_input::{Input, Key, MouseBtn};
+use spark_types::Vec2;
 
 use crate::{
     command::UiCommand,

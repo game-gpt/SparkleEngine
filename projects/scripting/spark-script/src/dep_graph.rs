@@ -14,9 +14,15 @@ use crate::request::PackageId;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DepGraphError {
     /// 未知依赖目标。
-    UnknownPackage { id: PackageId },
+    UnknownPackage {
+        /// 边指向但图中不存在的包身份。
+        id: PackageId,
+    },
     /// 存在环。
-    Cycle { path: Vec<PackageId> },
+    Cycle {
+        /// 环上的包路径（诊断用，顺序不保证唯一规范形式）。
+        path: Vec<PackageId>,
+    },
     /// 空图。
     Empty,
 }
@@ -51,6 +57,7 @@ fn key(id: &PackageId) -> Arc<str> {
 /// 单个包节点及其直接依赖（被依赖方）。
 #[derive(Debug, Clone)]
 pub struct PackageNode {
+    /// 本节点包身份。
     pub id: PackageId,
     /// 本包依赖的其它包（须先链接）。
     pub depends_on: Vec<PackageId>,
@@ -63,6 +70,7 @@ pub struct PackageDepGraph {
 }
 
 impl PackageDepGraph {
+    /// 空图。
     pub fn new() -> Self {
         Self::default()
     }
@@ -72,10 +80,12 @@ impl PackageDepGraph {
         self.nodes.insert(key(&node.id), node);
     }
 
+    /// 节点数量。
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
 
+    /// 是否无节点。
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }

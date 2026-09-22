@@ -6,12 +6,12 @@
 //! 解码错误：`io`、`image_decode`、`image_dimension_overflow`、`texture_data_length_mismatch`。
 //! 编码错误：`image_rgba_length_mismatch`、`image_encode`、`io`。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 
 use std::{io::Cursor, path::Path, sync::Arc};
 
-use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::TextureUpload;
+use spark_types::{ErrorArg, SparkError, codes};
 
 /// PNG 解码选项：控制上传包的色彩空间标注与 GPU 格式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -41,9 +41,8 @@ impl DecodeOptions {
 pub fn decode_path(path: impl AsRef<Path>, options: DecodeOptions) -> Result<TextureUpload, SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
-    let bytes = std::fs::read(path).map_err(|e| {
-        SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e)
-    })?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e))?;
     decode_memory(&bytes, options).map_err(|e| e.arg("path", path_arg))
 }
 
@@ -133,9 +132,8 @@ pub fn encode_path(path: impl AsRef<Path>, width: u32, height: u32, rgba: &[u8])
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
     let bytes = encode_rgba8(width, height, rgba)?;
-    std::fs::write(path, bytes).map_err(|e| {
-        SparkError::new(codes::io()).arg("path", path_arg).arg("op", ErrorArg::String(Arc::from("write"))).caused_by(e)
-    })
+    std::fs::write(path, bytes)
+        .map_err(|e| SparkError::new(codes::io()).arg("path", path_arg).arg("op", ErrorArg::String(Arc::from("write"))).caused_by(e))
 }
 
 fn expand_to_rgba8(color: png::ColorType, raw: &[u8], width: u32, height: u32) -> Result<Vec<u8>, SparkError> {
@@ -191,7 +189,6 @@ fn expand_to_rgba8(color: png::ColorType, raw: &[u8], width: u32, height: u32) -
         }
         other => Err(SparkError::new(codes::image_decode())
             .arg("format", ErrorArg::String(Arc::from("png")))
-            .arg("reason", ErrorArg::String(Arc::from(format!("unsupported_color:{other:?}")))),
-        ),
+            .arg("reason", ErrorArg::String(Arc::from(format!("unsupported_color:{other:?}"))))),
     }
 }

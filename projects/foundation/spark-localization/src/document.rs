@@ -11,36 +11,73 @@ use crate::{locale::LocaleId, message::NamespaceId};
 pub struct MessageName(Arc<str>);
 
 impl MessageName {
+    /// 由任意可转成 `Arc<str>` 的名字构造。
     pub fn new(name: impl Into<Arc<str>>) -> Self {
         Self(name.into())
     }
 
+    /// 原始字符串视图。
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
 /// 参数格式提示。
+///
+/// 求值器可按 Locale 文化规则渲染；未知格式不得回退为 HTML。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ArgumentFormat {
+    /// 无额外格式，按值类型默认展示。
     None,
+    /// 数值（整数 / 定点小数）。
     Number,
-    Currency { currency_code: Arc<str> },
+    /// 货币金额。
+    Currency {
+        /// ISO 4217 货币码（如 `CNY`）。
+        currency_code: Arc<str>,
+    },
+    /// 百分比。
     Percent,
+    /// 仅日期部分。
     Date,
+    /// 仅时间部分。
     Time,
+    /// 日期 + 时间。
     DateTime,
+    /// 相对时间（如「3 分钟前」语义由渲染层决定）。
     RelativeTime,
+    /// 列表连接。
     List,
 }
 
 /// 消息 AST 节点（构建期糖展开后的明确表示）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MessageNode {
+    /// 字面文本片段。
     Text(Arc<str>),
-    Argument { name: Arc<str>, format: ArgumentFormat },
-    MessageRef { name: MessageName, attribute: Option<Arc<str>> },
-    Select { argument: Arc<str>, kind: SelectKind, cases: BTreeMap<Arc<str>, Vec<MessageNode>> },
+    /// 具名参数插值。
+    Argument {
+        /// 参数名，对应 [`crate::MessageArgs`] 键。
+        name: Arc<str>,
+        /// 展示格式提示。
+        format: ArgumentFormat,
+    },
+    /// 引用同命名空间内另一条消息。
+    MessageRef {
+        /// 被引用消息名。
+        name: MessageName,
+        /// 可选属性名（Fluent 风格；当前求值可仅作诊断占位）。
+        attribute: Option<Arc<str>>,
+    },
+    /// 嵌套选择 / 复数分支。
+    Select {
+        /// 驱动分支的参数名。
+        argument: Arc<str>,
+        /// 分支语义。
+        kind: SelectKind,
+        /// 分支键 → 子节点；检查要求含 `other`。
+        cases: BTreeMap<Arc<str>, Vec<MessageNode>>,
+    },
 }
 
 /// 选择 / 复数类别。
@@ -62,7 +99,14 @@ pub enum MessageDefinition {
     /// 结构化 pattern。
     Pattern(Vec<MessageNode>),
     /// 顶层 select（常见于复数消息）。
-    Select { argument: Arc<str>, kind: SelectKind, cases: BTreeMap<Arc<str>, Vec<MessageNode>> },
+    Select {
+        /// 驱动分支的参数名。
+        argument: Arc<str>,
+        /// 分支语义。
+        kind: SelectKind,
+        /// 分支键 → 子节点；检查要求含 `other`。
+        cases: BTreeMap<Arc<str>, Vec<MessageNode>>,
+    },
 }
 
 impl MessageDefinition {
@@ -107,16 +151,21 @@ impl MessageDefinition {
 /// VON / JSON 反序列化后的语言包文档。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalizationDocument {
+    /// 文档所属 Locale。
     pub locale: LocaleId,
+    /// 消息命名空间。
     pub namespace: NamespaceId,
+    /// 消息名 → 定义；键有序便于差分与快照比对。
     pub messages: BTreeMap<MessageName, MessageDefinition>,
 }
 
 impl LocalizationDocument {
+    /// 构造空文档。
     pub fn new(locale: LocaleId, namespace: impl Into<Arc<str>>) -> Self {
         Self { locale, namespace: NamespaceId::new(namespace), messages: BTreeMap::new() }
     }
 
+    /// 插入或覆盖一条消息定义。
     pub fn insert(&mut self, name: impl Into<Arc<str>>, definition: MessageDefinition) {
         self.messages.insert(MessageName::new(name), definition);
     }

@@ -100,9 +100,7 @@ impl PrefabError {
             Self::ChildMissing { parent, child } => ErrorArgs::new()
                 .with("parent", ErrorArg::String(Arc::from(parent.as_str())))
                 .with("child", ErrorArg::String(Arc::from(child.as_str()))),
-            Self::NodeCycle { node } | Self::BadNodeId { node } => {
-                ErrorArgs::new().with("node", ErrorArg::String(Arc::from(node.as_str())))
-            }
+            Self::NodeCycle { node } | Self::BadNodeId { node } => ErrorArgs::new().with("node", ErrorArg::String(Arc::from(node.as_str()))),
             Self::PrefabCycle { path } => ErrorArgs::new().with("path", ErrorArg::String(Arc::from(path.as_str()))),
             Self::OverrideTargetMissing { target } | Self::BadOverridePath { target } => {
                 ErrorArgs::new().with("target", ErrorArg::String(Arc::from(target.as_str())))

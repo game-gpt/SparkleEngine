@@ -27,23 +27,35 @@ pub enum CoverageStatus {
 /// 单条覆盖率行。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoverageEntry {
+    /// 消息所属命名空间。
     pub namespace: NamespaceId,
+    /// 被评估的目标 Locale。
     pub locale: LocaleId,
+    /// 消息键。
     pub message: MessageName,
+    /// 相对基线的状态。
     pub status: CoverageStatus,
 }
 
 /// 覆盖率汇总。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CoverageReport {
+    /// 逐条明细。
     pub entries: Vec<CoverageEntry>,
+    /// [`CoverageStatus::Present`] 计数。
     pub present: usize,
+    /// [`CoverageStatus::Missing`] 计数。
     pub missing: usize,
+    /// [`CoverageStatus::Extra`] 计数。
     pub extra: usize,
+    /// [`CoverageStatus::FallbackOnly`] 计数。
     pub fallback_only: usize,
 }
 
 impl CoverageReport {
+    /// 已独立翻译占比：`present / (present + missing + fallback_only)`。
+    ///
+    /// 分母至少为 1，避免空报告除零；`extra` 不计入分母。
     pub fn ratio_present(&self) -> f32 {
         let denom = (self.present + self.missing + self.fallback_only).max(1) as f32;
         self.present as f32 / denom

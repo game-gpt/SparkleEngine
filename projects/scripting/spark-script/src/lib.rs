@@ -5,7 +5,7 @@
 //! - [`ScriptRuntime`]：装载映像并执行（持有 VM / JIT）
 //! - 语言前端经公共 IR 降低，不得在正式路径直接发射 `spark-vm::Op`
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 pub mod artifact;
 pub mod cache;
 pub mod codec;
@@ -57,22 +57,41 @@ pub enum ScriptLanguage {
 /// 脚本管线阶段。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScriptStage {
+    /// 前端解析 / 词法语法。
     Parse,
+    /// 前端降低、IR、宿主绑定与目标封装。
     Compile,
+    /// 跨单元链接与宿主导入解析。
     Link,
+    /// 字节码验证（含宿主槽位契约）。
     Verify,
+    /// VM / JIT 执行期。
     Runtime,
 }
 
 /// 结构化脚本错误（码 + 参数；`Display` 只输出稳定码）。
 #[derive(Debug)]
 pub enum ScriptError {
-    Parse { args: ErrorArgs, span: Option<SourceSpan> },
-    Compile { args: ErrorArgs, span: Option<SourceSpan> },
+    /// 解析失败；稳定码 `spark.script.parse`。
+    Parse {
+        /// 结构化参数（含 `reason`，可选 `span`）。
+        args: ErrorArgs,
+        /// 主定位跨度；无定位时为 `None`。
+        span: Option<SourceSpan>,
+    },
+    /// 编译 / 链接 / 验证失败；稳定码 `spark.script.compile`。
+    Compile {
+        /// 结构化参数（含 `reason`，可选 `span`）。
+        args: ErrorArgs,
+        /// 主定位跨度；无定位时为 `None`。
+        span: Option<SourceSpan>,
+    },
+    /// 运行期 VM 错误；码委托给 [`VmError::code`]。
     Vm(VmError),
 }
 
 impl ScriptError {
+    /// 稳定错误码（面向诊断渲染与测试断言）。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Parse { .. } => "spark.script.parse",
@@ -81,6 +100,7 @@ impl ScriptError {
         }
     }
 
+    /// 错误所属管线阶段。
     pub fn stage(&self) -> ScriptStage {
         match self {
             Self::Parse { .. } => ScriptStage::Parse,
@@ -89,10 +109,12 @@ impl ScriptError {
         }
     }
 
+    /// 构造无跨度的解析错误（`args.reason`）。
     pub fn parse_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Parse { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())), span: None }
     }
 
+    /// 构造带主跨度的解析错误（同时写入 `args.span`）。
     pub fn parse_at(reason: impl Into<std::sync::Arc<str>>, span: SourceSpan) -> Self {
         Self::Parse {
             args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())).with("span", ErrorArg::Span(span)),
@@ -100,18 +122,22 @@ impl ScriptError {
         }
     }
 
+    /// 构造无跨度的编译错误（`args.reason`）。
     pub fn compile_reason(reason: impl Into<std::sync::Arc<str>>) -> Self {
         Self::Compile { args: ErrorArgs::new().with("reason", ErrorArg::String(reason.into())), span: None }
     }
 
+    /// 解析错误的不透明入口（语义同 [`Self::parse_reason`]）。
     pub fn parse_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
         Self::parse_reason(detail)
     }
 
+    /// 编译错误的不透明入口（语义同 [`Self::compile_reason`]）。
     pub fn compile_opaque(detail: impl Into<std::sync::Arc<str>>) -> Self {
         Self::compile_reason(detail)
     }
 
+    /// 主定位跨度；VM 错误恒为 `None`。
     pub fn span(&self) -> Option<SourceSpan> {
         match self {
             Self::Parse { span, .. } | Self::Compile { span, .. } => *span,
@@ -119,6 +145,7 @@ impl ScriptError {
         }
     }
 
+    /// 诊断上下文：目标固定为 `spark-script`，有跨度则附带。
     pub fn context(&self) -> ErrorContext {
         let mut ctx = ErrorContext::new().target("spark-script");
         if let Some(span) = self.span() {
@@ -127,6 +154,7 @@ impl ScriptError {
         ctx
     }
 
+    /// 结构化参数副本；VM 错误委托 [`VmError::args`]。
     pub fn args(&self) -> ErrorArgs {
         match self {
             Self::Parse { args, .. } | Self::Compile { args, .. } => args.clone(),

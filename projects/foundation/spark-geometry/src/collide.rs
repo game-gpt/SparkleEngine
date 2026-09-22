@@ -7,29 +7,37 @@ use crate::{
     line::{LineSegment, Ray},
 };
 
+/// 最近点查询结果（世界 / 局部 2D 单位由调用方约定）。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClosestPoint {
+    /// 最近点坐标。
     pub point: Vec2,
+    /// 到查询点的欧氏距离。
     pub distance: f32,
 }
 
+/// 点是否在圆盘内（含边界）。
 pub fn point_in_circle(p: Vec2, c: Circle) -> bool {
     c.contains(p)
 }
 
+/// 点是否在轴对齐矩形内（半开区间，与 [`Rect::contains`] 一致）。
 pub fn point_in_aabb(p: Vec2, r: Rect) -> bool {
     r.contains(p)
 }
 
+/// 两圆是否相交（含相切）。
 pub fn circle_circle(a: Circle, b: Circle) -> bool {
     let r = a.radius + b.radius;
     a.center.distance_squared(b.center) <= r * r
 }
 
+/// 两 AABB（`Rect`）是否相交（开重叠，边贴合不算）。
 pub fn aabb_aabb(a: Rect, b: Rect) -> bool {
     a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 }
 
+/// 圆与 AABB 是否相交（含相切）。
 pub fn circle_aabb(c: Circle, r: Rect) -> bool {
     let cx = c.center.x.clamp(r.x, r.x + r.w);
     let cy = c.center.y.clamp(r.y, r.y + r.h);

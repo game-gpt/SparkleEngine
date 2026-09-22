@@ -1,9 +1,9 @@
 //! Spark 调试框架：叠加绘制、帧统计与检查器钩子。
 //! 不含游戏专用面板或远程调试协议产品。
 
-#![deny(missing_docs)]
-pub use spark_types::{Color, Rect, Vec2};
+#![forbid(missing_docs)]
 use spark_renderer::DrawList;
+pub use spark_types::{Color, Rect, Vec2};
 
 /// 单帧性能与计数快照。
 #[derive(Debug, Clone, Copy, Default)]

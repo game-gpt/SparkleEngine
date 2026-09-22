@@ -14,18 +14,12 @@ pub struct EditCapabilities {
 impl EditCapabilities {
     /// 默认只读（MCP / 远程 Agent）。
     pub fn read_only() -> Self {
-        Self {
-            read_project: true,
-            write_assets: false,
-        }
+        Self { read_project: true, write_assets: false }
     }
 
     /// 本地项目编辑（可 apply）。
     pub fn project_edit() -> Self {
-        Self {
-            read_project: true,
-            write_assets: true,
-        }
+        Self { read_project: true, write_assets: true }
     }
 
     /// 从 CLI / MCP 字符串列表解析。
@@ -36,10 +30,7 @@ impl EditCapabilities {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        let mut caps = Self {
-            read_project: false,
-            write_assets: false,
-        };
+        let mut caps = Self { read_project: false, write_assets: false };
         for raw in tokens {
             match raw.as_ref().trim().to_ascii_lowercase().as_str() {
                 "read-project" | "read_project" | "read-only" | "readonly" => {

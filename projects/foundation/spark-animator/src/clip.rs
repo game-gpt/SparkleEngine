@@ -5,7 +5,9 @@ use crate::track::AnimationTrack;
 /// 时间轴上的一个样本。
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnimationFrame<T> {
+    /// 相对剪辑起点的时间，单位秒；帧序列须非递减。
     pub time: f32,
+    /// 该时刻的采样值（精灵帧、自定义载荷等）。
     pub value: T,
 }
 
@@ -14,12 +16,16 @@ pub struct AnimationFrame<T> {
 /// 轨道按调用方写入的顺序保存。采样默认读第一条轨道。
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnimationClip<T> {
+    /// 剪辑名，供状态机与 [`crate::ClipLibrary`] 按名查找。
     pub name: String,
+    /// 总时长，单位秒；须 `> 0` 才有意义可播。
     pub duration: f32,
+    /// 属性轨道列表；`sample_clip` 只用下标 0。
     pub tracks: Vec<AnimationTrack<T>>,
 }
 
 impl<T> AnimationClip<T> {
+    /// 空轨道剪辑。调用方再往 `tracks` 里填数据。
     pub fn new(name: impl Into<String>, duration: f32) -> Self {
         Self { name: name.into(), duration, tracks: Vec::new() }
     }

@@ -7,19 +7,27 @@ use std::{
 
 use crate::{EngineError, domain::ScriptDomain, manifest::ModManifest, vfs::ModVfs};
 
-/// 已加载模组。
+/// 已装入引擎的模组运行时状态（清单、沙箱路径、可选脚本域、启用开关）。
 pub struct LoadedMod {
+    /// 解析后的 `mod.von`。
     pub manifest: ModManifest,
+    /// 模组根目录绝对/相对路径（装载时确定）。
     pub root: std::path::PathBuf,
+    /// 限制在 `root` 内的资源解析器。
     pub vfs: ModVfs,
-    /// 脚本运行域（有入口脚本时存在）。
+    /// 脚本运行域（有入口脚本或映像时存在）。
     pub domain: Option<ScriptDomain>,
+    /// 为 `false` 时跳过钩子触发与脚本调度。
     pub enabled: bool,
 }
 
+/// 模组发现命名空间占位（发现逻辑见 [`discover_and_order`]）。
 pub struct ModLoader;
 
 /// 扫描根目录，返回按依赖排序的清单列表。
+///
+/// 缺依赖 → [`EngineError::MissingDep`]；环 → [`EngineError::CyclicDeps`]；
+/// 同 id 重复 → [`EngineError::DuplicateMod`]。根目录不存在时返回空列表。
 pub fn discover_and_order(mods_root: &Path) -> Result<Vec<ModManifest>, EngineError> {
     let mut by_id: HashMap<String, ModManifest> = HashMap::new();
     if !mods_root.exists() {

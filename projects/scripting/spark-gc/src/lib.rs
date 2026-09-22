@@ -3,7 +3,7 @@
 //! 不变式：所有堆对象经 [`GcHandle`] 引用；根由宿主在 [`Heap::collect`] 前登记。
 //! 栈值 [`Value`] 含非堆变体（数字、实体 ID、函数下标），GC 只追踪 [`Value::Handle`]。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::{collections::HashMap, fmt};
 
 /// 堆对象句柄（分代可后续扩展；当前为槽位索引）。

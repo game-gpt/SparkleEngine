@@ -15,18 +15,22 @@ pub struct TextureCache {
 }
 
 impl TextureCache {
+    /// 空缓存；与 [`Default`] 相同。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 按键查找已缓存的 [`TextureId`]；未命中返回 `None`。
     pub fn get(&self, key: &str) -> Option<TextureId> {
         self.slots.get(key).copied()
     }
 
+    /// 已缓存的键数量（不等于 GPU 纹理存活数）。
     pub fn len(&self) -> usize {
         self.slots.len()
     }
 
+    /// 是否没有任何缓存键。
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
     }

@@ -14,9 +14,13 @@ use crate::{EngineError, command_buffer::ScriptCommandBuffer, event_inbox::Scrip
 /// 每领域每帧（或每次回调）的资源预算。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptBudget {
+    /// VM 指令步上限（写入 `vm.step_limit`）。
     pub instruction_limit: u64,
+    /// 宿主导入调用次数上限。
     pub host_call_limit: u64,
+    /// 分配字节上限（由 VM 解释）。
     pub allocation_limit: u64,
+    /// 调用栈深度上限。
     pub call_depth_limit: u16,
 }
 
@@ -28,11 +32,17 @@ impl Default for ScriptBudget {
 
 /// 模组脚本运行域（串行资源：同域执行暂不并行）。
 pub struct ScriptDomain {
+    /// 所属模组 id。
     pub mod_id: Arc<str>,
+    /// 已装载映像的运行时（含 VM）。
     pub runtime: ScriptRuntime,
+    /// 装载时宿主 schema 指纹（与映像校验一致）。
     pub host_schema_hash: u64,
+    /// 宿主 ABI 版本号。
     pub host_abi_version: u32,
+    /// 映像声明的生命周期导出名列表。
     pub lifecycle_exports: Vec<Arc<str>>,
+    /// 当前资源预算（可在运行中调整后 `apply_budget`）。
     pub budget: ScriptBudget,
     /// 结构变更意图，同步点由引擎 `drain` 后提交。
     /// 与宿主 `queue_*` 原生共享同一缓冲。

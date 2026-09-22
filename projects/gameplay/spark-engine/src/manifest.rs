@@ -11,8 +11,11 @@ use crate::EngineError;
 /// 模组清单。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModManifest {
+    /// 稳定模组 id（依赖边与装载键）。
     pub id: String,
+    /// 展示名；缺省时回填为 `id`。
     pub name: String,
+    /// 语义化版本字符串（写入映像包 id）。
     pub version: String,
     /// 相对模组根的入口脚本；缺省则只挂载资源 / 清单。
     pub entry: Option<String>,
@@ -20,19 +23,39 @@ pub struct ModManifest {
     pub artifact: Option<String>,
     /// 脚本语言：`valkyrie` / `lua` / `ruby`；缺省时按入口扩展名推断。
     pub language: Option<String>,
+    /// 必须先装载的其它模组 id 列表。
     pub dependencies: Vec<String>,
 }
 
 /// `mod.von` 解析错误（稳定码 + 类型化参数，无预先拼好的 Locale 句子）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManifestParseError {
-    MissingAssign { line: u32 },
-    UnknownField { field: Arc<str>, line: u32 },
-    ExpectedString { opaque: Arc<str> },
-    ExpectedStringArray { opaque: Arc<str> },
+    /// 行上找不到 `key = value` 赋值。
+    MissingAssign {
+        /// 1-based 行号。
+        line: u32,
+    },
+    /// 未识别的顶层字段名。
+    UnknownField {
+        /// 字段名。
+        field: Arc<str>,
+        /// 1-based 行号。
+        line: u32,
+    },
+    /// 期望字符串字面量或裸标识。
+    ExpectedString {
+        /// 原始 token 片段（诊断用）。
+        opaque: Arc<str>,
+    },
+    /// 期望 `[...]` 字符串数组。
+    ExpectedStringArray {
+        /// 原始 token 片段（诊断用）。
+        opaque: Arc<str>,
+    },
 }
 
 impl ManifestParseError {
+    /// 稳定错误码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::MissingAssign { .. } => "spark.engine.manifest.missing_assign",
@@ -42,6 +65,7 @@ impl ManifestParseError {
         }
     }
 
+    /// 结构化诊断参数（供 `SparkError` / 本地化模板使用）。
     pub fn args(&self) -> ErrorArgs {
         match self {
             Self::MissingAssign { line } => ErrorArgs::new().with("line", ErrorArg::Unsigned(u64::from(*line))),
@@ -64,6 +88,7 @@ impl std::fmt::Display for ManifestParseError {
 impl std::error::Error for ManifestParseError {}
 
 impl ModManifest {
+    /// 从 `mod.von` 文件路径读取并解析；缺 `id` → [`EngineError::ManifestMissingId`]。
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, EngineError> {
         let path = path.as_ref();
         let text = fs::read_to_string(path).map_err(|e| EngineError::from_io(path.display().to_string(), e))?;
@@ -77,6 +102,7 @@ impl ModManifest {
         Ok(m)
     }
 
+    /// 从模组目录读取 `mod.von`。
     pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self, EngineError> {
         Self::from_path(dir.as_ref().join("mod.von"))
     }

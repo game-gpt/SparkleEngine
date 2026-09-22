@@ -4,7 +4,7 @@
 //! 完整语义（table、元表、协程）不在本前端范围。
 //! 正式编译只经 `spark-ir`；不支持的构造必须报错。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod lower;
 
 use lower::lower_root_to_hir;

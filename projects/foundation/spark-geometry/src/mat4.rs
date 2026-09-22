@@ -2,6 +2,7 @@
 
 use crate::{Quat, Vec3};
 
+/// 列主序仿射 / 投影矩阵。`cols` 按列连续存放，可直接上传 GPU。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Mat4 {
     /// 列主序 16 浮点。
@@ -9,6 +10,7 @@ pub struct Mat4 {
 }
 
 impl Mat4 {
+    /// 单位矩阵。
     pub const IDENTITY: Self = Self {
         cols: [
             1.0, 0.0, 0.0, 0.0, //
@@ -26,10 +28,12 @@ impl Default for Mat4 {
 }
 
 impl Mat4 {
+    /// 由列主序 16 元数组构造（不做正交性校验）。
     pub fn from_cols(cols: [f32; 16]) -> Self {
         Self { cols }
     }
 
+    /// 纯平移矩阵（第 4 列为 `t`）。
     pub fn translation(t: Vec3) -> Self {
         let mut m = Self::IDENTITY;
         m.cols[12] = t.x;
@@ -38,6 +42,7 @@ impl Mat4 {
         m
     }
 
+    /// 按轴缩放（对角元为 `s`）。
     pub fn scaling(s: Vec3) -> Self {
         Self {
             cols: [
@@ -54,6 +59,7 @@ impl Mat4 {
         Self::translation(translation).mul(rotation.to_mat4()).mul(Self::scaling(scale))
     }
 
+    /// 绕世界 Y 轴旋转（弧度，右手系）。
     pub fn rotation_y(rad: f32) -> Self {
         let (s, c) = rad.sin_cos();
         Self {
@@ -66,6 +72,7 @@ impl Mat4 {
         }
     }
 
+    /// 绕世界 X 轴旋转（弧度，右手系）。
     pub fn rotation_x(rad: f32) -> Self {
         let (s, c) = rad.sin_cos();
         Self {
@@ -78,6 +85,7 @@ impl Mat4 {
         }
     }
 
+    /// 透视投影。`fov_y_rad` 为竖直视野；裁剪 Z ∈ `[0,1]`（WebGPU / wgpu），Y 向上。
     pub fn perspective(fov_y_rad: f32, aspect: f32, near: f32, far: f32) -> Self {
         // WebGPU / wgpu：裁剪空间 Z ∈ [0, 1]，Y 向上。
         let f = 1.0 / (fov_y_rad * 0.5).tan();
@@ -106,6 +114,9 @@ impl Mat4 {
         Self { cols }
     }
 
+    /// 观察矩阵：相机在 `eye`，朝 `forward` 看，以 `up` 为大致上方向。
+    ///
+    /// `forward` / `up` 共线时自动换备用轴，避免奇异。
     pub fn look_to(eye: Vec3, forward: Vec3, up: Vec3) -> Self {
         let f = forward.normalized();
         let mut s = f.cross(up);
@@ -135,6 +146,7 @@ impl Mat4 {
         Self { cols }
     }
 
+    /// 矩阵乘法：`self * rhs`（先应用 `rhs`，再应用 `self`）。
     pub fn mul(self, rhs: Self) -> Self {
         let mut out = [0.0; 16];
         for col in 0..4 {
@@ -149,6 +161,7 @@ impl Mat4 {
         Self { cols: out }
     }
 
+    /// 变换点（含平移；按透视除法处理 `w`）。
     pub fn transform_point(self, p: Vec3) -> Vec3 {
         let x = self.cols[0] * p.x + self.cols[4] * p.y + self.cols[8] * p.z + self.cols[12];
         let y = self.cols[1] * p.x + self.cols[5] * p.y + self.cols[9] * p.z + self.cols[13];
@@ -217,6 +230,7 @@ impl Mat4 {
         Some(Self { cols: inv })
     }
 
+    /// 列主序数组只读视图（上传 uniform / 调试用）。
     pub fn as_cols(&self) -> &[f32; 16] {
         &self.cols
     }

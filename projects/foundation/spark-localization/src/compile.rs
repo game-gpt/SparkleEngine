@@ -9,17 +9,25 @@ use crate::{
 /// 编译错误。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompileError {
-    /// 文档检查未通过。
-    CheckFailed { count: usize },
+    /// 文档检查未通过；`count` 为问题条数。
+    CheckFailed {
+        /// [`CheckReport::error_count`] 快照。
+        count: usize,
+    },
     /// 编译阶段事实不足，`detail` 仅供调试器展开。
-    Internal { detail: String },
+    Internal {
+        /// 不透明调试说明，不得作为用户可见句子权威。
+        detail: String,
+    },
 }
 
 impl CompileError {
+    /// 由检查失败条数构造。
     pub fn check_failed(count: usize) -> Self {
         Self::CheckFailed { count }
     }
 
+    /// 稳定机器码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::CheckFailed { .. } => "spark.localization.check_failed",
@@ -27,6 +35,7 @@ impl CompileError {
         }
     }
 
+    /// 结构化参数；`Internal` 的 `detail` 以 `opaque` 键传递。
     pub fn args(&self) -> spark_types::ErrorArgs {
         use spark_types::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
@@ -64,7 +73,9 @@ impl Default for CompileOptions {
 /// 编译结果（包 + 可选检查报告）。
 #[derive(Debug, Clone)]
 pub struct CompileOutput {
+    /// 已编译运行时包。
     pub bundle: LocalizationBundle,
+    /// 编译前累积的检查报告（即便未 `reject` 也会带回）。
     pub report: CheckReport,
 }
 

@@ -100,10 +100,9 @@ impl DeviceCaps {
             | TextureFormat::Bc7RgbaUnorm
             | TextureFormat::Bc7RgbaUnormSrgb => self.supports_bc,
             TextureFormat::Etc2Rgba8Unorm | TextureFormat::Etc2Rgba8UnormSrgb => self.supports_etc2,
-            TextureFormat::Astc4x4Unorm
-            | TextureFormat::Astc4x4UnormSrgb
-            | TextureFormat::Astc6x6Unorm
-            | TextureFormat::Astc6x6UnormSrgb => self.supports_astc,
+            TextureFormat::Astc4x4Unorm | TextureFormat::Astc4x4UnormSrgb | TextureFormat::Astc6x6Unorm | TextureFormat::Astc6x6UnormSrgb => {
+                self.supports_astc
+            }
         }
     }
 }

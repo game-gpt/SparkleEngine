@@ -17,30 +17,48 @@ use crate::{
     probe::{AudioTrackInfo, MediaInfo, VideoTrackInfo, classify_tracks},
 };
 
+/// 包所属轨类别（由探测时的轨分类决定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PacketKind {
+    /// 来自音频轨。
     Audio,
+    /// 来自视频轨。
     Video,
+    /// 其它轨，或轨 ID 未出现在探测结果中。
     Other,
 }
 
 /// 解复用后的原始包（时间戳单位为轨 time_base）。
+///
+/// `data` 为压缩载荷字节，不做像素/PCM 解码。
 #[derive(Debug, Clone)]
 pub struct MediaPacket {
+    /// 源轨 ID。
     pub track_id: u32,
+    /// 轨类别（相对 [`MediaInfo`] 快照）。
     pub kind: PacketKind,
+    /// 演示时间戳（PTS），单位为该轨 time_base 刻度；负 PTS 钳为 `0`。
     pub ts: u64,
+    /// 包时长（同 time_base 刻度）；`0` 或缺失时为 `None`。
     pub dur: Option<u64>,
+    /// 压缩载荷字节。
     pub data: Vec<u8>,
 }
 
 /// 打开中的媒体读者（持有 Symphonia `FormatReader`）。
+///
+/// 打开时固化一份 [`MediaInfo`]；后续轨集合变化需重新打开。
 pub struct MediaReader {
     format: Box<dyn FormatReader>,
     info: MediaInfo,
 }
 
 impl MediaReader {
+    /// 从路径打开容器；扩展名写入 `Hint`。
+    ///
+    /// # Errors
+    ///
+    /// 打开失败 → [`MediaError::Open`]；探测失败 → [`MediaError::Decode`]。
     pub fn open_path(path: impl AsRef<Path>) -> Result<Self, MediaError> {
         let path = path.as_ref();
         let file = File::open(path).map_err(|e| MediaError::open_path(path, &e))?;
@@ -51,6 +69,11 @@ impl MediaReader {
         Self::open_mss(MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default()), hint)
     }
 
+    /// 从内存字节打开容器（无扩展名 hint）。
+    ///
+    /// # Errors
+    ///
+    /// 探测失败 → [`MediaError::Decode`]。
     pub fn open_bytes(bytes: impl Into<Vec<u8>>) -> Result<Self, MediaError> {
         let cursor = std::io::Cursor::new(bytes.into());
         Self::open_mss(MediaSourceStream::new(Box::new(cursor), MediaSourceStreamOptions::default()), Hint::new())
@@ -62,19 +85,28 @@ impl MediaReader {
         Ok(Self { format, info })
     }
 
+    /// 打开时固化的轨/格式摘要。
     pub fn info(&self) -> &MediaInfo {
         &self.info
     }
 
+    /// 默认（第一条）音频轨摘要。
     pub fn default_audio(&self) -> Option<&AudioTrackInfo> {
         self.info.default_audio()
     }
 
+    /// 默认（第一条）视频轨摘要。
     pub fn default_video(&self) -> Option<&VideoTrackInfo> {
         self.info.default_video()
     }
 
     /// 拉取下一包；`track_filter` 为 `None` 时接受任意轨。
+    ///
+    /// 遇到 Symphonia `ResetRequired` 时自动重试。流结束返回 `Ok(None)`。
+    ///
+    /// # Errors
+    ///
+    /// 其它解复用错误映射为 [`MediaError::Decode`]。
     pub fn next_packet(&mut self, track_filter: Option<u32>) -> Result<Option<MediaPacket>, MediaError> {
         loop {
             let packet = match self.format.next_packet() {
@@ -97,6 +129,13 @@ impl MediaReader {
     }
 
     /// 按秒粗略寻道（依赖容器 seek 支持）。
+    ///
+    /// 优先锚定默认视频轨，否则默认音频轨；无轨时 `track_id` 为 `None`。
+    /// `seconds` 非法时回退到时间零点。
+    ///
+    /// # Errors
+    ///
+    /// 容器不支持或 seek 失败 → [`MediaError::Decode`]。
     pub fn seek_seconds(&mut self, seconds: f64) -> Result<(), MediaError> {
         let track_id = self.info.default_video().map(|v| v.track_id).or_else(|| self.info.default_audio().map(|a| a.track_id));
         let time = Time::try_from_secs_f64(seconds).unwrap_or(Time::ZERO);

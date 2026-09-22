@@ -7,7 +7,9 @@ use spark_types::Vec2;
 /// 正交 2D 相机。`zoom` 为世界单位到像素的缩放，`1` 表示一比一。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera2d {
+    /// 视口左上角对应的世界坐标。
     pub origin: Vec2,
+    /// 世界单位 → 屏幕像素的缩放；非法值在变换时按 `1` 处理。
     pub zoom: f32,
 }
 
@@ -18,15 +20,18 @@ impl Default for Camera2d {
 }
 
 impl Camera2d {
+    /// 构造相机；`zoom` 会经有限性与下限消毒。
     pub fn new(origin: Vec2, zoom: f32) -> Self {
         Self { origin, zoom: sanitize_zoom(zoom) }
     }
 
+    /// 世界点 → 屏幕像素（相对视口左上）。
     pub fn world_to_screen(&self, world: Vec2) -> Vec2 {
         let z = sanitize_zoom(self.zoom);
         Vec2::new((world.x - self.origin.x) * z, (world.y - self.origin.y) * z)
     }
 
+    /// 屏幕像素 → 世界点（与 [`Self::world_to_screen`] 互逆）。
     pub fn screen_to_world(&self, screen: Vec2) -> Vec2 {
         let z = sanitize_zoom(self.zoom);
         Vec2::new(screen.x / z + self.origin.x, screen.y / z + self.origin.y)

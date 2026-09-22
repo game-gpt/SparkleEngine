@@ -5,7 +5,9 @@ use crate::{Aabb3, Ray3, Vec3, ray_aabb};
 /// 扫掠命中：`toi ∈ [0, 1]` 为位移比例。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SweepHit {
+    /// 首次接触时的位移比例（0=起点，1=走完全程 `delta`）。
     pub toi: f32,
+    /// 接触面法线（世界空间，指向离开障碍的一侧）。
     pub normal: Vec3,
 }
 

@@ -6,9 +6,7 @@
 
 use std::{
     collections::BTreeMap,
-    fmt,
-    fs,
-    io,
+    fmt, fs, io,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -118,17 +116,9 @@ impl AssetMetaError {
     /// 类型化参数（供本地化与 Agent 诊断）。
     pub fn args(&self) -> ErrorArgs {
         match self {
-            Self::Missing { asset } => {
-                ErrorArgs::new().with("path", ErrorArg::String(Arc::from(asset.to_string_lossy().as_ref())))
-            }
-            Self::AlreadyExists { meta } => {
-                ErrorArgs::new().with("path", ErrorArg::String(Arc::from(meta.to_string_lossy().as_ref())))
-            }
-            Self::GuidMismatch {
-                asset,
-                expected,
-                found,
-            } => ErrorArgs::new()
+            Self::Missing { asset } => ErrorArgs::new().with("path", ErrorArg::String(Arc::from(asset.to_string_lossy().as_ref()))),
+            Self::AlreadyExists { meta } => ErrorArgs::new().with("path", ErrorArg::String(Arc::from(meta.to_string_lossy().as_ref()))),
+            Self::GuidMismatch { asset, expected, found } => ErrorArgs::new()
                 .with("path", ErrorArg::String(Arc::from(asset.to_string_lossy().as_ref())))
                 .with("expected", ErrorArg::String(Arc::from(expected.to_string())))
                 .with("found", ErrorArg::String(Arc::from(found.to_string()))),
@@ -187,17 +177,9 @@ impl AssetMetaStore {
         let asset = asset.as_ref();
         let meta_path = Self::path(asset);
         match fs::read_to_string(&meta_path) {
-            Ok(text) => oak_von::from_str(&text).map_err(|e| AssetMetaError::Parse {
-                path: meta_path,
-                detail: e.to_string(),
-            }),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Err(AssetMetaError::Missing {
-                asset: asset.to_path_buf(),
-            }),
-            Err(e) => Err(AssetMetaError::Io {
-                path: meta_path,
-                cause: e,
-            }),
+            Ok(text) => oak_von::from_str(&text).map_err(|e| AssetMetaError::Parse { path: meta_path, detail: e.to_string() }),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Err(AssetMetaError::Missing { asset: asset.to_path_buf() }),
+            Err(e) => Err(AssetMetaError::Io { path: meta_path, cause: e }),
         }
     }
 
@@ -206,25 +188,12 @@ impl AssetMetaStore {
         let meta_path = Self::path(asset.as_ref());
         if let Some(parent) = meta_path.parent() {
             if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).map_err(|e| AssetMetaError::Io {
-                    path: parent.to_path_buf(),
-                    cause: e,
-                })?;
+                fs::create_dir_all(parent).map_err(|e| AssetMetaError::Io { path: parent.to_path_buf(), cause: e })?;
             }
         }
-        let text = oak_von::to_string(meta).map_err(|e| AssetMetaError::Parse {
-            path: meta_path.clone(),
-            detail: e.to_string(),
-        })?;
-        let body = if text.ends_with('\n') {
-            text
-        } else {
-            format!("{text}\n")
-        };
-        fs::write(&meta_path, body).map_err(|e| AssetMetaError::Io {
-            path: meta_path,
-            cause: e,
-        })
+        let text = oak_von::to_string(meta).map_err(|e| AssetMetaError::Parse { path: meta_path.clone(), detail: e.to_string() })?;
+        let body = if text.ends_with('\n') { text } else { format!("{text}\n") };
+        fs::write(&meta_path, body).map_err(|e| AssetMetaError::Io { path: meta_path, cause: e })
     }
 
     /// 为**新资源**生成身份并写入；若旁车已存在则失败，避免静默换 GUID。

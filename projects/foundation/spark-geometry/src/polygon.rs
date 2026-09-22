@@ -2,20 +2,25 @@
 
 use spark_types::Vec2;
 
+/// 二维简单多边形（顶点按边界顺序；不要求凸）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Polygon {
+    /// 顶点列表；少于 3 个时 [`contains`] 恒为假。
     pub vertices: Vec<Vec2>,
 }
 
 impl Polygon {
+    /// 由顶点序列构造（不校验自交）。
     pub fn new(vertices: Vec<Vec2>) -> Self {
         Self { vertices }
     }
 
+    /// 顶点数。
     pub fn len(&self) -> usize {
         self.vertices.len()
     }
 
+    /// 是否无顶点。
     pub fn is_empty(&self) -> bool {
         self.vertices.is_empty()
     }

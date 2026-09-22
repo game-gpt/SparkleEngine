@@ -25,15 +25,19 @@ pub enum ScriptParallelism {
 /// 组件访问声明（名字在链接期解析为稳定槽位；热路径禁止再字符串查找）。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ComponentAccess {
+    /// 组件逻辑名。
     pub component: Arc<str>,
+    /// `true` = 写；`false` = 只读。
     pub write: bool,
 }
 
 impl ComponentAccess {
+    /// 只读访问声明。
     pub fn read(component: impl Into<Arc<str>>) -> Self {
         Self { component: component.into(), write: false }
     }
 
+    /// 写访问声明。
     pub fn write(component: impl Into<Arc<str>>) -> Self {
         Self { component: component.into(), write: true }
     }
@@ -42,21 +46,30 @@ impl ComponentAccess {
 /// 脚本 System 描述符。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptSystemDescriptor {
+    /// 所属模组 id。
     pub mod_id: Arc<str>,
+    /// System 逻辑名（同模组内唯一；调度图键的一部分）。
     pub name: Arc<str>,
     /// 入口导出函数名（如 `fixed_update` / 自定义 micro）。
     pub entry: Arc<str>,
+    /// 所属宿主生命周期阶段。
     pub phase: HostPhase,
+    /// 组件读写声明（门禁与冲突检测依据）。
     pub access: Vec<ComponentAccess>,
     /// 查询可见的脚本原型名；空 = 不按原型过滤（仍受读写集门禁）。
     pub query_archetypes: Vec<Arc<str>>,
+    /// 必须排在本 System **之前** 的其它 System 名 / 图键。
     pub before: Vec<Arc<str>>,
+    /// 必须排在本 System **之后** 的前置依赖名 / 图键。
     pub after: Vec<Arc<str>>,
+    /// 确定性等级（约束可调用的宿主导入）。
     pub determinism: DeterminismClass,
+    /// 并行 / 互斥策略。
     pub parallelism: ScriptParallelism,
 }
 
 impl ScriptSystemDescriptor {
+    /// 最小描述符：默认定确定性、同域串行、无访问/序约束。
     pub fn new(mod_id: impl Into<Arc<str>>, name: impl Into<Arc<str>>, entry: impl Into<Arc<str>>, phase: HostPhase) -> Self {
         Self {
             mod_id: mod_id.into(),
@@ -72,11 +85,13 @@ impl ScriptSystemDescriptor {
         }
     }
 
+    /// 追加只读组件访问。
     pub fn read(mut self, component: impl Into<Arc<str>>) -> Self {
         self.access.push(ComponentAccess::read(component));
         self
     }
 
+    /// 追加写组件访问。
     pub fn write(mut self, component: impl Into<Arc<str>>) -> Self {
         self.access.push(ComponentAccess::write(component));
         self
@@ -88,21 +103,25 @@ impl ScriptSystemDescriptor {
         self
     }
 
+    /// 声明本 System 须排在目标 **之前**。
     pub fn before(mut self, name: impl Into<Arc<str>>) -> Self {
         self.before.push(name.into());
         self
     }
 
+    /// 声明本 System 须排在目标 **之后**。
     pub fn after(mut self, name: impl Into<Arc<str>>) -> Self {
         self.after.push(name.into());
         self
     }
 
+    /// 覆盖确定性等级。
     pub fn determinism(mut self, class: DeterminismClass) -> Self {
         self.determinism = class;
         self
     }
 
+    /// 覆盖并行策略。
     pub fn parallelism(mut self, policy: ScriptParallelism) -> Self {
         self.parallelism = policy;
         self
@@ -117,10 +136,26 @@ impl ScriptSystemDescriptor {
 /// System 登记 / 调度声明错误。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScriptSystemError {
-    Cycle { detail: String },
-    AccessConflict { detail: String },
-    ExclusiveConflict { detail: String },
-    UnknownOrderTarget { detail: String },
+    /// before/after 图存在环。
+    Cycle {
+        /// 诊断细节（含 phase 等）。
+        detail: String,
+    },
+    /// 同 phase 两 System 对同一组件声明冲突的写/读写。
+    AccessConflict {
+        /// 冲突双方与组件名。
+        detail: String,
+    },
+    /// `Exclusive` 与同 phase 其它 System 并存，或存在多个 Exclusive。
+    ExclusiveConflict {
+        /// 冲突说明。
+        detail: String,
+    },
+    /// before/after 目标无法唯一解析。
+    UnknownOrderTarget {
+        /// 无法解析的目标名。
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for ScriptSystemError {
@@ -149,18 +184,22 @@ pub struct ScriptSystemRegistry {
 }
 
 impl ScriptSystemRegistry {
+    /// 空登记表。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 已登记 System 数。
     pub fn len(&self) -> usize {
         self.systems.len()
     }
 
+    /// 是否尚无登记。
     pub fn is_empty(&self) -> bool {
         self.systems.is_empty()
     }
 
+    /// 登记或覆盖同 `mod_id`+`name` 的描述符（不立即校验）。
     pub fn register(&mut self, desc: ScriptSystemDescriptor) {
         if let Some(existing) = self.systems.iter_mut().find(|s| s.mod_id == desc.mod_id && s.name == desc.name) {
             *existing = desc;
@@ -176,14 +215,17 @@ impl ScriptSystemRegistry {
         self.validate_all()
     }
 
+    /// 移除某模组的全部 System 描述符。
     pub fn remove_mod(&mut self, mod_id: &str) {
         self.systems.retain(|s| s.mod_id.as_ref() != mod_id);
     }
 
+    /// 只读切片访问全部描述符。
     pub fn systems(&self) -> &[ScriptSystemDescriptor] {
         &self.systems
     }
 
+    /// 迭代属于 `phase`（或 `Any`）的描述符。
     pub fn for_phase(&self, phase: HostPhase) -> impl Iterator<Item = &ScriptSystemDescriptor> {
         self.systems.iter().filter(move |s| s.phase == phase || s.phase == HostPhase::Any)
     }

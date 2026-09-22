@@ -9,7 +9,7 @@
 //!   [`Op::JitEnter`] 预留原生 stub 槽（解释路径跳过）。
 //! - **栈式**：操作数在值栈，调用帧只记 `func` / `ip` / `stack_base`，利于特化与调试。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 use std::{
     collections::{HashMap, HashSet},
     fmt,
@@ -28,24 +28,53 @@ pub use verify::{BytecodeVerifyError, verify_bytecode, verify_bytecode_with_host
 /// VM 结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]
 pub enum VmError {
+    /// 值栈弹出时为空（操作数不足）。
     StackUnderflow,
+    /// 指令指针越过当前帧 `code` 边界，或操作数截断。
     CodeOob,
+    /// 运行时类型不符合操作码期望（算术 / 比较 / 字段访问等）。
     TypeError {
+        /// 期望的类型名（诊断用静态标签）。
         expected: &'static str,
+        /// 实际值的类型描述。
         got: String,
     },
-    UnknownGlobal(String),
-    UnknownFunction(String),
+    /// 全局符号表中找不到该名字。
+    UnknownGlobal(
+        /// 缺失的全局名。
+        String,
+    ),
+    /// 模块函数表中找不到该导出名。
+    UnknownFunction(
+        /// 缺失的函数名。
+        String,
+    ),
+    /// 调用帧栈溢出（达到硬上限，先于预算检查的保护）。
     CallOverflow,
+    /// `Return` 时无活动帧，或返回值无法落到调用方栈槽。
     BadReturn,
+    /// 除法 / 取模除零（算术指令当前压 `0`；宿主 / 扩展路径可返回此码）。
     DivByZero,
-    UnknownNative(String),
-    UnknownOpcode(u8),
+    /// 未注册且无法默认占位的原生 / 宿主名。
+    UnknownNative(
+        /// 缺失的原生函数名。
+        String,
+    ),
+    /// 字节流中出现无法映射到 [`Op`] 的操作码字节。
+    UnknownOpcode(
+        /// 原始操作码字节。
+        u8,
+    ),
+    /// 调用实参个数与 [`FuncProto::arity`] 不一致。
     ArityMismatch {
+        /// 原型声明的形参数。
         expected: u16,
+        /// 实际压入的实参数。
         got: u16,
     },
+    /// 原生 / 宿主闭包拒绝某个实参形态。
     BadNativeArg {
+        /// 被调用的原生名（稳定诊断键）。
         name: &'static str,
     },
     /// 堆句柄无效。
@@ -58,13 +87,15 @@ pub enum VmError {
     CallDepthExceeded,
     /// 堆分配次数预算耗尽。
     AllocationLimitExceeded,
-    /// 宿主 ABI / 阶段 / 能力门禁拒绝（`detail` 为稳定令牌）。
+    /// 宿主 ABI / 阶段 / 能力门禁拒绝。
     HostDenied {
+        /// 稳定拒绝令牌（供诊断与本地化，非自由文本）。
         detail: String,
     },
 }
 
 impl VmError {
+    /// 稳定错误码字符串（`spark.vm.*`），供诊断与本地化键使用。
     pub fn code(&self) -> &'static str {
         match self {
             Self::StackUnderflow => "spark.vm.stack_underflow",
@@ -116,6 +147,7 @@ impl VmError {
         }
     }
 
+    /// 转为 `spark-diagnostics` 的 [`Error`]（稳定码 + 类型化参数）。
     pub fn to_error(&self) -> Error {
         Error::new(ErrorCode::parse(self.code())).with_args(self.args())
     }
@@ -133,49 +165,71 @@ impl std::error::Error for VmError {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Op {
+    /// 空操作：不改值栈与指令指针以外的状态。
     Nop = 0,
+    /// 压入 [`Value::Null`]。
     LoadNull,
+    /// 压入 [`Value::Bool`]`(true)`。
     LoadTrue,
+    /// 压入 [`Value::Bool`]`(false)`。
     LoadFalse,
-    /// 后跟 u16 常量下标。
+    /// 后跟 u16 常量下标；从当前帧 [`FuncProto::consts`] 压入一份克隆。
     LoadConst,
-    /// 后跟 u16 局部槽。
+    /// 后跟 u16 局部槽；相对当前帧 `stack_base` 读槽并压栈（越界读为 `Null`）。
     LoadLocal,
+    /// 后跟 u16 局部槽；弹出栈顶写入该槽（不足则扩展栈垫 `Null`）。
     StoreLocal,
-    /// 后跟 u16 全局名常量表下标（字符串）。
+    /// 后跟 u16 全局名常量表下标；按 [`FuncProto::const_names`] 查 [`Vm::globals`]（未定义压 `Null`）。
     LoadGlobal,
+    /// 后跟 u16 全局名常量表下标；弹出栈顶写入 [`Vm::globals`]。
     StoreGlobal,
+    /// 弹出 `b` 再 `a`：数字相加；数组拼接；其余按字符串拼接后入堆。
     Add,
+    /// 弹出两操作数，按数字减法（非数字按 0）。
     Sub,
+    /// 弹出两操作数：数组/字符串与数字做重复；否则按数字乘法。
     Mul,
+    /// 弹出两操作数，按数字除法（除零结果为 0，不抛 [`VmError::DivByZero`]）。
     Div,
+    /// 弹出一操作数，压入其数字取负（非数字按 0）。
     Neg,
+    /// 弹出一操作数，压入其真值取反（[`Value`] 真值语义）。
     Not,
+    /// 弹出两操作数，按值相等比较，压入 [`Value::Bool`]。
     Eq,
+    /// 弹出两操作数，按值不等比较，压入 [`Value::Bool`]。
     Ne,
+    /// 弹出两操作数，按数字 `<` 比较（非数字按 0）。
     Lt,
+    /// 弹出两操作数，按数字 `<=` 比较（非数字按 0）。
     Le,
+    /// 弹出两操作数，按数字 `>` 比较（非数字按 0）。
     Gt,
+    /// 弹出两操作数，按数字 `>=` 比较（非数字按 0）。
     Ge,
-    /// 相对跳转 i16（相对操作数之后）。
+    /// 相对跳转：后跟 i16，目标为「读完操作数后的 ip + 偏移」。
     Jump,
+    /// 条件跳转：后跟 i16；弹出条件，假值则相对跳转，真值则落到操作数之后。
     JumpIfFalse,
+    /// 条件跳转：后跟 i16；弹出条件，真值则相对跳转，假值则落到操作数之后。
     JumpIfTrue,
-    /// 参数个数 u8；栈顶为 argN-1…arg0，其下为 callee（[`Value::Func`]）。
+    /// 脚本调用：后跟 u8 参数个数；栈顶为 `argN-1…arg0`，其下为 callee（[`Value::Func`]）。
+    /// 缺参垫 `Null`、多余实参丢弃；受 [`Vm::call_depth_limit`] 约束。
     Call,
+    /// 弹出返回值（空栈则 `Null`），弹出当前帧并截断到 `stack_base`，再把返回值压给调用方。
     Return,
-    /// 弹出 N 个（u8）。
+    /// 弹出 N 个栈值：后跟 u8 个数；不足则 [`VmError::StackUnderflow`]。
     Pop,
-    /// 打印栈顶（不弹出）。
+    /// 打印栈顶（不弹出）：经 [`HostHooks::print`] 输出。
     Print,
-    /// JIT 入口占位：后跟 u32 stub id。
+    /// JIT 入口占位：后跟 u32 stub id；解释路径只跳过操作数，不进入原生 stub。
     JitEnter,
-    /// 后跟 u16 字符串池下标；运行时分配到堆。
+    /// 后跟 u16 字符串池下标；从 [`FuncProto::strings`] 分配堆字符串并压栈。
     LoadString,
     /// 保留操作码：正式制品禁止出现；链接 / 验证拒绝，解释期 trap。
     /// 宿主调用一律用 [`Op::CallHost`]。
     CallNative,
-    /// 取模。
+    /// 取模：弹出两操作数按数字取余（除零结果为 0）。
     Mod,
     /// 实例方法派发：后跟 u16 方法名字符串池下标 + u8 参数个数（不含接收者）。
     /// 栈：`recv, arg0…argN-1`。按 `recv.__class` + 方法名查找 `Class_method`。
@@ -184,30 +238,38 @@ pub enum Op {
     GetField,
     /// 写表字段：后跟 u16 字符串池下标。弹出值再弹出对象，写入后压回值。
     SetField,
-    /// 复制栈顶。
+    /// 复制栈顶（再压一份相同值）。
     Dup,
     /// 新建空表：无操作数，压入 `Table` 句柄。
     NewTable,
     /// 新建数组：后跟 u8 元素个数；弹出 N 个元素（底→顶为 0..N-1），压入 `Array`。
     NewArray,
     /// 宿主槽位调用：后跟 u16 槽位 + u8 参数个数（链接后 ABI；不经字符串查找）。
+    /// 受 [`Vm::host_call_limit`] 约束。
     CallHost,
 }
 
 /// 编译期函数原型（解释与 JIT 共用）。
 #[derive(Debug, Clone)]
 pub struct FuncProto {
+    /// 导出名（链接按名合并；[`Module::find_function`] / [`Op::Send`] 派发键）。
     pub name: String,
+    /// 形参数（与 [`Op::Call`] / [`Vm::call_function`] 实参个数对齐）。
     pub arity: u8,
+    /// 局部槽总数（含参数）；帧进入时值栈从 `stack_base` 至少扩展到此长度。
     pub locals: u16,
+    /// 紧凑字节码：操作码字节 + 小端操作数。
     pub code: Vec<u8>,
+    /// 常量表：[`Op::LoadConst`] 按下标克隆压栈；可含 [`Value::Func`] 等。
     pub consts: Vec<Value>,
     /// 与 `consts` 并行的名字槽（全局符号用）。
     pub const_names: Vec<String>,
+    /// 字符串池：[`Op::LoadString`] / [`Op::Send`] / 字段名等按下标引用。
     pub strings: Vec<String>,
 }
 
 impl FuncProto {
+    /// 新建空原型：`locals` 初值等于 `arity`，常量表与码流为空。
     pub fn new(name: impl Into<String>, arity: u8) -> Self {
         Self {
             name: name.into(),
@@ -220,22 +282,27 @@ impl FuncProto {
         }
     }
 
+    /// 追加一个无操作数的操作码字节。
     pub fn emit(&mut self, op: Op) {
         self.code.push(op as u8);
     }
 
+    /// 追加一个 u8 操作数（如 `Call`/`Pop`/`NewArray` 的个数）。
     pub fn emit_u8(&mut self, v: u8) {
         self.code.push(v);
     }
 
+    /// 追加一个小端 u16 操作数（常量/局部/字符串下标等）。
     pub fn emit_u16(&mut self, v: u16) {
         self.code.extend_from_slice(&v.to_le_bytes());
     }
 
+    /// 追加一个小端 i16 操作数（相对跳转偏移）。
     pub fn emit_i16(&mut self, v: i16) {
         self.code.extend_from_slice(&v.to_le_bytes());
     }
 
+    /// 向常量表追加数字，返回可供 [`Op::LoadConst`] 使用的下标。
     pub fn add_const_number(&mut self, n: f64) -> u16 {
         let i = self.consts.len() as u16;
         self.consts.push(Value::Number(n));
@@ -243,6 +310,7 @@ impl FuncProto {
         i
     }
 
+    /// 向常量表追加函数下标（[`Value::Func`]），返回 `LoadConst` 下标。
     pub fn add_const_func(&mut self, func: u32) -> u16 {
         let i = self.consts.len() as u16;
         self.consts.push(Value::Func(func));
@@ -250,6 +318,7 @@ impl FuncProto {
         i
     }
 
+    /// 登记全局名槽：`consts` 占位 `Null`，`const_names` 存名字；供 [`Op::LoadGlobal`]/[`Op::StoreGlobal`]。
     pub fn add_const_name(&mut self, name: impl Into<String>) -> u16 {
         let name = name.into();
         let i = self.consts.len() as u16;
@@ -258,40 +327,49 @@ impl FuncProto {
         i
     }
 
+    /// 向字符串池追加字面量，返回 [`Op::LoadString`] / 方法名等可用的下标。
     pub fn add_string(&mut self, s: impl Into<String>) -> u16 {
         let i = self.strings.len() as u16;
         self.strings.push(s.into());
         i
     }
 
+    /// 回填已预留的小端 i16（典型：先 `emit(Jump*)` 再 `emit_i16(0)`，末尾再 `patch_i16`）。
     pub fn patch_i16(&mut self, at: usize, v: i16) {
         let b = v.to_le_bytes();
         self.code[at] = b[0];
         self.code[at + 1] = b[1];
     }
 
+    /// 当前 `code` 字节长度（下一写位置 / 跳转锚点）。
     pub fn len(&self) -> usize {
         self.code.len()
     }
 }
 
+/// 已链接的脚本模块：函数表 + 入口 +（遗留）原生名表。
 #[derive(Debug, Clone)]
 pub struct Module {
+    /// 函数原型表；[`Value::Func`] 与调用下标均相对此表。
     pub functions: Vec<FuncProto>,
     /// 入口函数下标（块初始化 / REPL；模组语义入口用命名导出）。
     pub entry: usize,
+    /// 遗留原生名表（链接合并用；正式宿主调用走 [`Op::CallHost`] 槽位）。
     pub native_names: Vec<String>,
 }
 
 impl Module {
+    /// 以给定函数表与入口下标构造模块（`native_names` 为空）。
     pub fn with_entry(functions: Vec<FuncProto>, entry: usize) -> Self {
         Self { functions, entry, native_names: Vec::new() }
     }
 
+    /// 按导出名查找函数下标（首次匹配）；供 [`Vm::call_function`] / [`Op::Send`]。
     pub fn find_function(&self, name: &str) -> Option<usize> {
         self.functions.iter().position(|f| f.name == name)
     }
 
+    /// 将原生名登记进 `native_names`（已存在则返回原下标）。
     pub fn intern_native(&mut self, name: impl Into<String>) -> u16 {
         let name = name.into();
         if let Some(i) = self.native_names.iter().position(|n| n == &name) {
@@ -400,15 +478,20 @@ fn remap_func_against(
 
 /// 原生函数上下文（宿主可经此访问堆与全局；ECS World 由闭包捕获）。
 pub struct NativeCtx<'a> {
+    /// 可变堆：分配字符串 / 表 / 数组，解析 [`Value::Handle`]。
     pub heap: &'a mut Heap,
+    /// 可变全局符号表（与 [`Op::LoadGlobal`] / [`Op::StoreGlobal`] 同一映射）。
     pub globals: &'a mut HashMap<String, Value>,
 }
 
+/// 已装箱的原生 / 宿主闭包：接收上下文与实参向量，返回值或 [`VmError`]。
 pub type NativeFn = Box<dyn FnMut(&mut NativeCtx<'_>, Vec<Value>) -> Result<Value, VmError>>;
 
 #[derive(Debug)]
 struct Frame {
+    /// 当前帧执行的 [`Module::functions`] 下标。
     func: usize,
+    /// 下一待取指令在该函数 `code` 中的字节偏移。
     ip: usize,
     /// 该帧在值栈上的基址（含参数）。
     stack_base: usize,
@@ -416,9 +499,11 @@ struct Frame {
 
 /// 宿主钩子（打印等；ECS 侧可换实现）。
 pub trait HostHooks {
+    /// 输出一行调试 / `Print` 操作码文本（不含末尾换行约定由实现决定）。
     fn print(&mut self, text: &str);
 }
 
+/// 默认宿主：[`HostHooks::print`] 转发到标准输出。
 pub struct StdHost;
 
 impl HostHooks for StdHost {
@@ -427,14 +512,19 @@ impl HostHooks for StdHost {
     }
 }
 
+/// 栈式字节码虚拟机：持有模块、堆、全局、调用帧与解释预算。
 pub struct Vm {
+    /// 当前装载的脚本模块（函数表与入口）。
     pub module: Module,
+    /// 对象堆（字符串 / 表 / 数组）；GC 根来自值栈与全局。
     pub heap: Heap,
+    /// 全局符号表（[`Op::LoadGlobal`] / [`Op::StoreGlobal`]）。
     pub globals: HashMap<String, Value>,
     stack: Vec<Value>,
     frames: Vec<Frame>,
     /// 每条函数解释步热度（供 JIT）。
     pub hotness: Vec<u32>,
+    /// 按限定名注册的原生 / 宿主实现（[`Op::CallHost`] / [`Op::Send`] 回退）。
     pub natives: HashMap<String, NativeFn>,
     /// 宿主槽位 → 调度名（与 [`HostFunctionId::qualified_name`] / `register_native` 键一致，顺序 = 槽位）。
     pub host_slot_names: Vec<String>,
@@ -455,6 +545,7 @@ pub struct Vm {
 }
 
 impl Vm {
+    /// 以模块构造 VM：默认预算（步数 / 宿主调用 / 深度 / 分配）已设，热度表与函数表等长。
     pub fn new(module: Module) -> Self {
         let n = module.functions.len();
         Self {
@@ -481,6 +572,7 @@ impl Vm {
         self.host_slot_names = names.into_iter().map(Into::into).collect();
     }
 
+    /// 按名字注册原生闭包（覆盖同名）；[`Op::CallHost`] 经槽位解析到此键。
     pub fn register_native<F>(&mut self, name: impl Into<String>, f: F)
     where
         F: FnMut(&mut NativeCtx<'_>, Vec<Value>) -> Result<Value, VmError> + 'static,
@@ -1165,6 +1257,9 @@ impl Vm {
         }
     }
 
+    /// 将 [`Value`] 格式化为可读字符串（`Print`、字符串拼接与诊断共用）。
+    ///
+    /// 句柄解析堆对象；悬空句柄显示为 `<dangling>`，不视为 [`VmError::BadHandle`]。
     pub fn value_to_string(&self, v: &Value) -> Result<String, VmError> {
         Ok(match v {
             Value::Null => "null".into(),

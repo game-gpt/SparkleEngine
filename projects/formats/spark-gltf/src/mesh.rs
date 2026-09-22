@@ -1,7 +1,7 @@
 //! 网格：POSITION / NORMAL / TEXCOORD_0 / JOINTS_0 / WEIGHTS_0 → 三角列表。
 
-use spark_types::Color;
 use spark_renderer::SkinnedVertex;
+use spark_types::Color;
 
 use crate::import::{GltfError, ImportedMesh, aabb_from_positions, default_color};
 

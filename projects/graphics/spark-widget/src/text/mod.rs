@@ -6,14 +6,17 @@ mod edit;
 pub use clipboard::{Clipboard, MemoryClipboard};
 pub use edit::{TextEditAction, apply_text_input};
 
-use spark_types::{Color, Vec2};
 use spark_font::GlyphCache;
+use spark_types::{Color, Vec2};
 
 /// 文本样式。
 #[derive(Debug, Clone)]
 pub struct TextStyle {
+    /// 字号（逻辑像素）。
     pub size: f32,
+    /// 前景色。
     pub color: Color,
+    /// 行高相对字号的倍数。
     pub line_height: f32,
 }
 
@@ -26,13 +29,17 @@ impl Default for TextStyle {
 /// 文本布局结果。
 #[derive(Debug, Clone, Default)]
 pub struct TextLayout {
+    /// 排版后占用的宽高。
     pub size: Vec2,
+    /// 首行基线相对顶边的偏移。
     pub baseline: f32,
+    /// 折行后的行数。
     pub line_count: usize,
 }
 
 /// 可替换的文本测量器。
 pub trait TextMeasurer: Send {
+    /// 测量 `text` 在给定样式与可选最大宽度下的布局结果。
     fn measure(&mut self, text: &str, style: &TextStyle, max_width: Option<f32>) -> TextLayout;
 }
 
@@ -52,14 +59,17 @@ pub struct FontMeasurer {
 }
 
 impl FontMeasurer {
+    /// 用已有字形缓存构造测量器。
     pub fn new(cache: GlyphCache) -> Self {
         Self { cache }
     }
 
+    /// 尝试加载系统默认字体；失败返回 `None`。
     pub fn try_system() -> Option<Self> {
         GlyphCache::load_system().ok().map(Self::new)
     }
 
+    /// 可变借用内部字形缓存（预热或调试）。
     pub fn cache_mut(&mut self) -> &mut GlyphCache {
         &mut self.cache
     }

@@ -71,8 +71,7 @@ export function loadSpark(_options: LoadOptions = {}): SparkHostBindings {
         loadBytes: (root, key) => host.loadBytes(root, key),
         assetLen: (id) => host.assetLen(id),
         runEditPlan: (root, mode, von) => host.runEditPlan(root, mode, von),
-        runEditPlanWithCaps: (root, mode, von, capabilities) =>
-            host.runEditPlanWithCaps(root, mode, von, capabilities),
+        runEditPlanWithCaps: (root, mode, von, capabilities) => host.runEditPlanWithCaps(root, mode, von, capabilities),
     };
     return _cached;
 }

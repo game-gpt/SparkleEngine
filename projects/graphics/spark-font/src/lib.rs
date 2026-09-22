@@ -2,7 +2,7 @@
 //!
 //! 本 crate **不**碰 GPU：`spark-renderer-wgpu` 只消费 `GlyphCache` 的图集字节与 UV，自行上传纹理。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},

@@ -86,8 +86,7 @@ function handle(msg) {
                 tools: [
                     {
                         name: "spark_script",
-                        description:
-                            "Run a Spark Edit Runtime VON plan (check / dry-run / apply). Prefer dry-run before apply.",
+                        description: "Run a Spark Edit Runtime VON plan (check / dry-run / apply). Prefer dry-run before apply.",
                         inputSchema: {
                             type: "object",
                             properties: {
@@ -102,8 +101,7 @@ function handle(msg) {
                                 capabilities: {
                                     type: "array",
                                     items: { type: "string" },
-                                    description:
-                                        "Defaults to read-only. apply requires project-edit or write-assets.",
+                                    description: "Defaults to read-only. apply requires project-edit or write-assets.",
                                     default: ["read-project"],
                                 },
                             },

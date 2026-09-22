@@ -20,10 +20,12 @@ pub struct ScriptQueryView<'a> {
 }
 
 impl<'a> ScriptQueryView<'a> {
+    /// 借用世界构造视图；调用方保证不以本视图为借口做结构变更。
     pub fn new(world: &'a World) -> Self {
         Self { world }
     }
 
+    /// 底层世界只读引用。
     pub fn world(&self) -> &'a World {
         self.world
     }
@@ -57,14 +59,17 @@ pub struct ScriptQuerySnapshot {
 }
 
 impl ScriptQuerySnapshot {
+    /// 空快照。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 从世界立即拍摄（遍历全部 [`ScriptArchetypeTag`]）。
     pub fn from_world(world: &World) -> Self {
         ScriptQueryView::new(world).to_snapshot()
     }
 
+    /// 从已有视图拍摄。
     pub fn from_view(view: &ScriptQueryView<'_>) -> Self {
         let mut by_archetype: HashMap<Arc<str>, Vec<u64>> = HashMap::new();
         view.world.for_each::<ScriptArchetypeTag>(|e, tag| {
@@ -73,10 +78,12 @@ impl ScriptQuerySnapshot {
         Self { by_archetype }
     }
 
+    /// 清空全部原型桶。
     pub fn clear(&mut self) {
         self.by_archetype.clear();
     }
 
+    /// 某原型下实体数量；未知原型为 0。
     pub fn count(&self, archetype: &str) -> usize {
         self.by_archetype.get(archetype).map(|v| v.len()).unwrap_or(0)
     }
@@ -86,6 +93,7 @@ impl ScriptQuerySnapshot {
         self.by_archetype.get(archetype).and_then(|v| v.get(index).copied())
     }
 
+    /// 快照中出现的全部原型名。
     pub fn archetypes(&self) -> impl Iterator<Item = &str> {
         self.by_archetype.keys().map(|k| k.as_ref())
     }

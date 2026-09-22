@@ -5,9 +5,9 @@
 use std::{cell::Cell, collections::HashMap};
 
 use bytemuck::{Pod, Zeroable};
-use spark_types::SparkError;
 use spark_renderer::{DrawList3d, MeshResidentKey, TexMeshVertex, TextureId, TextureUpload};
 use spark_shader::{BuiltinShader, create_builtin};
+use spark_types::SparkError;
 use wgpu::util::DeviceExt;
 
 use crate::game3d::mat4_to_cols_pub;
@@ -342,7 +342,12 @@ impl TexMeshGpu {
         }
     }
 
-    pub fn ingest_uploads(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, uploads: &[(TextureId, TextureUpload)]) -> Result<(), SparkError> {
+    pub fn ingest_uploads(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        uploads: &[(TextureId, TextureUpload)],
+    ) -> Result<(), SparkError> {
         for (id, upload) in uploads {
             let texture = crate::texture_upload::create_texture_from_upload(device, queue, upload)?;
             let view = texture.create_view(&Default::default());

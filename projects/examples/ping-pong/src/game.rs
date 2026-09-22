@@ -1,8 +1,8 @@
 //! 乒乓对局逻辑与绘制。
 
-use spark_types::{Color, Rect};
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_types::{Color, Rect};
 
 use crate::{ball::Ball, paddle::Paddle};
 

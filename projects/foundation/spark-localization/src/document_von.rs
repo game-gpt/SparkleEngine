@@ -18,17 +18,34 @@ use crate::{
 };
 
 /// VON 语言包解析错误。
+///
+/// 稳定码见 [`Self::code`]；行号从 1 起，供编辑器定位。
 #[derive(Debug)]
 pub enum DocumentVonError {
+    /// 复用清单侧 VON 词法/字符串错误。
     Manifest(ManifestVonError),
+    /// `locale` 字段无法解析为 BCP 47。
     Locale(LocaleParseError),
+    /// 缺少必填 `locale = ...`。
     MissingLocale,
+    /// 缺少必填 `namespace = ...`。
     MissingNamespace,
-    MissingAssign { line: usize },
-    UnknownField { field: String, line: usize },
+    /// 非空行缺少 `=` 赋值。
+    MissingAssign {
+        /// 1-based 行号。
+        line: usize,
+    },
+    /// 未知顶层字段（非 `locale` / `namespace` / `message.*`）。
+    UnknownField {
+        /// 原始字段名。
+        field: String,
+        /// 1-based 行号。
+        line: usize,
+    },
 }
 
 impl DocumentVonError {
+    /// 稳定机器码；嵌套变体转发源码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Manifest(e) => e.code(),
@@ -40,6 +57,7 @@ impl DocumentVonError {
         }
     }
 
+    /// 结构化参数（行号、字段名等）。
     pub fn args(&self) -> spark_types::ErrorArgs {
         use spark_types::{ErrorArg, ErrorArgs};
         match self {

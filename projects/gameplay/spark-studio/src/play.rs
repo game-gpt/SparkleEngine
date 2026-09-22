@@ -7,13 +7,20 @@ use tetris::TetrisApp;
 
 use crate::project::{ProjectInfo, ProjectKind};
 
+/// 进程内 Play 会话：持有某一个示例宿主。
 pub enum PlaySession {
+    /// 乒乓示例。
     PingPong(PingPongGame),
+    /// 俄罗斯方块示例。
     Tetris(TetrisApp),
+    /// 贪吃蛇示例。
     Snake(SnakeApp),
 }
 
 impl PlaySession {
+    /// 按项目 `runTarget` / 名称 / kind 解析并启动会话。
+    ///
+    /// 解析失败时仍按 `ProjectKind` 兜底，避免 Play 按钮无响应；仅当构造失败才返回 `Err`。
     pub fn start(project: &ProjectInfo) -> Result<Self, String> {
         if let Some(session) = resolve_by_target(project) {
             return Ok(session);
@@ -29,7 +36,7 @@ impl PlaySession {
         }
     }
 
-    /// 返回 `true` 表示会话应结束（回编辑器）。
+    /// 推进一帧。返回 `true` 表示会话应结束（回编辑器）。
     pub fn update(&mut self, frame: &FrameCtx<'_>) -> bool {
         match self {
             Self::PingPong(g) => {
@@ -47,6 +54,7 @@ impl PlaySession {
         }
     }
 
+    /// 绘制当前示例到 `DrawList`。
     pub fn draw(&mut self, draw: &mut DrawList) {
         match self {
             Self::PingPong(g) => g.draw(draw),
@@ -55,6 +63,7 @@ impl PlaySession {
         }
     }
 
+    /// 状态栏 / 日志用短标签。
     pub fn label(&self) -> &'static str {
         match self {
             Self::PingPong(_) => "ping-pong",

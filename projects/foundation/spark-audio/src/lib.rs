@@ -4,7 +4,7 @@
 //!
 //! 宿主侧基于 rodio 0.22：`MixerDeviceSink` + [`Player`]。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::{
     f32::consts::PI,
     num::{NonZeroU16, NonZeroU32},

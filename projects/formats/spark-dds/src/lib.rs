@@ -11,15 +11,15 @@
 //! `texture_format_unsupported`（未映射 FourCC / DXGI）、`texture_upload_invalid`（非 2D / 数组）、
 //! `texture_data_length_mismatch` / `image_dimension_overflow`（mip 载荷不足或尺寸溢出）。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 
 use std::{path::Path, sync::Arc};
 
-use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::{
-    AlphaMode, ColorSpace, CpuCopyPolicy, MipmapPolicy, Residency, TextureData, TextureDesc, TextureDimension, TextureFormat,
-    TextureLayout, TextureUpload, TextureUsage, UploadPolicy,
+    AlphaMode, ColorSpace, CpuCopyPolicy, MipmapPolicy, Residency, TextureData, TextureDesc, TextureDimension, TextureFormat, TextureLayout,
+    TextureUpload, TextureUsage, UploadPolicy,
 };
+use spark_types::{ErrorArg, SparkError, codes};
 
 const MAGIC: &[u8; 4] = b"DDS ";
 const DDS_HEADER_SIZE: usize = 124;
@@ -49,9 +49,8 @@ const DXGI_BC7_UNORM_SRGB: u32 = 99;
 pub fn decode_path(path: impl AsRef<Path>) -> Result<TextureUpload, SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
-    let bytes = std::fs::read(path).map_err(|e| {
-        SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e)
-    })?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e))?;
     decode_memory(&bytes).map_err(|e| e.arg("path", path_arg))
 }
 
@@ -116,10 +115,12 @@ pub fn decode_memory(bytes: &[u8]) -> Result<TextureUpload, SparkError> {
             }
             data_offset += 20;
             map_dxgi(dxgi)?
-        } else {
+        }
+        else {
             map_four_cc(four_cc)?
         }
-    } else if pf_flags & DDPF_RGB != 0 {
+    }
+    else if pf_flags & DDPF_RGB != 0 {
         // 仅接受 32-bit BGRA/RGBA 掩码常见布局 → 当作 RGBA8 上传（字节原样）。
         let rgb_bit_count = read_u32(pf, 12)?;
         if rgb_bit_count != 32 || pf_flags & DDPF_ALPHAPIXELS == 0 {
@@ -128,7 +129,8 @@ pub fn decode_memory(bytes: &[u8]) -> Result<TextureUpload, SparkError> {
                 .arg("reason", ErrorArg::String(Arc::from("uncompressed_must_be_32bit_rgba"))));
         }
         (TextureFormat::Rgba8Unorm, false)
-    } else {
+    }
+    else {
         return Err(SparkError::new(codes::texture_format_unsupported())
             .arg("format", ErrorArg::String(Arc::from("dds")))
             .arg("reason", ErrorArg::String(Arc::from("unknown_pixelformat"))));
@@ -146,14 +148,11 @@ pub fn decode_memory(bytes: &[u8]) -> Result<TextureUpload, SparkError> {
         mip_offsets.push(packed.len() as u64);
         let blocks_x = level_w.div_ceil(bw) as usize;
         let blocks_y = level_h.div_ceil(bh) as usize;
-        let level_bytes = blocks_x
-            .checked_mul(blocks_y)
-            .and_then(|n| n.checked_mul(bpb as usize))
-            .ok_or_else(|| {
-                SparkError::new(codes::image_dimension_overflow())
-                    .arg("width", ErrorArg::Unsigned(level_w as u64))
-                    .arg("height", ErrorArg::Unsigned(level_h as u64))
-            })?;
+        let level_bytes = blocks_x.checked_mul(blocks_y).and_then(|n| n.checked_mul(bpb as usize)).ok_or_else(|| {
+            SparkError::new(codes::image_dimension_overflow())
+                .arg("width", ErrorArg::Unsigned(level_w as u64))
+                .arg("height", ErrorArg::Unsigned(level_h as u64))
+        })?;
         if cursor.saturating_add(level_bytes) > payload.len() {
             return Err(SparkError::new(codes::texture_data_length_mismatch())
                 .arg("expected", ErrorArg::Unsigned(level_bytes as u64))

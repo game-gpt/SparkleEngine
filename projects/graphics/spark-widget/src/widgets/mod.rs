@@ -30,6 +30,7 @@ pub struct WidgetBuilder {
 }
 
 impl WidgetBuilder {
+    /// 按控件种类构造；其余字段取默认（可链式覆盖）。
     pub fn new(kind: WidgetKind) -> Self {
         Self {
             kind,
@@ -45,57 +46,68 @@ impl WidgetBuilder {
         }
     }
 
+    /// 设置稳定键（供 reconcile / 焦点恢复）。
     pub fn key(mut self, key: impl Into<String>) -> Self {
         self.key = Some(key.into());
         self
     }
 
+    /// 覆盖样式（背景、字色等；未设字段走主题默认）。
     pub fn style(mut self, style: Style) -> Self {
         self.style = style;
         self
     }
 
+    /// 覆盖布局规格（方向、尺寸、间距）。
     pub fn layout(mut self, layout: LayoutSpec) -> Self {
         self.layout = layout;
         self
     }
 
+    /// 设置显示文案（Label / Button / 勾选旁文字等）。
     pub fn text(mut self, text: impl Into<String>) -> Self {
         self.content.text = Some(text.into());
         self
     }
 
+    /// 点击时入队的 [`UiCommand`]（由 runtime / ViewModel 消费）。
     pub fn on_click(mut self, command: crate::command::UiCommand) -> Self {
         self.content.click_command = Some(command);
         self
     }
 
+    /// 勾选态（Checkbox / Toggle / Radio）。
     pub fn checked(mut self, checked: bool) -> Self {
         self.content.checked = checked;
         self
     }
 
+    /// 标量值（Slider / Progress 当前值）。
     pub fn value(mut self, value: f32) -> Self {
         self.content.value = value;
         self
     }
 
+    /// 标量取值范围（Slider / Progress）。
     pub fn value_range(mut self, min: f32, max: f32) -> Self {
         self.content.value_min = min;
         self.content.value_max = max;
         self
     }
 
+    /// 是否可聚焦；`None` 时按控件种类默认。
     pub fn focusable(mut self, focusable: bool) -> Self {
         self.focusable = Some(focusable);
         self
     }
 
+    /// Tab 序；同组内按数值排序。
     pub fn tab_index(mut self, tab_index: i32) -> Self {
         self.tab_index = Some(tab_index);
         self
     }
 
+    /// 方向键邻居（手柄 / 电视焦点）。
     pub fn neighbors(mut self, neighbors: crate::focus::Neighbors) -> Self {
         self.neighbors = Some(neighbors);
         self
@@ -109,31 +121,37 @@ impl WidgetBuilder {
         self
     }
 
+    /// 是否可作为拖放源。
     pub fn drag_source(mut self, enabled: bool) -> Self {
         self.content.drag_source = enabled;
         self
     }
 
+    /// 是否可作为拖放目标。
     pub fn drop_target(mut self, enabled: bool) -> Self {
         self.content.drop_target = enabled;
         self
     }
 
+    /// 绑定图片源（`AssetId` + UV / tint）。
     pub fn image(mut self, image: crate::asset::UiImage) -> Self {
         self.content.image = Some(image);
         self
     }
 
+    /// 点击后是否停止向祖先冒泡。
     pub fn stop_click_propagation(mut self, stop: bool) -> Self {
         self.content.stop_click_propagation = stop;
         self
     }
 
+    /// 点击后是否抑制控件内置默认行为（如 Toggle 翻转）。
     pub fn prevent_click_default(mut self, prevent: bool) -> Self {
         self.content.prevent_click_default = prevent;
         self
     }
 
+    /// 指定所属 [`UiLayer`]（挂载时写入节点）。
     pub fn layer(mut self, layer: crate::runtime::UiLayer) -> Self {
         self.layer = Some(layer);
         self
@@ -149,11 +167,13 @@ impl WidgetBuilder {
         self.key.as_deref()
     }
 
+    /// 追加一个子 builder。
     pub fn child(mut self, child: WidgetBuilder) -> Self {
         self.children.push(child);
         self
     }
 
+    /// 追加多个子 builder。
     pub fn children(mut self, children: impl IntoIterator<Item = WidgetBuilder>) -> Self {
         self.children.extend(children);
         self
@@ -188,12 +208,12 @@ impl WidgetBuilder {
             return None;
         }
         let inherited = tree.node(parent).map(|n| n.layer);
-        let existing =
-            find_reconcile_match(tree, parent, self.kind, self.key.as_deref(), parent_claimed);
+        let existing = find_reconcile_match(tree, parent, self.kind, self.key.as_deref(), parent_claimed);
         let id = if let Some(id) = existing {
             self.apply_to(tree, id, inherited);
             id
-        } else {
+        }
+        else {
             let id = tree.mount(parent, self.kind)?;
             self.apply_to(tree, id, inherited);
             id
@@ -263,82 +283,90 @@ fn find_reconcile_match(
 ) -> Option<WidgetId> {
     let children = tree.node(parent)?.children.clone();
     if let Some(key) = key {
-        return children.into_iter().find(|&id| {
-            !claimed.contains(&id)
-                && tree
-                    .node(id)
-                    .is_some_and(|n| n.kind == kind && n.key.as_deref() == Some(key))
-        });
+        return children
+            .into_iter()
+            .find(|&id| !claimed.contains(&id) && tree.node(id).is_some_and(|n| n.kind == kind && n.key.as_deref() == Some(key)));
     }
     // 无 key：取第一个同 kind、也无 key、且尚未占用的子节点。
-    children.into_iter().find(|&id| {
-        !claimed.contains(&id)
-            && tree
-                .node(id)
-                .is_some_and(|n| n.kind == kind && n.key.is_none())
-    })
+    children.into_iter().find(|&id| !claimed.contains(&id) && tree.node(id).is_some_and(|n| n.kind == kind && n.key.is_none()))
 }
 
+/// 纵向弹性容器（Column）。
 pub fn column() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec::vertical())
 }
 
+/// 横向弹性容器（Row）。
 pub fn row() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec { direction: FlexDirection::Row, ..LayoutSpec::horizontal() })
 }
 
+/// 面板容器：纵向布局，默认带面板语义（主题可画底）。
 pub fn panel() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Panel).layout(LayoutSpec::vertical())
 }
 
+/// 纯文本标签。
 pub fn label_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Label)
 }
 
+/// 图片控件；默认固有尺寸 32×32 逻辑像素。
 pub fn image_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Image).layout(LayoutSpec { width: Size::Px(32.0), height: Size::Px(32.0), ..LayoutSpec::default() })
 }
 
+/// 按钮。
 pub fn button_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Button)
 }
 
+/// 复选框；默认行高 24。
 pub fn checkbox_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Checkbox).layout(LayoutSpec { height: Size::Px(24.0), ..LayoutSpec::horizontal() })
 }
 
+/// 开关；默认行高 24。
 pub fn toggle_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Toggle).layout(LayoutSpec { height: Size::Px(24.0), ..LayoutSpec::horizontal() })
 }
 
+/// 单选项；默认行高 24。
 pub fn radio_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Radio).layout(LayoutSpec { height: Size::Px(24.0), ..LayoutSpec::horizontal() })
 }
 
+/// 滑条；默认宽填满、高 24。
 pub fn slider_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Slider).layout(LayoutSpec { width: Size::Fill, height: Size::Px(24.0), ..LayoutSpec::horizontal() })
 }
 
+/// 进度条；默认宽填满、高 12。
 pub fn progress_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::ProgressBar).layout(LayoutSpec { width: Size::Fill, height: Size::Px(12.0), ..LayoutSpec::horizontal() })
 }
 
+/// 单行文本输入；默认宽填满、高 32。
 pub fn text_field_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::TextField).layout(LayoutSpec { width: Size::Fill, height: Size::Px(32.0), ..LayoutSpec::horizontal() })
 }
 
+/// 分隔线；默认宽填满、高 1。
 pub fn separator_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Separator).layout(LayoutSpec { width: Size::Fill, height: Size::Px(1.0), ..LayoutSpec::default() })
 }
 
+/// 弹性空白（`flex_grow = 1`），用于推开兄弟节点。
 pub fn spacer_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Spacer).layout(LayoutSpec { flex_grow: 1.0, ..LayoutSpec::default() })
 }
 
+/// 网格容器；`columns` 列，默认间距 8。
 pub fn grid(columns: u32) -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec::grid(columns).with_gap(8.0))
 }
 
+/// 可滚动视口；默认宽高填满、纵向排布子项。
 pub fn scroll_view() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::ScrollView).layout(LayoutSpec { width: Size::Fill, height: Size::Fill, ..LayoutSpec::vertical() })
 }
@@ -348,6 +376,7 @@ pub fn list_view() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::ListView).layout(LayoutSpec { width: Size::Fill, height: Size::Fill, ..LayoutSpec::vertical() })
 }
 
+/// 居中全屏模态容器（overlay 布局）。
 pub fn modal_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Modal).layout(LayoutSpec {
         width: Size::Fill,
@@ -358,6 +387,7 @@ pub fn modal_widget() -> WidgetBuilder {
     })
 }
 
+/// Tooltip 内容壳；默认内边距 8。
 pub fn tooltip_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Tooltip).layout(LayoutSpec {
         width: Size::Auto,
@@ -367,6 +397,7 @@ pub fn tooltip_widget() -> WidgetBuilder {
     })
 }
 
+/// Popup 内容壳；默认内边距 8。
 pub fn popup_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Popup).layout(LayoutSpec {
         width: Size::Auto,
@@ -376,6 +407,7 @@ pub fn popup_widget() -> WidgetBuilder {
     })
 }
 
+/// Toast 内容壳；默认水平 16 / 竖直 10 内边距。
 pub fn toast_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Toast).layout(LayoutSpec {
         width: Size::Auto,
@@ -385,6 +417,7 @@ pub fn toast_widget() -> WidgetBuilder {
     })
 }
 
+/// Overlay 层根容器（`Layout::Overlay`）。
 pub fn overlay_root() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Container).layout(LayoutSpec::overlay())
 }

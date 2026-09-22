@@ -1,7 +1,9 @@
 //! 解析 VON：优先 `ops` 计划；含 `calls` / `profile` 时按 Edit profile 宿主脚本降级。
 
-use crate::host_api::{EDIT_PROFILE_ID, EditHostScript};
-use crate::plan::EditPlan;
+use crate::{
+    host_api::{EDIT_PROFILE_ID, EditHostScript},
+    plan::EditPlan,
+};
 
 /// 解析编辑源文本。
 pub fn parse_edit_source(text: &str) -> Result<EditPlan, String> {

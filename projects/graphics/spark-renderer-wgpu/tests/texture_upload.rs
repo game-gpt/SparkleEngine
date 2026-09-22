@@ -46,9 +46,7 @@ fn upload_rgba8_srgb_with_cpu_mips() {
         eprintln!("skip: no wgpu adapter");
         return;
     };
-    let upload = TextureUpload::rgba8_srgb(4, 4, vec![255u8; 4 * 4 * 4])
-        .unwrap()
-        .with_debug_name("test-rgba8-mips");
+    let upload = TextureUpload::rgba8_srgb(4, 4, vec![255u8; 4 * 4 * 4]).unwrap().with_debug_name("test-rgba8-mips");
     assert_eq!(expected_mip_levels(&upload), 3);
     let tex = create_texture_from_upload(&device, &queue, &upload).unwrap();
     assert_eq!(tex.mip_level_count(), 3);
@@ -64,10 +62,7 @@ fn upload_rgba8_single_mip_no_generate() {
         eprintln!("skip: no wgpu adapter");
         return;
     };
-    let upload = TextureUpload::rgba8(2, 2, vec![0u8; 16], false)
-        .unwrap()
-        .with_mipmap(MipmapPolicy::None)
-        .with_debug_name("test-rgba8-flat");
+    let upload = TextureUpload::rgba8(2, 2, vec![0u8; 16], false).unwrap().with_mipmap(MipmapPolicy::None).with_debug_name("test-rgba8-flat");
     assert_eq!(expected_mip_levels(&upload), 1);
     let tex = create_texture_from_upload(&device, &queue, &upload).unwrap();
     assert_eq!(tex.mip_level_count(), 1);
@@ -97,9 +92,7 @@ fn with_caps_rejects_bc_on_conservative() {
     let caps = DeviceCaps::conservative();
     let mut upload = TextureUpload::rgba8_srgb(4, 4, vec![0u8; 64]).unwrap().with_mipmap(MipmapPolicy::None);
     upload.desc.format = TextureFormat::Bc7RgbaUnorm;
-    upload.data = TextureData {
-        layout: TextureLayout::tightly_packed_2d(TextureFormat::Bc7RgbaUnorm, 4, 4),
-        bytes: std::sync::Arc::from(vec![0u8; 16]),
-    };
+    upload.data =
+        TextureData { layout: TextureLayout::tightly_packed_2d(TextureFormat::Bc7RgbaUnorm, 4, 4), bytes: std::sync::Arc::from(vec![0u8; 16]) };
     assert!(create_texture_from_upload_with_caps(&device, &queue, &upload, &caps).is_err());
 }

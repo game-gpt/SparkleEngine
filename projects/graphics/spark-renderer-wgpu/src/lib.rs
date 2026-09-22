@@ -5,7 +5,7 @@
 //! 3D 路径支持 `MeshResidentKey` 网格驻留、`TexMeshCmd` 纹理网格与 `SkinnedMeshCmd` 蒙皮网格。
 //! **winit 止于此 crate**：游戏只看见 `spark-renderer` / `spark-input` 类型。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod bloom;
 mod dyn_ubo;
 mod game3d;
@@ -740,8 +740,16 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
 pub fn run_window_2d<H: GameHost + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
     let event_loop = EventLoop::new().map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    let mut app =
-        HostApp { config, host, input: Input::default(), state: None, last: Instant::now(), scale: 1.0, last_metrics_log: Instant::now(), cursor_visible_applied: true };
+    let mut app = HostApp {
+        config,
+        host,
+        input: Input::default(),
+        state: None,
+        last: Instant::now(),
+        scale: 1.0,
+        last_metrics_log: Instant::now(),
+        cursor_visible_applied: true,
+    };
     event_loop.run_app(&mut app).map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
 }
 

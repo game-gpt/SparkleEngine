@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::{DeviceCaps, MipmapPolicy, TextureDimension, TextureFormat, TextureUpload, TextureUsage};
+use spark_types::{ErrorArg, SparkError, codes};
 
 use crate::mipmap::{create_rgba_texture_with_mips, mip_level_count};
 
@@ -42,22 +42,10 @@ pub fn map_texture_format(format: TextureFormat) -> Result<wgpu::TextureFormat, 
         TextureFormat::Bc7RgbaUnormSrgb => wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         TextureFormat::Etc2Rgba8Unorm => wgpu::TextureFormat::Etc2Rgba8Unorm,
         TextureFormat::Etc2Rgba8UnormSrgb => wgpu::TextureFormat::Etc2Rgba8UnormSrgb,
-        TextureFormat::Astc4x4Unorm => wgpu::TextureFormat::Astc {
-            block: wgpu::AstcBlock::B4x4,
-            channel: wgpu::AstcChannel::Unorm,
-        },
-        TextureFormat::Astc4x4UnormSrgb => wgpu::TextureFormat::Astc {
-            block: wgpu::AstcBlock::B4x4,
-            channel: wgpu::AstcChannel::UnormSrgb,
-        },
-        TextureFormat::Astc6x6Unorm => wgpu::TextureFormat::Astc {
-            block: wgpu::AstcBlock::B6x6,
-            channel: wgpu::AstcChannel::Unorm,
-        },
-        TextureFormat::Astc6x6UnormSrgb => wgpu::TextureFormat::Astc {
-            block: wgpu::AstcBlock::B6x6,
-            channel: wgpu::AstcChannel::UnormSrgb,
-        },
+        TextureFormat::Astc4x4Unorm => wgpu::TextureFormat::Astc { block: wgpu::AstcBlock::B4x4, channel: wgpu::AstcChannel::Unorm },
+        TextureFormat::Astc4x4UnormSrgb => wgpu::TextureFormat::Astc { block: wgpu::AstcBlock::B4x4, channel: wgpu::AstcChannel::UnormSrgb },
+        TextureFormat::Astc6x6Unorm => wgpu::TextureFormat::Astc { block: wgpu::AstcBlock::B6x6, channel: wgpu::AstcChannel::Unorm },
+        TextureFormat::Astc6x6UnormSrgb => wgpu::TextureFormat::Astc { block: wgpu::AstcBlock::B6x6, channel: wgpu::AstcChannel::UnormSrgb },
     })
 }
 
@@ -89,7 +77,8 @@ fn map_usage(usage: TextureUsage) -> wgpu::TextureUsages {
     if out.is_empty() {
         // 不变式：采样纹理至少能上传并绑定。
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST
-    } else {
+    }
+    else {
         out
     }
 }
@@ -98,11 +87,7 @@ fn map_usage(usage: TextureUsage) -> wgpu::TextureUsages {
 ///
 /// - `MipmapPolicy::GenerateCpu`：仅未压缩 RGBA8（线性 / sRGB），走 CPU 盒式 mip。
 /// - `None` / `Provided`：按 layout 的 mip 偏移逐级 `write_texture`（含压缩格式）。
-pub fn create_texture_from_upload(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    upload: &TextureUpload,
-) -> Result<wgpu::Texture, SparkError> {
+pub fn create_texture_from_upload(device: &wgpu::Device, queue: &wgpu::Queue, upload: &TextureUpload) -> Result<wgpu::Texture, SparkError> {
     upload.validate()?;
     create_texture_from_upload_validated(device, queue, upload)
 }
@@ -129,8 +114,9 @@ fn create_texture_from_upload_validated(
     match upload.mipmap {
         MipmapPolicy::GenerateCpu => {
             if !matches!(upload.desc.format, TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb) {
-                return Err(SparkError::new(codes::texture_upload_invalid())
-                    .arg("reason", ErrorArg::String(Arc::from("generate_cpu_rgba8_only"))));
+                return Err(
+                    SparkError::new(codes::texture_upload_invalid()).arg("reason", ErrorArg::String(Arc::from("generate_cpu_rgba8_only")))
+                );
             }
             Ok(create_rgba_texture_with_mips(
                 device,
@@ -164,11 +150,7 @@ fn create_with_explicit_mips(
 
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
-        size: wgpu::Extent3d {
-            width: desc.width,
-            height: desc.height,
-            depth_or_array_layers: desc.depth_or_layers,
-        },
+        size: wgpu::Extent3d { width: desc.width, height: desc.height, depth_or_array_layers: desc.depth_or_layers },
         mip_level_count: mip_levels,
         sample_count: desc.sample_count.max(1),
         dimension: map_dimension(desc.dimension),
@@ -188,14 +170,8 @@ fn create_with_explicit_mips(
         let blocks_x = level_w.div_ceil(bw);
         let blocks_y = level_h.div_ceil(bh);
         // 非 0 级始终按紧凑块布局推算行距；0 级可用显式 row_pitch。
-        let row_pitch = if layout.row_pitch > 0 && level == 0 {
-            layout.row_pitch
-        } else {
-            blocks_x.saturating_mul(bpb)
-        };
-        let level_bytes = (row_pitch as usize)
-            .saturating_mul(blocks_y as usize)
-            .saturating_mul(desc.depth_or_layers as usize);
+        let row_pitch = if layout.row_pitch > 0 && level == 0 { layout.row_pitch } else { blocks_x.saturating_mul(bpb) };
+        let level_bytes = (row_pitch as usize).saturating_mul(blocks_y as usize).saturating_mul(desc.depth_or_layers as usize);
         if offset.saturating_add(level_bytes) > bytes.len() {
             return Err(SparkError::new(codes::texture_data_length_mismatch())
                 .arg("mip_level", ErrorArg::Unsigned(level as u64))
@@ -205,23 +181,10 @@ fn create_with_explicit_mips(
         }
         let slice = &bytes[offset..offset + level_bytes];
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: level,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
+            wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: level, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
             slice,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(row_pitch),
-                rows_per_image: Some(blocks_y),
-            },
-            wgpu::Extent3d {
-                width: level_w,
-                height: level_h,
-                depth_or_array_layers: desc.depth_or_layers,
-            },
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row_pitch), rows_per_image: Some(blocks_y) },
+            wgpu::Extent3d { width: level_w, height: level_h, depth_or_array_layers: desc.depth_or_layers },
         );
     }
     Ok(texture)

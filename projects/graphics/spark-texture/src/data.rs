@@ -78,8 +78,9 @@ impl TextureData {
     /// 宽高为 0 → `texture_size_invalid`；长度不符 → `texture_data_length_mismatch`。
     pub fn from_uncompressed(format: TextureFormat, width: u32, height: u32, bytes: impl Into<Arc<[u8]>>) -> Result<Self, SparkError> {
         if format.is_compressed() {
-            return Err(SparkError::new(codes::texture_upload_invalid())
-                .arg("reason", ErrorArg::String("compressed_use_explicit_layout".into())));
+            return Err(
+                SparkError::new(codes::texture_upload_invalid()).arg("reason", ErrorArg::String("compressed_use_explicit_layout".into()))
+            );
         }
         if width == 0 || height == 0 {
             return Err(SparkError::new(codes::texture_size_invalid())
@@ -104,7 +105,7 @@ impl TextureData {
     /// 相对 [`TextureDesc`] 做轻量一致性检查（mip / 层偏移数量与非空字节）。
     ///
     /// `mip_offsets.len()` 须等于 `desc.mip_levels`；层偏移在非 D3 时须匹配 `depth_or_layers`
-    ///（或退化为单元素）。空字节缓冲 → `texture_data_length_mismatch`。
+    /// （或退化为单元素）。空字节缓冲 → `texture_data_length_mismatch`。
     pub fn validate_against(&self, desc: &TextureDesc) -> Result<(), SparkError> {
         if self.layout.mip_offsets.len() as u32 != desc.mip_levels {
             return Err(SparkError::new(codes::texture_layout_invalid())

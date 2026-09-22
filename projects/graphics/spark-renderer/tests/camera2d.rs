@@ -1,6 +1,6 @@
 //! 自 `src/camera2d.rs` 迁出的原 `#[cfg(test)] mod tests`。
-use spark_types::Vec2;
 use spark_renderer::*;
+use spark_types::Vec2;
 
 #[test]
 fn roundtrip_with_zoom() {

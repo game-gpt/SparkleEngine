@@ -1,13 +1,29 @@
 //! 单位指令队列（移动 / 攻击目标点 / 停止）。
+//!
+//! 同一单位新指令会替换旧指令。[`CommandQueue::dispatch`] 到达目标或 `Stop` 后移除条目。
 
 use spark_types::Vec2;
 
 use crate::unit::{PlayerId, UnitId, UnitRoster};
 
+/// 可下发给单位的指令。
 #[derive(Debug, Clone)]
 pub enum Command {
-    MoveTo { target: Vec2, speed: f32 },
-    AttackMove { target: Vec2, speed: f32 },
+    /// 移向目标点。
+    MoveTo {
+        /// 世界坐标目标。
+        target: Vec2,
+        /// 移动速度（世界单位 / 秒）。
+        speed: f32,
+    },
+    /// 攻击移动（本壳与 MoveTo 同路径推进，战斗语义留给游戏仓）。
+    AttackMove {
+        /// 世界坐标目标。
+        target: Vec2,
+        /// 移动速度。
+        speed: f32,
+    },
+    /// 立即停止并清除该单位指令。
     Stop,
 }
 
@@ -17,23 +33,27 @@ struct Queued {
     cmd: Command,
 }
 
+/// 每单位至多一条挂起指令的队列。
 #[derive(Debug, Default)]
 pub struct CommandQueue {
     items: Vec<Queued>,
 }
 
 impl CommandQueue {
+    /// 下发或替换某单位的指令。
     pub fn issue(&mut self, unit: UnitId, cmd: Command) {
         self.items.retain(|q| q.unit != unit);
         self.items.push(Queued { unit, cmd });
     }
 
+    /// 对多个单位各下发同一指令的克隆。
     pub fn issue_selection(&mut self, units: &[UnitId], cmd: Command) {
         for &u in units {
             self.issue(u, cmd.clone());
         }
     }
 
+    /// 清除某单位挂起指令。
     pub fn clear_unit(&mut self, unit: UnitId) {
         self.items.retain(|q| q.unit != unit);
     }

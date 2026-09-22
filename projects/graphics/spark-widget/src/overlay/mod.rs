@@ -1,4 +1,7 @@
 //! Overlay / Modal / Tooltip 层管理。
+//!
+//! 浮层按 [`OverlayLayer`] 排序叠在 GUI 之上；[`OverlayManager`] 负责登记、
+//! TTL、锚点定位与顶层查询，真正挂载仍走 [`WidgetTree`](crate::tree::WidgetTree)。
 
 use spark_types::{Rect, Vec2};
 
@@ -8,48 +11,65 @@ use crate::{
     tree::WidgetTree,
 };
 
+/// 浮层叠放顺序（数值越大越靠上）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OverlayLayer {
+    /// 普通浮层基底。
     Base,
+    /// 弹出菜单 / 下拉。
     Popup,
+    /// 悬停提示。
     Tooltip,
+    /// 模态对话框（通常截获焦点）。
     Modal,
+    /// 短暂提示条。
     Toast,
+    /// 拖放预览残影。
     DragPreview,
+    /// 自定义光标层。
     Cursor,
 }
 
+/// 已登记的一条浮层：控件 ID + 层 + 锚点 / 关闭策略。
 #[derive(Debug, Clone)]
 pub struct OverlayEntry {
+    /// 浮层根控件 ID。
     pub id: WidgetId,
+    /// 叠放层。
     pub layer: OverlayLayer,
     /// 锚点控件：定位时贴在其下方（溢出则翻到上方）。
     pub anchor: Option<WidgetId>,
+    /// 点击浮层外是否关闭（Popup 默认开启）。
     pub dismiss_on_outside: bool,
     /// 剩余存活时间（秒）。`None` 表示不自动关闭。
     pub ttl: Option<f32>,
 }
 
+/// 浮层登记表：按层排序，供 runtime 打开 / 关闭 / 计时。
 #[derive(Debug, Default)]
 pub struct OverlayManager {
     entries: Vec<OverlayEntry>,
 }
 
 impl OverlayManager {
+    /// 以默认策略登记一条浮层（Popup 默认点击外部关闭）。
     pub fn push(&mut self, id: WidgetId, layer: OverlayLayer) {
         self.push_entry(OverlayEntry { id, layer, anchor: None, dismiss_on_outside: matches!(layer, OverlayLayer::Popup), ttl: None });
     }
 
+    /// 登记完整条目；同 ID 先移除再插入，并按层重排。
     pub fn push_entry(&mut self, entry: OverlayEntry) {
         self.entries.retain(|e| e.id != entry.id);
         self.entries.push(entry);
         self.entries.sort_by_key(|e| e.layer);
     }
 
+    /// 按 ID 移除登记（不卸载树节点，由调用方负责）。
     pub fn remove(&mut self, id: WidgetId) {
         self.entries.retain(|e| e.id != id);
     }
 
+    /// 移除指定层全部条目，并返回被移除的控件 ID。
     pub fn remove_layer(&mut self, layer: OverlayLayer) -> Vec<WidgetId> {
         let mut removed = Vec::new();
         self.entries.retain(|e| {
@@ -64,10 +84,12 @@ impl OverlayManager {
         removed
     }
 
+    /// 按当前叠放顺序迭代全部浮层。
     pub fn iter(&self) -> impl Iterator<Item = &OverlayEntry> {
         self.entries.iter()
     }
 
+    /// 是否已登记该控件为浮层。
     pub fn contains(&self, id: WidgetId) -> bool {
         self.entries.iter().any(|e| e.id == id)
     }
@@ -77,6 +99,7 @@ impl OverlayManager {
         self.entries.last()
     }
 
+    /// 自顶向下找最近的 Modal 浮层根 ID。
     pub fn top_modal(&self) -> Option<WidgetId> {
         self.entries.iter().rev().find(|e| e.layer == OverlayLayer::Modal).map(|e| e.id)
     }
@@ -86,6 +109,7 @@ impl OverlayManager {
         self.entries.pop()
     }
 
+    /// 是否没有任何浮层。
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }

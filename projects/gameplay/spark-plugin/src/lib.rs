@@ -7,7 +7,7 @@
 //!
 //! 插件只负责声明元信息，并把原生函数注册到 [`Vm`]。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::fmt;
 
 use spark_vm::Vm;

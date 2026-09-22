@@ -2,7 +2,7 @@
 //!
 //! 解析只走 [`ValkyrieBuilder`]。正式编译只经 `spark-ir`；不支持的构造必须报错。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod lower;
 mod native_sig;
 

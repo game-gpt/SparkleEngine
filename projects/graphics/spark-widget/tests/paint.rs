@@ -1,8 +1,8 @@
 //! 自 `src/paint/mod.rs` 迁出的原 `#[cfg(test)] mod tests`。
 use spark_widget::*;
 
-use spark_types::{Color, Vec2};
 use spark_renderer::DrawList;
+use spark_types::{Color, Vec2};
 use spark_widget::{
     layout::{LayoutSpec, Size, UiMetrics, run_layout},
     text::EstimateMeasurer,

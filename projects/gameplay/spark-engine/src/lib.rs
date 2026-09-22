@@ -8,7 +8,8 @@
 //! **不**提供游戏内容权威（方块 / 配方等由游戏仓解释 [`DataRegistry`]）。
 //! Rust 宿主若直接需要能力，请 path 依赖对应 crate，勿把 Rust API 伪装成插件。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
+
 pub mod access_policy;
 pub mod api;
 pub mod app;
@@ -77,42 +78,67 @@ use crate::api::install_builtins;
 /// 引擎壳结构化错误。`Display` 只输出稳定码。
 #[derive(Debug)]
 pub enum EngineError {
+    /// 下层 `spark-types` 错误透传。
     Spark(SparkError),
+    /// 脚本编译 / 装载 / 运行时错误透传。
     Script(ScriptError),
+    /// 脚本插件登记失败透传。
     Plugin(PluginError),
+    /// 按 id 查找模组失败。
     ModNotFound {
+        /// 缺失的模组 id。
         id: String,
     },
+    /// 装载时声明了未发现的依赖。
     MissingDep {
+        /// 声明依赖的模组 id。
         mod_id: String,
+        /// 缺失的依赖 id。
         dep: String,
     },
+    /// 依赖图存在环。
     CyclicDeps {
+        /// 仍在环中的模组 id 列表（逗号拼接）。
         mods: String,
     },
+    /// 同一 mods 根下出现重复模组 id。
     DuplicateMod {
+        /// 重复的模组 id。
         id: String,
     },
+    /// `mod.von` 语法/字段解析失败。
     ManifestParse {
+        /// 清单文件路径。
         path: String,
+        /// 具体解析错误。
         source: crate::manifest::ManifestParseError,
     },
+    /// 清单缺少必填 `id`。
     ManifestMissingId {
+        /// 清单文件路径。
         path: String,
     },
     /// 文件系统失败：`kind` 为稳定机器令牌（如 `not_found`），不是 OS 本地化句子。
     Io {
+        /// 相关路径（展示用字符串）。
         path: String,
+        /// 稳定 `ErrorKind` 令牌。
         kind: String,
     },
+    /// 触发命名钩子时某模组导出调用失败。
     HookFailed {
+        /// 钩子名。
         hook: String,
+        /// 失败的模组 id。
         mod_id: String,
+        /// 失败的导出函数名。
         function: String,
+        /// 底层脚本错误。
         source: ScriptError,
     },
     /// 脚本领域已被禁用（trap / 预算等）。
     ScriptDomainDisabled {
+        /// 被禁用领域所属模组 id。
         mod_id: String,
     },
     /// 脚本 System 声明 / 调度契约失败。
@@ -121,11 +147,13 @@ pub enum EngineError {
     CommandApply(crate::command_apply::CommandApplyError),
     /// 模组语言无法解析（显式字段或入口扩展名）。
     UnknownLanguage {
+        /// 无法识别的语言 token 或 `ext:...`。
         token: String,
     },
 }
 
 impl EngineError {
+    /// 稳定错误码字符串（多数变体为 `spark.engine.*`）。
     pub fn code(&self) -> String {
         match self {
             Self::Spark(e) => e.code.to_string(),
@@ -146,6 +174,7 @@ impl EngineError {
         }
     }
 
+    /// 结构化诊断参数（供本地化模板 / `SparkError` 转换使用）。
     pub fn args(&self) -> spark_diagnostics::ErrorArgs {
         use spark_diagnostics::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
@@ -283,11 +312,15 @@ impl From<EngineError> for SparkError {
 /// 模组间共享状态（钩子、数据表、日志缓冲、事件与本地化）。
 #[derive(Default)]
 pub struct EngineShared {
+    /// 命名钩子总线（脚本注册，宿主 `fire_hook` 触发）。
     pub hooks: HookBus,
+    /// 跨模组通用数据表。
     pub registry: DataRegistry,
     /// 脚本 `log` 原生写入，便于测试与宿主读取。
     pub logs: Vec<String>,
+    /// 引擎侧事件总线（本地化变更等）。
     pub events: spark_event::EventBus,
+    /// 帧边界提交的本地化服务。
     pub localization: LocalizationService,
     /// 帧同步点拍摄的全量 ECS 只读快照。
     pub query_base: ScriptQuerySnapshot,
@@ -351,6 +384,7 @@ pub struct SparkEngine {
 }
 
 impl SparkEngine {
+    /// 以模组根目录构造空引擎壳（尚无装载模组；内置宿主 schema 已就绪）。
     pub fn new(mods_root: impl Into<PathBuf>) -> Self {
         let mut shared = EngineShared::default();
         shared.host_schema = crate::api::engine_host_schema();
@@ -363,18 +397,22 @@ impl SparkEngine {
         }
     }
 
+    /// 只读访问脚本插件登记表。
     pub fn plugins(&self) -> &PluginRegistry {
         &self.plugins
     }
 
+    /// 可变访问脚本插件登记表（须在 `load_*` 前 `register_plugin`）。
     pub fn plugins_mut(&mut self) -> &mut PluginRegistry {
         &mut self.plugins
     }
 
+    /// 只读访问脚本 System 登记表。
     pub fn script_systems(&self) -> &ScriptSystemRegistry {
         &self.script_systems
     }
 
+    /// 可变访问脚本 System 登记表。
     pub fn script_systems_mut(&mut self) -> &mut ScriptSystemRegistry {
         &mut self.script_systems
     }
@@ -391,10 +429,12 @@ impl SparkEngine {
         Ok(())
     }
 
+    /// 模组扫描根目录。
     pub fn mods_root(&self) -> &Path {
         &self.mods_root
     }
 
+    /// 共享状态句柄（内置原生与宿主侧共用）。
     pub fn shared(&self) -> &Rc<RefCell<EngineShared>> {
         &self.shared
     }
@@ -404,14 +444,17 @@ impl SparkEngine {
         self.shared.borrow_mut().begin_frame()
     }
 
+    /// 已装载模组 id 迭代器（无序）。
     pub fn mod_ids(&self) -> impl Iterator<Item = &str> {
         self.mods.keys().map(|s| s.as_str())
     }
 
+    /// 按 id 取已装载模组。
     pub fn get_mod(&self, id: &str) -> Option<&LoadedMod> {
         self.mods.get(id)
     }
 
+    /// 按 id 可变取已装载模组。
     pub fn get_mod_mut(&mut self, id: &str) -> Option<&mut LoadedMod> {
         self.mods.get_mut(id)
     }
@@ -505,6 +548,7 @@ impl SparkEngine {
         Ok(())
     }
 
+    /// 使用默认 [`StdHost`] 触发命名钩子。
     pub fn fire_hook_std(&mut self, hook: &str, args: &[Value]) -> Result<(), EngineError> {
         let mut host = StdHost;
         self.fire_hook(hook, args, &mut host)
@@ -526,12 +570,14 @@ impl SparkEngine {
         Ok(())
     }
 
+    /// 启用或禁用模组（禁用后跳过钩子与脚本调度）；未知 id → [`EngineError::ModNotFound`]。
     pub fn set_enabled(&mut self, id: &str, enabled: bool) -> Result<(), EngineError> {
         let m = self.mods.get_mut(id).ok_or_else(|| EngineError::ModNotFound { id: id.into() })?;
         m.enabled = enabled;
         Ok(())
     }
 
+    /// 在模组沙箱内解析相对资源路径；未知模组或路径逃逸均报错。
     pub fn resolve_asset(&self, mod_id: &str, rel: &str) -> Result<PathBuf, EngineError> {
         let m = self.mods.get(mod_id).ok_or_else(|| EngineError::ModNotFound { id: mod_id.into() })?;
         m.vfs.resolve(rel).map_err(EngineError::from)

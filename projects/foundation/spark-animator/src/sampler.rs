@@ -33,6 +33,7 @@ pub fn sample_clip<T: Clone>(clip: &AnimationClip<T>, time: f32) -> Option<T> {
     sample_frames(&track.frames, wrap_time(time, clip.duration))
 }
 
+/// 在已折算到剪辑区间的 `time` 上对帧序列做阶梯采样。
 pub fn sample_frames<T: Clone>(frames: &[AnimationFrame<T>], time: f32) -> Option<T> {
     if frames.is_empty() {
         return None;

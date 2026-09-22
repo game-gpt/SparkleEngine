@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
-use spark_types::SparkError;
 use spark_renderer::{DrawList, TexQuadCmd, TextureId, TextureUpload};
 use spark_shader::{BuiltinShader, create_builtin};
+use spark_types::SparkError;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

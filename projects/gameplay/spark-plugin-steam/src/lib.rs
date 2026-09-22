@@ -5,7 +5,7 @@
 //!
 //! Rust 游戏逻辑若直接调用 Steam API，请依赖后端 crate，**不必**走本插件。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod backend;
 mod plugin;
 mod runtime;

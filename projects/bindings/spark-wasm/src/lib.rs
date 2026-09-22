@@ -10,7 +10,7 @@
 //! #   → packages/spark-unknown-wasm32/spark_engine_bg.wasm
 //! ```
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 mod host;
 
 pub use host::SparkWasmHost;

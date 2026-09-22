@@ -62,6 +62,7 @@ impl Frustum {
         true
     }
 
+    /// 球体是否与视锥相交（含边界）。球心到任一平面的有符号距离 `< -radius` 则不可见。
     pub fn intersects_sphere(&self, center: Vec3, radius: f32) -> bool {
         for p in &self.planes {
             if p.signed_distance(center) < -radius {
@@ -75,16 +76,19 @@ impl Frustum {
 /// 距离 + 视锥可见性过滤参数。
 #[derive(Debug, Clone, Copy)]
 pub struct CullParams {
+    /// 观察点（世界空间），用于可选的距离剔除。
     pub eye: Vec3,
     /// 超过则剔除（世界空间）。`None` 表示不按距离裁。
     pub max_distance: Option<f32>,
 }
 
 impl CullParams {
+    /// 仅记录观察点；默认不做距离裁剪，由调用方再链式设置。
     pub fn new(eye: Vec3) -> Self {
         Self { eye, max_distance: None }
     }
 
+    /// 设置最大可见距离（世界单位，负值钳为 `0`）；与视锥测试一并使用。
     pub fn with_max_distance(mut self, d: f32) -> Self {
         self.max_distance = Some(d.max(0.0));
         self

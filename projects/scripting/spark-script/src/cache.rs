@@ -11,23 +11,29 @@ use crate::{artifact::ARTIFACT_FORMAT_VERSION, compiler::CompiledPackage, reques
 #[derive(Debug, Default)]
 pub struct ArtifactCache {
     entries: HashMap<u64, CompiledPackage>,
+    /// 命中次数（`get` 找到条目时递增）。
     pub hits: u64,
+    /// 未命中次数（`get` 未找到时递增）。
     pub misses: u64,
 }
 
 impl ArtifactCache {
+    /// 空缓存；命中计数归零。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 当前缓存条目数。
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    /// 是否无任何条目。
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
+    /// 清空条目并重置命中 / 未命中计数。
     pub fn clear(&mut self) {
         self.entries.clear();
         self.hits = 0;
@@ -57,6 +63,7 @@ impl ArtifactCache {
         h.finish()
     }
 
+    /// 按键查找；命中则克隆返回并增加 `hits`，否则增加 `misses`。
     pub fn get(&mut self, key: u64) -> Option<CompiledPackage> {
         match self.entries.get(&key) {
             Some(pkg) => {
@@ -70,6 +77,7 @@ impl ArtifactCache {
         }
     }
 
+    /// 写入或覆盖指定键的编译包。
     pub fn insert(&mut self, key: u64, package: CompiledPackage) {
         self.entries.insert(key, package);
     }

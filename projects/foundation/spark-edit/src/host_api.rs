@@ -7,8 +7,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use spark_asset::MetaValue;
 
-use crate::op::EditOp;
-use crate::plan::EditPlan;
+use crate::{op::EditOp, plan::EditPlan};
 
 /// Edit profile 标识（与 `spark-script` 的 profile 名对齐）。
 pub const EDIT_PROFILE_ID: &str = "spark-edit-1";
@@ -78,10 +77,7 @@ impl EditHostScript {
         for call in &self.calls {
             ops.push(lower_host_call(&call.name, &call.args)?);
         }
-        Ok(EditPlan {
-            name: self.transaction.clone(),
-            ops,
-        })
+        Ok(EditPlan { name: self.transaction.clone(), ops })
     }
 }
 
@@ -104,21 +100,11 @@ fn arg_string_opt(args: &BTreeMap<String, MetaValue>, key: &str) -> Result<Optio
 /// 将具名宿主调用降为 [`EditOp`]。
 pub fn lower_host_call(name: &str, args: &BTreeMap<String, MetaValue>) -> Result<EditOp, String> {
     match name {
-        names::META_CREATE => Ok(EditOp::MetaCreate {
-            path: arg_string(args, "path")?,
-        }),
-        names::META_LOAD => Ok(EditOp::MetaLoad {
-            path: arg_string(args, "path")?,
-        }),
-        names::ASSET_RENAME => Ok(EditOp::AssetRename {
-            from: arg_string(args, "from")?,
-            to: arg_string(args, "to")?,
-        }),
+        names::META_CREATE => Ok(EditOp::MetaCreate { path: arg_string(args, "path")? }),
+        names::META_LOAD => Ok(EditOp::MetaLoad { path: arg_string(args, "path")? }),
+        names::ASSET_RENAME => Ok(EditOp::AssetRename { from: arg_string(args, "from")?, to: arg_string(args, "to")? }),
         names::INDEX_SCAN => Ok(EditOp::IndexScan),
-        names::PREFAB_ENSURE => Ok(EditOp::PrefabEnsure {
-            path: arg_string(args, "path")?,
-            root: arg_string(args, "root")?,
-        }),
+        names::PREFAB_ENSURE => Ok(EditOp::PrefabEnsure { path: arg_string(args, "path")?, root: arg_string(args, "root")? }),
         names::PREFAB_ENSURE_NODE => Ok(EditOp::PrefabEnsureNode {
             path: arg_string(args, "path")?,
             id: arg_string(args, "id")?,
@@ -130,10 +116,7 @@ pub fn lower_host_call(name: &str, args: &BTreeMap<String, MetaValue>) -> Result
             component: arg_string(args, "component")?,
         }),
         names::PREFAB_SET_FIELD => {
-            let value = args
-                .get("value")
-                .cloned()
-                .ok_or_else(|| "missing arg `value`".to_string())?;
+            let value = args.get("value").cloned().ok_or_else(|| "missing arg `value`".to_string())?;
             Ok(EditOp::PrefabSetField {
                 path: arg_string(args, "path")?,
                 node: arg_string(args, "node")?,
@@ -142,12 +125,8 @@ pub fn lower_host_call(name: &str, args: &BTreeMap<String, MetaValue>) -> Result
                 value,
             })
         }
-        names::PREFAB_VALIDATE => Ok(EditOp::PrefabValidate {
-            path: arg_string(args, "path")?,
-        }),
-        names::PREFAB_SAVE => Ok(EditOp::PrefabSave {
-            path: arg_string(args, "path")?,
-        }),
+        names::PREFAB_VALIDATE => Ok(EditOp::PrefabValidate { path: arg_string(args, "path")? }),
+        names::PREFAB_SAVE => Ok(EditOp::PrefabSave { path: arg_string(args, "path")? }),
         other => Err(format!("unknown edit host call: {other}")),
     }
 }

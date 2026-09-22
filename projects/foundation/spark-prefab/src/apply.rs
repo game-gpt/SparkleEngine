@@ -4,10 +4,7 @@ use std::collections::BTreeMap;
 
 use spark_asset::MetaValue;
 
-use crate::document::PrefabDocument;
-use crate::error::PrefabError;
-use crate::instance::PrefabInstance;
-use crate::r#override::parse_override_path;
+use crate::{document::PrefabDocument, error::PrefabError, instance::PrefabInstance, r#override::parse_override_path};
 
 impl PrefabDocument {
     /// 在副本上应用实例覆盖，返回新文档。
@@ -25,24 +22,9 @@ impl PrefabDocument {
 
 fn apply_one(doc: &mut PrefabDocument, key: &str, value: MetaValue) -> Result<(), PrefabError> {
     let parsed = parse_override_path(key)?;
-    let node_id = parsed
-        .node_path
-        .rsplit('/')
-        .next()
-        .unwrap_or(parsed.node_path.as_str())
-        .to_string();
-    let node = doc
-        .nodes
-        .get_mut(&node_id)
-        .ok_or_else(|| PrefabError::OverrideTargetMissing {
-            target: key.into(),
-        })?;
-    let component = node
-        .components
-        .get_mut(&parsed.component)
-        .ok_or_else(|| PrefabError::OverrideTargetMissing {
-            target: key.into(),
-        })?;
+    let node_id = parsed.node_path.rsplit('/').next().unwrap_or(parsed.node_path.as_str()).to_string();
+    let node = doc.nodes.get_mut(&node_id).ok_or_else(|| PrefabError::OverrideTargetMissing { target: key.into() })?;
+    let component = node.components.get_mut(&parsed.component).ok_or_else(|| PrefabError::OverrideTargetMissing { target: key.into() })?;
     match component {
         MetaValue::Table(map) => {
             map.insert(parsed.field, value);

@@ -28,20 +28,10 @@ fn make_rgba8_srgb_1x1(pixel: [u8; 4]) -> Vec<u8> {
         face_count: 1,
         level_count: 1,
         supercompression_scheme: None,
-        index: ktx2::Index {
-            dfd_byte_offset,
-            dfd_byte_length,
-            kvd_byte_offset,
-            kvd_byte_length: 0,
-            sgd_byte_offset: 0,
-            sgd_byte_length: 0,
-        },
+        index: ktx2::Index { dfd_byte_offset, dfd_byte_length, kvd_byte_offset, kvd_byte_length: 0, sgd_byte_offset: 0, sgd_byte_length: 0 },
     };
-    let level_index = ktx2::LevelIndex {
-        byte_offset: level_byte_offset,
-        byte_length: level_byte_length,
-        uncompressed_byte_length: level_byte_length,
-    };
+    let level_index =
+        ktx2::LevelIndex { byte_offset: level_byte_offset, byte_length: level_byte_length, uncompressed_byte_length: level_byte_length };
 
     let mut out = Vec::with_capacity(level_byte_offset as usize + pixel.len());
     out.extend_from_slice(&header.as_bytes());

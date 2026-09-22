@@ -1,17 +1,25 @@
 //! 从当前目录的 `package.json` 识别 Spark 游戏项目。
+//!
+//! 权威字段在 `spark.*`；未声明 `kind` 时按 `Cargo.toml` 与
+//! `assets/scripts/*.script` 推断，两者并存或皆无则报错，要求显式 hybrid / kind。
 
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+/// 项目脚本/原生组合形态（决定 Hierarchy 演示树与 Play 兜底样例）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectKind {
+    /// 仅原生 Rust（`Cargo.toml`，无 `*.script`）。
     Rust,
+    /// 仅 Valkyrie / Sparkle Script（`assets/scripts/*.script`）。
     Valkyrie,
+    /// Rust 与 Script 并存（须在 `package.json` 显式声明，不可静默推断）。
     Hybrid,
 }
 
 impl ProjectKind {
+    /// 机器可读标识：`rust` / `valkyrie` / `hybrid`。
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Rust => "rust",
@@ -20,6 +28,7 @@ impl ProjectKind {
         }
     }
 
+    /// 菜单/状态栏用中文标签。
     pub fn label(self) -> &'static str {
         match self {
             Self::Rust => "纯 Rust",
@@ -29,16 +38,26 @@ impl ProjectKind {
     }
 }
 
+/// 已解析的项目根与 `spark` 配置快照。
 #[derive(Debug, Clone)]
 pub struct ProjectInfo {
+    /// 项目根目录（含 `package.json`）。
     pub root: PathBuf,
+    /// `package.json` 的 `name`，缺省时用目录名。
     pub name: String,
+    /// 解析或推断得到的 [`ProjectKind`]。
     pub kind: ProjectKind,
+    /// `true` 表示 `kind` 来自磁盘推断而非 `spark.kind`。
     pub kind_inferred: bool,
+    /// `spark.startupScene`（相对资源路径，可缺）。
     pub startup_scene: Option<String>,
+    /// `spark.scriptEntry`（脚本入口提示，可缺）。
     pub script_entry: Option<String>,
+    /// `spark.cargoManifest`（Cargo 清单路径提示，可缺）。
     pub cargo_manifest: Option<String>,
+    /// `spark.runTarget`：Play 时优先匹配的样例名（如 `snake`）。
     pub run_target: Option<String>,
+    /// `dependencies` / `devDependencies` 是否含 `@game-gpt/sparkle-engine`。
     pub has_sparkle_engine_dep: bool,
 }
 
@@ -64,12 +83,31 @@ struct SparkField {
     run_target: Option<String>,
 }
 
+/// 打开/识别项目失败原因（面向 CLI 打印）。
 #[derive(Debug)]
 pub enum ProjectError {
-    NoPackageJson { searched: PathBuf },
-    InvalidJson { path: PathBuf, detail: String },
-    AmbiguousKind { detail: String },
-    InvalidKind { value: String },
+    /// 起点目录下没有 `package.json`。
+    NoPackageJson {
+        /// 实际搜索的项目根。
+        searched: PathBuf,
+    },
+    /// `package.json` 读盘或 JSON 解析失败。
+    InvalidJson {
+        /// 出错文件路径。
+        path: PathBuf,
+        /// 底层错误摘要。
+        detail: String,
+    },
+    /// 无法唯一推断 `spark.kind`（需用户显式声明）。
+    AmbiguousKind {
+        /// 说明与建议文案。
+        detail: String,
+    },
+    /// `spark.kind` 取值不在允许集合。
+    InvalidKind {
+        /// 用户给出的原始字符串。
+        value: String,
+    },
 }
 
 impl std::fmt::Display for ProjectError {
@@ -153,6 +191,9 @@ fn infer_kind(root: &Path) -> Result<(ProjectKind, bool), ProjectError> {
     }
 }
 
+/// 读取 `root/package.json`，解析 `spark` 字段并填充 [`ProjectInfo`]。
+///
+/// 缺少 `spark.kind` 时调用磁盘推断；推断失败返回 [`ProjectError::AmbiguousKind`]。
 pub fn load_project(root: &Path) -> Result<ProjectInfo, ProjectError> {
     let pkg_path = root.join("package.json");
     if !pkg_path.is_file() {

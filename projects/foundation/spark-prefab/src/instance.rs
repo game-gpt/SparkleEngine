@@ -5,8 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use spark_asset::{AssetRef, MetaValue};
 
-use crate::document::PrefabDocument;
-use crate::error::PrefabError;
+use crate::{document::PrefabDocument, error::PrefabError};
 
 /// 场景或父 Prefab 中的实例记录。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -27,12 +26,7 @@ pub struct PrefabInstance {
 impl PrefabInstance {
     /// 新建空覆盖实例。
     pub fn new(prefab: impl Into<AssetRef>, instance_id: impl Into<String>) -> Self {
-        Self {
-            kind: "prefab-instance".into(),
-            prefab: prefab.into(),
-            instance_id: instance_id.into(),
-            overrides: BTreeMap::new(),
-        }
+        Self { kind: "prefab-instance".into(), prefab: prefab.into(), instance_id: instance_id.into(), overrides: BTreeMap::new() }
     }
 
     /// 设置或替换一条覆盖（幂等）。

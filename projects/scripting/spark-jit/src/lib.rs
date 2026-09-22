@@ -3,7 +3,7 @@
 //! 当前不做机器码发射：对热点 `FuncProto` 做常量折叠与死跳消除，
 //! 写回模块，降低解释器派发开销。API 预留 stub 表供原生入口。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::collections::HashMap;
 
 use std::fmt;

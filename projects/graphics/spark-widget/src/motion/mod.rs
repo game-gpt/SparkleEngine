@@ -60,10 +60,12 @@ impl Default for WidgetMotion {
     }
 }
 
-/// 某控件当前动效采样。
+/// 某控件当前动效采样（paint 时乘到 computed style）。
 #[derive(Debug, Clone, Copy)]
 pub struct MotionSample {
+    /// 当前不透明度乘数（1 = 不变）。
     pub opacity: f32,
+    /// 当前缩放乘数（相对节点中心，1 = 不变）。
     pub scale: f32,
 }
 
@@ -73,10 +75,13 @@ impl Default for MotionSample {
     }
 }
 
+/// 按控件维护 opacity / scale 插值轨道，并在伪态变化时换目标。
 #[derive(Debug)]
 pub struct MotionManager {
     widgets: HashMap<WidgetId, WidgetMotion>,
+    /// hover / press 等引起的不透明度过渡参数。
     pub opacity_transition: Transition,
+    /// hover / press 等引起的缩放过渡参数。
     pub scale_transition: Transition,
 }
 
@@ -87,6 +92,7 @@ impl Default for MotionManager {
 }
 
 impl MotionManager {
+    /// 使用默认时长缓动创建空管理器。
     pub fn new() -> Self {
         Self {
             widgets: HashMap::new(),
@@ -116,6 +122,7 @@ impl MotionManager {
         self.widgets.retain(|id, _| tree.node(*id).is_some());
     }
 
+    /// 仅推进已有轨道（不根据树刷新目标）。
     pub fn tick(&mut self, dt: f32) {
         for motion in self.widgets.values_mut() {
             motion.opacity.tick(dt);
@@ -123,6 +130,7 @@ impl MotionManager {
         }
     }
 
+    /// 取某控件当前采样；无轨道时返回单位样本。
     pub fn sample(&self, id: WidgetId) -> MotionSample {
         self.widgets.get(&id).map(|m| MotionSample { opacity: m.opacity.value, scale: m.scale.value }).unwrap_or_default()
     }

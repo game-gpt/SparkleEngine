@@ -30,14 +30,19 @@ pub enum LocaleParseError {
     /// 空标签。
     Empty,
     /// 标签无法规范化。`detail` 是校验器原始说明，不是用户文案。
-    Invalid { detail: String },
+    Invalid {
+        /// 机器可读失败原因（通常为原始输入片段）。
+        detail: String,
+    },
 }
 
 impl LocaleParseError {
+    /// 构造 [`Self::Invalid`]。
     pub fn invalid(detail: impl Into<String>) -> Self {
         Self::Invalid { detail: detail.into() }
     }
 
+    /// 稳定机器码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Empty => "spark.localization.locale_empty",
@@ -45,6 +50,7 @@ impl LocaleParseError {
         }
     }
 
+    /// 结构化参数；`Invalid` 以 `reason` 键携带 `detail`。
     pub fn args(&self) -> spark_types::ErrorArgs {
         use spark_types::{ErrorArg, ErrorArgs};
         use std::sync::Arc;
@@ -166,22 +172,27 @@ impl LocaleId {
         Self { language: Arc::from(language), script: script.map(Arc::from), region: region.map(Arc::from), tag: Arc::from(tag) }
     }
 
+    /// 规范化完整标签（如 `zh-Hans-CN`）。
     pub fn as_str(&self) -> &str {
         &self.tag
     }
 
+    /// 小写 language 子标签（如 `zh`）。
     pub fn language(&self) -> &str {
         &self.language
     }
 
+    /// 规范化 script（如 `Hans`）；无则 `None`。
     pub fn script(&self) -> Option<&str> {
         self.script.as_deref()
     }
 
+    /// 大写 region（如 `CN`）；无则 `None`。
     pub fn region(&self) -> Option<&str> {
         self.region.as_deref()
     }
 
+    /// 按 language 粗判的默认书写方向。
     pub fn direction(&self) -> TextDirection {
         TextDirection::guess_from_language(self.language())
     }
@@ -235,11 +246,14 @@ fn normalize_region(raw: &str) -> String {
 /// 用户偏好与产品回退配置。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocaleRequest {
+    /// 用户偏好 Locale，按优先级从高到低。
     pub preferred: Vec<LocaleId>,
+    /// 请求级额外回退（在偏好候选之后、产品默认之前）。
     pub fallback: Vec<LocaleId>,
 }
 
 impl LocaleRequest {
+    /// 构造协商请求。
     pub fn new(preferred: Vec<LocaleId>, fallback: Vec<LocaleId>) -> Self {
         Self { preferred, fallback }
     }

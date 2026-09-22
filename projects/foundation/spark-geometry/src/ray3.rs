@@ -5,19 +5,24 @@ use crate::{Aabb3, Vec3};
 /// 三维射线。`dir` 不必单位化，但 DDA / 距离判定会先归一化。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Ray3 {
+    /// 射线起点。
     pub origin: Vec3,
+    /// 方向（可非单位；部分 API 内部会归一化）。
     pub dir: Vec3,
 }
 
 impl Ray3 {
+    /// 构造射线。
     pub const fn new(origin: Vec3, dir: Vec3) -> Self {
         Self { origin, dir }
     }
 
+    /// 参数点：`origin + dir * t`（`t` 沿未归一化 `dir`）。
     pub fn point_at(self, t: f32) -> Vec3 {
         self.origin + self.dir * t
     }
 
+    /// 返回方向已归一化的副本（原点不变）。
     pub fn normalized_dir(self) -> Self {
         Self { origin: self.origin, dir: self.dir.normalized() }
     }
@@ -26,6 +31,7 @@ impl Ray3 {
 /// 体素格命中（无游戏方块语义）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VoxelHit {
+    /// 命中的整数格坐标。
     pub cell: [i32; 3],
     /// 进入该格前一格（放置面）。
     pub prev: [i32; 3],

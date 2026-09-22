@@ -1,6 +1,6 @@
 //! 自 `src/particles.rs` 迁出的原 `#[cfg(test)] mod tests`。
-use spark_types::{Color, Vec2};
 use spark_renderer::*;
+use spark_types::{Color, Vec2};
 
 #[test]
 fn tick_moves_and_expires() {

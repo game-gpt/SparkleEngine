@@ -20,6 +20,7 @@ impl Default for UiMetrics {
 }
 
 impl UiMetrics {
+    /// 仅指定 DPI 缩放，UI 缩放为 1、安全区为空。
     pub fn new(dpi_scale: f32) -> Self {
         Self { dpi_scale: dpi_scale.max(0.01), ..Self::default() }
     }

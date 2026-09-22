@@ -53,10 +53,7 @@ impl AssetRef {
     pub fn resolve(self) -> Result<Self, AssetMetaError> {
         let path = self.path().to_string();
         let meta = AssetMetaStore::load(&path)?;
-        Ok(Self::Resolved {
-            path,
-            guid: meta.guid,
-        })
+        Ok(Self::Resolved { path, guid: meta.guid })
     }
 
     /// 校验：旁车必须存在；若本引用已带 GUID，则必须与旁车一致。
@@ -64,11 +61,7 @@ impl AssetRef {
         let meta = AssetMetaStore::load(self.path())?;
         if let Some(guid) = self.guid() {
             if guid != meta.guid {
-                return Err(AssetMetaError::GuidMismatch {
-                    asset: PathBuf::from(self.path()),
-                    expected: guid,
-                    found: meta.guid,
-                });
+                return Err(AssetMetaError::GuidMismatch { asset: PathBuf::from(self.path()), expected: guid, found: meta.guid });
             }
         }
         Ok(meta)

@@ -21,7 +21,8 @@ impl GameHost for MyHost {
 }
 ```
 
-3D 用 `GameHost3d` / `DrawList3d`。纹理权威上传类型为 `TextureUpload`（来自 `spark-texture`）。开窗提交用 `spark_engine::run_game` 或 `spark_renderer_wgpu::run_window_2d`。
+3D 用 `GameHost3d` / `DrawList3d`。纹理权威上传类型为 `TextureUpload`（来自 `spark-texture`）。开窗提交用
+`spark_engine::run_game` 或 `spark_renderer_wgpu::run_window_2d`。
 
 ```bash
 cargo test -p spark-renderer

@@ -1,9 +1,9 @@
 //! 贪吃蛇：Valkyrie 项目的 native 试玩宿主（脚本仍为 Inspector 元数据，VM Play 接通前由此运行）。
 
-#![deny(missing_docs)]
-use spark_types::{Color, Rect};
+#![forbid(missing_docs)]
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_types::{Color, Rect};
 
 const COLS: i32 = 24;
 const ROWS: i32 = 18;

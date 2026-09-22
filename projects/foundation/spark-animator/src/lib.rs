@@ -5,7 +5,7 @@
 //!
 //! 不依赖渲染器。采样结果交给调用方绘制或写入蒙皮。骨骼姿态与精灵帧是两种采样值，不合成一个万能组件。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 mod blend;
 mod clip;
 mod controller;

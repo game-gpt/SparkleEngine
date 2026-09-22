@@ -10,20 +10,35 @@ pub const SPKX_MAGIC: &[u8; 4] = b"SPKX";
 /// `.spko` 魔数。
 pub const SPKO_MAGIC: &[u8; 4] = b"SPKO";
 
-/// 制品读写错误。
+/// 制品读写错误（`Display` / [`Self::code`] 输出稳定码）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArtifactIoError {
+    /// 字节流过早结束。码：`spark.script.artifact.truncated`。
     Truncated,
+    /// 魔数不是 `SPKO` / `SPKX`。码：`spark.script.artifact.bad_magic`。
     BadMagic,
-    UnsupportedFormat { version: u32 },
-    BadValueTag { tag: u8 },
+    /// 不支持的制品格式版本。码：`spark.script.artifact.unsupported_format`。
+    UnsupportedFormat {
+        /// 文件头中的格式版本。
+        version: u32,
+    },
+    /// 常量值标签非法。码：`spark.script.artifact.bad_value_tag`。
+    BadValueTag {
+        /// 读到的标签字节。
+        tag: u8,
+    },
+    /// 禁止把 `Handle` 写入常量池。码：`spark.script.artifact.handle_const_forbidden`。
     HandleConstForbidden,
+    /// 字符串字段不是合法 UTF-8。码：`spark.script.artifact.utf8`。
     Utf8,
+    /// 底层文件系统 I/O 失败。码：`spark.script.artifact.io`。
     Io,
+    /// `.spkx` 解码后字节码验证失败（码透传 `spark-vm`）。
     Verify(spark_vm::BytecodeVerifyError),
 }
 
 impl ArtifactIoError {
+    /// 返回稳定错误码。
     pub fn code(&self) -> &'static str {
         match self {
             Self::Truncated => "spark.script.artifact.truncated",

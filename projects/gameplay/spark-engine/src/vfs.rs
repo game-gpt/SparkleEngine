@@ -9,13 +9,17 @@ use spark_types::{ErrorArg, SparkError, codes};
 
 use crate::EngineError;
 
+/// 模组沙箱文件系统视图：所有相对路径解析都必须落在 `root` 内。
 #[derive(Debug, Clone)]
 pub struct ModVfs {
+    /// 模组 id（写入路径错误参数，便于诊断）。
     pub mod_id: String,
+    /// 模组根目录（含 `mod.von` 的那一层）。
     pub root: PathBuf,
 }
 
 impl ModVfs {
+    /// 构造视图；不检查 `root` 是否存在（解析时再 canonicalize）。
     pub fn new(mod_id: impl Into<String>, root: impl Into<PathBuf>) -> Self {
         Self { mod_id: mod_id.into(), root: root.into() }
     }
@@ -64,11 +68,13 @@ impl ModVfs {
         }
     }
 
+    /// 按相对路径读 UTF-8 文本；路径非法映射为 [`SparkError`]，IO 失败映射为 [`EngineError::Io`]。
     pub fn read_to_string(&self, rel: &str) -> Result<String, EngineError> {
         let p = self.resolve(rel)?;
         std::fs::read_to_string(&p).map_err(|e| EngineError::from_io(p.display().to_string(), e))
     }
 
+    /// 按相对路径读字节；语义同 [`Self::read_to_string`]。
     pub fn read_bytes(&self, rel: &str) -> Result<Vec<u8>, EngineError> {
         let p = self.resolve(rel)?;
         std::fs::read(&p).map_err(|e| EngineError::from_io(p.display().to_string(), e))

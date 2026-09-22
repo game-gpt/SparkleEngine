@@ -26,21 +26,21 @@ pnpm run build:wasm             # Wasm 平台袋（按需）
 
 ## 模块导航
 
-| 任务                  | crate                       |
-|-----------------------|-----------------------------|
-| 实体 / 组件 / 调度    | `spark-ecs`                 |
-| 固定步时钟            | `spark-time`                |
-| 键鼠帧状态            | `spark-input`               |
-| 绘制列表与 `GameHost` | `spark-renderer`            |
-| GPU 纹理描述与上传包  | `spark-texture`             |
+| 任务                                | crate                                                                  |
+|-------------------------------------|------------------------------------------------------------------------|
+| 实体 / 组件 / 调度                  | `spark-ecs`                                                            |
+| 固定步时钟                          | `spark-time`                                                           |
+| 键鼠帧状态                          | `spark-input`                                                          |
+| 绘制列表与 `GameHost`               | `spark-renderer`                                                       |
+| GPU 纹理描述与上传包                | `spark-texture`                                                        |
 | PNG / JPEG / WebP / KTX2 / DDS 解码 | `spark-png` / `spark-jpeg` / `spark-webp` / `spark-ktx2` / `spark-dds` |
-| wgpu 窗口与提交       | `spark-renderer-wgpu`       |
-| Retained UI           | `spark-widget`              |
-| 脚本编译与执行        | `spark-script` → `spark-vm` |
-| 模组与帧循环          | `spark-engine`              |
-| Node 绑定             | `spark-napi`                |
-| Wasm ABI              | `spark-wasm`                |
-| glTF 导入             | `spark-gltf`                |
+| wgpu 窗口与提交                     | `spark-renderer-wgpu`                                                  |
+| Retained UI                         | `spark-widget`                                                         |
+| 脚本编译与执行                      | `spark-script` → `spark-vm`                                            |
+| 模组与帧循环                        | `spark-engine`                                                         |
+| Node 绑定                           | `spark-napi`                                                           |
+| Wasm ABI                            | `spark-wasm`                                                           |
+| glTF 导入                           | `spark-gltf`                                                           |
 
 各 crate 说明见 `projects/**/readme.md`。
 

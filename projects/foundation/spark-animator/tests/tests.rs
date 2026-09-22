@@ -3,9 +3,9 @@ use spark_animator::*;
 
 use std::collections::HashMap;
 
-use spark_types::Rect;
 use spark_ecs::{Schedule, World};
 use spark_geometry::{Quat, Vec3};
+use spark_types::Rect;
 
 fn sprite(index: u32) -> SpriteFrame {
     SpriteFrame::new(index, Rect::new(0.0, 0.0, 1.0, 1.0))

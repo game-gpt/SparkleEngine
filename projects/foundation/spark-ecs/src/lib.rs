@@ -2,7 +2,7 @@
 //!
 //! **Component** 为纯数据；系统为纯逻辑。界面树在 `spark-widget`，不进本 crate。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::{
     any::{Any, TypeId},
     collections::HashMap,

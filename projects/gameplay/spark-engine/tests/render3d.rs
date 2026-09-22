@@ -3,9 +3,9 @@ use spark_engine::*;
 
 use spark_renderer::Mat4;
 
-use spark_types::Color;
 use spark_ecs::World;
 use spark_renderer::DrawList3d;
+use spark_types::Color;
 #[test]
 fn systems_run_in_order() {
     let mut world = World::new();

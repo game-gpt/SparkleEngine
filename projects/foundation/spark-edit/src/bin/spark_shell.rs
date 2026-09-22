@@ -1,9 +1,6 @@
 //! `spark-shell`：Edit Runtime CLI 入口（由 `spark shell` 转发）。
 
-use std::env;
-use std::fs;
-use std::path::PathBuf;
-use std::process::ExitCode;
+use std::{env, fs, path::PathBuf, process::ExitCode};
 
 use spark_edit::{EditCapabilities, EditMode, EditSession, parse_edit_source};
 
@@ -132,12 +129,9 @@ fn main() -> ExitCode {
 
     let text = if let Some(code) = code {
         code
-    } else if let Some(path) = path {
-        let abs = if path.is_absolute() {
-            path
-        } else {
-            cwd.join(path)
-        };
+    }
+    else if let Some(path) = path {
+        let abs = if path.is_absolute() { path } else { cwd.join(path) };
         match fs::read_to_string(&abs) {
             Ok(t) => t,
             Err(e) => {
@@ -145,7 +139,8 @@ fn main() -> ExitCode {
                 return ExitCode::from(1);
             }
         }
-    } else {
+    }
+    else {
         eprintln!("provide --path or --code");
         return usage();
     };
@@ -155,7 +150,8 @@ fn main() -> ExitCode {
             EditMode::Apply => EditCapabilities::project_edit(),
             _ => EditCapabilities::read_only(),
         }
-    } else {
+    }
+    else {
         EditCapabilities::from_tokens(&cap_tokens)
     };
 
@@ -171,7 +167,8 @@ fn main() -> ExitCode {
     let report = session.run(&plan);
     if json {
         println!("{}", report.to_json());
-    } else {
+    }
+    else {
         println!("ok={} mode={} transaction={:?}", report.ok, report.mode, report.transaction);
         for c in &report.changes {
             println!("  change {:?} {}", c.kind, c.path);
@@ -180,9 +177,5 @@ fn main() -> ExitCode {
             println!("  {:?} {} {}", d.severity, d.code, d.message);
         }
     }
-    if report.ok {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(1)
-    }
+    if report.ok { ExitCode::SUCCESS } else { ExitCode::from(1) }
 }

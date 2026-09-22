@@ -9,6 +9,7 @@ use crate::{clip::AnimationClip, controller::Animator, player::AnimationPlayer};
 /// 本帧动画步长（秒）。由宿主写入，系统不读窗口或渲染器。
 #[derive(Debug, Clone, Copy)]
 pub struct AnimationDelta {
+    /// 本帧 `Δt`，单位秒；缺资源时系统按 0 处理。
     pub dt: f32,
 }
 
@@ -25,18 +26,22 @@ impl<T> Default for ClipLibrary<T> {
 }
 
 impl<T> ClipLibrary<T> {
+    /// 空剪辑库。
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 按 `clip.name` 插入或覆盖。
     pub fn insert(&mut self, clip: AnimationClip<T>) {
         self.clips.insert(clip.name.clone(), clip);
     }
 
+    /// 按名取剪辑。
     pub fn get(&self, name: &str) -> Option<&AnimationClip<T>> {
         self.clips.get(name)
     }
 
+    /// 导出 `剪辑名 → duration`，供 [`Animator::tick`](crate::Animator::tick) 使用。
     pub fn durations(&self) -> HashMap<String, f32> {
         self.clips.iter().map(|(name, clip)| (name.clone(), clip.duration)).collect()
     }
@@ -45,16 +50,20 @@ impl<T> ClipLibrary<T> {
 /// 单段播放。没有状态机。
 #[derive(Debug, Clone)]
 pub struct AnimationPlayerComponent<T: Send + Sync + 'static> {
+    /// [`ClipLibrary`] 中的剪辑名。
     pub clip: String,
+    /// 该实体的播放时钟。
     pub player: AnimationPlayer<T>,
 }
 
 /// 状态机播放。`controller` 决定当前剪辑名。
 #[derive(Debug, Clone)]
 pub struct AnimatorComponent<T: Send + Sync + 'static> {
+    /// 实体绑定的运行时状态机。
     pub animator: Animator<T>,
 }
 
+/// 把 [`tick_players`] 挂进调度表，系统名 `animation_player`。
 pub fn install_player_system<T>(schedule: &mut Schedule)
 where
     T: Send + Sync + 'static,
@@ -62,6 +71,7 @@ where
     schedule.add_fn("animation_player", tick_players::<T>);
 }
 
+/// 把 [`tick_animators`] 挂进调度表，系统名 `animator`。
 pub fn install_animator_system<T>(schedule: &mut Schedule)
 where
     T: Send + Sync + 'static,
@@ -69,6 +79,7 @@ where
     schedule.add_fn("animator", tick_animators::<T>);
 }
 
+/// 用资源 [`AnimationDelta`] 与 [`ClipLibrary`] 推进所有 [`AnimationPlayerComponent`]。
 pub fn tick_players<T>(world: &mut World)
 where
     T: Send + Sync + 'static,
@@ -81,6 +92,7 @@ where
     });
 }
 
+/// 用资源 [`AnimationDelta`] 与 [`ClipLibrary`] 推进所有 [`AnimatorComponent`]。
 pub fn tick_animators<T>(world: &mut World)
 where
     T: Send + Sync + 'static,

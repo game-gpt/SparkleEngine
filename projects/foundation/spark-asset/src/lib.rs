@@ -4,7 +4,7 @@
 //! 以及旁车 [`.meta`](meta)（VON）持久化身份与路径优先的 [`AssetRef`]。
 //! 具体纹理/音频解码由其它 crate / 游戏仓实现加载器。
 
-#![warn(missing_docs)]
+#![forbid(missing_docs)]
 mod cache;
 mod handle;
 mod hot_reload;
@@ -25,16 +25,21 @@ pub use value::MetaValue;
 
 use spark_types::{ErrorArgs, SparkError};
 
-/// 资源层错误。自然语言不在此生成。
+/// 资源层统一错误。自然语言不在此生成；`Display` 委派到内层稳定码。
 #[derive(Debug)]
 pub enum AssetError {
+    /// 下层 `spark-types` 错误。
     Spark(SparkError),
+    /// 字节/路径加载失败。
     Load(LoadError),
+    /// 旁车 `.meta` 读写或身份校验失败。
     Meta(AssetMetaError),
+    /// 项目级 GUID ↔ 路径索引失败。
     Index(AssetIndexError),
 }
 
 impl AssetError {
+    /// 稳定错误码字符串（供本地化与诊断管道）。
     pub fn code(&self) -> String {
         match self {
             Self::Spark(e) => e.code.to_string(),
@@ -44,6 +49,7 @@ impl AssetError {
         }
     }
 
+    /// 类型化参数（路径、GUID、键等事实），不含面向用户文案。
     pub fn args(&self) -> ErrorArgs {
         match self {
             Self::Spark(e) => e.args.clone(),

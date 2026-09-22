@@ -19,29 +19,35 @@ pub struct AnimatorController {
 }
 
 impl AnimatorController {
+    /// 空图控制器，进入态为 `default_state`（可稍后再 `add_state`）。
     pub fn new(default_state: impl Into<String>) -> Self {
         Self { default_state: default_state.into(), ..Self::default() }
     }
 
+    /// 注册一个状态节点。
     pub fn add_state(&mut self, state: AnimatorState) -> &mut Self {
         self.states.push(state);
         self
     }
 
+    /// 注册一条边；条件全满足时才会从 `from` 切到 `to`。
     pub fn add_transition(&mut self, transition: AnimatorTransition) -> &mut Self {
         self.transitions.push(transition);
         self
     }
 
+    /// 写入或覆盖命名参数的初值 / 当前值。
     pub fn set_parameter(&mut self, name: impl Into<String>, value: ParameterValue) -> &mut Self {
         self.parameters.insert(name.into(), value);
         self
     }
 
+    /// 按名取状态定义。
     pub fn state(&self, name: &str) -> Option<&AnimatorState> {
         self.states.iter().find(|state| state.name == name)
     }
 
+    /// 默认进入态名称（构造 [`Animator`] 时的起点）。
     pub fn default_state(&self) -> &str {
         &self.default_state
     }
@@ -65,6 +71,7 @@ pub struct Animator<T> {
 }
 
 impl<T> Animator<T> {
+    /// 从控制器描述构造，并进入 `default_state`。
     pub fn new(controller: AnimatorController) -> Self {
         let current = controller.default_state().to_string();
         let speed = controller.state(&current).map(|state| state.speed).unwrap_or(1.0);
@@ -73,14 +80,17 @@ impl<T> Animator<T> {
         Self { controller, player, current, transition: None, _sample: PhantomData }
     }
 
+    /// 当前状态名。
     pub fn current_state(&self) -> &str {
         &self.current
     }
 
+    /// 只读访问内部播放时钟。
     pub fn player(&self) -> &AnimationPlayer<T> {
         &self.player
     }
 
+    /// 可变访问内部播放时钟（改速度、强制采样等）。
     pub fn player_mut(&mut self) -> &mut AnimationPlayer<T> {
         &mut self.player
     }
@@ -93,14 +103,17 @@ impl<T> Animator<T> {
             .unwrap_or(0.0)
     }
 
+    /// 设置布尔参数（供 `BoolEquals` 条件读取）。
     pub fn set_bool(&mut self, name: impl Into<String>, value: bool) {
         self.controller.parameters.insert(name.into(), ParameterValue::Bool(value));
     }
 
+    /// 设置浮点参数（供 `FloatGreater` 条件读取）。
     pub fn set_float(&mut self, name: impl Into<String>, value: f32) {
         self.controller.parameters.insert(name.into(), ParameterValue::Float(value));
     }
 
+    /// 拉高触发器；匹配过渡成功后会被清回 `false`。
     pub fn set_trigger(&mut self, name: impl Into<String>) {
         self.controller.parameters.insert(name.into(), ParameterValue::Trigger(true));
     }

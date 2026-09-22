@@ -9,7 +9,7 @@
 //! - **reading**：上一帧 `update` 后的快照；[`Events::iter`] / [`Events::drain_reading`] 只看此缓冲。
 //! - `update`：清空 reading，再与 writing 交换，使本帧写入变为下一帧可读。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 use std::{
     any::{Any, TypeId},
     collections::HashMap,

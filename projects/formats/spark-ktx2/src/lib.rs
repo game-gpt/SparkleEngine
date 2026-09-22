@@ -8,15 +8,15 @@
 //! 错误：`io`、`image_decode`、`texture_format_unsupported`、`texture_layout_invalid`、
 //! `texture_upload_invalid`（立方体数组）、以及描述 / 数据校验失败码。
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 
 use std::{path::Path, sync::Arc};
 
-use spark_types::{ErrorArg, SparkError, codes};
 use spark_texture::{
-    AlphaMode, ColorSpace, CpuCopyPolicy, MipmapPolicy, Residency, TextureData, TextureDesc, TextureDimension, TextureFormat,
-    TextureLayout, TextureUpload, TextureUsage, UploadPolicy,
+    AlphaMode, ColorSpace, CpuCopyPolicy, MipmapPolicy, Residency, TextureData, TextureDesc, TextureDimension, TextureFormat, TextureLayout,
+    TextureUpload, TextureUsage, UploadPolicy,
 };
+use spark_types::{ErrorArg, SparkError, codes};
 
 /// 从路径读取 KTX2 文件并解码为可上传包。
 ///
@@ -24,9 +24,8 @@ use spark_texture::{
 pub fn decode_path(path: impl AsRef<Path>) -> Result<TextureUpload, SparkError> {
     let path = path.as_ref();
     let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
-    let bytes = std::fs::read(path).map_err(|e| {
-        SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e)
-    })?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e))?;
     decode_memory(&bytes).map_err(|e| e.arg("path", path_arg))
 }
 
@@ -110,9 +109,11 @@ pub fn decode_memory(bytes: &[u8]) -> Result<TextureUpload, SparkError> {
     // `level_count == 0` 表示容器只存 base，应用可补 mip（仅未压缩可走 CPU 生成）。
     let mipmap = if mip_levels > 1 {
         MipmapPolicy::Provided
-    } else if header.level_count == 0 && !tex_format.is_compressed() {
+    }
+    else if header.level_count == 0 && !tex_format.is_compressed() {
         MipmapPolicy::GenerateCpu
-    } else {
+    }
+    else {
         MipmapPolicy::None
     };
 
@@ -163,43 +164,62 @@ fn map_vk_format(format: ktx2::Format) -> Result<TextureFormat, SparkError> {
     // 与 spark-texture / wgpu 首切对齐的常用子集。
     let mapped = if format == ktx2::Format::R8_UNORM {
         Some(TextureFormat::R8Unorm)
-    } else if format == ktx2::Format::R8G8_UNORM {
+    }
+    else if format == ktx2::Format::R8G8_UNORM {
         Some(TextureFormat::Rg8Unorm)
-    } else if format == ktx2::Format::R8G8B8A8_UNORM {
+    }
+    else if format == ktx2::Format::R8G8B8A8_UNORM {
         Some(TextureFormat::Rgba8Unorm)
-    } else if format == ktx2::Format::R8G8B8A8_SRGB {
+    }
+    else if format == ktx2::Format::R8G8B8A8_SRGB {
         Some(TextureFormat::Rgba8UnormSrgb)
-    } else if format == ktx2::Format::R16G16B16A16_SFLOAT {
+    }
+    else if format == ktx2::Format::R16G16B16A16_SFLOAT {
         Some(TextureFormat::Rgba16Float)
-    } else if format == ktx2::Format::R32G32B32A32_SFLOAT {
+    }
+    else if format == ktx2::Format::R32G32B32A32_SFLOAT {
         Some(TextureFormat::Rgba32Float)
-    } else if format == ktx2::Format::BC1_RGBA_UNORM_BLOCK {
+    }
+    else if format == ktx2::Format::BC1_RGBA_UNORM_BLOCK {
         Some(TextureFormat::Bc1RgbaUnorm)
-    } else if format == ktx2::Format::BC1_RGBA_SRGB_BLOCK {
+    }
+    else if format == ktx2::Format::BC1_RGBA_SRGB_BLOCK {
         Some(TextureFormat::Bc1RgbaUnormSrgb)
-    } else if format == ktx2::Format::BC3_UNORM_BLOCK {
+    }
+    else if format == ktx2::Format::BC3_UNORM_BLOCK {
         Some(TextureFormat::Bc3RgbaUnorm)
-    } else if format == ktx2::Format::BC3_SRGB_BLOCK {
+    }
+    else if format == ktx2::Format::BC3_SRGB_BLOCK {
         Some(TextureFormat::Bc3RgbaUnormSrgb)
-    } else if format == ktx2::Format::BC5_UNORM_BLOCK {
+    }
+    else if format == ktx2::Format::BC5_UNORM_BLOCK {
         Some(TextureFormat::Bc5RgUnorm)
-    } else if format == ktx2::Format::BC7_UNORM_BLOCK {
+    }
+    else if format == ktx2::Format::BC7_UNORM_BLOCK {
         Some(TextureFormat::Bc7RgbaUnorm)
-    } else if format == ktx2::Format::BC7_SRGB_BLOCK {
+    }
+    else if format == ktx2::Format::BC7_SRGB_BLOCK {
         Some(TextureFormat::Bc7RgbaUnormSrgb)
-    } else if format == ktx2::Format::ETC2_R8G8B8A8_UNORM_BLOCK {
+    }
+    else if format == ktx2::Format::ETC2_R8G8B8A8_UNORM_BLOCK {
         Some(TextureFormat::Etc2Rgba8Unorm)
-    } else if format == ktx2::Format::ETC2_R8G8B8A8_SRGB_BLOCK {
+    }
+    else if format == ktx2::Format::ETC2_R8G8B8A8_SRGB_BLOCK {
         Some(TextureFormat::Etc2Rgba8UnormSrgb)
-    } else if format == ktx2::Format::ASTC_4x4_UNORM_BLOCK {
+    }
+    else if format == ktx2::Format::ASTC_4x4_UNORM_BLOCK {
         Some(TextureFormat::Astc4x4Unorm)
-    } else if format == ktx2::Format::ASTC_4x4_SRGB_BLOCK {
+    }
+    else if format == ktx2::Format::ASTC_4x4_SRGB_BLOCK {
         Some(TextureFormat::Astc4x4UnormSrgb)
-    } else if format == ktx2::Format::ASTC_6x6_UNORM_BLOCK {
+    }
+    else if format == ktx2::Format::ASTC_6x6_UNORM_BLOCK {
         Some(TextureFormat::Astc6x6Unorm)
-    } else if format == ktx2::Format::ASTC_6x6_SRGB_BLOCK {
+    }
+    else if format == ktx2::Format::ASTC_6x6_SRGB_BLOCK {
         Some(TextureFormat::Astc6x6UnormSrgb)
-    } else {
+    }
+    else {
         None
     };
     mapped.ok_or_else(|| {

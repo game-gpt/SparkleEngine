@@ -1,6 +1,6 @@
 //! 自 `src/draw.rs` 迁出的原 `#[cfg(test)] mod tests`。
-use spark_types::{Color, Rect, Vec2};
 use spark_renderer::*;
+use spark_types::{Color, Rect, Vec2};
 
 #[test]
 fn world_quads_follow_camera_and_hud_does_not() {

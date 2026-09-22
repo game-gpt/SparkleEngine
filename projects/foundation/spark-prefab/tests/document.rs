@@ -13,10 +13,7 @@ fn new_roundtrip_von() {
     doc.set_component(
         "sprite",
         "Sprite",
-        MetaValue::Table(BTreeMap::from([(
-            "texture".into(),
-            MetaValue::String("assets/player.png".into()),
-        )])),
+        MetaValue::Table(BTreeMap::from([("texture".into(), MetaValue::String("assets/player.png".into()))])),
     )
     .unwrap();
     doc.validate().unwrap();
@@ -44,15 +41,7 @@ fn ensure_is_idempotent() {
 #[test]
 fn bad_node_id_rejected() {
     let mut doc = PrefabDocument::new("player");
-    doc.nodes.insert(
-        "a/b".into(),
-        spark_prefab::PrefabNode {
-            name: None,
-            components: Default::default(),
-            children: vec![],
-            prefab: None,
-        },
-    );
+    doc.nodes.insert("a/b".into(), spark_prefab::PrefabNode { name: None, components: Default::default(), children: vec![], prefab: None });
     let err = doc.validate().unwrap_err();
     assert_eq!(err.code(), "spark.prefab.bad_node_id");
 }
