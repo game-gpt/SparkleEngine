@@ -104,6 +104,15 @@ impl WidgetTree {
         children.into_iter().find(|&id| self.node(id).and_then(|n| n.key.as_deref()).is_some_and(|k| k == key))
     }
 
+    /// 按 key 列表解析直接子节点；任一缺失则 `None`。
+    pub fn children_by_keys(&self, parent: WidgetId, keys: &[&str]) -> Option<Vec<WidgetId>> {
+        let mut out = Vec::with_capacity(keys.len());
+        for key in keys {
+            out.push(self.child_by_key(parent, key)?);
+        }
+        Some(out)
+    }
+
     /// 子树 DFS（含 `root` 自身）按 `key` 查找。
     pub fn find_by_key(&self, root: WidgetId, key: &str) -> Option<WidgetId> {
         if self.node(root).and_then(|n| n.key.as_deref()).is_some_and(|k| k == key) {

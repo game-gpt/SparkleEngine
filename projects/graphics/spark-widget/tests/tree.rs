@@ -34,4 +34,7 @@ fn find_by_key_and_child_by_key() {
     let menu = column().key("menu").child(button_widget().key("start")).child(button_widget().key("quit")).mount(&mut tree, root).unwrap();
     assert_eq!(tree.find_by_key(root, "start"), tree.child_by_key(menu, "start"));
     assert_eq!(tree.children_with_key_prefix(menu, "q").len(), 1);
+    let ids = tree.children_by_keys(menu, &["start", "quit"]).unwrap();
+    assert_eq!(ids.len(), 2);
+    assert!(tree.children_by_keys(menu, &["start", "missing"]).is_none());
 }
