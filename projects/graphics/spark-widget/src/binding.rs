@@ -163,6 +163,11 @@ pub fn set_absolute_bounds(
     true
 }
 
+/// 用 [`spark_types::Rect`] 绝对定位（与 [`set_absolute_bounds`] 等价）。
+pub fn set_absolute_rect(tree: &mut WidgetTree, id: WidgetId, rect: spark_types::Rect) -> bool {
+    set_absolute_bounds(tree, id, rect.x, rect.y, rect.w, rect.h)
+}
+
 /// 用完整 [`LayoutSpec`] 覆盖节点布局。
 pub fn set_layout(tree: &mut WidgetTree, id: WidgetId, layout: LayoutSpec) -> bool {
     let Some(node) = tree.node_mut(id) else {
@@ -318,6 +323,17 @@ pub fn set_absolute_bounds_by_key(
 ) -> bool {
     tree.find_by_key(root, key)
         .is_some_and(|id| set_absolute_bounds(tree, id, x, y, width, height))
+}
+
+/// 自 `root` 子树按 key 查找并用 [`spark_types::Rect`] 绝对定位。
+pub fn set_absolute_rect_by_key(
+    tree: &mut WidgetTree,
+    root: WidgetId,
+    key: &str,
+    rect: spark_types::Rect,
+) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_absolute_rect(tree, id, rect))
 }
 
 /// 自 `root` 子树按 key 查找并写像素宽高。
