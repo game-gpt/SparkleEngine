@@ -57,6 +57,7 @@ pub use layout::{Align, Constraints, FlexDirection, Insets, Justify, Layout, Lay
 pub use motion::{Easing, MotionManager, MotionSample, SpringConfig, StyleProperty, Transition};
 pub use node::{WidgetContent, WidgetKind, WidgetNode, WidgetStateFlags};
 pub use overlay::{OverlayEntry, OverlayLayer, OverlayManager};
+#[allow(deprecated)]
 pub use paint::{PaintContext, UiRenderBatch, paint_tree, paint_tree_into};
 pub use response::EventResponse;
 pub use runtime::{UiFrame, UiLayer, UiRuntime};

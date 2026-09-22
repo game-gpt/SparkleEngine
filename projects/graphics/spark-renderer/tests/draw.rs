@@ -7,6 +7,7 @@ fn world_quads_follow_camera_and_hud_does_not() {
     let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
     draw.set_camera(Camera2d::new(Vec2::new(8.0, 0.0), 2.0));
     draw.fill_rect(Rect::new(10.0, 0.0, 4.0, 2.0), Color::rgb(1.0, 0.0, 0.0));
+    #[allow(deprecated)]
     draw.begin_hud();
     draw.fill_rect(Rect::new(10.0, 0.0, 4.0, 2.0), Color::rgb(0.0, 1.0, 0.0));
     assert!((draw.quads[0].rect.x - 4.0).abs() < 1e-5);
@@ -18,6 +19,7 @@ fn world_quads_follow_camera_and_hud_does_not() {
 #[test]
 fn clip_culls_and_intersects_quads() {
     let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+    #[allow(deprecated)]
     draw.begin_hud();
     draw.push_clip(Rect::new(10.0, 10.0, 20.0, 20.0));
     draw.fill_rect(Rect::new(0.0, 0.0, 5.0, 5.0), Color::rgb(1.0, 0.0, 0.0));
@@ -38,6 +40,7 @@ fn ui_batch_flush_merges_into_hud_only() {
     ui.fill_rect(Rect::new(10.0, 10.0, 8.0, 8.0), Color::rgb(0.0, 1.0, 0.0));
     ui.text(12.0, 12.0, 14.0, Color::rgb(1.0, 1.0, 1.0), "ok");
     // 兼容桥仍可用；正式路径由后端直读 `ui`。
+    #[allow(deprecated)]
     world.extend_hud(&mut ui);
 
     assert_eq!(world.quads.len(), 1);

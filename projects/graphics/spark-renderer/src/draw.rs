@@ -159,6 +159,7 @@ impl DrawList {
     ///
     /// **兼容旧路径**。新的屏幕装饰 / Widget 叠绘请写入 [`crate::UiRenderBatch`]
     ///（经 [`crate::HudCanvas`]），由宿主 `draw_ui` 提交。
+    #[deprecated(note = "write screen-space paint to UiRenderBatch via HudCanvas")]
     pub fn begin_hud(&mut self) {
         self.layer = DrawLayer2d::Hud;
     }
@@ -240,10 +241,12 @@ impl DrawList {
         }
     }
 
-    /// 把 UI 批次刷入 HUD 层（追加，不改世界层命令）。
+    /// 兼容桥：把 UI 批次刷入 HUD 层（追加，不改世界层命令）。
     ///
     /// 调用后 `batch` 的图元向量被抽空；裁剪栈由 [`crate::UiRenderBatch::flush_hud`] 清理。
+    #[deprecated(note = "submit UiRenderBatch via draw_ui instead of merging into DrawList")]
     pub fn extend_hud(&mut self, batch: &mut crate::UiRenderBatch) {
+        #[allow(deprecated)]
         self.begin_hud();
         self.hud_quads.append(&mut batch.quads);
         self.hud_tex_quads.append(&mut batch.tex_quads);

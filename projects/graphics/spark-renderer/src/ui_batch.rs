@@ -7,8 +7,8 @@ use crate::texture::TextureId;
 
 /// HUD 绘制命令批次（纯色 / 纹理 / 文字）。
 ///
-/// Widget paint 写入本类型后，可经 [`Self::flush_hud`] 并入 [`DrawList`]，
-/// 或由渲染后端直接消费 `quads` / `tex_quads` / `texts`（不经世界层）。
+/// Widget paint 与屏幕装饰写入本类型后，由宿主 `draw_ui` 交给 GPU 后端直读。
+/// [`Self::flush_hud`] 仅作兼容桥，新代码不要再并入 [`DrawList`]。
 #[derive(Debug, Default)]
 pub struct UiRenderBatch {
     /// 轴对齐纯色四边形（屏幕像素）。
@@ -133,8 +133,12 @@ impl UiRenderBatch {
         self.command_count() == 0
     }
 
-    /// 把本批刷入 [`DrawList`] 的 HUD 层（不改动世界层命令）。
+    /// 兼容桥：把本批刷入 [`DrawList`] 的 HUD 层（不改动世界层命令）。
+    ///
+    /// 新代码请把批次交给 `draw_ui` / GPU 后端，勿再合并。
+    #[deprecated(note = "submit UiRenderBatch via draw_ui instead of merging into DrawList")]
     pub fn flush_hud(&mut self, draw: &mut DrawList) {
+        #[allow(deprecated)]
         draw.extend_hud(self);
         self.clip_stack.clear();
     }

@@ -1,7 +1,6 @@
 //! 自 `src/paint/mod.rs` 迁出的原 `#[cfg(test)] mod tests`。
 use spark_widget::*;
 
-use spark_renderer::DrawList;
 use spark_types::{Color, Vec2};
 use spark_widget::{
     layout::{LayoutSpec, Size, UiMetrics, run_layout},
@@ -24,15 +23,21 @@ fn paint_emits_commands_for_label_and_button() {
 
     let theme = Theme::default();
     let motion = spark_widget::motion::MotionManager::new();
-    let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
-    paint_tree(&tree, &theme, &motion, &mut spark_widget::asset::NullTextureResolver, &mut draw);
-    let total = draw.hud_quads.len() + draw.texts.len() + draw.quads.len();
+    let mut batch = UiRenderBatch::new();
+    paint_tree_into(
+        &tree,
+        &theme,
+        &motion,
+        &mut spark_widget::asset::NullTextureResolver,
+        &mut batch,
+    );
+    let total = batch.command_count();
     assert!(
         total >= 4,
-        "expected several draw commands, got hud_quads={} texts={} quads={}",
-        draw.hud_quads.len(),
-        draw.texts.len(),
-        draw.quads.len()
+        "expected several UI commands, got quads={} tex={} texts={}",
+        batch.quads.len(),
+        batch.tex_quads.len(),
+        batch.texts.len()
     );
 }
 
@@ -58,10 +63,10 @@ fn paint_image_emits_tex_quad() {
     let mut textures = MapTextureResolver { asset, texture: TextureId(99), size: Vec2::new(48.0, 48.0) };
     let theme = Theme::default();
     let motion = spark_widget::motion::MotionManager::new();
-    let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
-    paint_tree(&tree, &theme, &motion, &mut textures, &mut draw);
-    assert!(!draw.hud_tex_quads.is_empty(), "image should emit hud tex quads");
-    assert_eq!(draw.hud_tex_quads[0].texture, TextureId(99));
+    let mut batch = UiRenderBatch::new();
+    paint_tree_into(&tree, &theme, &motion, &mut textures, &mut batch);
+    assert!(!batch.tex_quads.is_empty(), "image should emit tex quads");
+    assert_eq!(batch.tex_quads[0].texture, TextureId(99));
 }
 
 #[test]
@@ -94,10 +99,10 @@ fn paint_image_pending_draws_placeholder() {
     let mut textures = PendingResolver { asset };
     let theme = Theme::default();
     let motion = spark_widget::motion::MotionManager::new();
-    let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
-    paint_tree(&tree, &theme, &motion, &mut textures, &mut draw);
-    assert!(draw.hud_tex_quads.is_empty(), "pending must not sample texture");
-    assert!(!draw.hud_quads.is_empty(), "pending should draw placeholder fill");
+    let mut batch = UiRenderBatch::new();
+    paint_tree_into(&tree, &theme, &motion, &mut textures, &mut batch);
+    assert!(batch.tex_quads.is_empty(), "pending must not sample texture");
+    assert!(!batch.quads.is_empty(), "pending should draw placeholder fill");
 }
 
 #[test]
@@ -123,7 +128,9 @@ fn paint_tree_into_batch_then_flush() {
     assert!(batch.command_count() >= 1);
     assert!(!batch.texts.is_empty());
 
-    let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+    // 兼容桥仍可用；正式路径由后端直读批次。
+    let mut draw = spark_renderer::DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+    #[allow(deprecated)]
     batch.flush_hud(&mut draw);
     assert_eq!(batch.command_count(), 0);
     assert!(!draw.texts.is_empty());

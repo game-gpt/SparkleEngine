@@ -404,6 +404,13 @@ impl GpuState {
     fn render(&mut self, list: &DrawList, ui: &UiRenderBatch) -> Result<(), SparkError> {
         let sw = self.config.width as f32;
         let sh = self.config.height as f32;
+        // DrawList::hud_* 仅为兼容；正式屏幕叠绘应走 ui。非空时 debug 下报警，便于清残留。
+        debug_assert!(
+            list.hud_quads.is_empty() && list.hud_tex_quads.is_empty(),
+            "DrawList HUD hitchhiking is deprecated: hud_quads={} hud_tex_quads={} (use UiRenderBatch)",
+            list.hud_quads.len(),
+            list.hud_tex_quads.len()
+        );
         self.queue.write_buffer(&self.uniform_buf, 0, bytemuck::bytes_of(&Uniforms { screen: [sw, sh], _pad: [0.0, 0.0] }));
 
         // 世界纯色 → DrawList HUD 纯色（兼容）→ UI 批次纯色。

@@ -19,6 +19,7 @@ use crate::{
 };
 
 /// 兼容桥：遍历树写入批次后刷入 `draw` 的 HUD 层。
+#[deprecated(note = "use paint_tree_into and submit UiRenderBatch via draw_ui")]
 pub fn paint_tree(
     tree: &WidgetTree,
     theme: &Theme,
@@ -28,6 +29,7 @@ pub fn paint_tree(
 ) {
     let mut batch = UiRenderBatch::new();
     paint_tree_into(tree, theme, motion, textures, &mut batch);
+    #[allow(deprecated)]
     batch.flush_hud(draw);
 }
 

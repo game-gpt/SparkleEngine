@@ -123,6 +123,7 @@ fn draw_ui(&mut self, _ui: &mut UiRenderBatch) {}
 /// 本函数仅供测试或尚未切分的游戏临时合并。
 #[deprecated(note = "pass UiRenderBatch to the GPU backend instead of merging into DrawList")]
 pub fn compose_ui_hud(draw: &mut DrawList, ui: &mut UiRenderBatch) {
+    #[allow(deprecated)]
     ui.flush_hud(draw);
 }
 

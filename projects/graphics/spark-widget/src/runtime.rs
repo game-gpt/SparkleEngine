@@ -295,9 +295,11 @@ impl UiRuntime {
     /// 兼容桥：把整棵树经 [`UiRenderBatch`] 刷进 `DrawList` HUD。
     ///
     /// 新代码请用 [`Self::paint_into`]，由宿主 `draw_ui` / 后端直读批次。
+    #[deprecated(note = "use paint_into and submit UiRenderBatch via draw_ui")]
     pub fn paint(&mut self, draw: &mut DrawList) {
         let mut batch = crate::UiRenderBatch::new();
         self.paint_into(&mut batch);
+        #[allow(deprecated)]
         batch.flush_hud(draw);
     }
 
