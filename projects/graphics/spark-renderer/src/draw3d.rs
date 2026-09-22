@@ -4,11 +4,12 @@ use std::sync::Arc;
 
 use spark_core::{Color, SparkError};
 use spark_geometry::{Aabb3, Mat4, Vec3};
+use spark_texture::TextureUpload;
 
 use crate::{
     draw::DrawList,
     frustum::{CullParams, Frustum},
-    texture::{RgbaImage, TextureId, alloc_texture_id},
+    texture::{TextureId, alloc_texture_id},
 };
 
 /// 驻留网格标识（跨帧稳定）。
@@ -256,7 +257,7 @@ pub struct DrawList3d {
     /// 第一人称 view-model：世界 pass 之后清深度再画，避免被近景墙体裁切。
     pub view_model_meshes: Vec<MeshCmd>,
     /// 本帧新建 / 更新纹理，由 wgpu 后端上传。
-    pub texture_uploads: Vec<(TextureId, RgbaImage)>,
+    pub texture_uploads: Vec<(TextureId, TextureUpload)>,
     /// 全屏 bloom 强度；`0` 关闭后处理。
     pub bloom_strength: f32,
     /// 单级太阳阴影参数。
@@ -291,17 +292,27 @@ impl DrawList3d {
 
     /// 分配稳定纹理 ID 并排队上传。请缓存返回的 ID，勿每帧为同一贴图重复分配。
     pub fn create_texture(&mut self, width: u32, height: u32, rgba: Vec<u8>) -> Result<TextureId, SparkError> {
-        let img = RgbaImage::from_rgba8(width, height, rgba)?;
+        let upload = TextureUpload::rgba8_srgb(width, height, rgba)?;
+        Ok(self.create_texture_upload(upload))
+    }
+
+    /// 排队任意 [`TextureUpload`]。
+    pub fn create_texture_upload(&mut self, upload: TextureUpload) -> TextureId {
         let id = alloc_texture_id();
-        self.texture_uploads.push((id, img));
-        Ok(id)
+        self.texture_uploads.push((id, upload));
+        id
     }
 
     /// 用已有 ID 重新上传像素（热重载 / 图集更新）。
     pub fn update_texture(&mut self, id: TextureId, width: u32, height: u32, rgba: Vec<u8>) -> Result<(), SparkError> {
-        let img = RgbaImage::from_rgba8(width, height, rgba)?;
-        self.texture_uploads.push((id, img));
+        let upload = TextureUpload::rgba8_srgb(width, height, rgba)?;
+        self.queue_texture_upload(id, upload);
         Ok(())
+    }
+
+    /// 用已有 ID 排队 [`TextureUpload`]。
+    pub fn queue_texture_upload(&mut self, id: TextureId, upload: TextureUpload) {
+        self.texture_uploads.push((id, upload));
     }
 
     pub fn mesh(&mut self, model: Mat4, vertices: Arc<[MeshVertex]>) {

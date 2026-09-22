@@ -3415,6 +3415,7 @@ dependencies = [
  "spark-core",
  "spark-geometry",
  "spark-input",
+ "spark-texture",
 ]
 
 [[package]]

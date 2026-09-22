@@ -26,6 +26,11 @@ pub use spark_geometry::{Aabb3, Mat4, Vec3};
 pub use spark_input::{ButtonState, Input, Key, MouseBtn};
 pub use texture::{RgbaImage, TextureId, alloc_texture_id};
 pub use texture_cache::TextureCache;
+pub use spark_texture::{
+    AddressMode, AlphaMode, AtlasMetadata, ColorSpace, CpuCopyPolicy, DeviceCaps, FilterMode, MipmapPolicy, Residency, SamplerDesc,
+    SpriteRegion, TextureData, TextureDesc, TextureDimension, TextureFormat, TextureInfo, TextureLayout, TextureState, TextureUpload,
+    TextureUsage, UploadPolicy,
+};
 
 /// 启动窗口配置（后端无关字段）。
 #[derive(Debug, Clone)]

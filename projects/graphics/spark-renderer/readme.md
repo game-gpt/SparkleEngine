@@ -21,8 +21,8 @@ impl GameHost for MyHost {
 }
 ```
 
-3D 用 `GameHost3d` / `DrawList3d`。常用类型：`WindowConfig`、`FrameCtx`、`QuadCmd` / `TextCmd` / `TexQuadCmd`、`Camera2d` /
-`Camera3d`、`alloc_texture_id`。开窗提交用 `spark_engine::run_game` 或 `spark_renderer_wgpu::run_window_2d`。
+3D 用 `GameHost3d` / `DrawList3d`。纹理权威上传类型为 `TextureUpload`（来自 `spark-texture`）；`create_texture(w,h,rgba)` 仍可用，内部转为
+sRGB `TextureUpload`。`RgbaImage` 仅作 RGBA8 特例薄封装。开窗提交用 `spark_engine::run_game` 或 `spark_renderer_wgpu::run_window_2d`。
 
 ```bash
 cargo test -p spark-renderer

@@ -30,6 +30,17 @@ fn create_texture_queues_upload() {
     let id = list.create_texture(1, 1, vec![255, 0, 0, 255]).unwrap();
     assert!(id.0 >= 1);
     assert_eq!(list.texture_uploads.len(), 1);
+    assert_eq!(list.texture_uploads[0].1.desc.format, TextureFormat::Rgba8UnormSrgb);
+}
+
+#[test]
+fn create_texture_upload_queues_arbitrary() {
+    let mut list = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
+    let upload = TextureUpload::rgba8(2, 2, vec![0u8; 16], false).unwrap().with_mipmap(MipmapPolicy::None);
+    let id = list.create_texture_upload(upload);
+    assert!(id.0 >= 1);
+    assert_eq!(list.texture_uploads.len(), 1);
+    assert_eq!(list.texture_uploads[0].1.desc.format, TextureFormat::Rgba8Unorm);
 }
 
 #[test]

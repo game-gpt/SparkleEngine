@@ -1,8 +1,9 @@
 use spark_core::{Color, Rect, SparkError, Vec2};
+use spark_texture::TextureUpload;
 
 use crate::{
     camera2d::Camera2d,
-    texture::{RgbaImage, TextureId, alloc_texture_id},
+    texture::{TextureId, alloc_texture_id},
 };
 
 #[derive(Debug, Clone)]
@@ -54,7 +55,7 @@ pub struct DrawList {
     pub hud_quads: Vec<QuadCmd>,
     pub hud_tex_quads: Vec<TexQuadCmd>,
     pub texts: Vec<TextCmd>,
-    pub texture_uploads: Vec<(TextureId, RgbaImage)>,
+    pub texture_uploads: Vec<(TextureId, TextureUpload)>,
     layer: DrawLayer2d,
     /// 只变换世界层。默认原点与缩放为恒等，旧调用坐标不变。
     camera: Camera2d,
@@ -149,17 +150,27 @@ impl DrawList {
 
     /// 分配稳定纹理 ID 并排队上传。请缓存返回的 ID。
     pub fn create_texture(&mut self, width: u32, height: u32, rgba: Vec<u8>) -> Result<TextureId, SparkError> {
-        let img = RgbaImage::from_rgba8(width, height, rgba)?;
+        let upload = TextureUpload::rgba8_srgb(width, height, rgba)?;
+        Ok(self.create_texture_upload(upload))
+    }
+
+    /// 排队任意 [`TextureUpload`]（压缩 / 多 mip 等）。
+    pub fn create_texture_upload(&mut self, upload: TextureUpload) -> TextureId {
         let id = alloc_texture_id();
-        self.texture_uploads.push((id, img));
-        Ok(id)
+        self.texture_uploads.push((id, upload));
+        id
     }
 
     /// 用已有 ID 重新上传像素。
     pub fn update_texture(&mut self, id: TextureId, width: u32, height: u32, rgba: Vec<u8>) -> Result<(), SparkError> {
-        let img = RgbaImage::from_rgba8(width, height, rgba)?;
-        self.texture_uploads.push((id, img));
+        let upload = TextureUpload::rgba8_srgb(width, height, rgba)?;
+        self.queue_texture_upload(id, upload);
         Ok(())
+    }
+
+    /// 用已有 ID 排队 [`TextureUpload`]。
+    pub fn queue_texture_upload(&mut self, id: TextureId, upload: TextureUpload) {
+        self.texture_uploads.push((id, upload));
     }
 
     /// 绘制纹理四边形。`uv` 为归一化 [0,1] 源矩形。
