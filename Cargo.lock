@@ -2924,8 +2924,8 @@ dependencies = [
 name = "spark-prefab"
 version = "0.0.0"
 dependencies = [
+ "oak-von",
  "serde",
- "serde_json",
  "spark-asset",
  "spark-types",
  "uuid",
