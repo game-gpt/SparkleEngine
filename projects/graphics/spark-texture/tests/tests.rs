@@ -77,3 +77,35 @@ fn device_caps_rejects_oversized() {
     let err = upload.validate_for_device(&caps).unwrap_err();
     assert_eq!(err.code, codes::texture_size_invalid());
 }
+
+#[test]
+fn sheet_index() {
+    let sheet = SpriteSheet::from_size(64, 32, 4, 2).unwrap();
+    let s = sheet.sprite_index(5).unwrap();
+    assert_eq!(s.region.x, 16.0);
+    assert_eq!(s.region.y, 16.0);
+    assert_eq!(s.region.w, 16.0);
+    assert_eq!(s.region.h, 16.0);
+}
+
+#[test]
+fn nine_stretch_corners() {
+    use spark_core::Rect;
+    let nine = NineSlice::new(Rect::new(0.0, 0.0, 32.0, 32.0), Margin::uniform(8.0));
+    nine.validate(32, 32).unwrap();
+    let quads = nine.layout(Rect::new(0.0, 0.0, 100.0, 60.0)).unwrap();
+    assert_eq!(quads.len(), 9);
+    assert!((quads[0].src.w - 8.0).abs() < 1e-5);
+    assert!((quads[0].dst.w - 8.0).abs() < 1e-5);
+    let center = quads.iter().find(|q| (q.dst.x - 8.0).abs() < 1e-5 && (q.dst.y - 8.0).abs() < 1e-5).unwrap();
+    assert!((center.dst.w - 84.0).abs() < 1e-5);
+    assert!((center.dst.h - 44.0).abs() < 1e-5);
+}
+
+#[test]
+fn nine_tile_center() {
+    use spark_core::Rect;
+    let nine = NineSlice::new(Rect::new(0.0, 0.0, 30.0, 30.0), Margin::uniform(10.0)).with_mode(NineSliceMode::Tile);
+    let quads = nine.layout(Rect::new(0.0, 0.0, 50.0, 50.0)).unwrap();
+    assert!(quads.len() > 9);
+}
