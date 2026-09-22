@@ -45,6 +45,15 @@ pub fn set_visible(tree: &mut WidgetTree, id: WidgetId, visible: bool) -> bool {
     true
 }
 
+/// 写入禁用态（不接收交互）。
+pub fn set_disabled(tree: &mut WidgetTree, id: WidgetId, disabled: bool) -> bool {
+    let Some(node) = tree.node_mut(id) else {
+        return false;
+    };
+    node.state.disabled = disabled;
+    true
+}
+
 /// 写入勾选态（同步 `content` 与 `state`）。
 pub fn set_checked(tree: &mut WidgetTree, id: WidgetId, checked: bool) -> bool {
     let Some(node) = tree.node_mut(id) else {
@@ -161,6 +170,12 @@ pub fn set_text_by_key(
 pub fn set_visible_by_key(tree: &mut WidgetTree, root: WidgetId, key: &str, visible: bool) -> bool {
     tree.find_by_key(root, key)
         .is_some_and(|id| set_visible(tree, id, visible))
+}
+
+/// 自 `root` 子树按 key 查找并写禁用态。
+pub fn set_disabled_by_key(tree: &mut WidgetTree, root: WidgetId, key: &str, disabled: bool) -> bool {
+    tree.find_by_key(root, key)
+        .is_some_and(|id| set_disabled(tree, id, disabled))
 }
 
 /// 自 `root` 子树按 key 查找并写勾选态。

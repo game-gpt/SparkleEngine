@@ -60,6 +60,31 @@ fn bind_helpers_by_id_and_key() {
 }
 
 #[test]
+fn disabled_and_menu_button() {
+    use spark_types::Color;
+    use spark_widget::menu_button;
+
+    let mut tree = WidgetTree::new();
+    let root = tree.root();
+    let id = menu_button("Single Player", 24.0, Color::rgb(1.0, 1.0, 1.0))
+        .key("title.single")
+        .on_action("title.single")
+        .disabled(true)
+        .mount(&mut tree, root)
+        .unwrap();
+
+    let n = tree.node(id).unwrap();
+    assert!(n.state.disabled);
+    assert_eq!(n.content.text.as_deref(), Some("Single Player"));
+    assert!(n.style.background.is_some_and(|c| c.a < 0.01));
+
+    assert!(set_disabled(&mut tree, id, false));
+    assert!(!tree.node(id).unwrap().state.disabled);
+    assert!(set_disabled_by_key(&mut tree, root, "title.single", true));
+    assert!(tree.node(id).unwrap().state.disabled);
+}
+
+#[test]
 fn absolute_and_style_bind_helpers() {
     use spark_types::Color;
     use spark_widget::layout::Layout;

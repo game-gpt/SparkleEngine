@@ -6,6 +6,8 @@ mod tabs;
 pub use list::{content_height, sync_visible_rows, visible_row_range};
 pub use tabs::{handle_tab_click, sync_tabs, tab_view};
 
+use spark_types::Color;
+
 use crate::{
     id::WidgetId,
     layout::{FlexDirection, LayoutSpec, Size},
@@ -26,6 +28,10 @@ pub struct WidgetBuilder {
     tab_index: Option<i32>,
     neighbors: Option<crate::focus::Neighbors>,
     layer: Option<crate::runtime::UiLayer>,
+    /// 若设则写入 `state.disabled`（未设则 reconcile 时保留原值）。
+    disabled: Option<bool>,
+    /// 若设则写入 `state.visible`（未设则 reconcile 时保留原值）。
+    visible: Option<bool>,
     children: Vec<WidgetBuilder>,
 }
 
@@ -42,6 +48,8 @@ impl WidgetBuilder {
             tab_index: None,
             neighbors: None,
             layer: None,
+            disabled: None,
+            visible: None,
             children: Vec::new(),
         }
     }
@@ -167,6 +175,18 @@ impl WidgetBuilder {
         self
     }
 
+    /// 禁用交互（不接收命中 / 焦点）。
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = Some(disabled);
+        self
+    }
+
+    /// 可见性（隐藏则跳过布局命中与绘制）。
+    pub fn visible(mut self, visible: bool) -> Self {
+        self.visible = Some(visible);
+        self
+    }
+
     /// 控件种类。
     pub fn kind(&self) -> WidgetKind {
         self.kind
@@ -278,6 +298,12 @@ impl WidgetBuilder {
         if let Some(neighbors) = self.neighbors.clone() {
             node.neighbors = neighbors;
         }
+        if let Some(disabled) = self.disabled {
+            node.state.disabled = disabled;
+        }
+        if let Some(visible) = self.visible {
+            node.state.visible = visible;
+        }
         node.layer = self.layer.or(inherited).unwrap_or(crate::runtime::UiLayer::Gui);
         // ScrollView 等：保留运行时滚动，不被声明式默认冲掉。
         node.scroll = prev_scroll;
@@ -329,6 +355,26 @@ pub fn image_widget() -> WidgetBuilder {
 /// 按钮。
 pub fn button_widget() -> WidgetBuilder {
     WidgetBuilder::new(WidgetKind::Button)
+}
+
+/// 透明底菜单文字按钮：idle 用声明字色，hover / focus / pressed 走 [`crate::Theme::menu_item`]。
+///
+/// `font_size` 与 `foreground` 由调用方传入；宽默认 320，高为 `font_size + 14`。
+pub fn menu_button(label: impl Into<String>, font_size: f32, foreground: Color) -> WidgetBuilder {
+    button_widget()
+        .text(label)
+        .style(Style {
+            background: Some(Color::rgba(0.0, 0.0, 0.0, 0.0)),
+            foreground: Some(foreground),
+            font_size: Some(font_size),
+            corner_radius: Some(0.0),
+            ..Style::default()
+        })
+        .layout(LayoutSpec {
+            width: Size::Px(320.0),
+            height: Size::Px(font_size + 14.0),
+            ..LayoutSpec::default()
+        })
 }
 
 /// 复选框；默认行高 24。

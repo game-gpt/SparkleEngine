@@ -36,10 +36,10 @@ pub use accessibility::{AccessibilityNode, AccessibilityTree, Role};
 pub use asset::{MapTextureResolver, NullTextureResolver, ResolvedTexture, UiImage, UiTextureResolver};
 pub use binding::{
     set_absolute_bounds, set_absolute_bounds_by_key, set_absolute_offset, set_absolute_offset_by_key,
-    set_background, set_background_by_key, set_checked, set_checked_by_key, set_foreground,
-    set_foreground_by_key, set_image, set_image_by_key, set_layout, set_selected, set_selected_by_key,
-    set_size_px, set_text, set_text_by_key, set_value, set_value_by_key, set_visible,
-    set_visible_by_key, NullViewModel, UiViewModel,
+    set_background, set_background_by_key, set_checked, set_checked_by_key, set_disabled, set_disabled_by_key,
+    set_foreground, set_foreground_by_key, set_image, set_image_by_key, set_layout, set_selected, set_selected_by_key,
+    set_size_px, set_text, set_text_by_key, set_value, set_value_by_key, set_visible, set_visible_by_key, NullViewModel,
+    UiViewModel,
 };
 pub use command::{UiCommand, UiCommandQueue};
 pub use drag_drop::{DragPayload, DragState};
@@ -54,7 +54,7 @@ pub use layout::{Align, Constraints, FlexDirection, Insets, Justify, Layout, Lay
 pub use motion::{Easing, MotionManager, MotionSample, SpringConfig, StyleProperty, Transition};
 pub use node::{WidgetContent, WidgetKind, WidgetNode, WidgetStateFlags};
 pub use overlay::{OverlayEntry, OverlayLayer, OverlayManager};
-pub use paint::{PaintContext, paint_tree};
+pub use paint::{PaintContext, UiRenderBatch, paint_tree, paint_tree_into};
 pub use response::EventResponse;
 pub use runtime::{UiFrame, UiLayer, UiRuntime};
 pub use scroll::{ScrollDirection, ScrollState, ensure_visible, find_scroll_ancestor};
@@ -66,8 +66,8 @@ pub use text::{
 };
 pub use tree::WidgetTree;
 pub use widgets::{
-    WidgetBuilder, button_widget, checkbox_widget, column, content_height, grid, handle_tab_click, hud_root, image_widget, label_widget,
-    list_view, modal_widget, overlay_root, panel, popup_widget, progress_widget, radio_widget, row, scroll_view, separator_widget,
-    slider_widget, spacer_widget, sync_tabs, sync_visible_rows, tab_view, text_field_widget, toast_widget, toggle_widget, tooltip_widget,
-    visible_row_range,
+    WidgetBuilder, button_widget, checkbox_widget, column, content_height, grid, handle_tab_click, hud_root, image_widget,
+    label_widget, list_view, menu_button, modal_widget, overlay_root, panel, popup_widget, progress_widget, radio_widget, row,
+    scroll_view, separator_widget, slider_widget, spacer_widget, sync_tabs, sync_visible_rows, tab_view, text_field_widget,
+    toast_widget, toggle_widget, tooltip_widget, visible_row_range,
 };
