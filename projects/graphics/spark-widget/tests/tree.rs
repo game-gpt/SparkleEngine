@@ -26,3 +26,20 @@ fn builder_mounts_children() {
     let id = column().key("menu").child(button_widget().key("start")).mount(&mut tree, root).unwrap();
     assert_eq!(tree.node(id).unwrap().children.len(), 1);
 }
+
+#[test]
+fn find_by_key_and_child_by_key() {
+    let mut tree = WidgetTree::new();
+    let root = tree.root();
+    let menu = column()
+        .key("menu")
+        .child(button_widget().key("start"))
+        .child(button_widget().key("quit"))
+        .mount(&mut tree, root)
+        .unwrap();
+    assert_eq!(tree.find_by_key(root, "start"), tree.child_by_key(menu, "start"));
+    assert_eq!(
+        tree.children_with_key_prefix(menu, "q").len(),
+        1
+    );
+}

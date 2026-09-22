@@ -90,4 +90,48 @@ impl WidgetTree {
     pub fn ids(&self) -> Vec<WidgetId> {
         self.nodes.keys().copied().collect()
     }
+
+    /// 直接子节点中匹配 `key` 的第一个。
+    pub fn child_by_key(&self, parent: WidgetId, key: &str) -> Option<WidgetId> {
+        let children = self.node(parent)?.children.clone();
+        children.into_iter().find(|&id| {
+            self.node(id)
+                .and_then(|n| n.key.as_deref())
+                .is_some_and(|k| k == key)
+        })
+    }
+
+    /// 子树 DFS（含 `root` 自身）按 `key` 查找。
+    pub fn find_by_key(&self, root: WidgetId, key: &str) -> Option<WidgetId> {
+        if self
+            .node(root)
+            .and_then(|n| n.key.as_deref())
+            .is_some_and(|k| k == key)
+        {
+            return Some(root);
+        }
+        let children = self.node(root)?.children.clone();
+        for child in children {
+            if let Some(id) = self.find_by_key(child, key) {
+                return Some(id);
+            }
+        }
+        None
+    }
+
+    /// `root` 下直接子节点里，`key` 以 `prefix` 开头的 ID（按挂载序）。
+    pub fn children_with_key_prefix(&self, root: WidgetId, prefix: &str) -> Vec<WidgetId> {
+        let Some(node) = self.node(root) else {
+            return Vec::new();
+        };
+        node.children
+            .iter()
+            .copied()
+            .filter(|&id| {
+                self.node(id)
+                    .and_then(|n| n.key.as_deref())
+                    .is_some_and(|k| k.starts_with(prefix))
+            })
+            .collect()
+    }
 }
