@@ -3,13 +3,14 @@
 //! 提供不可靠/可靠通道抽象、包序号、简易客户端预测与权威确认。
 //! **不**定义游戏 RPC 枚举或具体传输实现（UDP/WebRTC 由宿主注入）。
 
+#![warn(missing_docs)]
 mod channel;
 mod prediction;
 mod transport;
 
 pub use channel::{ChannelKind, NetPacket, PacketHeader, Sequence};
 pub use prediction::{PredictionClock, PredictionError};
-pub use transport::{InMemoryTransport, PeerId, Transport};
+pub use transport::{InMemoryBus, InMemoryTransport, PeerId, Transport};
 
 use std::{fmt, sync::Arc};
 

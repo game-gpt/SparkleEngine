@@ -121,22 +121,3 @@ fn recount(report: &mut CoverageReport) {
 pub fn fallback_key(locale: LocaleId, message: impl Into<Arc<str>>) -> (LocaleId, MessageName) {
     (locale, MessageName::new(message))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{document::MessageDefinition, locale::LocaleId};
-
-    #[test]
-    fn reports_missing_and_present() {
-        let mut en = LocalizationDocument::new(LocaleId::parse("en").unwrap(), "game");
-        en.insert("a", MessageDefinition::Text(Arc::from("A")));
-        en.insert("b", MessageDefinition::Text(Arc::from("B")));
-        let mut zh = LocalizationDocument::new(LocaleId::parse("zh-Hans").unwrap(), "game");
-        zh.insert("a", MessageDefinition::Text(Arc::from("甲")));
-        let report = coverage_against(&en, &zh);
-        assert_eq!(report.present, 1);
-        assert_eq!(report.missing, 1);
-        assert!(report.ratio_present() < 1.0);
-    }
-}

@@ -1,5 +1,6 @@
 //! 混合示例：Rust 棋盘权威 + 可玩主循环（Valkyrie HUD 元数据仍在 assets/scripts）。
 
+#![warn(missing_docs)]
 mod board;
 mod collision;
 mod pieces;

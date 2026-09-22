@@ -206,16 +206,3 @@ pub mod codes {
         ErrorCode::new("spark", "gpu.event_loop")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn dotted_roundtrip() {
-        let c = ErrorCode::parse("spark.asset.not_found");
-        assert_eq!(c.namespace.as_str(), "spark");
-        assert_eq!(c.id.as_str(), "asset.not_found");
-        assert_eq!(c.to_string(), "spark.asset.not_found");
-    }
-}

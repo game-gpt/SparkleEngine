@@ -1,5 +1,6 @@
 //! 固定时间步、缩放与暂停。
 
+#![warn(missing_docs)]
 /// 帧时钟：累积真实时间，按固定步吐出仿真 tick。
 #[derive(Debug, Clone)]
 pub struct Clock {
@@ -103,30 +104,5 @@ impl Clock {
         }
         self.delta_seconds = self.fixed_dt;
         steps
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fixed_steps_accumulate() {
-        let mut c = Clock::fixed(0.05, 8);
-        assert_eq!(c.begin_frame(0.12), 2);
-        assert!((c.elapsed_seconds - 0.10).abs() < 1e-5);
-        assert_eq!(c.begin_frame(0.01), 0);
-        assert_eq!(c.begin_frame(0.04), 1);
-    }
-
-    #[test]
-    fn pause_and_scale() {
-        let mut c = Clock::variable();
-        c.set_paused(true);
-        assert_eq!(c.begin_frame(0.016), 0);
-        c.set_paused(false);
-        c.set_scale(2.0);
-        assert_eq!(c.begin_frame(0.016), 1);
-        assert!((c.delta_seconds - 0.032).abs() < 1e-5);
     }
 }

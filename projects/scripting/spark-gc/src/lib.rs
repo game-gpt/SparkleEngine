@@ -3,6 +3,7 @@
 //! 不变式：所有堆对象经 [`GcHandle`] 引用；根由宿主在 [`Heap::collect`] 前登记。
 //! 栈值 [`Value`] 含非堆变体（数字、实体 ID、函数下标），GC 只追踪 [`Value::Handle`]。
 
+#![warn(missing_docs)]
 use std::{collections::HashMap, fmt};
 
 /// 堆对象句柄（分代可后续扩展；当前为槽位索引）。
@@ -228,29 +229,5 @@ impl Heap {
 
     pub fn live_count(&self) -> usize {
         self.slots.iter().filter(|s| s.live).count()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn collect_unreachable_string() {
-        let mut heap = Heap::new();
-        let keep = heap.alloc_string("keep");
-        let _drop = heap.alloc_string("drop");
-        assert_eq!(heap.live_count(), 2);
-        heap.collect(&[keep]);
-        assert_eq!(heap.live_count(), 1);
-    }
-
-    #[test]
-    fn entity_and_func_are_not_heap() {
-        let e = Value::Entity(7);
-        let f = Value::Func(3);
-        assert_eq!(e.as_entity(), Some(7));
-        assert_eq!(f.as_func(), Some(3));
-        assert!(e.truthy());
     }
 }

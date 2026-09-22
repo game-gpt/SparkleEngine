@@ -48,16 +48,3 @@ impl SparkJsHost {
         self.assets.bytes(spark_asset::AssetId(id)).map(|b| b.len())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn info_and_geometry() {
-        let host = SparkJsHost::new();
-        let info = host.info();
-        assert_eq!(info.npm_package, "@game-gpt/sparkle-engine");
-        assert!((host.vec2_length(3.0, 4.0) - 5.0).abs() < 1e-5);
-    }
-}

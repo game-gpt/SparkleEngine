@@ -1,5 +1,6 @@
 //! 纯 Rust 乒乓示例：可独立 `cargo run`，也可由 Studio Play 嵌入。
 
+#![warn(missing_docs)]
 mod ball;
 mod game;
 mod paddle;

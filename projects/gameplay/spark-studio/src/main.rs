@@ -1,15 +1,9 @@
 //! Spark Studio 入口：打开当前 npm 游戏项目的 Unity-like 编辑器。
 
-mod app;
-mod play;
-mod project;
-mod shell;
-mod state;
-
 use spark_engine::run_game;
 use spark_renderer::WindowConfig;
 
-use crate::{
+use spark_studio::{
     app::StudioApp,
     project::{load_project, resolve_project_dir},
 };

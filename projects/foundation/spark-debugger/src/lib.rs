@@ -1,7 +1,8 @@
 //! Spark 调试框架：叠加绘制、帧统计与检查器钩子。
 //! 不含游戏专用面板或远程调试协议产品。
 
-use spark_core::{Color, Rect, Vec2};
+#![warn(missing_docs)]
+pub use spark_core::{Color, Rect, Vec2};
 use spark_renderer::DrawList;
 
 /// 单帧性能与计数快照。
@@ -205,21 +206,5 @@ impl DebugSession {
 
     pub fn flush_draw(&self, draw: &mut DrawList) {
         self.draw.flush(draw);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn debug_draw_respects_enabled_flag() {
-        let mut d = DebugDraw::new();
-        d.rect_filled(Rect::new(0.0, 0.0, 10.0, 10.0), Color::rgb(1.0, 0.0, 0.0));
-        assert_eq!(d.prims().len(), 1);
-        d.set_enabled(false);
-        d.clear();
-        d.line(Vec2::ZERO, Vec2::new(1.0, 1.0), Color::rgb(1.0, 1.0, 1.0), 1.0);
-        assert!(d.prims().is_empty());
     }
 }

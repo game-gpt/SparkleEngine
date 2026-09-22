@@ -92,19 +92,3 @@ impl Vec2Ext for Vec2 {
         if d2 <= max * max || d2 < 1e-12 { self } else { self.mul_scalar(max / d2.sqrt()) }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalize_and_rotate() {
-        let v = Vec2::new(3.0, 4.0);
-        assert!((v.length() - 5.0).abs() < 1e-5);
-        let n = v.normalized();
-        assert!((n.length() - 1.0).abs() < 1e-5);
-        let r = Vec2::new(1.0, 0.0).rotate(std::f32::consts::FRAC_PI_2);
-        assert!(r.x.abs() < 1e-5);
-        assert!((r.y - 1.0).abs() < 1e-5);
-    }
-}

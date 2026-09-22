@@ -3,6 +3,7 @@
 //! 错误只保存事实（码、类型化参数、上下文、因果）。最终用户句子由
 //! `spark-localization` 在渲染边界生成。`Display` 仅输出稳定错误码。
 
+#![warn(missing_docs)]
 mod args;
 mod code;
 mod context;

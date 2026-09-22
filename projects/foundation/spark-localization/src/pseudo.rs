@@ -107,22 +107,3 @@ fn accentuate(input: &str) -> String {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::locale::LocaleId;
-
-    #[test]
-    fn accents_expand_ascii_vowels() {
-        let mut doc = LocalizationDocument::new(LocaleId::parse("en").unwrap(), "game");
-        doc.insert("menu.continue", MessageDefinition::Text(Arc::from("Continue")));
-        let pseudo = generate_pseudo(&doc, PseudoKind::Accents);
-        let def = pseudo.messages.values().next().unwrap();
-        match def {
-            MessageDefinition::Text(text) => assert_eq!(text.as_ref(), "Çóñtíñúé"),
-            other => panic!("unexpected {other:?}"),
-        }
-        assert_eq!(pseudo.locale.as_str(), "en-XA");
-    }
-}

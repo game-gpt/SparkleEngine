@@ -3,6 +3,7 @@
 //! 提供 [`AssetId`]、内存缓存、[`AssetLoader`]、热重载事件与 [`HotReloadWatch`] 轮询。
 //! 具体纹理/音频解码由其它 crate / 游戏仓实现加载器。
 
+#![warn(missing_docs)]
 mod cache;
 mod handle;
 mod hot_reload;

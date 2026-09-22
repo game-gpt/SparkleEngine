@@ -22,8 +22,8 @@ node = ["dep:napi", "dep:napi-derive"]
 spark-core = { workspace = true }
 spark-asset = { workspace = true }
 spark-geometry = { workspace = true }
-napi = { version = "3", default-features = false, features = ["napi4"], optional = true }
-napi-derive = { version = "3", optional = true }
+napi = { workspace = true, optional = true }
+napi-derive = { workspace = true, optional = true }
 
 [package.metadata.napi]
 # npm 包名（发布时由 CI / 文档使用）

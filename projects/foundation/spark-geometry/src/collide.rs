@@ -93,26 +93,3 @@ fn colinear_overlap(a: LineSegment, b: LineSegment) -> bool {
     let (tb_min, tb_max) = if tb0 < tb1 { (tb0, tb1) } else { (tb1, tb0) };
     tb_max >= ta0 - 1e-6 && tb_min <= ta1 + 1e-6
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn circles_and_ray() {
-        let a = Circle::new(Vec2::new(0.0, 0.0), 1.0);
-        let b = Circle::new(Vec2::new(1.5, 0.0), 1.0);
-        assert!(circle_circle(a, b));
-        let ray = Ray::new(Vec2::new(-5.0, 0.0), Vec2::new(1.0, 0.0));
-        let t = ray_circle(ray, a).unwrap();
-        assert!((t - 4.0).abs() < 1e-4);
-    }
-
-    #[test]
-    fn aabb() {
-        let a = Rect::new(0.0, 0.0, 2.0, 2.0);
-        let b = Rect::new(1.0, 1.0, 2.0, 2.0);
-        assert!(aabb_aabb(a, b));
-        assert!(circle_aabb(Circle::new(Vec2::new(3.0, 1.0), 1.1), a));
-    }
-}

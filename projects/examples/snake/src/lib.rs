@@ -1,5 +1,6 @@
 //! 贪吃蛇：Valkyrie 项目的 native 试玩宿主（脚本仍为 Inspector 元数据，VM Play 接通前由此运行）。
 
+#![warn(missing_docs)]
 use spark_core::{Color, Rect};
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost};

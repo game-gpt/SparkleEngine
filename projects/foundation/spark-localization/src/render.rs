@@ -63,34 +63,3 @@ pub fn render_diagnostic(snapshot: &LocaleSnapshot, diagnostic: &Diagnostic) -> 
 pub fn render_error(snapshot: &LocaleSnapshot, error: &SparkError) -> LocalizedText {
     render_diagnostic(snapshot, &Diagnostic::from_error(error.clone()))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        compile::{CompileOptions, compile_documents},
-        document::{LocalizationDocument, MessageDefinition},
-        locale::LocaleId,
-        snapshot::LocaleSnapshot,
-    };
-    use spark_core::{SparkError, codes};
-    use std::sync::Arc;
-
-    #[test]
-    fn renders_user_message_from_error_code() {
-        let mut doc = LocalizationDocument::new(LocaleId::parse("en").unwrap(), "spark");
-        doc.insert("error.asset.not_found", MessageDefinition::Text(Arc::from("Asset not found: {key}")));
-        let bundle = compile_documents(&[doc], CompileOptions::default()).unwrap().bundle;
-        let snap = LocaleSnapshot::from_bundle(
-            LocaleId::parse("en").unwrap(),
-            &LocaleId::parse("en").unwrap(),
-            &[LocaleId::parse("en").unwrap()],
-            1,
-            bundle,
-        );
-        let err = SparkError::new(codes::asset_not_found()).arg("key", ErrorArg::AssetKey(Arc::from("textures/dirt.png")));
-        let text = render_error(&snap, &err);
-        assert_eq!(text.text.as_ref(), "Asset not found: textures/dirt.png");
-        assert!(!text.text.contains("无法"));
-    }
-}

@@ -92,15 +92,3 @@ impl std::error::Error for Error {
         self.cause.as_ref().map(|c| c.as_ref() as &(dyn std::error::Error + 'static))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn display_is_stable_code_only() {
-        let err = Error::not_implemented("widget-rtl");
-        assert_eq!(err.to_string(), "spark.not_implemented");
-        assert!(err.args.get("what").is_some());
-    }
-}

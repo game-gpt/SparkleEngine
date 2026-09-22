@@ -119,15 +119,3 @@ fn measure_estimate(text: &str, style: &TextStyle, max_width: Option<f32>) -> Te
     let w = text.chars().count() as f32 * char_w;
     TextLayout { size: Vec2::new(w, style.size * style.line_height), baseline: style.size, line_count: 1 }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn estimate_wraps_when_max_width_set() {
-        let style = TextStyle { size: 10.0, ..TextStyle::default() };
-        let layout = measure_plain("abcdefghij", &style, Some(30.0));
-        assert!(layout.line_count >= 2);
-    }
-}

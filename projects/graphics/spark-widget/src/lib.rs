@@ -8,6 +8,7 @@
 //!
 //! 不提供立即模式控件公共 API。
 
+#![warn(missing_docs)]
 pub mod accessibility;
 pub mod asset;
 pub mod binding;
@@ -43,11 +44,11 @@ pub use focus::{
 };
 pub use id::WidgetId;
 pub use inspector::{LayoutDump, UiEventTrace, UiInspector};
-pub use layout::{Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size, UiMetrics};
+pub use layout::{Align, Constraints, FlexDirection, Insets, Justify, Layout, LayoutSpec, Size, UiMetrics, run_layout};
 pub use motion::{Easing, MotionManager, MotionSample, SpringConfig, StyleProperty, Transition};
 pub use node::{WidgetContent, WidgetKind, WidgetNode, WidgetStateFlags};
 pub use overlay::{OverlayEntry, OverlayLayer, OverlayManager};
-pub use paint::PaintContext;
+pub use paint::{PaintContext, paint_tree};
 pub use response::EventResponse;
 pub use runtime::{UiFrame, UiLayer, UiRuntime};
 pub use scroll::{ScrollDirection, ScrollState, ensure_visible, find_scroll_ancestor};

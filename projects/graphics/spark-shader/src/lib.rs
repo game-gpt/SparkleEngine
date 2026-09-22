@@ -2,6 +2,7 @@
 //!
 //! WGSL 正文归本 crate；`spark-renderer-wgpu` 只消费编译结果与入口名，不内嵌着色器字符串。
 
+#![warn(missing_docs)]
 use std::sync::Arc;
 
 use spark_core::{ErrorArg, SparkError, codes};
@@ -110,36 +111,4 @@ pub fn validate_source(source: &ShaderSource<'_>) -> Result<(), SparkError> {
         return Err(SparkError::new(codes::shader_empty()).arg("label", ErrorArg::String(Arc::from(source.label))));
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn builtin_sources_are_nonempty() {
-        for s in [
-            BuiltinShader::SolidQuad,
-            BuiltinShader::TexturedGlyph,
-            BuiltinShader::TexturedQuad,
-            BuiltinShader::SolidMesh3d,
-            BuiltinShader::LitSolidMesh3d,
-            BuiltinShader::TexturedMesh3d,
-            BuiltinShader::EmissiveMesh3d,
-            BuiltinShader::SkinnedMesh3d,
-            BuiltinShader::Bloom,
-            BuiltinShader::BloomComposite,
-            BuiltinShader::SkyAtmosphere3d,
-            BuiltinShader::DepthOnlyMesh3d,
-        ] {
-            validate_source(&s.into()).unwrap();
-            assert!(s.wgsl().contains("vs_main"));
-            assert!(
-                s.wgsl().contains("fs_main")
-                    || s.wgsl().contains("fs_extract")
-                    || s.wgsl().contains("fs_blur")
-                    || matches!(s, BuiltinShader::DepthOnlyMesh3d)
-            );
-        }
-    }
 }

@@ -3,6 +3,7 @@
 //! 错误使用 [`SparkError`]（即 `spark-diagnostics::Error`）：只保存稳定码与类型化参数，
 //! **不**把自然语言句子作为错误权威内容。
 
+#![warn(missing_docs)]
 pub use spark_diagnostics::{Diagnostic, ErrorArg, ErrorArgs, ErrorCode, ErrorContext, MessageKey, Severity, codes};
 
 mod light2d;

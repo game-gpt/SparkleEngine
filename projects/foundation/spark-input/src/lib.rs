@@ -2,6 +2,7 @@
 //!
 //! 后端适配放在 `spark-renderer-wgpu` / `spark-napi`；本 crate 只认 `Key` / `MouseBtn`。
 
+#![warn(missing_docs)]
 mod actions;
 
 pub use actions::ActionMap;
@@ -241,22 +242,5 @@ impl Input {
     /// 本帧累计的文本输入（不含控制键）。
     pub fn text(&self) -> &str {
         &self.text
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ime_preedit_survives_begin_frame_until_commit() {
-        let mut input = Input::default();
-        input.on_ime_preedit("ni", Some((0, 2)));
-        assert_eq!(input.composition(), "ni");
-        input.begin_frame();
-        assert_eq!(input.composition(), "ni");
-        input.on_ime_commit("你");
-        assert!(input.composition().is_empty());
-        assert_eq!(input.text(), "你");
     }
 }

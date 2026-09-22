@@ -44,6 +44,11 @@ impl ParticlePool2d {
         self.len() == 0
     }
 
+    /// 底层槽位（含已过期项），供测试与调试读位置。
+    pub fn slots(&self) -> &[Particle2d] {
+        &self.particles
+    }
+
     pub fn spawn(&mut self, particle: Particle2d) {
         if let Some(slot) = self.particles.iter_mut().find(|p| p.life <= 0.0) {
             *slot = particle;
@@ -85,23 +90,5 @@ impl ParticlePool2d {
             let s = p.size.max(0.0);
             draw.fill_rect(Rect::new(p.pos.x - s * 0.5, p.pos.y - s * 0.5, s, s), color);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tick_moves_and_expires() {
-        let mut pool = ParticlePool2d::with_capacity(1);
-        pool.spawn(Particle2d::new(Vec2::ZERO, Vec2::new(10.0, 0.0), 0.5, Color::rgb(1.0, 1.0, 1.0), 2.0));
-        pool.tick(0.1);
-        assert!((pool.particles[0].pos.x - 1.0).abs() < 1e-4);
-        pool.tick(1.0);
-        assert!(pool.is_empty());
-        pool.spawn(Particle2d::new(Vec2::new(3.0, 0.0), Vec2::ZERO, 1.0, Color::rgb(1.0, 0.0, 0.0), 4.0));
-        assert_eq!(pool.len(), 1);
-        assert!((pool.particles[0].pos.x - 3.0).abs() < 1e-4);
     }
 }

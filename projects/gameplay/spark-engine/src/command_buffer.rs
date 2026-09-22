@@ -66,20 +66,3 @@ impl ScriptCommandBuffer {
         self.commands.clear();
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn drain_clears_buffer() {
-        let mut buf = ScriptCommandBuffer::new();
-        buf.spawn("unit");
-        buf.despawn(1);
-        assert_eq!(buf.len(), 2);
-        let cmds = buf.drain();
-        assert_eq!(cmds.len(), 2);
-        assert!(buf.is_empty());
-        assert!(matches!(cmds[0], ScriptCommand::Spawn { .. }));
-    }
-}

@@ -3,6 +3,7 @@
 //! 语言前端完成 AST 语义分析后降低到 HIR。本 crate 不依赖任何语言前端，
 //! 也不出现源语言枚举或语言专属节点。`spark-vm` 字节码不是编译器 IR。
 
+#![warn(missing_docs)]
 mod codegen;
 mod hir;
 mod host;

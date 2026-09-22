@@ -3,6 +3,7 @@
 //! 轴对齐刚体、固体/单向台、重力跳跃（土狼时间 / 跳跃缓冲）、相机死区跟随。
 //! **禁止**关卡块 ID、角色数值表——那些属于游戏仓。
 
+#![warn(missing_docs)]
 mod actor;
 mod camera;
 mod world;
@@ -53,26 +54,5 @@ impl PlatformerEngine {
     pub fn tick(&mut self, dt: f32, input: ControllerInput) {
         self.player.integrate(dt, input, &self.config, &self.world);
         self.camera.follow_center(self.player.center(), 0.0, 0.0, crate::camera::DEADZONE, crate::camera::FOLLOW_LERP, dt);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use spark_core::Rect;
-
-    #[test]
-    fn land_and_jump() {
-        let mut eng = PlatformerEngine::new(".");
-        eng.world.push(SolidRect { rect: Rect::new(0.0, 0.0, 20.0, 1.0), kind: SolidKind::Solid });
-        eng.player.pos = Vec2::new(2.0, 3.0);
-        eng.player.vel = Vec2::new(0.0, -1.0);
-        for _ in 0..30 {
-            eng.tick(1.0 / 60.0, ControllerInput::default());
-        }
-        assert!(eng.player.on_ground);
-        let y0 = eng.player.pos.y;
-        eng.tick(1.0 / 60.0, ControllerInput { move_x: 0.0, jump_pressed: true, jump_held: true });
-        assert!(eng.player.vel.y > 0.0 || eng.player.pos.y > y0);
     }
 }

@@ -10,6 +10,10 @@ keywords = ["spark", "studio", "editor", "widget"]
 categories = ["game-development", "gui"]
 publish = false
 
+[lib]
+name = "spark_studio"
+path = "src/lib.rs"
+
 [[bin]]
 name = "spark-studio"
 path = "src/main.rs"
@@ -20,10 +24,10 @@ spark-engine = { workspace = true }
 spark-input = { workspace = true }
 spark-renderer = { workspace = true }
 spark-widget = { workspace = true }
-ping-pong = { path = "../../examples/ping-pong" }
-tetris = { path = "../../examples/tetris" }
-snake = { path = "../../examples/snake" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+ping-pong = { workspace = true }
+tetris = { workspace = true }
+snake = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

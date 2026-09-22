@@ -5,6 +5,7 @@
 //! 3D 路径支持 `MeshResidentKey` 网格驻留、`TexMeshCmd` 纹理网格与 `SkinnedMeshCmd` 蒙皮网格。
 //! **winit 止于此 crate**：游戏只看见 `spark-renderer` / `spark-input` 类型。
 
+#![warn(missing_docs)]
 mod bloom;
 mod dyn_ubo;
 mod game3d;
@@ -18,7 +19,9 @@ mod winit_map;
 /// 每帧最多新建/更新的驻留网格 VBO 数（分摊开局 remesh 洪峰，未上传的本帧跳过绘制）。
 pub(crate) const RESIDENT_UPLOADS_PER_FRAME: usize = 8;
 
+pub use dyn_ubo::{binding_size, uniform_stride};
 pub use game3d::run_window_3d;
+pub use mipmap::{downsample_rgba, mip_level_count};
 pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
     Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost, GameHost3d, Input, Key, MAX_SKIN_JOINTS, Mat4,

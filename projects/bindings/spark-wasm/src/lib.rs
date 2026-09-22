@@ -10,6 +10,7 @@
 //! #   → packages/spark-unknown-wasm32/spark_engine_bg.wasm
 //! ```
 
+#![warn(missing_docs)]
 mod host;
 
 pub use host::SparkWasmHost;
@@ -25,7 +26,7 @@ pub extern "C" fn spark_vec2_length(x: f64, y: f64) -> f64 {
     Vec2::new(x as f32, y as f32).length() as f64
 }
 
-/// 版本编码：`major * 1_000_000 + minor * 1_000 + patch`（当前 0.1.0 → 1000）。
+/// 版本编码：`major * 1_000_000 + minor * 1_000 + patch`（当前 0.0.0 → 0）。
 #[unsafe(no_mangle)]
 pub extern "C" fn spark_version_code() -> u32 {
     let v = env!("CARGO_PKG_VERSION");
@@ -38,16 +39,4 @@ fn parse_version_code(v: &str) -> u32 {
     let minor: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     let patch: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     major.saturating_mul(1_000_000) + minor.saturating_mul(1_000) + patch
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn exports_geometry() {
-        let len = spark_vec2_length(3.0, 4.0);
-        assert!((len - 5.0).abs() < 1e-9);
-        assert_eq!(spark_version_code(), 1_000);
-    }
 }
