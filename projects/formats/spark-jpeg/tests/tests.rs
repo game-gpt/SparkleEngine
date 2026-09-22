@@ -1,20 +1,12 @@
-//! JPEG 解码烟测。
+//! JPEG 解码烟测（pure Rust `jpeg-decoder`）。
 
 use spark_jpeg::{DecodeOptions, decode_memory};
 use spark_texture::TextureFormat;
 
-fn encode_rgb_jpeg(w: u32, h: u32, rgb: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::new();
-    let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 90);
-    use image::ImageEncoder;
-    enc.write_image(rgb, w, h, image::ExtendedColorType::Rgb8).unwrap();
-    buf
-}
-
 #[test]
 fn decode_memory_rgba8_srgb() {
-    let jpeg = encode_rgb_jpeg(1, 1, &[255, 0, 0]);
-    let upload = decode_memory(&jpeg, DecodeOptions::srgb()).unwrap();
+    let jpeg = include_bytes!("fixtures/red1x1.jpg");
+    let upload = decode_memory(jpeg, DecodeOptions::srgb()).unwrap();
     assert_eq!(upload.desc.width, 1);
     assert_eq!(upload.desc.height, 1);
     assert_eq!(upload.desc.format, TextureFormat::Rgba8UnormSrgb);
@@ -24,4 +16,10 @@ fn decode_memory_rgba8_srgb() {
     assert!(upload.data.bytes[1] < 40);
     assert!(upload.data.bytes[2] < 40);
     assert_eq!(upload.data.bytes[3], 255);
+}
+
+#[test]
+fn decode_rejects_garbage() {
+    let err = decode_memory(b"not-a-jpeg", DecodeOptions::srgb()).unwrap_err();
+    assert_eq!(err.to_string(), "spark.image.decode");
 }

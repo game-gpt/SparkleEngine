@@ -1,6 +1,6 @@
 # spark-webp
 
-WebP → `TextureUpload`。不暴露 `PixelImage`，不碰 GPU。
+WebP → `TextureUpload`。pure Rust [`image-webp`](https://crates.io/crates/image-webp)，不依赖 umbrella `image`，不依赖 libwebp/`*-sys`。
 
 ```rust
 use spark_webp::{DecodeOptions, decode_memory};

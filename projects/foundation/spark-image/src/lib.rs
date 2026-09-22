@@ -1,8 +1,8 @@
 //! 像素图装载（过渡）、精灵裁切与九宫格布局。
 //!
 //! **几何**（[`Sprite`] / [`NineSlice`]）只依赖纹理宽高，不依赖 CPU 像素缓冲。
-//! **解码**（[`PixelImage`] + `image` crate）为过渡路径；目标管线是 formats →
-//! `spark-texture` 的 `TextureUpload`（见引擎纹理契约）。本 crate **不**碰 GPU。
+//! **解码**走 formats 分仓（`spark-png` / `spark-jpeg` / `spark-webp`），**不**依赖 umbrella
+//! `image` crate。目标管线是 formats → `spark-texture` 的 `TextureUpload`。本 crate **不**碰 GPU。
 
 #![warn(missing_docs)]
 mod nine;
@@ -13,12 +13,11 @@ pub use sprite::{Sprite, SpriteSheet};
 
 use std::{path::Path, sync::Arc};
 
-use image::ImageReader;
 use spark_core::{Color, ErrorArg, SparkError, codes};
 
 pub use spark_core::Rect;
 
-/// CPU 侧 RGBA8 像素图（行主序，每像素 4 字节）。
+/// CPU 侧 RGBA8 像素图（行主序，每像素 4 字节）。过渡类型，新代码优先 `TextureUpload`。
 #[derive(Debug, Clone)]
 pub struct PixelImage {
     width: u32,
@@ -60,40 +59,20 @@ impl PixelImage {
         Self::from_rgba8(width, height, rgba)
     }
 
-    /// 从文件解码（PNG / JPEG / WebP 等，由 `image` 决定）。
+    /// 从文件解码（按扩展名分发到 `spark-png` / `spark-jpeg` / `spark-webp`）。
     pub fn load(path: impl AsRef<Path>) -> Result<Self, SparkError> {
         let path = path.as_ref();
         let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
-        let reader = ImageReader::open(path)
-            .map_err(|e| {
-                SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("open"))).caused_by(e)
-            })?
-            .with_guessed_format()
-            .map_err(|e| {
-                SparkError::new(codes::image_decode())
-                    .arg("path", path_arg.clone())
-                    .arg("op", ErrorArg::String(Arc::from("guess_format")))
-                    .caused_by(e)
-            })?;
-        let dyn_img = reader.decode().map_err(|e| {
-            SparkError::new(codes::image_decode()).arg("path", path_arg).arg("op", ErrorArg::String(Arc::from("decode"))).caused_by(e)
+        let bytes = std::fs::read(path).map_err(|e| {
+            SparkError::new(codes::io()).arg("path", path_arg.clone()).arg("op", ErrorArg::String(Arc::from("read"))).caused_by(e)
         })?;
-        let rgba = dyn_img.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        Self::from_rgba8(w, h, rgba.into_raw())
+        Self::load_from_memory(&bytes).map_err(|e| e.arg("path", path_arg))
     }
 
-    /// 从内存字节解码。
+    /// 从内存字节解码（按魔数识别 PNG / JPEG / WebP）。
     pub fn load_from_memory(bytes: &[u8]) -> Result<Self, SparkError> {
-        let dyn_img = image::load_from_memory(bytes).map_err(|e| {
-            SparkError::new(codes::image_decode())
-                .arg("op", ErrorArg::String(Arc::from("decode_memory")))
-                .arg("bytes", ErrorArg::Unsigned(bytes.len() as u64))
-                .caused_by(e)
-        })?;
-        let rgba = dyn_img.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        Self::from_rgba8(w, h, rgba.into_raw())
+        let (w, h, rgba) = decode_rgba8_auto(bytes)?;
+        Self::from_rgba8(w, h, rgba)
     }
 
     pub fn width(&self) -> u32 {
@@ -112,18 +91,9 @@ impl PixelImage {
         self.rgba
     }
 
-    /// 写成 PNG。格式由 `image` 负责，不在调用方再实现编码器。
+    /// 写成 PNG（`spark-png` / pure Rust `png`）。
     pub fn save_png(&self, path: impl AsRef<Path>) -> Result<(), SparkError> {
-        let path = path.as_ref();
-        let path_arg = ErrorArg::Path(Arc::from(path.to_string_lossy().as_ref()));
-        image::save_buffer_with_format(path, &self.rgba, self.width, self.height, image::ExtendedColorType::Rgba8, image::ImageFormat::Png)
-            .map_err(|e| {
-                SparkError::new(codes::image_encode())
-                    .arg("path", path_arg)
-                    .arg("width", ErrorArg::Unsigned(self.width as u64))
-                    .arg("height", ErrorArg::Unsigned(self.height as u64))
-                    .caused_by(e)
-            })
+        spark_png::encode_path(path, self.width, self.height, &self.rgba)
     }
 
     /// 整图作为源矩形（像素坐标，原点左上）。
@@ -151,6 +121,22 @@ impl PixelImage {
         let i = ((y * self.width + x) * 4) as usize;
         Ok([self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]])
     }
+}
+
+fn decode_rgba8_auto(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), SparkError> {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1A, b'\n']) {
+        return spark_png::decode_rgba8(bytes);
+    }
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return spark_jpeg::decode_rgba8(bytes);
+    }
+    if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        return spark_webp::decode_rgba8(bytes);
+    }
+    Err(SparkError::new(codes::image_decode())
+        .arg("op", ErrorArg::String(Arc::from("detect_format")))
+        .arg("bytes", ErrorArg::Unsigned(bytes.len() as u64))
+        .arg("reason", ErrorArg::String(Arc::from("unsupported_or_unknown_format"))))
 }
 
 pub(crate) fn validate_region(img_w: u32, img_h: u32, region: Rect) -> Result<(), SparkError> {

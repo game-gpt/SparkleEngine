@@ -5,12 +5,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "Spark 像素图装载、精灵裁切与九宫格拉伸"
+description = "Spark 像素图过渡层、精灵裁切与九宫格布局"
 keywords = ["spark", "image", "sprite", "nine-slice"]
 categories = ["game-development", "graphics"]
 publish = false
 
 [dependencies]
 spark-core = { workspace = true }
-image = { workspace = true }
+spark-png = { workspace = true }
+spark-jpeg = { workspace = true }
+spark-webp = { workspace = true }
 tracing = { workspace = true }
