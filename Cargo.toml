@@ -39,6 +39,7 @@ spark-localization = { path = "projects/foundation/spark-localization" }
 spark-debugger = { path = "projects/foundation/spark-debugger" }
 spark-shader = { path = "projects/graphics/spark-shader" }
 spark-font = { path = "projects/graphics/spark-font" }
+spark-texture = { path = "projects/graphics/spark-texture" }
 spark-image = { path = "projects/foundation/spark-image" }
 spark-renderer = { path = "projects/graphics/spark-renderer" }
 spark-renderer-wgpu = { path = "projects/graphics/spark-renderer-wgpu" }

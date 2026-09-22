@@ -178,6 +178,22 @@ pub mod codes {
         ErrorCode::new("spark", "texture.size_invalid")
     }
 
+    pub fn texture_data_length_mismatch() -> ErrorCode {
+        ErrorCode::new("spark", "texture.data_length_mismatch")
+    }
+
+    pub fn texture_layout_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "texture.layout_invalid")
+    }
+
+    pub fn texture_format_unsupported() -> ErrorCode {
+        ErrorCode::new("spark", "texture.format_unsupported")
+    }
+
+    pub fn texture_upload_invalid() -> ErrorCode {
+        ErrorCode::new("spark", "texture.upload_invalid")
+    }
+
     pub fn shader_empty() -> ErrorCode {
         ErrorCode::new("spark", "shader.empty")
     }

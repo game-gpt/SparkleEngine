@@ -1,0 +1,14 @@
+[package]
+name = "spark-texture"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Spark GPU 友好纹理描述、上传包与图集区域（无文件格式解码）"
+keywords = ["spark", "texture", "gpu", "upload"]
+categories = ["game-development", "graphics"]
+publish = false
+
+[dependencies]
+spark-core = { workspace = true }

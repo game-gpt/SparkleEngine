@@ -3514,6 +3514,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "spark-texture"
+version = "0.0.0"
+dependencies = [
+ "spark-core",
+]
+
+[[package]]
 name = "spark-time"
 version = "0.0.0"
 dependencies = [
