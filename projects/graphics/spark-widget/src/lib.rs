@@ -34,7 +34,11 @@ pub mod widgets;
 
 pub use accessibility::{AccessibilityNode, AccessibilityTree, Role};
 pub use asset::{MapTextureResolver, NullTextureResolver, ResolvedTexture, UiImage, UiTextureResolver};
-pub use binding::{NullViewModel, UiViewModel};
+pub use binding::{
+    set_checked, set_checked_by_key, set_image, set_image_by_key, set_selected, set_selected_by_key,
+    set_text, set_text_by_key, set_value, set_value_by_key, set_visible, set_visible_by_key,
+    NullViewModel, UiViewModel,
+};
 pub use command::{UiCommand, UiCommandQueue};
 pub use drag_drop::{DragPayload, DragState};
 pub use event::{EventContext, Phase, UiEvent, bubble_from, bubble_path, capture_path, hit_test, propagate};
