@@ -3,6 +3,7 @@
 //! 当前交付轨元数据与压缩包泵；像素帧解码留给渲染/硬件路径。
 //! **无**过场剧本或游戏镜头语义。
 
+#![warn(missing_docs)]
 use std::{path::Path, time::Duration};
 
 use spark_core::{SparkError, codes};

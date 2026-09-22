@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "projects/foundation/*",
+    "projects/formats/*",
     "projects/graphics/*",
     "projects/scripting/*",
     "projects/gameplay/*",
@@ -38,15 +39,15 @@ spark-localization = { path = "projects/foundation/spark-localization" }
 spark-debugger = { path = "projects/foundation/spark-debugger" }
 spark-shader = { path = "projects/graphics/spark-shader" }
 spark-font = { path = "projects/graphics/spark-font" }
-spark-image = { path = "projects/graphics/spark-image" }
+spark-image = { path = "projects/foundation/spark-image" }
 spark-renderer = { path = "projects/graphics/spark-renderer" }
 spark-renderer-wgpu = { path = "projects/graphics/spark-renderer-wgpu" }
 spark-widget = { path = "projects/graphics/spark-widget" }
 spark-animator = { path = "projects/foundation/spark-animator" }
-spark-gltf = { path = "projects/graphics/spark-gltf" }
-spark-media = { path = "projects/graphics/spark-media" }
-spark-audio = { path = "projects/graphics/spark-audio" }
-spark-video = { path = "projects/graphics/spark-video" }
+spark-gltf = { path = "projects/formats/spark-gltf" }
+spark-media = { path = "projects/foundation/spark-media" }
+spark-audio = { path = "projects/foundation/spark-audio" }
+spark-video = { path = "projects/foundation/spark-video" }
 spark-gc = { path = "projects/scripting/spark-gc" }
 spark-vm = { path = "projects/scripting/spark-vm" }
 spark-jit = { path = "projects/scripting/spark-jit" }
@@ -91,6 +92,16 @@ symphonia = { version = "0.6.1", features = [
     "vorbis",
     "wav",
 ] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rodio = { version = "0.22", default-features = true }
+gltf = { version = "1.4", default-features = true }
+base64 = "0.23"
+napi = { version = "3", default-features = false, features = ["napi4"] }
+napi-derive = "3"
+ping-pong = { path = "projects/examples/ping-pong" }
+tetris = { path = "projects/examples/tetris" }
+snake = { path = "projects/examples/snake" }
 
 [profile.release]
 opt-level = 3

@@ -5,6 +5,7 @@
 //!
 //! **无**曲库 / 过场脚本 / 游戏资源 ID 语义。
 
+#![warn(missing_docs)]
 mod decode;
 mod demux;
 mod probe;

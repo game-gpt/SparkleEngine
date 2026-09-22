@@ -4,6 +4,7 @@
 //! 等后端上传纹理并批绘制。
 //! 上传纹理并批绘制。无游戏语义（无方块 / UI 皮肤产品名）。
 
+#![warn(missing_docs)]
 mod nine;
 mod sprite;
 
@@ -13,7 +14,9 @@ pub use sprite::{Sprite, SpriteSheet};
 use std::{path::Path, sync::Arc};
 
 use image::ImageReader;
-use spark_core::{Color, ErrorArg, Rect, SparkError, codes};
+use spark_core::{Color, ErrorArg, SparkError, codes};
+
+pub use spark_core::Rect;
 
 /// CPU 侧 RGBA8 像素图（行主序，每像素 4 字节）。
 #[derive(Debug, Clone)]
@@ -166,38 +169,4 @@ pub(crate) fn validate_region(img_w: u32, img_h: u32, region: Rect) -> Result<()
             .arg("img_h", ErrorArg::Unsigned(img_h as u64)));
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use spark_core::Color;
-
-    #[test]
-    fn solid_and_uv() {
-        let img = PixelImage::solid(64, 32, Color::rgb(1.0, 0.0, 0.0)).unwrap();
-        assert_eq!(img.width(), 64);
-        assert_eq!(img.pixel(0, 0).unwrap(), [255, 0, 0, 255]);
-        let uv = img.uv_rect(Rect::new(16.0, 8.0, 16.0, 8.0)).unwrap();
-        assert!((uv.x - 0.25).abs() < 1e-5);
-        assert!((uv.w - 0.25).abs() < 1e-5);
-    }
-
-    #[test]
-    fn errors_are_stable_codes() {
-        let err = PixelImage::from_rgba8(1, 1, vec![0, 0, 0]).unwrap_err();
-        assert_eq!(err.to_string(), "spark.image.rgba_length_mismatch");
-    }
-
-    #[test]
-    fn png_roundtrip() {
-        let src = PixelImage::solid(2, 1, Color::rgba(0.0, 1.0, 0.0, 0.5)).unwrap();
-        let path = std::env::temp_dir().join(format!("spark-image-{}.png", std::process::id()));
-        src.save_png(&path).unwrap();
-        let loaded = PixelImage::load(&path).unwrap();
-        assert_eq!(loaded.width(), 2);
-        assert_eq!(loaded.height(), 1);
-        assert_eq!(loaded.pixel(0, 0).unwrap(), src.pixel(0, 0).unwrap());
-        let _ = std::fs::remove_file(&path);
-    }
 }

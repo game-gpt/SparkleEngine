@@ -13,5 +13,5 @@ publish = false
 [dependencies]
 spark-core = { workspace = true }
 spark-media = { workspace = true }
-rodio = { version = "0.22", default-features = true }
+rodio = { workspace = true }
 tracing = { workspace = true }

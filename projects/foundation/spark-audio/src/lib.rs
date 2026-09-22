@@ -4,6 +4,7 @@
 //!
 //! 宿主侧基于 rodio 0.22：`MixerDeviceSink` + [`Player`]。
 
+#![warn(missing_docs)]
 use std::{
     f32::consts::PI,
     num::{NonZeroU16, NonZeroU32},
@@ -113,6 +114,11 @@ pub struct AudioBus {
 }
 
 impl AudioBus {
+    /// 无输出设备的静默总线（测试 / 无音频宿主）。
+    pub fn silent() -> Self {
+        Self { device: None, muted: true }
+    }
+
     pub fn try_open() -> Self {
         match DeviceSinkBuilder::open_default_sink() {
             Ok(mut device) => {
@@ -223,7 +229,7 @@ impl Drop for Playback {
 }
 
 /// 交错 PCM 流。循环时在末尾回到 0。
-struct PcmStream {
+pub struct PcmStream {
     samples: Arc<[f32]>,
     channels: NonZeroU16,
     sample_rate: NonZeroU32,
@@ -232,7 +238,8 @@ struct PcmStream {
 }
 
 impl PcmStream {
-    fn new(pcm: &PcmAudio, looping: bool) -> Self {
+    /// 从 [`PcmAudio`] 构造 PCM 迭代器。`looping` 为真时在末尾回到起点。
+    pub fn new(pcm: &PcmAudio, looping: bool) -> Self {
         Self {
             samples: Arc::from(pcm.samples.as_slice()),
             channels: nz_u16(pcm.channels),
@@ -331,43 +338,5 @@ impl Source for SineWave {
     fn total_duration(&self) -> Option<Duration> {
         let ms = self.samples_left as u64 * 1000 / self.sample_rate.get() as u64;
         Some(Duration::from_millis(ms))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn queue_drains_into_silent_bus() {
-        let bus = AudioBus { device: None, muted: true };
-        let mut q = AudioQueue::new();
-        q.play_tone(Tone::new(440.0, 10, 0.5));
-        q.play_file("nope.wav");
-        assert_eq!(q.len(), 2);
-        let mut errs = Vec::new();
-        q.flush(&bus, Some(&mut errs));
-        assert!(q.is_empty());
-        assert!(errs.is_empty());
-    }
-
-    #[test]
-    fn pcm_stream_loops_then_stops() {
-        let pcm = PcmAudio { sample_rate: 4, channels: 1, samples: vec![0.1, 0.2] };
-        let mut looping = PcmStream::new(&pcm, true);
-        assert_eq!(looping.next(), Some(0.1));
-        assert_eq!(looping.next(), Some(0.2));
-        assert_eq!(looping.next(), Some(0.1));
-        let mut once = PcmStream::new(&pcm, false);
-        assert_eq!(once.next(), Some(0.1));
-        assert_eq!(once.next(), Some(0.2));
-        assert_eq!(once.next(), None);
-    }
-
-    #[test]
-    fn muted_start_pcm_returns_none() {
-        let bus = AudioBus { device: None, muted: true };
-        let pcm = PcmAudio { sample_rate: 8, channels: 1, samples: vec![0.0, 1.0] };
-        assert!(bus.start_pcm(&pcm, 1.0, 1.0, false).unwrap().is_none());
     }
 }
