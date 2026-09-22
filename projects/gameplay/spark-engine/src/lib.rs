@@ -41,7 +41,7 @@ pub use command_apply::{
 };
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
-pub use ecs_host::{AppExit, DrawBuffer2d, DrawBuffer3d, DrawScratch2d, EcsHost2d, EcsHost3d, FrameSnapshot};
+pub use ecs_host::{AppExit, DrawBuffer2d, DrawBuffer3d, DrawScratch2d, EcsHost2d, EcsHost3d, FrameSnapshot, OsCursorVisible};
 pub use event_inbox::{ScriptEvent, ScriptEventInbox};
 pub use frame::{FrameLoop, FrameLoopConfig, LoopedHost2d, LoopedHost3d, StepMode};
 pub use hooks::{HookBus, HookRef};
@@ -64,12 +64,12 @@ use std::{
     rc::Rc,
 };
 
-use spark_types::SparkError;
 use spark_gc::Value;
 use spark_script::{
     ArtifactCache, CompilationRequest, DeterminismClass, ExecutableImage, HostFunction, HostFunctionId, HostPhase, HostSchema, PackageId,
     ScriptCompiler, ScriptError, ScriptLanguage,
 };
+use spark_types::SparkError;
 use spark_vm::{HostHooks, StdHost};
 
 use crate::api::install_builtins;

@@ -555,6 +555,8 @@ struct HostApp<H: GameHost> {
     scale: f32,
     /// 避免 resize / DPI 抖动时刷屏。
     last_metrics_log: Instant,
+    /// 已应用到窗口的 OS 光标可见性。
+    cursor_visible_applied: bool,
 }
 
 impl<H: GameHost> HostApp<H> {
@@ -697,6 +699,13 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         }
         self.input.begin_frame();
 
+        // 菜单自绘光标时隐藏 OS 指针；不 grab（标题菜单保持自由移动）。
+        let want_visible = self.host.cursor_visible();
+        if want_visible != self.cursor_visible_applied {
+            gpu.window.set_cursor_visible(want_visible);
+            self.cursor_visible_applied = want_visible;
+        }
+
         if self.host.should_exit() {
             event_loop.exit();
             return;
@@ -732,7 +741,7 @@ pub fn run_window_2d<H: GameHost + 'static>(config: WindowConfig, host: H) -> Re
     let event_loop = EventLoop::new().map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))?;
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app =
-        HostApp { config, host, input: Input::default(), state: None, last: Instant::now(), scale: 1.0, last_metrics_log: Instant::now() };
+        HostApp { config, host, input: Input::default(), state: None, last: Instant::now(), scale: 1.0, last_metrics_log: Instant::now(), cursor_visible_applied: true };
     event_loop.run_app(&mut app).map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
 }
 

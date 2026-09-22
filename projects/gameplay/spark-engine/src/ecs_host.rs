@@ -36,6 +36,18 @@ impl AppExit {
     }
 }
 
+/// 操作系统光标可见性（游戏系统写入，2D 宿主每帧读取）。
+///
+/// 默认可见。标题菜单绘制 `Cursor_0` 时应写入 `false`，避免双光标。
+#[derive(Debug, Clone, Copy)]
+pub struct OsCursorVisible(pub bool);
+
+impl Default for OsCursorVisible {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
 /// 由游戏 / 渲染系统填充的 2D 绘制缓冲（系统写入，宿主在 draw 相位取走）。
 #[derive(Debug, Default)]
 pub struct DrawBuffer2d {
@@ -146,6 +158,14 @@ impl GameHost for EcsHost2d {
 
     fn should_exit(&self) -> bool {
         exit_requested(&self.world, self.exit)
+    }
+
+    fn cursor_visible(&self) -> bool {
+        self.world
+            .resources
+            .get::<OsCursorVisible>()
+            .map(|c| c.0)
+            .unwrap_or(true)
     }
 }
 

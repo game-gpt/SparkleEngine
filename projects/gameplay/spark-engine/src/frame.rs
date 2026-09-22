@@ -133,6 +133,10 @@ impl<H: GameHost> GameHost for LoopedHost2d<H> {
     fn should_exit(&self) -> bool {
         self.inner.should_exit()
     }
+
+    fn cursor_visible(&self) -> bool {
+        self.inner.cursor_visible()
+    }
 }
 
 /// 3D 宿主包装。
