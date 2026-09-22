@@ -121,6 +121,8 @@ pub struct WidgetNode {
     pub state: WidgetStateFlags,
     pub content: WidgetContent,
     pub focusable: bool,
+    /// Tab 序：`>0` 按升序优先，`0` 跟文档序，`<0` 可点聚焦但不进 Tab 环。
+    pub tab_index: i32,
     pub neighbors: crate::focus::Neighbors,
     pub scroll: crate::scroll::ScrollState,
     pub layer: crate::runtime::UiLayer,
@@ -152,9 +154,17 @@ impl WidgetNode {
             state: WidgetStateFlags::enabled_visible(),
             content: WidgetContent::default(),
             focusable,
+            tab_index: 0,
             neighbors: crate::focus::Neighbors::default(),
             scroll: crate::scroll::ScrollState::default(),
             layer: crate::runtime::UiLayer::Gui,
         }
+    }
+
+    /// 应用完整焦点策略（覆盖 `focusable` / `tab_index` / `neighbors`）。
+    pub fn apply_focus_policy(&mut self, policy: crate::focus::FocusPolicy) {
+        self.focusable = policy.focusable;
+        self.tab_index = policy.tab_index;
+        self.neighbors = policy.neighbors;
     }
 }

@@ -46,19 +46,32 @@ impl FocusManager {
     }
 }
 
-/// 收集深度优先、可聚焦且未禁用的节点。
+/// 收集可聚焦且未禁用的节点，并按 `tab_index` 排序（用于 Tab 环）。
 pub fn collect_focusable(tree: &WidgetTree) -> Vec<WidgetId> {
     collect_focusable_in(tree, tree.root())
 }
 
 /// 在子树内收集可聚焦节点（用于 modal focus trap）。
+///
+/// 顺序：`tab_index > 0` 升序，其后 `tab_index == 0` 按文档序；`tab_index < 0` 不进 Tab 环。
 pub fn collect_focusable_in(tree: &WidgetTree, root: WidgetId) -> Vec<WidgetId> {
-    let mut out = Vec::new();
-    collect_focusable_rec(tree, root, &mut out);
+    let mut positive: Vec<(i32, usize, WidgetId)> = Vec::new();
+    let mut zero: Vec<WidgetId> = Vec::new();
+    let mut doc_order = 0usize;
+    collect_focusable_rec(tree, root, &mut positive, &mut zero, &mut doc_order);
+    positive.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    let mut out: Vec<WidgetId> = positive.into_iter().map(|(_, _, id)| id).collect();
+    out.extend(zero);
     out
 }
 
-fn collect_focusable_rec(tree: &WidgetTree, id: WidgetId, out: &mut Vec<WidgetId>) {
+fn collect_focusable_rec(
+    tree: &WidgetTree,
+    id: WidgetId,
+    positive: &mut Vec<(i32, usize, WidgetId)>,
+    zero: &mut Vec<WidgetId>,
+    doc_order: &mut usize,
+) {
     let Some(node) = tree.node(id)
     else {
         return;
@@ -67,10 +80,18 @@ fn collect_focusable_rec(tree: &WidgetTree, id: WidgetId, out: &mut Vec<WidgetId
         return;
     }
     if node.focusable {
-        out.push(id);
+        let order = *doc_order;
+        *doc_order += 1;
+        if node.tab_index > 0 {
+            positive.push((node.tab_index, order, id));
+        }
+        else if node.tab_index == 0 {
+            zero.push(id);
+        }
+        // tab_index < 0：可聚焦但不参与 Tab 环。
     }
     for child in &node.children {
-        collect_focusable_rec(tree, *child, out);
+        collect_focusable_rec(tree, *child, positive, zero, doc_order);
     }
 }
 
@@ -262,5 +283,41 @@ mod tests {
         assert_eq!(focus.focused, Some(list[1]));
         focus_next_in(&tree, &mut focus, Some(modal));
         assert_eq!(focus.focused, Some(list[0]));
+    }
+
+    #[test]
+    fn tab_index_orders_positive_before_document_zero() {
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let a = button_widget().text("a").tab_index(0).mount(&mut tree, root).unwrap();
+        let b = button_widget().text("b").tab_index(2).mount(&mut tree, root).unwrap();
+        let c = button_widget().text("c").tab_index(1).mount(&mut tree, root).unwrap();
+        let skip = button_widget().text("skip").tab_index(-1).mount(&mut tree, root).unwrap();
+
+        let list = collect_focusable(&tree);
+        assert_eq!(list, vec![c, b, a]);
+        assert!(!list.contains(&skip));
+        assert!(tree.node(skip).unwrap().focusable);
+    }
+
+    #[test]
+    fn focus_policy_applies_neighbors_and_tab_index() {
+        let mut tree = WidgetTree::new();
+        let root = tree.root();
+        let first = button_widget().text("first").mount(&mut tree, root).unwrap();
+        let second = button_widget()
+            .text("second")
+            .focus_policy(FocusPolicy {
+                focusable: true,
+                tab_index: 5,
+                neighbors: Neighbors { up: Some(first), ..Neighbors::default() },
+            })
+            .mount(&mut tree, root)
+            .unwrap();
+
+        let node = tree.node(second).unwrap();
+        assert_eq!(node.tab_index, 5);
+        assert_eq!(node.neighbors.up, Some(first));
+        assert_eq!(collect_focusable(&tree), vec![second, first]);
     }
 }

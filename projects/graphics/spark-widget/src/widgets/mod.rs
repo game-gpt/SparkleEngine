@@ -23,6 +23,8 @@ pub struct WidgetBuilder {
     layout: LayoutSpec,
     content: WidgetContent,
     focusable: Option<bool>,
+    tab_index: Option<i32>,
+    neighbors: Option<crate::focus::Neighbors>,
     layer: Option<crate::runtime::UiLayer>,
     children: Vec<WidgetBuilder>,
 }
@@ -36,6 +38,8 @@ impl WidgetBuilder {
             layout: LayoutSpec::default(),
             content: WidgetContent::default(),
             focusable: None,
+            tab_index: None,
+            neighbors: None,
             layer: None,
             children: Vec::new(),
         }
@@ -84,6 +88,24 @@ impl WidgetBuilder {
 
     pub fn focusable(mut self, focusable: bool) -> Self {
         self.focusable = Some(focusable);
+        self
+    }
+
+    pub fn tab_index(mut self, tab_index: i32) -> Self {
+        self.tab_index = Some(tab_index);
+        self
+    }
+
+    pub fn neighbors(mut self, neighbors: crate::focus::Neighbors) -> Self {
+        self.neighbors = Some(neighbors);
+        self
+    }
+
+    /// 一次设置 `focusable` / `tab_index` / `neighbors`。
+    pub fn focus_policy(mut self, policy: crate::focus::FocusPolicy) -> Self {
+        self.focusable = Some(policy.focusable);
+        self.tab_index = Some(policy.tab_index);
+        self.neighbors = Some(policy.neighbors);
         self
     }
 
@@ -139,6 +161,12 @@ impl WidgetBuilder {
             node.state.checked = node.content.checked;
             if let Some(focusable) = self.focusable {
                 node.focusable = focusable;
+            }
+            if let Some(tab_index) = self.tab_index {
+                node.tab_index = tab_index;
+            }
+            if let Some(neighbors) = self.neighbors {
+                node.neighbors = neighbors;
             }
             node.layer = self.layer.or(inherited).unwrap_or(crate::runtime::UiLayer::Gui);
         }
