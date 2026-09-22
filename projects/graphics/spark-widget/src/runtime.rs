@@ -1,8 +1,8 @@
 //! UI 运行时：一帧完整流程入口。
 
-use spark_types::Vec2;
 use spark_input::Input;
 use spark_renderer::DrawList;
+use spark_types::Vec2;
 
 use crate::{
     accessibility::AccessibilityTree,
@@ -176,6 +176,60 @@ impl UiRuntime {
         let root = self.tree.root();
         let id = builder.layer(UiLayer::Gui).mount(&mut self.tree, root)?;
         self.set_scene_root(id);
+        self.invalidate_layout();
+        Some(id)
+    }
+
+    /// 按稳定 `key` reconcile GUI scene，尽量保留 `WidgetId` / 焦点 / 悬停。
+    ///
+    /// 无既有 scene 时退化为 [`Self::mount_scene`]。根 `key`+`kind` 不匹配则整树替换。
+    pub fn reconcile_scene(&mut self, builder: crate::widgets::WidgetBuilder) -> Option<WidgetId> {
+        let builder = builder.layer(UiLayer::Gui);
+        let Some(old) = self.scene_root
+        else {
+            return self.mount_scene(builder);
+        };
+
+        let can_reuse = self.tree.node(old).is_some_and(|n| {
+            n.kind == builder.kind() && n.key.as_deref() == builder.key_str()
+        });
+
+        if !can_reuse {
+            return self.mount_scene(builder);
+        }
+
+        let focused_key = self
+            .focus
+            .focused
+            .and_then(|id| self.tree.node(id).and_then(|n| n.key.clone()));
+        let hovered_key = self
+            .state
+            .hovered
+            .and_then(|id| self.tree.node(id).and_then(|n| n.key.clone()));
+
+        let root = self.tree.root();
+        let id = builder.reconcile(&mut self.tree, root)?;
+        self.set_scene_root(id);
+
+        if let Some(key) = focused_key.as_deref() {
+            if let Some(fid) = self.tree.find_by_key(id, key) {
+                crate::focus::set_focus(&mut self.tree, &mut self.focus, Some(fid));
+            }
+        }
+        if let Some(key) = hovered_key.as_deref() {
+            if let Some(hid) = self.tree.find_by_key(id, key) {
+                for nid in self.tree.ids() {
+                    if let Some(node) = self.tree.node_mut(nid) {
+                        node.state.hovered = false;
+                    }
+                }
+                if let Some(node) = self.tree.node_mut(hid) {
+                    node.state.hovered = true;
+                }
+                self.state.hovered = Some(hid);
+            }
+        }
+
         self.invalidate_layout();
         Some(id)
     }

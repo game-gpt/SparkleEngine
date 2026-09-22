@@ -139,6 +139,16 @@ impl WidgetBuilder {
         self
     }
 
+    /// 控件种类。
+    pub fn kind(&self) -> WidgetKind {
+        self.kind
+    }
+
+    /// 稳定键（若有）。
+    pub fn key_str(&self) -> Option<&str> {
+        self.key.as_deref()
+    }
+
     pub fn child(mut self, child: WidgetBuilder) -> Self {
         self.children.push(child);
         self
@@ -153,28 +163,120 @@ impl WidgetBuilder {
     pub fn mount(self, tree: &mut WidgetTree, parent: WidgetId) -> Option<WidgetId> {
         let inherited = tree.node(parent).map(|n| n.layer);
         let id = tree.mount(parent, self.kind)?;
-        if let Some(node) = tree.node_mut(id) {
-            node.key = self.key;
-            node.style = self.style;
-            node.layout = self.layout;
-            node.content = self.content;
-            node.state.checked = node.content.checked;
-            if let Some(focusable) = self.focusable {
-                node.focusable = focusable;
-            }
-            if let Some(tab_index) = self.tab_index {
-                node.tab_index = tab_index;
-            }
-            if let Some(neighbors) = self.neighbors {
-                node.neighbors = neighbors;
-            }
-            node.layer = self.layer.or(inherited).unwrap_or(crate::runtime::UiLayer::Gui);
-        }
+        self.apply_to(tree, id, inherited);
         for child in self.children {
             child.mount(tree, id);
         }
         Some(id)
     }
+
+    /// 按 `key` + `kind` 复用 parent 下已有子节点；无匹配则 `mount`。
+    ///
+    /// 复用时保留 `WidgetId`、滚动偏移与文本光标（文案未变时），并递归 reconcile 子树。
+    /// 无 key 的节点按「同 kind 且尚未占用」的文档序匹配。
+    pub fn reconcile(self, tree: &mut WidgetTree, parent: WidgetId) -> Option<WidgetId> {
+        self.reconcile_excluding(tree, parent, &std::collections::HashSet::new())
+    }
+
+    fn reconcile_excluding(
+        self,
+        tree: &mut WidgetTree,
+        parent: WidgetId,
+        parent_claimed: &std::collections::HashSet<WidgetId>,
+    ) -> Option<WidgetId> {
+        if tree.node(parent).is_none() {
+            return None;
+        }
+        let inherited = tree.node(parent).map(|n| n.layer);
+        let existing =
+            find_reconcile_match(tree, parent, self.kind, self.key.as_deref(), parent_claimed);
+        let id = if let Some(id) = existing {
+            self.apply_to(tree, id, inherited);
+            id
+        } else {
+            let id = tree.mount(parent, self.kind)?;
+            self.apply_to(tree, id, inherited);
+            id
+        };
+
+        let old_children = tree.node(id).map(|n| n.children.clone()).unwrap_or_default();
+        let mut used = std::collections::HashSet::new();
+        let mut order = Vec::with_capacity(self.children.len());
+        for child in self.children {
+            if let Some(cid) = child.reconcile_excluding(tree, id, &used) {
+                used.insert(cid);
+                order.push(cid);
+            }
+        }
+        for old in old_children {
+            if !used.contains(&old) {
+                tree.unmount(old);
+            }
+        }
+        tree.set_child_order(id, &order);
+        Some(id)
+    }
+
+    fn apply_to(&self, tree: &mut WidgetTree, id: WidgetId, inherited: Option<crate::runtime::UiLayer>) {
+        let Some(node) = tree.node_mut(id)
+        else {
+            return;
+        };
+        let prev_text = node.content.text.clone();
+        let prev_cursor = node.content.cursor;
+        let prev_sel = node.content.sel_anchor;
+        let prev_composition = node.content.composition.clone();
+        let prev_scroll = node.scroll.clone();
+
+        node.key = self.key.clone();
+        node.style = self.style.clone();
+        node.layout = self.layout.clone();
+        node.content = self.content.clone();
+        // 文案未变时保留编辑态，避免 reconcile 打断输入。
+        if node.content.text == prev_text {
+            node.content.cursor = prev_cursor;
+            node.content.sel_anchor = prev_sel;
+            node.content.composition = prev_composition;
+        }
+        node.state.checked = node.content.checked;
+        if let Some(focusable) = self.focusable {
+            node.focusable = focusable;
+        }
+        if let Some(tab_index) = self.tab_index {
+            node.tab_index = tab_index;
+        }
+        if let Some(neighbors) = self.neighbors.clone() {
+            node.neighbors = neighbors;
+        }
+        node.layer = self.layer.or(inherited).unwrap_or(crate::runtime::UiLayer::Gui);
+        // ScrollView 等：保留运行时滚动，不被声明式默认冲掉。
+        node.scroll = prev_scroll;
+    }
+}
+
+fn find_reconcile_match(
+    tree: &WidgetTree,
+    parent: WidgetId,
+    kind: WidgetKind,
+    key: Option<&str>,
+    claimed: &std::collections::HashSet<WidgetId>,
+) -> Option<WidgetId> {
+    let children = tree.node(parent)?.children.clone();
+    if let Some(key) = key {
+        return children.into_iter().find(|&id| {
+            !claimed.contains(&id)
+                && tree
+                    .node(id)
+                    .is_some_and(|n| n.kind == kind && n.key.as_deref() == Some(key))
+        });
+    }
+    // 无 key：取第一个同 kind、也无 key、且尚未占用的子节点。
+    children.into_iter().find(|&id| {
+        !claimed.contains(&id)
+            && tree
+                .node(id)
+                .is_some_and(|n| n.kind == kind && n.key.is_none())
+    })
 }
 
 pub fn column() -> WidgetBuilder {
