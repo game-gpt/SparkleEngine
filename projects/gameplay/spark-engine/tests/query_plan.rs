@@ -46,10 +46,10 @@ fn column_batch_entity_count_by_archetype_index() {
     let snapshot = ScriptQuerySnapshot::from_world(&world);
     let desc = ScriptSystemDescriptor::new("m", "sim", "update", HostPhase::Update).query_archetype("rock");
     let plan = QueryPlan::bind(&desc, &ScriptComponentCatalog::with_builtins()).unwrap();
-    let batch = ScriptColumnBatch::install(plan, snapshot);
-    assert_eq!(batch.entity_count(0), 2);
-    assert_eq!(batch.views()[0].entities().len(), 2);
-    assert_eq!(batch.total_entity_count(), 2);
+    let batch = ScriptColumnBatch::install(plan, &snapshot);
+    assert_eq!(batch.entity_count(&snapshot, 0), 2);
+    assert_eq!(batch.views()[0].entities(&snapshot).len(), 2);
+    assert_eq!(batch.total_entity_count(&snapshot), 2);
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn column_batch_unfiltered_installs_all_archetypes() {
     let desc = ScriptSystemDescriptor::new("m", "sim", "update", HostPhase::Update);
     let plan = QueryPlan::bind(&desc, &ScriptComponentCatalog::with_builtins()).unwrap();
     assert!(plan.is_unfiltered());
-    let batch = ScriptColumnBatch::install(plan, snapshot);
+    let batch = ScriptColumnBatch::install(plan, &snapshot);
     assert_eq!(batch.views().len(), 2);
-    assert_eq!(batch.total_entity_count(), 2);
+    assert_eq!(batch.total_entity_count(&snapshot), 2);
 }

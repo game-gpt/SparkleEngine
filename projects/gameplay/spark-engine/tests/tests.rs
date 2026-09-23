@@ -225,7 +225,7 @@ entry = "main.vk"
     assert_eq!(report.spawned.len(), 1);
     let e = report.spawned[0];
     assert_eq!(world.get::<ScriptArchetypeTag>(e).map(|t| t.name.as_ref()), Some("rock"));
-    assert_eq!(eng.shared().borrow().query.count("rock"), 1);
+    assert_eq!(eng.shared().borrow().query_base.count("rock"), 1);
 }
 
 #[test]
@@ -262,7 +262,7 @@ entry = "main.vk"
     let mut host = StdHost;
     let v = eng.get_mod_mut("query_demo").unwrap().domain.as_mut().unwrap().call("update", &[], &mut host).unwrap();
     assert_eq!(v.as_number(), Some(1.0));
-    let bits = eng.shared().borrow().query.entity_at("rock", 0).unwrap();
+    let bits = eng.shared().borrow().query_base.entity_at("rock", 0).unwrap();
     assert!(world.is_alive(spark_ecs::Entity::from_bits(bits)));
 }
 
@@ -456,7 +456,7 @@ entry = "main.vk"
         eng.get_mod_mut("query_filter").unwrap().domain.as_mut().unwrap().call_in_phase("update", &[], HostPhase::Update, &mut hooks).unwrap();
     eng.shared().borrow_mut().end_script_call();
     assert_eq!(v.as_number(), Some(1.0));
-    assert_eq!(eng.shared().borrow().query.count("tree"), 1);
+    assert_eq!(eng.shared().borrow().query_base.count("tree"), 1);
 }
 
 #[test]

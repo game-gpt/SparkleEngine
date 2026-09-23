@@ -66,16 +66,42 @@ impl ScriptQuerySnapshot {
 
     /// 从世界立即拍摄（遍历全部 [`ScriptArchetypeTag`]）。
     pub fn from_world(world: &World) -> Self {
-        ScriptQueryView::new(world).to_snapshot()
+        let mut snap = Self::new();
+        snap.refresh_from_world(world);
+        snap
     }
 
     /// 从已有视图拍摄。
     pub fn from_view(view: &ScriptQueryView<'_>) -> Self {
-        let mut by_archetype: HashMap<Arc<str>, Vec<u64>> = HashMap::new();
-        view.world.for_each::<ScriptArchetypeTag>(|e, tag| {
-            by_archetype.entry(Arc::clone(&tag.name)).or_default().push(e.to_bits());
+        Self::from_world(view.world)
+    }
+
+    /// 就地刷新：复用各原型桶 `Vec` 容量，避免每帧重建 `HashMap`。
+    pub fn refresh_from_world(&mut self, world: &World) {
+        for bucket in self.by_archetype.values_mut() {
+            bucket.clear();
+        }
+        world.for_each::<ScriptArchetypeTag>(|e, tag| {
+            self.by_archetype.entry(Arc::clone(&tag.name)).or_default().push(e.to_bits());
         });
-        Self { by_archetype }
+        self.by_archetype.retain(|_, bucket| !bucket.is_empty());
+    }
+
+    /// 从 `base` 刷新过滤视图到 `self`；复用 `self` 桶容量，仅复制可见原型实体 id。
+    pub fn refresh_filtered_from(&mut self, base: &Self, allow: &HashSet<Arc<str>>) {
+        if allow.is_empty() {
+            *self = base.clone();
+            return;
+        }
+        self.by_archetype.retain(|name, _| allow.iter().any(|a| a.as_ref() == name.as_ref()));
+        for bucket in self.by_archetype.values_mut() {
+            bucket.clear();
+        }
+        for (name, entities) in &base.by_archetype {
+            if allow.iter().any(|a| a.as_ref() == name.as_ref()) {
+                self.by_archetype.entry(Arc::clone(name)).or_default().extend_from_slice(entities);
+            }
+        }
     }
 
     /// 清空全部原型桶。

@@ -40,6 +40,21 @@ fn snapshot_exposes_count_and_entity_at() {
 }
 
 #[test]
+fn refresh_from_world_updates_counts_in_place() {
+    let mut world = World::new();
+    apply_script_commands(
+        &mut world,
+        &[ScriptCommand::Spawn { archetype: Arc::from("rock") }, ScriptCommand::Spawn { archetype: Arc::from("rock") }],
+    )
+    .unwrap();
+    let mut snap = ScriptQuerySnapshot::from_world(&world);
+    assert_eq!(snap.count("rock"), 2);
+    apply_script_commands(&mut world, &[ScriptCommand::Spawn { archetype: Arc::from("rock") }]).unwrap();
+    snap.refresh_from_world(&world);
+    assert_eq!(snap.count("rock"), 3);
+}
+
+#[test]
 fn filtered_snapshot_hides_other_archetypes() {
     let mut world = World::new();
     apply_script_commands(

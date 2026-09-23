@@ -95,9 +95,10 @@ fn column_batch_entity_bits_match_snapshot() {
     eng.refresh_script_query(&world);
     let catalog = eng.component_catalog().clone();
     eng.shared().borrow_mut().begin_script_call(HostPhase::Update, Some(&desc), Some(&plan), &catalog, None, None);
-    let expected = eng.shared().borrow().query.entity_at("rock", 0).unwrap();
+    let expected = eng.shared().borrow().active_query().entity_at("rock", 0).unwrap();
     let batch = eng.shared().borrow().active_column_batch.clone().unwrap();
+    let snapshot = eng.shared().borrow().active_query().clone();
     eng.shared().borrow_mut().end_script_call();
-    assert!(batch.entity_count(0) >= 1);
-    assert_eq!(batch.views()[0].entity_bits(0), Some(expected));
+    assert!(batch.entity_count(&snapshot, 0) >= 1);
+    assert_eq!(batch.entity_bits(&snapshot, 0, 0), Some(expected));
 }

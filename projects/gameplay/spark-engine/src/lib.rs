@@ -398,18 +398,28 @@ impl EngineShared {
             None => ScriptAccessPolicy::Unrestricted,
         };
         self.install_query_view();
-        self.active_column_batch = plan.map(|p| ScriptColumnBatch::install(p.clone(), self.query.clone()));
+        self.active_column_batch = plan.map(|p| ScriptColumnBatch::install(p.clone(), self.active_query()));
         self.active_component_catalog = catalog.clone();
         self.active_component_store = store;
         self.active_column_dispatch = dispatch;
     }
 
+    /// 当前脚本调用可见的只读查询快照（无原型过滤时直接读 `query_base`）。
+    pub fn active_query(&self) -> &ScriptQuerySnapshot {
+        if self.access.archetype_filter().is_some() {
+            &self.query
+        }
+        else {
+            &self.query_base
+        }
+    }
+
     /// 按当前 `access` 从 `query_base` 安装可见查询快照。
     pub fn install_query_view(&mut self) {
-        self.query = match self.access.archetype_filter() {
-            Some(allow) => self.query_base.filtered_by_archetypes(allow),
-            None => self.query_base.clone(),
-        };
+        match self.access.archetype_filter() {
+            Some(allow) => self.query.refresh_filtered_from(&self.query_base, allow),
+            None => self.query.clear(),
+        }
     }
 
     /// 调用结束后恢复为未声明阶段 + 无限制访问 + 全量查询视图。
@@ -417,7 +427,7 @@ impl EngineShared {
         self.active_phase = HostPhase::Any;
         self.active_determinism = DeterminismClass::Nondeterministic;
         self.access = ScriptAccessPolicy::Unrestricted;
-        self.query = self.query_base.clone();
+        self.query.clear();
         self.active_column_batch = None;
         self.active_component_store = None;
         self.active_column_dispatch = None;
@@ -770,7 +780,7 @@ impl SparkEngine {
     /// 从当前世界刷新脚本可读查询快照（应在提交命令后、跑脚本前调用）。
     pub fn refresh_script_query(&mut self, world: &spark_ecs::World) {
         let mut shared = self.shared.borrow_mut();
-        shared.query_base = ScriptQuerySnapshot::from_world(world);
+        shared.query_base.refresh_from_world(world);
         shared.install_query_view();
     }
 

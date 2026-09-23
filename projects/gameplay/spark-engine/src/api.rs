@@ -136,9 +136,7 @@ fn gate_column_dispatch(shared: &EngineShared, import: &str) -> Result<(), VmErr
 fn column_entity_bits(shared: &EngineShared, archetype_index: usize, row: usize) -> Result<u64, VmError> {
     let batch = shared.active_column_batch.as_ref().expect("gate_column_dispatch ensures batch");
     batch
-        .views()
-        .get(archetype_index)
-        .and_then(|view| view.entity_bits(row))
+        .entity_bits(shared.active_query(), archetype_index, row)
         .ok_or(VmError::BadNativeArg { name: "column_row" })
 }
 
@@ -330,7 +328,7 @@ pub fn install_builtins(
         if !shared.access.allows_query_archetype(&name) {
             return Ok(Value::Number(0.0));
         }
-        let n = shared.query.count(&name);
+        let n = shared.active_query().count(&name);
         Ok(Value::Number(n as f64))
     });
 
@@ -347,7 +345,7 @@ pub fn install_builtins(
         if !shared.access.allows_query_archetype(&name) {
             return Ok(Value::Null);
         }
-        match shared.query.entity_at(&name, index) {
+        match shared.active_query().entity_at(&name, index) {
             Some(bits) => Ok(Value::Entity(bits)),
             None => Ok(Value::Null),
         }
@@ -362,7 +360,7 @@ pub fn install_builtins(
         let archetype_index = args[0].as_number().ok_or(VmError::BadNativeArg { name: "query_batch_count" })? as usize;
         let shared = shared_batch_count.borrow();
         let batch = shared.active_column_batch.as_ref().expect("gate_batch_read ensures batch");
-        Ok(Value::Number(batch.entity_count(archetype_index) as f64))
+        Ok(Value::Number(batch.entity_count(shared.active_query(), archetype_index) as f64))
     });
 
     let shared_batch_entity = Rc::clone(shared);
@@ -375,10 +373,7 @@ pub fn install_builtins(
         let row = args[1].as_number().ok_or(VmError::BadNativeArg { name: "query_batch_entity_at" })? as usize;
         let shared = shared_batch_entity.borrow();
         let batch = shared.active_column_batch.as_ref().expect("gate_batch_read ensures batch");
-        let bits = batch
-            .views()
-            .get(archetype_index)
-            .and_then(|view| view.entity_bits(row));
+        let bits = batch.entity_bits(shared.active_query(), archetype_index, row);
         Ok(bits.map(Value::Entity).unwrap_or(Value::Null))
     });
 
