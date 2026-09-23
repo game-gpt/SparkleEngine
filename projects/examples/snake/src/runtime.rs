@@ -1,6 +1,7 @@
-//! 贪吃蛇：[`SparkRuntime`] 路径（权威状态在 ECS 资源）。
+//! 贪吃蛇：[`SparkRuntime`] 路径（段实体 Component + 会话 Resource）。
 
-use spark_engine::{NativeGamePlugin, RustPhase, SparkRuntime};
+use spark_ecs::{Entity, World};
+use spark_engine::{NativeGamePlugin, RustPhase, SparkRuntime, SystemOrder};
 use spark_input::Key;
 use spark_types::{Color, Rect};
 
@@ -37,13 +38,25 @@ impl Dir {
     }
 }
 
-/// 蛇局权威状态（内核 [`World`] 资源，非宿主 struct 字段）。
+/// 网格格点（每段实体一份）。
+#[derive(Debug, Clone, Copy)]
+struct GridPos {
+    x: i32,
+    y: i32,
+}
+
+/// 蛇身段序（0 = 头）。
+#[derive(Debug, Clone, Copy)]
+struct SnakeSegment {
+    order: u32,
+}
+
+/// 局级会话状态（方向、食物、计时、胜负；**不含** `Vec` 段坐标）。
 #[derive(Debug)]
-pub struct SnakeState {
-    body: Vec<(i32, i32)>,
+struct SnakeSession {
     dir: Dir,
     pending: Option<Dir>,
-    food: (i32, i32),
+    food: GridPos,
     acc: f32,
     step: f32,
     score: u32,
@@ -52,67 +65,140 @@ pub struct SnakeState {
     rng: u64,
 }
 
-impl SnakeState {
+impl SnakeSession {
     fn new() -> Self {
-        let mut s = Self {
-            body: vec![(8, 9), (7, 9), (6, 9)],
+        Self {
             dir: Dir::Right,
             pending: None,
-            food: (0, 0),
+            food: GridPos { x: 0, y: 0 },
             acc: 0.0,
             step: 0.12,
             score: 0,
             dead: false,
             exit: false,
             rng: 0x5A11E_u64,
-        };
-        s.place_food();
-        s
-    }
-
-    fn place_food(&mut self) {
-        for _ in 0..512 {
-            self.rng = self.rng.wrapping_mul(6364136223846793005).wrapping_add(1);
-            let x = ((self.rng >> 33) % COLS as u64) as i32;
-            let y = ((self.rng >> 17) % ROWS as u64) as i32;
-            if !self.body.iter().any(|&p| p == (x, y)) {
-                self.food = (x, y);
-                return;
-            }
         }
-        self.food = (0, 0);
     }
+}
 
-    fn restart(&mut self) {
-        *self = Self::new();
+struct SegmentSnap {
+    entity: Entity,
+    x: i32,
+    y: i32,
+    order: u32,
+}
+
+fn spawn_initial_snake(world: &mut World) {
+    for (order, (x, y)) in [(8, 9), (7, 9), (6, 9)].into_iter().enumerate() {
+        world.spawn2(GridPos { x, y }, SnakeSegment { order: order as u32 });
     }
+}
 
-    fn step_once(&mut self) {
-        if let Some(p) = self.pending.take() {
-            if p != self.dir.opposite() {
-                self.dir = p;
-            }
-        }
-        let (dx, dy) = self.dir.delta();
-        let head = self.body[0];
-        let next = (head.0 + dx, head.1 + dy);
-        if next.0 < 0 || next.1 < 0 || next.0 >= COLS || next.1 >= ROWS {
-            self.dead = true;
+fn collect_segments(world: &mut World) -> Vec<SegmentSnap> {
+    let mut out = Vec::new();
+    world.for_each2_mut::<GridPos, SnakeSegment>(|entity, pos, seg| {
+        out.push(SegmentSnap { entity, x: pos.x, y: pos.y, order: seg.order });
+    });
+    out.sort_by_key(|s| s.order);
+    out
+}
+
+fn despawn_all_segments(world: &mut World) {
+    let entities: Vec<Entity> = collect_segments(world).into_iter().map(|s| s.entity).collect();
+    for entity in entities {
+        world.despawn(entity);
+    }
+}
+
+fn occupied_cells(world: &World) -> std::collections::HashSet<(i32, i32)> {
+    let mut blocked = std::collections::HashSet::new();
+    world.for_each::<GridPos>(|_, pos| {
+        blocked.insert((pos.x, pos.y));
+    });
+    blocked
+}
+
+fn place_food(world: &mut World) {
+    let blocked = occupied_cells(&*world);
+    let session = world.resources.get_mut::<SnakeSession>().unwrap();
+    for _ in 0..512 {
+        session.rng = session.rng.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let x = ((session.rng >> 33) % COLS as u64) as i32;
+        let y = ((session.rng >> 17) % ROWS as u64) as i32;
+        if !blocked.contains(&(x, y)) {
+            session.food = GridPos { x, y };
             return;
         }
-        if self.body.contains(&next) {
-            self.dead = true;
-            return;
+    }
+    session.food = GridPos { x: 0, y: 0 };
+}
+
+fn restart_session(world: &mut World) {
+    despawn_all_segments(world);
+    world.resources.insert(SnakeSession::new());
+    spawn_initial_snake(world);
+    place_food(world);
+}
+
+fn step_snake(world: &mut World) {
+    {
+        let session = world.resources.get_mut::<SnakeSession>().unwrap();
+        if let Some(p) = session.pending.take() {
+            if p != session.dir.opposite() {
+                session.dir = p;
+            }
         }
-        self.body.insert(0, next);
-        if next == self.food {
-            self.score += 1;
-            self.step = (0.12 - self.score as f32 * 0.002).max(0.05);
-            self.place_food();
+    }
+
+    let segs = collect_segments(world);
+    if segs.is_empty() {
+        return;
+    }
+
+    let (dir, food_x, food_y) = {
+        let session = world.resources.get::<SnakeSession>().unwrap();
+        (session.dir, session.food.x, session.food.y)
+    };
+
+    let (dx, dy) = dir.delta();
+    let next = (segs[0].x + dx, segs[0].y + dy);
+    if next.0 < 0 || next.1 < 0 || next.0 >= COLS || next.1 >= ROWS {
+        world.resources.get_mut::<SnakeSession>().unwrap().dead = true;
+        return;
+    }
+    if segs.iter().any(|s| s.x == next.0 && s.y == next.1) {
+        world.resources.get_mut::<SnakeSession>().unwrap().dead = true;
+        return;
+    }
+
+    let ate = next.0 == food_x && next.1 == food_y;
+    let old_positions: Vec<(i32, i32)> = segs.iter().map(|s| (s.x, s.y)).collect();
+
+    if let Some(head_pos) = world.get_mut::<GridPos>(segs[0].entity) {
+        head_pos.x = next.0;
+        head_pos.y = next.1;
+    }
+    for seg in segs.iter().skip(1) {
+        let (px, py) = old_positions[(seg.order - 1) as usize];
+        if let Some(pos) = world.get_mut::<GridPos>(seg.entity) {
+            pos.x = px;
+            pos.y = py;
         }
-        else {
-            self.body.pop();
+    }
+
+    if ate {
+        let tail = old_positions[old_positions.len() - 1];
+        let new_order = segs.last().map(|s| s.order + 1).unwrap_or(1);
+        world.spawn2(GridPos { x: tail.0, y: tail.1 }, SnakeSegment { order: new_order });
+        {
+            let session = world.resources.get_mut::<SnakeSession>().unwrap();
+            session.score += 1;
+            session.step = (0.12 - session.score as f32 * 0.002).max(0.05);
         }
+        place_food(world);
+    }
+    else if let Some(tail) = segs.last() {
+        world.despawn(tail.entity);
     }
 }
 
@@ -121,24 +207,25 @@ pub struct SnakeNativePlugin;
 
 impl NativeGamePlugin for SnakeNativePlugin {
     fn build(&self, runtime: &mut SparkRuntime) {
-        runtime.insert_resource(SnakeState::new());
         runtime.scenes_mut().on_enter("play", |world| {
-            if world.resources.get::<SnakeState>().is_none() {
-                world.resources.insert(SnakeState::new());
+            if world.resources.get::<SnakeSession>().is_none() {
+                world.resources.insert(SnakeSession::new());
+                spawn_initial_snake(world);
+                place_food(world);
             }
         });
         runtime.load_scene("play");
 
-        runtime.add_system_ctx(RustPhase::Update, "snake_input_sim", |ctx| {
-            let state = ctx.world.resources.get_mut::<SnakeState>().unwrap();
+        runtime.add_system_ctx(RustPhase::Update, "snake_input", |ctx| {
+            let session = ctx.world.resources.get_mut::<SnakeSession>().unwrap();
             if ctx.input.key_pressed(Key::Escape) {
-                state.exit = true;
+                session.exit = true;
                 ctx.world.resources.get_mut::<spark_engine::AppExit>().unwrap().request();
                 return;
             }
-            if state.dead {
+            if session.dead {
                 if ctx.input.key_pressed(Key::R) {
-                    state.restart();
+                    restart_session(ctx.world);
                 }
                 return;
             }
@@ -158,22 +245,47 @@ impl NativeGamePlugin for SnakeNativePlugin {
                 None
             };
             if let Some(d) = want {
-                if d != state.dir.opposite() {
-                    state.pending = Some(d);
-                }
-            }
-            state.acc += ctx.dt;
-            while state.acc >= state.step {
-                state.acc -= state.step;
-                state.step_once();
-                if state.dead {
-                    break;
+                if d != session.dir.opposite() {
+                    session.pending = Some(d);
                 }
             }
         });
 
+        runtime.add_system_ctx_with_order(
+            RustPhase::Update,
+            "snake_step",
+            SystemOrder { after: vec!["snake_input"], ..SystemOrder::default() },
+            |ctx| {
+                if ctx.world.resources.get::<SnakeSession>().is_none_or(|s| s.dead) {
+                    return;
+                }
+                {
+                    let session = ctx.world.resources.get_mut::<SnakeSession>().unwrap();
+                    session.acc += ctx.dt;
+                }
+                loop {
+                    let step = ctx.world.resources.get::<SnakeSession>().unwrap().step;
+                    let mut tick = false;
+                    {
+                        let session = ctx.world.resources.get_mut::<SnakeSession>().unwrap();
+                        if session.acc >= step {
+                            session.acc -= step;
+                            tick = true;
+                        }
+                    }
+                    if !tick {
+                        break;
+                    }
+                    step_snake(ctx.world);
+                    if ctx.world.resources.get::<SnakeSession>().is_none_or(|s| s.dead) {
+                        break;
+                    }
+                }
+            },
+        );
+
         runtime.add_render_fn("snake_world", |world, _, draw| {
-            let state = world.resources.get::<SnakeState>().unwrap();
+            let session = world.resources.get::<SnakeSession>().unwrap();
             let w = PAD * 2.0 + COLS as f32 * CELL;
             let h = PAD * 2.0 + ROWS as f32 * CELL + 40.0;
             draw.begin_world();
@@ -182,21 +294,24 @@ impl NativeGamePlugin for SnakeNativePlugin {
                 Rect::new(PAD - 2.0, PAD - 2.0, COLS as f32 * CELL + 4.0, ROWS as f32 * CELL + 4.0),
                 Color::rgb(0.1, 0.14, 0.12),
             );
-            let (fx, fy) = state.food;
+            let (fx, fy) = (session.food.x, session.food.y);
             draw.fill_rect(
                 Rect::new(PAD + fx as f32 * CELL + 2.0, PAD + fy as f32 * CELL + 2.0, CELL - 4.0, CELL - 4.0),
                 Color::rgb(0.95, 0.35, 0.3),
             );
-            for (i, &(x, y)) in state.body.iter().enumerate() {
-                let c = if i == 0 { Color::rgb(0.35, 0.95, 0.45) } else { Color::rgb(0.25, 0.7, 0.35) };
-                draw.fill_rect(Rect::new(PAD + x as f32 * CELL + 1.0, PAD + y as f32 * CELL + 1.0, CELL - 2.0, CELL - 2.0), c);
-            }
+            world.for_each2_mut::<GridPos, SnakeSegment>(|_, pos, seg| {
+                let c = if seg.order == 0 { Color::rgb(0.35, 0.95, 0.45) } else { Color::rgb(0.25, 0.7, 0.35) };
+                draw.fill_rect(
+                    Rect::new(PAD + pos.x as f32 * CELL + 1.0, PAD + pos.y as f32 * CELL + 1.0, CELL - 2.0, CELL - 2.0),
+                    c,
+                );
+            });
         });
 
         runtime.add_system(RustPhase::UiPrepare, "snake_hud", |world| {
-            let state = world.resources.get::<SnakeState>().unwrap();
+            let session = world.resources.get::<SnakeSession>().unwrap();
             let mut batch = spark_renderer::UiRenderBatch::new();
-            batch.text(PAD, PAD + ROWS as f32 * CELL + 10.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", state.score));
+            batch.text(PAD, PAD + ROWS as f32 * CELL + 10.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", session.score));
             batch.text(
                 PAD + 140.0,
                 PAD + ROWS as f32 * CELL + 12.0,
@@ -204,7 +319,7 @@ impl NativeGamePlugin for SnakeNativePlugin {
                 Color::rgba(1.0, 1.0, 1.0, 0.55),
                 "方向键/WASD · R 重开 · Esc 退出",
             );
-            if state.dead {
+            if session.dead {
                 batch.fill_rect(Rect::new(PAD + 40.0, PAD + 160.0, 400.0, 80.0), Color::rgba(0.0, 0.0, 0.0, 0.7));
                 batch.text(PAD + 140.0, PAD + 180.0, 28.0, Color::rgb(1.0, 0.45, 0.4), "GAME OVER");
                 batch.text(PAD + 150.0, PAD + 215.0, 16.0, Color::rgb(1.0, 1.0, 1.0), "按 R 重新开始");
