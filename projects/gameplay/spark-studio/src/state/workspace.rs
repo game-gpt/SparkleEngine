@@ -1,8 +1,8 @@
 //! Studio 会话 UI 状态。
 
-use crate::layout::DockLayoutState;
+use crate::layout::{DockLayoutState, LayoutPreset};
 
-use super::{BottomTab, CenterTab, PlayMode, Tool};
+use super::{BottomTab, CenterTab, PlayMode, Tool, TransformState};
 
 /// Studio 会话 UI 状态（与 Widget 树命令互通）。
 #[derive(Debug, Clone)]
@@ -19,6 +19,10 @@ pub struct EditorState {
     pub selected: u64,
     /// 停靠布局尺寸与折叠态。
     pub dock: DockLayoutState,
+    /// 当前布局预设。
+    pub layout_preset: LayoutPreset,
+    /// 检查器 Transform 演示字段。
+    pub transform: TransformState,
     /// 状态栏短文案。
     pub status: String,
 }
@@ -32,6 +36,8 @@ impl Default for EditorState {
             tool: Tool::Move,
             selected: 1,
             dock: DockLayoutState::default(),
+            layout_preset: LayoutPreset::Default,
+            transform: TransformState::default(),
             status: String::new(),
         }
     }
