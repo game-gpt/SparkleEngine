@@ -16,9 +16,14 @@ pub fn build_hierarchy_panel(project: &ProjectInfo, state: &EditorState, dock: &
     let mut body = Vec::new();
     for row in hierarchy_for(project.kind) {
         let indent = "  ".repeat(row.depth as usize);
-        let label = format!("{indent}{}", row.name);
+        let icon = if row.depth == 0 { "▾ " } else { "◦ " };
+        let label = format!("{indent}{icon}{}", row.name);
         let active = row.id == state.selected;
-        let btn = button_widget().text(label).on_click(UiCommand::Custom(select_cmd(row.id))).style(Style {
+        let btn = button_widget()
+            .key(format!("hierarchy.row.{}", row.id))
+            .text(label)
+            .on_click(UiCommand::Custom(select_cmd(row.id)))
+            .style(Style {
             background: if active { Some(selected_surface()) } else { Some(Color::rgba(0.0, 0.0, 0.0, 0.0)) },
             foreground: Some(text_primary()),
             corner_radius: Some(0.0),

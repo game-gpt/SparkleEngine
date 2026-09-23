@@ -46,5 +46,5 @@ pub fn build_shell(project: &ProjectInfo, state: &EditorState, asset_lines: &[St
         .child(build_scene_toolbar(state))
         .child(h_splitter())
         .child(main)
-        .child(build_status_bar(state))
+        .child(build_status_bar(project, state))
 }

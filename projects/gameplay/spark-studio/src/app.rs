@@ -248,6 +248,17 @@ impl StudioApp {
         }
     }
 
+    fn frame_selection(&mut self) {
+        if entity_by_id(self.project.kind, self.state.selected).is_none() {
+            return;
+        }
+        let t = self.state.transform;
+        let zoom = self.state.viewport.zoom;
+        self.state.viewport.pan_x = -t.pos_x * zoom;
+        self.state.viewport.pan_y = t.pos_y * zoom;
+        self.state.status = "已聚焦选中对象 (F)".into();
+    }
+
     fn handle_shortcuts(&mut self, input: &Input) {
         let ctrl = input.key_down(Key::LCtrl) || input.key_down(Key::RCtrl);
         if ctrl && input.key_pressed(Key::J) {
@@ -255,6 +266,9 @@ impl StudioApp {
             self.state.status = if self.state.dock.bottom_collapsed { "底栏已隐藏 (Ctrl+J)".into() } else { "底栏已显示 (Ctrl+J)".into() };
             self.dirty_ui = true;
             self.persist_dock();
+        }
+        if input.key_pressed(Key::F) && self.state.center == CenterTab::Scene {
+            self.frame_selection();
         }
     }
 
