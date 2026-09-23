@@ -1,4 +1,4 @@
-//! 贪吃蛇：[`SparkRuntime`] 路径（权威状态在 ECS 资源，不实现 [`GameHost`]）。
+//! 贪吃蛇：[`SparkRuntime`] 路径（权威状态在 ECS 资源）。
 
 use spark_engine::{NativeGamePlugin, RustPhase, SparkRuntime};
 use spark_input::Key;
