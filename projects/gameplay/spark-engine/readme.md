@@ -2,7 +2,7 @@
 
 引擎壳：`SparkRuntime` 双脚本帧循环、场景、模组加载、脚本域与 `DataRegistry`。
 
-## 推荐入口（2D）
+## 推荐入口（2D 游戏）
 
 ```rust
 use spark_engine::{NativeGamePlugin, RustPhase, SparkRuntime, run_runtime};
@@ -20,11 +20,16 @@ runtime.register_native(&MyPlugin);
 run_runtime(WindowConfig { title: "demo".into(), ..Default::default() }, runtime)?;
 ```
 
-`RuntimeHost2d` 在内部适配窗口泵；游戏**不**实现 `GameHost`。
+`RuntimeHost2d` 在内部实现 `WindowPump2d`；游戏**不**实现窗口泵。
 
-## 遗留入口（禁止新代码）
+## 自定义壳（编辑器 / 工具）
 
-`run_game` / `EcsHost2d` / `impl GameHost` 仅兼容旧示例与未迁移游戏，已 `deprecated`。
+```rust
+use spark_engine::run_window_2d;
+use spark_renderer::{WindowConfig, WindowPump2d};
+
+run_window_2d(WindowConfig::default(), my_pump)?;
+```
 
 模组路径：
 
@@ -32,11 +37,10 @@ run_runtime(WindowConfig { title: "demo".into(), ..Default::default() }, runtime
 use spark_engine::{SparkEngine, parse_mod_von};
 
 let mut engine = SparkEngine::new("mods");
-// register_plugin / register_script_system / load_all
 let manifest = parse_mod_von(r#"id = "demo""#)?;
 ```
 
-窗口泵在 `spark-renderer-wgpu`。`DataRegistry` 存通用表项，内容含义由游戏解释。
+窗口 GPU 提交在 `spark-renderer-wgpu`。`DataRegistry` 存通用表项，内容含义由游戏解释。
 
 ```bash
 cargo test -p spark-engine

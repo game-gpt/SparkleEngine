@@ -1,82 +1,29 @@
 //! 产品入口：帧编排在本 crate，窗口泵在 `spark-renderer-wgpu`。
 
-use spark_renderer::{GameHost, GameHost3d, WindowConfig};
+use spark_renderer::{WindowConfig, WindowPump2d};
 use spark_types::SparkError;
 
-use crate::frame::{FrameLoopConfig, LoopedHost2d, LoopedHost3d};
+use crate::frame::FrameLoopConfig;
+use crate::runtime::RuntimeHost2d;
+use crate::SparkRuntime;
 
-/// 运行 2D 游戏：引擎编排帧相位，wgpu 只泵窗口与提交。
-#[deprecated(note = "use run_runtime with SparkRuntime instead")]
-pub fn run_game<H: GameHost + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
-    #[allow(deprecated)]
-    run_game_with(config, host, FrameLoopConfig::default())
+/// 以自定义 [`WindowPump2d`] 运行 2D 窗口（编辑器壳、工具等）。
+pub fn run_window_2d<P: WindowPump2d + 'static>(config: WindowConfig, pump: P) -> Result<(), SparkError> {
+    spark_renderer_wgpu::run_window_2d(config, pump)
 }
 
-/// 带帧循环配置的 2D 入口。
-#[deprecated(note = "use run_runtime_with with SparkRuntime instead")]
-pub fn run_game_with<H: GameHost + 'static>(config: WindowConfig, host: H, loop_config: FrameLoopConfig) -> Result<(), SparkError> {
-    let wrapped = LoopedHost2d::new(host, loop_config);
-    spark_renderer_wgpu::run_window_2d(config, wrapped)
-}
-
-/// 运行 3D 游戏宿主。
-#[deprecated(note = "use SparkRuntime 3D path when available")]
-pub fn run_game_3d<H: GameHost3d + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
-    #[allow(deprecated)]
-    run_game_3d_with(config, host, FrameLoopConfig::default())
-}
-
-/// 带帧循环配置的 3D 入口。
-#[deprecated(note = "use SparkRuntime 3D path when available")]
-pub fn run_game_3d_with<H: GameHost3d + 'static>(config: WindowConfig, host: H, loop_config: FrameLoopConfig) -> Result<(), SparkError> {
-    let wrapped = LoopedHost3d::new(host, loop_config);
-    spark_renderer_wgpu::run_window_3d(config, wrapped)
-}
-
-/// 以 [`crate::SparkApp`] 运行 2D 游戏（内部委托 [`run_runtime`]）。
-pub fn run_app_2d(config: WindowConfig, app: crate::SparkApp) -> Result<(), SparkError> {
-    run_runtime(config, app.into_runtime())
-}
-
-/// 以 [`crate::SparkApp3d`] 运行 3D 游戏。
-pub fn run_app_3d(config: WindowConfig, app: crate::SparkApp3d) -> Result<(), SparkError> {
-    #[allow(deprecated)]
-    run_ecs_game_3d(config, app.into_host(), FrameLoopConfig::default())
-}
-
-/// 以 [`crate::EcsHost2d`] 运行 2D 游戏（固定/可变帧循环可配）。
-#[deprecated(note = "use run_runtime_with with SparkRuntime instead")]
-pub fn run_ecs_game_2d(config: WindowConfig, host: crate::EcsHost2d, loop_config: FrameLoopConfig) -> Result<(), SparkError> {
-    #[allow(deprecated)]
-    run_game_with(config, host, loop_config)
-}
-
-/// 以默认帧循环配置运行 [`crate::EcsHost2d`]。
-#[deprecated(note = "use run_runtime with SparkRuntime instead")]
-pub fn run_ecs_game(config: WindowConfig, host: crate::EcsHost2d) -> Result<(), SparkError> {
-    run_ecs_game_2d(config, host, FrameLoopConfig::default())
-}
-
-/// 以 [`crate::SparkRuntime`] 运行 2D 游戏（推荐入口；[`GameHost`] 仅作窗口泵适配）。
-pub fn run_runtime(config: WindowConfig, runtime: crate::SparkRuntime) -> Result<(), SparkError> {
+/// 以 [`SparkRuntime`] 运行 2D 游戏（游戏仓推荐入口）。
+pub fn run_runtime(config: WindowConfig, runtime: SparkRuntime) -> Result<(), SparkError> {
     run_runtime_with(config, runtime, FrameLoopConfig::default())
 }
 
-/// 带帧循环配置的 [`crate::SparkRuntime`] 入口。
+/// 带帧循环配置的 [`SparkRuntime`] 入口。
 pub fn run_runtime_with(
     config: WindowConfig,
-    runtime: crate::SparkRuntime,
+    runtime: SparkRuntime,
     loop_config: FrameLoopConfig,
 ) -> Result<(), SparkError> {
     let loop_cfg = loop_config.clone();
-    let host = crate::RuntimeHost2d::new(runtime.with_loop_config(loop_cfg.clone()), loop_cfg);
-    #[allow(deprecated)]
-    run_game_with(config, host, loop_config)
-}
-
-/// 以 [`crate::EcsHost3d`] 运行 3D 游戏（固定/可变帧循环可配）。
-#[deprecated(note = "use SparkRuntime 3D path when available")]
-pub fn run_ecs_game_3d(config: WindowConfig, host: crate::EcsHost3d, loop_config: FrameLoopConfig) -> Result<(), SparkError> {
-    #[allow(deprecated)]
-    run_game_3d_with(config, host, loop_config)
+    let pump = RuntimeHost2d::new(runtime.with_loop_config(loop_cfg), loop_config);
+    run_window_2d(config, pump)
 }

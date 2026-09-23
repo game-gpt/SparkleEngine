@@ -1,6 +1,6 @@
-//! 窗口后端适配：[`GameHost`] 只泵事件与 GPU，游戏语义全在 [`SparkRuntime`]。
+//! 窗口后端适配：[`WindowPump2d`] 只泵事件与 GPU，游戏语义全在 [`SparkRuntime`]。
 
-use spark_renderer::{DrawList, FrameCtx, GameHost, UiRenderBatch};
+use spark_renderer::{DrawList, FrameCtx, UiRenderBatch, WindowPump2d};
 use spark_vm::StdHost;
 
 use super::SparkRuntime;
@@ -32,32 +32,22 @@ impl RuntimeHost2d {
     }
 }
 
-#[allow(deprecated)]
-impl GameHost for RuntimeHost2d {
-    fn update(&mut self, frame: &FrameCtx<'_>) {
-        let steps = self.loop_.clock_mut().begin_frame(frame.dt);
-        for _ in 0..steps {
-            let stepped = FrameCtx {
-                input: frame.input,
-                dt: self.loop_.clock().delta_seconds,
-                screen_w: frame.screen_w,
-                screen_h: frame.screen_h,
-                dpi_scale: frame.dpi_scale,
-                timing: frame.timing,
-            };
+impl WindowPump2d for RuntimeHost2d {
+    fn simulate(&mut self, frame: &FrameCtx<'_>) {
+        self.loop_.run_sim_steps(frame, |stepped| {
             let mut host = StdHost;
-            let _ = self.runtime.tick_sim(&stepped, &mut host);
-        }
+            let _ = self.runtime.tick_sim(stepped, &mut host);
+        });
         let mut host = StdHost;
         let _ = self.runtime.tick_frame_end(frame, &mut host);
     }
 
-    fn draw(&mut self, draw: &mut DrawList) {
+    fn present_world(&mut self, draw: &mut DrawList) {
         let mut host = StdHost;
         let _ = self.runtime.render_world(draw, &mut host);
     }
 
-    fn draw_ui(&mut self, ui: &mut UiRenderBatch) {
+    fn present_ui(&mut self, ui: &mut UiRenderBatch) {
         self.runtime.render_ui(ui);
     }
 

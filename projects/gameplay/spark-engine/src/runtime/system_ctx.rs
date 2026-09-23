@@ -3,7 +3,7 @@
 use spark_ecs::World;
 use spark_input::Input;
 
-use crate::ecs_host::FrameSnapshot;
+use crate::frame_state::FrameSnapshot;
 
 /// Rust 原生系统的单步执行上下文。
 ///

@@ -2,7 +2,7 @@
 
 use spark_engine::*;
 use spark_input::Input;
-use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_renderer::{DrawList, FrameCtx, WindowPump2d};
 use spark_types::Color;
 use spark_vm::StdHost;
 
@@ -30,16 +30,16 @@ impl NativeGamePlugin for CounterPlugin {
 }
 
 #[test]
-fn runtime_ticks_and_renders_via_host() {
+fn runtime_ticks_and_renders_via_window_pump() {
     let mut runtime = SparkRuntime::new();
     runtime.register_native(&CounterPlugin);
-    let mut host = runtime.into_host();
+    let mut pump = runtime.into_host();
     let input = Input::default();
     let frame = frame_ctx(&input, 1.0 / 60.0);
-    host.update(&frame);
+    pump.simulate(&frame);
     let mut draw = DrawList::new(Color::rgb(0.0, 0.0, 0.0));
-    host.draw(&mut draw);
-    assert_eq!(*host.runtime.world().resources.get::<u32>().unwrap(), 2);
+    pump.present_world(&mut draw);
+    assert_eq!(*pump.runtime.world().resources.get::<u32>().unwrap(), 2);
     assert!((draw.clear.r - 2.0 / 255.0).abs() < 1e-5);
 }
 

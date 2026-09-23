@@ -4,7 +4,7 @@
 //! - **Spark Script 域**：Mod、热更内容与受控命令 API。
 //!
 //! 窗口泵只通过 [`RuntimeHost2d`] 调用 [`SparkRuntime::tick_sim`] / [`SparkRuntime::render_world`]；
-//! 游戏不实现 [`spark_renderer::GameHost`]。
+//! 游戏不实现 [`spark_renderer::WindowPump2d`]。
 
 mod host;
 mod native;
@@ -27,7 +27,7 @@ use spark_renderer::{Camera2d, DrawList, FrameCtx, UiRenderBatch};
 use spark_vm::HostHooks;
 
 use crate::{
-    ecs_host::{AppExit, DrawBuffer2d, FrameSnapshot, OsCursorVisible, UiBuffer2d},
+    frame_state::{AppExit, DrawBuffer2d, FrameSnapshot, OsCursorVisible, UiBuffer2d},
     render2d::{RenderFrame2d, RenderSchedule2d},
     EngineError, FrameLoopConfig,
 };
@@ -205,12 +205,6 @@ impl SparkRuntime {
         for cmd in batch {
             self.scenes.flush(&mut self.world, Some(cmd));
         }
-    }
-
-    /// 压平仿真相位为单个 [`Schedule`]（仅供 [`EcsHost2d`] 兼容路径）。
-    pub fn into_ecs_host(self) -> crate::EcsHost2d {
-        let sim = self.scheduler.into_flat_sim();
-        crate::EcsHost2d::new(self.world, sim).with_renderer(self.renderer)
     }
 
     /// 单仿真步：写帧快照 → 场景 → 双域调度。
