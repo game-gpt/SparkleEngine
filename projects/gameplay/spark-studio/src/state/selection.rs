@@ -2,6 +2,8 @@
 
 use crate::project::ProjectKind;
 
+use super::demo_entity_position;
+
 /// Hierarchy 一行：演示用静态实体描述（非 ECS 权威）。
 #[derive(Debug, Clone)]
 pub struct EntityRow {
@@ -32,6 +34,22 @@ pub fn entity_by_id(kind: ProjectKind, id: u64) -> Option<&'static EntityRow> {
 /// 打开项目时的默认选中：优先第二行（常见为 Camera），否则 `1`。
 pub fn default_selected(kind: ProjectKind) -> u64 {
     hierarchy_for(kind).get(1).map(|e| e.id).unwrap_or(1)
+}
+
+/// 在世界坐标附近拾取最近演示实体（跳过 Scene 根节点）。
+pub fn pick_entity_at_world(kind: ProjectKind, wx: f32, wy: f32, max_dist: f32) -> Option<u64> {
+    hierarchy_for(kind)
+        .iter()
+        .filter(|e| e.depth > 0)
+        .filter_map(|e| {
+            let (x, y, _) = demo_entity_position(e.id);
+            let dx = wx - x;
+            let dy = wy - y;
+            let d = (dx * dx + dy * dy).sqrt();
+            if d <= max_dist { Some((d, e.id)) } else { None }
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, id)| id)
 }
 
 const PING_PONG: &[EntityRow] = &[

@@ -2,7 +2,7 @@
 
 use crate::layout::{DockLayoutState, LayoutPreset};
 
-use super::{BottomTab, CenterTab, PlayMode, Tool, TransformState};
+use super::{BottomTab, CenterTab, PlayMode, Tool, TransformState, ViewportState};
 
 /// Studio 会话 UI 状态（与 Widget 树命令互通）。
 #[derive(Debug, Clone)]
@@ -23,6 +23,8 @@ pub struct EditorState {
     pub layout_preset: LayoutPreset,
     /// 检查器 Transform 演示字段。
     pub transform: TransformState,
+    /// 场景视口相机。
+    pub viewport: ViewportState,
     /// 状态栏短文案。
     pub status: String,
 }
@@ -38,6 +40,7 @@ impl Default for EditorState {
             dock: DockLayoutState::default(),
             layout_preset: LayoutPreset::Default,
             transform: TransformState::default(),
+            viewport: ViewportState::default(),
             status: String::new(),
         }
     }

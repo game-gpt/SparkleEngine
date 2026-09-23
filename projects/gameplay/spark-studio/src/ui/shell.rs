@@ -39,6 +39,7 @@ pub fn build_shell(project: &ProjectInfo, state: &EditorState, asset_lines: &[St
     }
 
     column()
+        .key("studio.shell")
         .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, gap: 0.0, ..LayoutSpec::vertical() })
         .style(Style { background: Some(chrome_surface()), ..Style::default() })
         .child(build_top_bar(project))

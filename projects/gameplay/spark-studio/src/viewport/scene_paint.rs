@@ -3,6 +3,10 @@
 use spark_renderer::DrawList;
 use spark_types::{Color, Rect};
 
+use crate::state::{TransformState, ViewportState};
+
+use super::camera::{viewport_center, world_to_screen};
+
 /// 场景画布底色。
 const CANVAS: Color = Color::rgb(0.055, 0.060, 0.068);
 /// 次网格线。
@@ -21,7 +25,7 @@ const SELECTION: Color = Color::rgb(0.286, 0.475, 0.655);
 const GRID_STEP: f32 = 24.0;
 
 /// 在视口矩形内绘制场景网格、原点十字、相机框与选中占位。
-pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, selected: bool) {
+pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, vp: &ViewportState, selection: Option<&TransformState>) {
     if rect.w < 1.0 || rect.h < 1.0 {
         return;
     }
@@ -31,13 +35,13 @@ pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, selected: bool) {
     draw.begin_hud();
     draw.fill_rect(rect, CANVAS);
 
-    let origin_x = rect.x + rect.w * 0.5;
-    let origin_y = rect.y + rect.h * 0.5;
+    let (origin_x, origin_y) = viewport_center(rect, vp);
+    let step = GRID_STEP * vp.zoom.max(0.01);
 
-    let x_start = rect.x + (origin_x - rect.x).rem_euclid(GRID_STEP);
+    let x_start = rect.x + (origin_x - rect.x).rem_euclid(step);
     let mut x = x_start;
     while x < rect.x + rect.w {
-        let idx = ((x - origin_x) / GRID_STEP).round() as i32;
+        let idx = ((x - origin_x) / step).round() as i32;
         let color = if idx == 0 {
             AXIS_Y
         }
@@ -48,13 +52,13 @@ pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, selected: bool) {
             GRID_MINOR
         };
         draw.fill_rect(Rect::new(x, rect.y, 1.0, rect.h), color);
-        x += GRID_STEP;
+        x += step;
     }
 
-    let y_start = rect.y + (origin_y - rect.y).rem_euclid(GRID_STEP);
+    let y_start = rect.y + (origin_y - rect.y).rem_euclid(step);
     let mut y = y_start;
     while y < rect.y + rect.h {
-        let idx = ((y - origin_y) / GRID_STEP).round() as i32;
+        let idx = ((y - origin_y) / step).round() as i32;
         let color = if idx == 0 {
             AXIS_X
         }
@@ -65,7 +69,7 @@ pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, selected: bool) {
             GRID_MINOR
         };
         draw.fill_rect(Rect::new(rect.x, y, rect.w, 1.0), color);
-        y += GRID_STEP;
+        y += step;
     }
 
     let cam_w = rect.w.min(220.0);
@@ -74,11 +78,15 @@ pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, selected: bool) {
     let cam_y = origin_y - cam_h * 0.5;
     stroke_rect(draw, Rect::new(cam_x, cam_y, cam_w, cam_h), CAMERA_FRAME);
 
-    if selected {
-        stroke_rect(draw, Rect::new(origin_x - 40.0, origin_y - 28.0, 80.0, 56.0), SELECTION);
+    if let Some(t) = selection {
+        let (sx, sy) = world_to_screen(t.pos_x, t.pos_y, rect, vp);
+        let w = 80.0 * t.scale_x.abs().max(0.1) * vp.zoom;
+        let h = 56.0 * t.scale_y.abs().max(0.1) * vp.zoom;
+        stroke_rect(draw, Rect::new(sx - w * 0.5, sy - h * 0.5, w, h), SELECTION);
     }
 
-    draw.text(rect.x + 8.0, rect.y + 6.0, 11.0, Color::rgb(0.67, 0.69, 0.72), "世界原点 (0, 0)");
+    let zoom_pct = (vp.zoom * 100.0).round();
+    draw.text(rect.x + 8.0, rect.y + 6.0, 11.0, Color::rgb(0.67, 0.69, 0.72), format!("世界原点 (0, 0) · {zoom_pct}%"));
 
     draw.pop_clip();
 }

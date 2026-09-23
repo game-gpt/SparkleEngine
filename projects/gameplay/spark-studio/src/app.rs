@@ -19,10 +19,10 @@ use crate::{
         BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_LAYOUT_DEBUG, CMD_LAYOUT_DEFAULT, CMD_LAYOUT_SCRIPT,
         CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE,
         CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab,
-        EditorState, PlayMode, Tool, TransformState, default_selected, entity_by_id, parse_select_cmd,
+        EditorState, PlayMode, Tool, TransformState, default_selected, entity_by_id, parse_select_cmd, pick_entity_at_world,
     },
     ui,
-    viewport::paint_scene_viewport,
+    viewport::{paint_scene_viewport, screen_to_world},
 };
 
 /// Studio 应用宿主：持有 Widget 运行时、项目元数据与可选 Play 会话。
@@ -36,6 +36,7 @@ pub struct StudioApp {
     play: Option<PlaySession>,
     splitter_drag: Option<SplitterDrag>,
     splitter_last_click: Option<(SplitterAxis, f64)>,
+    viewport_pan: Option<(f32, f32)>,
     screen_w: f32,
     screen_h: f32,
     exit: bool,
@@ -64,6 +65,7 @@ impl StudioApp {
             play: None,
             splitter_drag: None,
             splitter_last_click: None,
+            viewport_pan: None,
             screen_w: 1280.0,
             screen_h: 720.0,
             exit: false,
@@ -91,7 +93,13 @@ impl StudioApp {
     }
 
     fn remount(&mut self) {
-        self.ui.mount_scene(ui::build_shell(&self.project, &self.state, &self.assets));
+        let shell = ui::build_shell(&self.project, &self.state, &self.assets);
+        if self.mounted {
+            self.ui.reconcile_scene(shell);
+        }
+        else {
+            self.ui.mount_scene(shell);
+        }
         self.mounted = true;
         self.dirty_ui = false;
     }
@@ -138,18 +146,56 @@ impl StudioApp {
 
     fn apply_selection(&mut self, entity_id: u64) {
         self.state.selected = entity_id;
-        self.state.transform = TransformState {
-            pos_x: (entity_id as f32 - 1.0) * 16.0,
-            pos_y: 0.0,
-            pos_z: 0.0,
-            rot_x: 0.0,
-            rot_y: 0.0,
-            rot_z: 0.0,
-            scale_x: 1.0,
-            scale_y: 1.0,
-            scale_z: 1.0,
-        };
+        self.state.transform = TransformState::from_entity(entity_id);
         self.dirty_ui = true;
+    }
+
+    fn sync_inspector_transform(&mut self) {
+        if let Some(root) = self.ui.scene_root() {
+            if TransformState::read_from_tree(&self.ui.tree, root, &mut self.state.transform) {
+                self.state.status = "已应用 Transform 修改".into();
+            }
+        }
+    }
+
+    fn handle_viewport_input(&mut self, input: &Input) {
+        if self.state.center != CenterTab::Scene || self.splitter_drag.is_some() {
+            return;
+        }
+
+        let rect = center_viewport_rect(self.screen_w, self.screen_h, self.state.dock);
+        let (mx, my) = input.mouse_pos();
+        if mx < rect.x || my < rect.y || mx > rect.x + rect.w || my > rect.y + rect.h {
+            self.viewport_pan = None;
+            return;
+        }
+
+        let wheel = input.wheel();
+        if wheel != 0.0 {
+            let factor = if wheel > 0.0 { 1.1 } else { 0.9 };
+            self.state.viewport.zoom = (self.state.viewport.zoom * factor).clamp(0.25, 4.0);
+        }
+
+        let panning = input.mouse_down(MouseBtn::Middle)
+            || (self.state.tool == Tool::Hand && input.mouse_down(MouseBtn::Left) && my > rect.y + 48.0);
+        if panning {
+            if let Some((last_x, last_y)) = self.viewport_pan {
+                self.state.viewport.pan_x += mx - last_x;
+                self.state.viewport.pan_y += my - last_y;
+            }
+            self.viewport_pan = Some((mx, my));
+        }
+        else {
+            self.viewport_pan = None;
+        }
+
+        if input.mouse_pressed(MouseBtn::Left) && self.state.tool == Tool::Hand && my > rect.y + 48.0 {
+            let (wx, wy) = screen_to_world(mx, my, rect, &self.state.viewport);
+            let pick_radius = 48.0 / self.state.viewport.zoom;
+            if let Some(eid) = pick_entity_at_world(self.project.kind, wx, wy, pick_radius) {
+                self.apply_selection(eid);
+            }
+        }
     }
 
     fn handle_shortcuts(&mut self, input: &Input) {
@@ -314,6 +360,7 @@ impl StudioApp {
         self.screen_w = frame.screen_w;
         self.screen_h = frame.screen_h;
         self.handle_shortcuts(frame.input);
+        self.handle_viewport_input(frame.input);
         self.handle_splitter_input(frame.input, frame.screen_w, frame.screen_h);
 
         if !self.mounted || self.dirty_ui {
@@ -331,6 +378,9 @@ impl StudioApp {
 
         self.ui.begin_frame(&ui_frame);
         self.ui.dispatch_input(&ui_frame);
+        if frame.input.key_pressed(Key::Enter) {
+            self.sync_inspector_transform();
+        }
         self.ui.update(frame.dt);
         self.ui.layout(&ui_frame);
         self.handle_commands();
@@ -399,8 +449,8 @@ impl WindowPump2d for StudioApp {
 
         if self.state.center == CenterTab::Scene {
             let rect = center_viewport_rect(self.screen_w, self.screen_h, self.state.dock);
-            let selected = entity_by_id(self.project.kind, self.state.selected).is_some();
-            paint_scene_viewport(draw, rect, selected);
+            let selection = entity_by_id(self.project.kind, self.state.selected).map(|_| &self.state.transform);
+            paint_scene_viewport(draw, rect, &self.state.viewport, selection);
         }
 
         self.ui.paint(draw);

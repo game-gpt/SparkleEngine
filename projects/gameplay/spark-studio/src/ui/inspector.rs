@@ -5,22 +5,37 @@ use spark_widget::{LayoutSpec, Size, WidgetBuilder, row, separator_widget, text_
 use crate::{
     layout::DockLayoutState,
     project::{ProjectInfo, ProjectKind},
-    state::{CMD_EDIT_UNDO, EditorState, entity_by_id},
+    state::{CMD_EDIT_UNDO, EditorState, TransformState, entity_by_id, field_keys},
     ui::{
         dock_panel::side_dock,
         style::{bright_label, dim_label, menu_item},
     },
 };
 
-fn field_row(label: &str, value: &str) -> WidgetBuilder {
+fn field_row(label: &str, key: &str, value: &str) -> WidgetBuilder {
     row()
         .layout(LayoutSpec { width: Size::Fill, height: Size::Px(24.0), flex_grow: 0.0, gap: 6.0, ..LayoutSpec::horizontal() })
         .child(dim_label(label))
         .child(
             text_field_widget()
+                .key(key)
                 .text(value)
                 .layout(LayoutSpec { width: Size::Fill, height: Size::Px(24.0), flex_grow: 1.0, ..LayoutSpec::horizontal() }),
         )
+}
+
+fn transform_fields(t: &TransformState) -> Vec<WidgetBuilder> {
+    vec![
+        field_row("Position X", field_keys::POS_X, &format!("{:.2}", t.pos_x)),
+        field_row("Position Y", field_keys::POS_Y, &format!("{:.2}", t.pos_y)),
+        field_row("Position Z", field_keys::POS_Z, &format!("{:.2}", t.pos_z)),
+        field_row("Rotation X", field_keys::ROT_X, &format!("{:.1}°", t.rot_x)),
+        field_row("Rotation Y", field_keys::ROT_Y, &format!("{:.1}°", t.rot_y)),
+        field_row("Rotation Z", field_keys::ROT_Z, &format!("{:.1}°", t.rot_z)),
+        field_row("Scale X", field_keys::SCALE_X, &format!("{:.2}", t.scale_x)),
+        field_row("Scale Y", field_keys::SCALE_Y, &format!("{:.2}", t.scale_y)),
+        field_row("Scale Z", field_keys::SCALE_Z, &format!("{:.2}", t.scale_z)),
+    ]
 }
 
 /// 构建检查器面板。
@@ -32,16 +47,7 @@ pub fn build_inspector_panel(project: &ProjectInfo, state: &EditorState, dock: &
         body.push(dim_label(format!("✓ {}", e.component_summary)));
         body.push(separator_widget());
         body.push(bright_label("Transform"));
-        let t = &state.transform;
-        body.push(field_row("Position X", &format!("{:.2}", t.pos_x)));
-        body.push(field_row("Position Y", &format!("{:.2}", t.pos_y)));
-        body.push(field_row("Position Z", &format!("{:.2}", t.pos_z)));
-        body.push(field_row("Rotation X", &format!("{:.1}°", t.rot_x)));
-        body.push(field_row("Rotation Y", &format!("{:.1}°", t.rot_y)));
-        body.push(field_row("Rotation Z", &format!("{:.1}°", t.rot_z)));
-        body.push(field_row("Scale X", &format!("{:.2}", t.scale_x)));
-        body.push(field_row("Scale Y", &format!("{:.2}", t.scale_y)));
-        body.push(field_row("Scale Z", &format!("{:.2}", t.scale_z)));
+        body.extend(transform_fields(&state.transform));
         body.push(separator_widget());
         let hint = match project.kind {
             ProjectKind::Rust => "组件字段来自 Rust 类型注册",
