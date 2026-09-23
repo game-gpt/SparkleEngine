@@ -16,11 +16,11 @@ use crate::{
     play::PlaySession,
     project::{ProjectInfo, list_asset_entries},
     state::{
-        BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_LAYOUT_DEBUG, CMD_LAYOUT_DEFAULT, CMD_LAYOUT_SCRIPT,
-        CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE,
-        CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab,
-        EditorState, PlayMode, Tool, TransformState, default_selected, entity_by_id, is_transform_field_key, parse_asset_cmd,
-        parse_select_cmd, pick_entity_at_world,
+        BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_CONSOLE_CLEAR, CMD_LAYOUT_DEBUG, CMD_LAYOUT_DEFAULT,
+        CMD_LAYOUT_SCRIPT, CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND,
+        CMD_TOOL_MOVE, CMD_TOOL_ROTATE, CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab,
+        EditorState, PlayMode, ProblemSeverity, Tool, TransformState, default_selected, entity_by_id, is_transform_field_key,
+        parse_asset_cmd, parse_select_cmd, pick_entity_at_world,
     },
     ui,
     viewport::{paint_scene_viewport, screen_to_world, world_to_screen},
@@ -94,7 +94,7 @@ impl StudioApp {
                 self.state.log(format!("运行中：{label}"));
             }
             Err(e) => {
-                self.state.log(format!("无法运行：{e}"));
+                self.state.note_runtime_problem(ProblemSeverity::Error, format!("无法运行：{e}"));
                 self.state.bottom = BottomTab::Console;
             }
         }
@@ -134,11 +134,12 @@ impl StudioApp {
                 self.play = Some(session);
                 self.state.play = PlayMode::Play;
                 self.state.center = CenterTab::Game;
+                self.state.clear_runtime_problems();
                 self.state.log(format!("运行中：{label}"));
                 self.dirty_ui = true;
             }
             Err(e) => {
-                self.state.log(format!("运行失败：{e}"));
+                self.state.note_runtime_problem(ProblemSeverity::Error, format!("运行失败：{e}"));
                 self.state.bottom = BottomTab::Console;
                 self.dirty_ui = true;
             }
@@ -229,14 +230,25 @@ impl StudioApp {
 
         let has_selection = entity_by_id(self.project.kind, self.state.selected).is_some();
         let t = self.state.transform;
+        let shift = input.key_down(Key::LShift) || input.key_down(Key::RShift);
 
         let moving_entity = self.state.tool == Tool::Move && has_selection && input.mouse_down(MouseBtn::Left) && in_scene_body && !panning;
         if moving_entity {
             if let Some((last_mx, last_my)) = self.entity_drag {
                 let (wx0, wy0) = screen_to_world(last_mx, last_my, rect, &self.state.viewport);
                 let (wx1, wy1) = screen_to_world(mx, my, rect, &self.state.viewport);
-                self.state.transform.pos_x += wx1 - wx0;
-                self.state.transform.pos_y += wy1 - wy0;
+                let mut dx = wx1 - wx0;
+                let mut dy = wy1 - wy0;
+                if shift {
+                    if dx.abs() >= dy.abs() {
+                        dy = 0.0;
+                    }
+                    else {
+                        dx = 0.0;
+                    }
+                }
+                self.state.transform.pos_x += dx;
+                self.state.transform.pos_y += dy;
                 self.push_transform_to_inspector();
             }
             self.entity_drag = Some((mx, my));
@@ -251,7 +263,8 @@ impl StudioApp {
         let rotating = self.state.tool == Tool::Rotate && has_selection && input.mouse_down(MouseBtn::Left) && in_scene_body && !panning;
         if rotating {
             if let Some(last_mx) = self.rotate_drag {
-                self.state.transform.rot_z += (mx - last_mx) * 0.5;
+                let sensitivity = if shift { 0.15 } else { 0.5 };
+                self.state.transform.rot_z += (mx - last_mx) * sensitivity;
                 self.push_transform_to_inspector();
             }
             self.rotate_drag = Some(mx);
@@ -260,6 +273,10 @@ impl StudioApp {
         }
         else if self.rotate_drag.is_some() {
             self.rotate_drag = None;
+            if shift {
+                self.state.transform.rot_z = (self.state.transform.rot_z / 15.0).round() * 15.0;
+                self.push_transform_to_inspector();
+            }
             self.state.log(format!("旋转 Z = {:.1}°", self.state.transform.rot_z));
         }
 
@@ -269,8 +286,18 @@ impl StudioApp {
             let dist = ((mx - cx).powi(2) + (my - cy).powi(2)).sqrt().max(1.0);
             if let Some((start_dist, sx, sy)) = self.scale_drag {
                 let factor = dist / start_dist;
-                self.state.transform.scale_x = (sx * factor).clamp(0.1, 8.0);
-                self.state.transform.scale_y = (sy * factor).clamp(0.1, 8.0);
+                if shift {
+                    if (mx - cx).abs() >= (my - cy).abs() {
+                        self.state.transform.scale_x = (sx * factor).clamp(0.1, 8.0);
+                    }
+                    else {
+                        self.state.transform.scale_y = (sy * factor).clamp(0.1, 8.0);
+                    }
+                }
+                else {
+                    self.state.transform.scale_x = (sx * factor).clamp(0.1, 8.0);
+                    self.state.transform.scale_y = (sy * factor).clamp(0.1, 8.0);
+                }
                 self.push_transform_to_inspector();
             }
             else {
@@ -317,6 +344,21 @@ impl StudioApp {
         }
         if input.key_pressed(Key::F) && self.state.center == CenterTab::Scene {
             self.frame_selection();
+        }
+        if ctrl && input.key_pressed(Key::Digit0) {
+            self.state.ui_scale = 1.0;
+            self.state.log("UI 缩放已重置");
+            self.dirty_ui = true;
+        }
+        if ctrl && input.key_pressed(Key::Up) {
+            self.state.ui_scale = (self.state.ui_scale + 0.1).min(2.0);
+            self.state.log(format!("UI 缩放 {:.0}%", self.state.ui_scale * 100.0));
+            self.dirty_ui = true;
+        }
+        if ctrl && input.key_pressed(Key::Down) {
+            self.state.ui_scale = (self.state.ui_scale - 0.1).max(0.5);
+            self.state.log(format!("UI 缩放 {:.0}%", self.state.ui_scale * 100.0));
+            self.dirty_ui = true;
         }
     }
 
@@ -438,6 +480,11 @@ impl StudioApp {
                     self.state.bottom = BottomTab::Problems;
                     self.dirty_ui = true;
                 }
+                UiCommand::Custom(CMD_CONSOLE_CLEAR) => {
+                    self.state.console.clear();
+                    self.state.log("控制台已清空");
+                    self.dirty_ui = true;
+                }
                 UiCommand::Custom(CMD_WINDOW_GALLERY) => {
                     self.state.status = "窗口：控件图鉴（调试工具）".into();
                     self.state.bottom = BottomTab::Console;
@@ -491,7 +538,7 @@ impl StudioApp {
             dt: frame.dt,
             screen_size: Vec2::new(frame.screen_w, frame.screen_h),
             dpi_scale: frame.dpi_scale,
-            ui_scale: 1.0,
+            ui_scale: self.state.ui_scale,
             safe_area: Insets::default(),
             input: frame.input,
         };
