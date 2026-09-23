@@ -6,17 +6,17 @@
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, WindowPump2d};
 use spark_types::Vec2;
-use spark_widget::{Insets, UiCommand, UiFrame, UiRuntime};
+use spark_widget::{Insets, Theme, UiCommand, UiFrame, UiRuntime};
 
 use crate::{
     play::PlaySession,
     project::{ProjectInfo, list_asset_entries},
-    shell,
     state::{
         BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME,
         CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE, CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab,
         EditorState, PlayMode, Tool, default_selected, parse_select_cmd,
     },
+    ui,
 };
 
 /// Studio 应用宿主：持有 Widget 运行时、项目元数据与可选 Play 会话。
@@ -41,7 +41,9 @@ impl StudioApp {
         state.selected = default_selected(project.kind);
         let inferred = if project.kind_inferred { "（推断）" } else { "" };
         state.status = format!("已打开 {} · kind={}{}", project.name, project.kind.as_str(), inferred);
-        Self { ui: UiRuntime::new(), project, assets, state, play: None, exit: false, mounted: false, dirty_ui: true }
+        let mut ui = UiRuntime::new();
+        ui.theme = Theme::editor_dark();
+        Self { ui, project, assets, state, play: None, exit: false, mounted: false, dirty_ui: true }
     }
 
     /// `--play`：跳过编辑器壳，直接进入对局全屏（仍可用 Esc 退出进程级 play）。
@@ -63,7 +65,7 @@ impl StudioApp {
     }
 
     fn remount(&mut self) {
-        self.ui.mount_scene(shell::build_shell(&self.project, &self.state, &self.assets));
+        self.ui.mount_scene(ui::build_shell(&self.project, &self.state, &self.assets));
         self.mounted = true;
         self.dirty_ui = false;
     }
@@ -226,7 +228,6 @@ impl StudioApp {
 
 impl WindowPump2d for StudioApp {
     fn simulate(&mut self, frame: &FrameCtx<'_>) {
-        // `--play`：从未挂载编辑器壳 → 全屏对局。
         let immersive = self.play.is_some() && !self.mounted;
 
         if immersive {
@@ -253,7 +254,6 @@ impl WindowPump2d for StudioApp {
             return;
         }
 
-        // 先跑 UI（Stop / 切页签），再推进对局。
         self.tick_ui(frame);
 
         if self.state.play == PlayMode::Paused {

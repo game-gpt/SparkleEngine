@@ -1,12 +1,12 @@
 //! Spark Studio 库面（供 `tests/` 与 bin 共用）。
 //!
-//! 提供 Unity-like 编辑器壳、项目识别与进程内 Play 会话；
-//! 二进制入口见同 crate 的 `main`。
+//! 编辑器壳在 `ui/`，停靠布局在 `layout/`，会话状态在 `state/`。
 
 #![forbid(missing_docs)]
 
 pub mod app;
+pub mod layout;
 pub mod play;
 pub mod project;
-pub mod shell;
 pub mod state;
+pub mod ui;
