@@ -11,7 +11,7 @@ use spark_renderer::WindowConfig;
 struct MyPlugin;
 impl NativeGamePlugin for MyPlugin {
     fn build(&self, runtime: &mut SparkRuntime) {
-        runtime.add_rust_system_ctx(RustPhase::Update, "sim", |ctx| { /* ... */ });
+        runtime.add_system_ctx(RustPhase::Update, "sim", |ctx| { /* ... */ });
     }
 }
 

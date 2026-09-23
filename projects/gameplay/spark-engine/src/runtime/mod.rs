@@ -16,7 +16,7 @@ mod script_domain;
 mod system_ctx;
 mod commands;
 mod query;
-mod rust_system;
+mod system_schedule;
 mod schedule_graph;
 
 pub use host::RuntimeHost2d;
@@ -28,7 +28,7 @@ pub use scheduler::RuntimeScheduler;
 pub use script_domain::SparkScriptDomain;
 pub use system_ctx::SystemContext;
 pub use commands::RustCommands;
-pub use rust_system::RustSystemMeta;
+pub use system_schedule::SystemOrder;
 
 use spark_ecs::World;
 use spark_renderer::{Camera2d, DrawList, DrawList3d, FrameCtx, UiRenderBatch};
@@ -154,35 +154,37 @@ impl SparkRuntime {
         self
     }
 
-    /// 向 Rust 相位追加闭包系统（早期 API）。
-    pub fn add_rust_system(
+    /// 向 Rust 相位追加闭包系统（早期 API：`&mut World`）。
+    pub fn add_system(
         &mut self,
         phase: RustPhase,
         name: &'static str,
         f: impl FnMut(&mut World) + Send + 'static,
     ) -> &mut Self {
-        self.scheduler.add_rust_fn(phase, name, f);
+        self.scheduler.add_fn(phase, name, f);
         self
     }
 
     /// 向 Rust 相位追加基于 [`SystemContext`] 的系统。
-    pub fn add_rust_system_ctx(
+    pub fn add_system_ctx(
         &mut self,
         phase: RustPhase,
         name: &'static str,
         f: impl FnMut(&mut SystemContext<'_>) + Send + 'static,
     ) -> &mut Self {
-        self.scheduler.add_rust_ctx_fn(phase, name, f);
+        self.scheduler.add_ctx_fn(phase, name, f);
         self
     }
 
-    /// 向 Rust 相位追加带调度声明的 [`SystemContext`] 系统。
-    pub fn add_rust_system_ctx_with_meta(
+    /// 向 Rust 相位追加带 [`SystemOrder`] 的 [`SystemContext`] 系统。
+    pub fn add_system_ctx_with_order(
         &mut self,
-        meta: RustSystemMeta,
+        phase: RustPhase,
+        name: &'static str,
+        order: SystemOrder,
         f: impl FnMut(&mut SystemContext<'_>) + Send + 'static,
     ) -> &mut Self {
-        self.scheduler.add_rust_ctx_fn_with_meta(meta, f);
+        self.scheduler.add_ctx_fn_with_order(phase, name, &order, f);
         self
     }
 

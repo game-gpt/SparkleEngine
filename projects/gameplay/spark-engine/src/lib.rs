@@ -52,8 +52,8 @@ pub use registry::{DataRegistry, RegValue};
 pub use render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d};
 pub use render3d::{RenderFrame3d, RenderSchedule3d, RenderSystem3d};
 pub use runtime::{
-    NativeGamePlugin, RustCommands, RustPhase, RustSystemMeta, RuntimeHost2d, RuntimeHost3d, SceneCommand, SceneManager, SceneRequests,
-    SparkRuntime, SparkScriptDomain, SystemContext,
+    NativeGamePlugin, RustCommands, RustPhase, RuntimeHost2d, RuntimeHost3d, SceneCommand, SceneManager, SceneRequests, SparkRuntime,
+    SparkScriptDomain, SystemContext, SystemOrder,
 };
 pub use run::{run_runtime, run_runtime_3d, run_runtime_3d_with, run_runtime_with, run_window_2d, run_window_3d};
 pub use script_system::{ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError, ScriptSystemRegistry};

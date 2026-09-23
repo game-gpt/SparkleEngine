@@ -154,7 +154,7 @@ impl NativeGamePlugin for TetrisNativePlugin {
         });
         runtime.load_scene("play");
 
-        runtime.add_rust_system_ctx(RustPhase::Update, "tetris_sim", |ctx| {
+        runtime.add_system_ctx(RustPhase::Update, "tetris_sim", |ctx| {
             let state = ctx.world.resources.get_mut::<TetrisState>().unwrap();
             if ctx.input.key_pressed(Key::Escape) {
                 ctx.world.resources.get_mut::<spark_engine::AppExit>().unwrap().request();
@@ -237,7 +237,7 @@ impl NativeGamePlugin for TetrisNativePlugin {
             }
         });
 
-        runtime.add_rust_system(RustPhase::UiPrepare, "tetris_hud", |world| {
+        runtime.add_system(RustPhase::UiPrepare, "tetris_hud", |world| {
             let state = world.resources.get::<TetrisState>().unwrap();
             let board_w = COLS as f32 * CELL;
             let nx0 = ORIGIN_X + board_w + 28.0;

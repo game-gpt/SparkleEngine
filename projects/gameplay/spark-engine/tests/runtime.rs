@@ -19,7 +19,7 @@ impl NativeGamePlugin for CounterPlugin {
             *world.resources.get_mut::<u32>().unwrap() = 1;
         });
         runtime.load_scene("main");
-        runtime.add_rust_system_ctx(RustPhase::Update, "inc", |ctx| {
+        runtime.add_system_ctx(RustPhase::Update, "inc", |ctx| {
             *ctx.world.resources.get_mut::<u32>().unwrap() += 1;
         });
         runtime.add_render_fn("paint", |w, _, draw| {

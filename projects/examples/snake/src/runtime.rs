@@ -129,7 +129,7 @@ impl NativeGamePlugin for SnakeNativePlugin {
         });
         runtime.load_scene("play");
 
-        runtime.add_rust_system_ctx(RustPhase::Update, "snake_input_sim", |ctx| {
+        runtime.add_system_ctx(RustPhase::Update, "snake_input_sim", |ctx| {
             let state = ctx.world.resources.get_mut::<SnakeState>().unwrap();
             if ctx.input.key_pressed(Key::Escape) {
                 state.exit = true;
@@ -193,7 +193,7 @@ impl NativeGamePlugin for SnakeNativePlugin {
             }
         });
 
-        runtime.add_rust_system(RustPhase::UiPrepare, "snake_hud", |world| {
+        runtime.add_system(RustPhase::UiPrepare, "snake_hud", |world| {
             let state = world.resources.get::<SnakeState>().unwrap();
             let mut batch = spark_renderer::UiRenderBatch::new();
             batch.text(PAD, PAD + ROWS as f32 * CELL + 10.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", state.score));

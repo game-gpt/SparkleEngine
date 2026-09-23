@@ -80,7 +80,7 @@ impl NativeGamePlugin for PingPongNativePlugin {
         });
         runtime.load_scene("play");
 
-        runtime.add_rust_system_ctx(RustPhase::Update, "ping_pong_sim", |ctx| {
+        runtime.add_system_ctx(RustPhase::Update, "ping_pong_sim", |ctx| {
             let state = ctx.world.resources.get_mut::<PingPongState>().unwrap();
             if ctx.input.key_pressed(Key::Escape) {
                 state.exit = true;
@@ -148,7 +148,7 @@ impl NativeGamePlugin for PingPongNativePlugin {
             );
         });
 
-        runtime.add_rust_system(RustPhase::UiPrepare, "ping_pong_hud", |world| {
+        runtime.add_system(RustPhase::UiPrepare, "ping_pong_hud", |world| {
             let state = world.resources.get::<PingPongState>().unwrap();
             let mut batch = spark_renderer::UiRenderBatch::new();
             batch.text(24.0, 16.0, 28.0, Color::rgb(1.0, 1.0, 1.0), format!("{}   :   {}", state.score_l, state.score_r));

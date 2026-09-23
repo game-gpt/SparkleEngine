@@ -1,6 +1,6 @@
 //! 统一调度图、RustCommands 与 SystemContext 查询助手。
 
-use spark_engine::{NativeGamePlugin, RustPhase, RustSystemMeta, SparkRuntime};
+use spark_engine::{NativeGamePlugin, RustPhase, SparkRuntime, SystemOrder};
 use spark_input::Input;
 use spark_renderer::FrameCtx;
 use spark_vm::StdHost;
@@ -15,7 +15,7 @@ struct CounterPlugin;
 impl NativeGamePlugin for CounterPlugin {
     fn build(&self, runtime: &mut SparkRuntime) {
         runtime.world_mut().spawn(Counter { value: 0 });
-        runtime.add_rust_system_ctx(RustPhase::Update, "inc_counter", |ctx| {
+        runtime.add_system_ctx(RustPhase::Update, "inc_counter", |ctx| {
             ctx.query_mut::<Counter>(|_, c| c.value += 1);
         });
     }
@@ -42,12 +42,12 @@ fn system_context_query_mut_increments_component() {
 #[test]
 fn rust_commands_apply_at_phase_boundary() {
     let mut runtime = SparkRuntime::new();
-    runtime.add_rust_system_ctx(RustPhase::Update, "spawn_then_count", |ctx| {
+    runtime.add_system_ctx(RustPhase::Update, "spawn_then_count", |ctx| {
         if ctx.world.entity_count() == 0 {
             ctx.commands.spawn(Counter { value: 7 });
         }
     });
-    runtime.add_rust_system_ctx(RustPhase::Update, "read_before_apply", |ctx| {
+    runtime.add_system_ctx(RustPhase::Update, "read_before_apply", |ctx| {
         assert_eq!(ctx.world.entity_count(), 0);
     });
     let input = Input::default();
@@ -61,17 +61,20 @@ fn rust_commands_apply_at_phase_boundary() {
 }
 
 #[test]
-fn rust_system_before_after_ordering() {
+fn system_before_after_ordering() {
     let mut runtime = SparkRuntime::new();
     runtime.insert_resource(String::new());
-    let mut second_meta = RustSystemMeta::new("second", RustPhase::Update);
-    second_meta.after.push("first");
-    runtime.add_rust_system_ctx(RustPhase::Update, "first", |ctx| {
+    runtime.add_system_ctx(RustPhase::Update, "first", |ctx| {
         ctx.world.resources.get_mut::<String>().unwrap().push_str("a");
     });
-    runtime.add_rust_system_ctx_with_meta(second_meta, |ctx| {
-        ctx.world.resources.get_mut::<String>().unwrap().push_str("b");
-    });
+    runtime.add_system_ctx_with_order(
+        RustPhase::Update,
+        "second",
+        SystemOrder { after: vec!["first"], ..SystemOrder::default() },
+        |ctx| {
+            ctx.world.resources.get_mut::<String>().unwrap().push_str("b");
+        },
+    );
     let input = Input::default();
     let frame = frame_ctx(&input, 0.016);
     let mut host = StdHost;
