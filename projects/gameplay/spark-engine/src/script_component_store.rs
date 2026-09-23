@@ -85,6 +85,84 @@ impl ScriptComponentStore {
         };
         write_pod(row, field.offset, value)
     }
+
+    /// 读取 `field_index` 处 `i32` 字段。
+    pub fn read_i32(
+        &self,
+        slot: ComponentDescriptorId,
+        layout: &ScriptComponentLayout,
+        entity_bits: u64,
+        field_index: usize,
+    ) -> Option<i32> {
+        let field = layout.fields.get(field_index)?;
+        if field.kind != ScriptFieldKind::I32 {
+            return None;
+        }
+        let inner = self.inner.lock().expect("script component store poisoned");
+        let row = inner.rows.get(&slot)?.get(&entity_bits)?;
+        read_pod::<i32>(row, field.offset)
+    }
+
+    /// 写入 `field_index` 处 `i32` 字段；行不存在则失败。
+    pub fn write_i32(
+        &mut self,
+        slot: ComponentDescriptorId,
+        layout: &ScriptComponentLayout,
+        entity_bits: u64,
+        field_index: usize,
+        value: i32,
+    ) -> bool {
+        let Some(field) = layout.fields.get(field_index) else {
+            return false;
+        };
+        if field.kind != ScriptFieldKind::I32 {
+            return false;
+        }
+        let mut inner = self.inner.lock().expect("script component store poisoned");
+        let Some(row) = inner.rows.get_mut(&slot).and_then(|b| b.get_mut(&entity_bits)) else {
+            return false;
+        };
+        write_pod(row, field.offset, value)
+    }
+
+    /// 读取 `field_index` 处 `bool` 字段（布局占 4 字节，非零为 true）。
+    pub fn read_bool(
+        &self,
+        slot: ComponentDescriptorId,
+        layout: &ScriptComponentLayout,
+        entity_bits: u64,
+        field_index: usize,
+    ) -> Option<bool> {
+        let field = layout.fields.get(field_index)?;
+        if field.kind != ScriptFieldKind::Bool {
+            return None;
+        }
+        let inner = self.inner.lock().expect("script component store poisoned");
+        let row = inner.rows.get(&slot)?.get(&entity_bits)?;
+        read_pod::<u32>(row, field.offset).map(|v| v != 0)
+    }
+
+    /// 写入 `field_index` 处 `bool` 字段；行不存在则失败。
+    pub fn write_bool(
+        &mut self,
+        slot: ComponentDescriptorId,
+        layout: &ScriptComponentLayout,
+        entity_bits: u64,
+        field_index: usize,
+        value: bool,
+    ) -> bool {
+        let Some(field) = layout.fields.get(field_index) else {
+            return false;
+        };
+        if field.kind != ScriptFieldKind::Bool {
+            return false;
+        }
+        let mut inner = self.inner.lock().expect("script component store poisoned");
+        let Some(row) = inner.rows.get_mut(&slot).and_then(|b| b.get_mut(&entity_bits)) else {
+            return false;
+        };
+        write_pod(row, field.offset, if value { 1u32 } else { 0u32 })
+    }
 }
 
 impl Default for ScriptComponentStore {
