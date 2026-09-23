@@ -32,6 +32,7 @@ impl RuntimeHost2d {
     }
 }
 
+#[allow(deprecated)]
 impl GameHost for RuntimeHost2d {
     fn update(&mut self, frame: &FrameCtx<'_>) {
         let steps = self.loop_.clock_mut().begin_frame(frame.dt);

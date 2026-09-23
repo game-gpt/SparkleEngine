@@ -96,7 +96,14 @@ impl FrameCtx<'_> {
     }
 }
 
-/// 2D 游戏宿主：更新逻辑并填充绘制列表。
+/// 2D 窗口泵适配 trait（**遗留**）。
+///
+/// 新游戏须使用 `spark_engine::SparkRuntime` + `run_runtime`；由 `RuntimeHost2d` 实现本 trait 转发内核。
+/// 禁止游戏类型直接 `impl GameHost` 并拥有玩法权威状态。
+#[deprecated(
+    since = "0.0.0",
+    note = "use spark_engine::SparkRuntime and run_runtime instead of impl GameHost for game types"
+)]
 pub trait GameHost {
     /// 每帧逻辑更新（输入、模拟）；勿在此提交 GPU。
     fn update(&mut self, frame: &FrameCtx<'_>);
@@ -131,7 +138,11 @@ pub fn compose_ui_hud(draw: &mut DrawList, ui: &mut UiRenderBatch) {
     ui.flush_hud(draw);
 }
 
-/// 3D 游戏宿主：透视网格 + 可选 2D HUD。
+/// 3D 窗口泵适配 trait（**遗留**）。新游戏须走内核运行时，禁止游戏类型直接实现。
+#[deprecated(
+    since = "0.0.0",
+    note = "use spark_engine runtime host instead of impl GameHost3d for game types"
+)]
 pub trait GameHost3d {
     /// 每帧逻辑更新（相机、模拟）；勿在此提交 GPU。
     fn update(&mut self, frame: &FrameCtx<'_>);

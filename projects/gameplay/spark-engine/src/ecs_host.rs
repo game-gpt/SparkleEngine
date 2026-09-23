@@ -1,6 +1,7 @@
-//! ECS 与帧宿主桥：把 `Schedule` 挂到 `GameHost` / `GameHost3d`。
+//! ECS 与帧宿主桥：把 `Schedule` 挂到 `GameHost` / `GameHost3d`（**遗留**，禁止新调用方）。
 //!
-//! 窗口泵与 GPU 提交仍在 `spark-renderer-wgpu`。本模块只接 ECS 与绘制相位。
+//! 窗口泵与 GPU 提交仍在 `spark-renderer-wgpu`。正式路径：`SparkRuntime` + `RuntimeHost2d`。
+#![allow(deprecated)]
 
 use spark_ecs::{Schedule, World};
 use spark_input::Input;

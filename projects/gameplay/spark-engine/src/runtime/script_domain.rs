@@ -1,4 +1,4 @@
-//! Spark Script 执行域：热更 Mod、内容与受控世界访问。
+//! Spark Script 执行域：热更 Mod、内容与脚本系统调度。
 
 use std::path::{Path, PathBuf};
 
@@ -10,7 +10,7 @@ use crate::{CommandApplyReport, EngineError, SparkEngine};
 
 /// Spark Script 包（Mod / 热更脚本）的运行时域。
 ///
-/// 与 Rust 域共享同一个 [`World`]，但只能通过引擎提供的命令缓冲与查询视图写入。
+/// 与 Rust 域共享同一个 [`World`]；能力在绑定期解析，结构变更经命令缓冲在 phase 边界提交。
 pub struct SparkScriptDomain {
     engine: Option<SparkEngine>,
     mods_root: Option<PathBuf>,
