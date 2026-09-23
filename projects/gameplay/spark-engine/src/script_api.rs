@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use spark_script::HostSchema;
+use spark_script::{HostEffect, HostFunction, HostFunctionId, HostPhase, HostSchema};
 
 /// 向宿主 schema 注册可选导入的游戏侧 API 面。
 pub trait ScriptApiProvider: Send + Sync {
@@ -16,6 +16,22 @@ pub struct CoreEngineScriptApiProvider;
 
 impl ScriptApiProvider for CoreEngineScriptApiProvider {
     fn register(&self, _schema: &mut HostSchema) {}
+}
+
+/// 示例游戏战斗 API Provider（演示 `game.*` 面扩展；运行时尚未接线原生实现）。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GameCombatScriptApiProvider;
+
+impl ScriptApiProvider for GameCombatScriptApiProvider {
+    fn register(&self, schema: &mut HostSchema) {
+        let sim = [HostPhase::OnLoad, HostPhase::OnStart, HostPhase::FixedUpdate, HostPhase::Update, HostPhase::LateUpdate, HostPhase::OnEvent];
+        schema.insert(
+            HostFunction::new(HostFunctionId::new("game", "apply_damage", 2))
+                .phases(sim)
+                .effect(HostEffect::WriteComponent),
+        );
+        schema.insert(HostFunction::new(HostFunctionId::new("game", "is_alive", 1)).phases(sim).effect(HostEffect::ReadWorld));
+    }
 }
 
 /// 多 Provider 装配表：可禁用单个限定名、可清空后只挂游戏 API。

@@ -1,6 +1,8 @@
 //! ScriptApiProvider 装配与禁用。
 
-use spark_engine::{CoreEngineScriptApiProvider, ScriptApiProvider, ScriptApiRegistry, SparkEngine, engine_host_schema};
+use spark_engine::{
+    CoreEngineScriptApiProvider, GameCombatScriptApiProvider, ScriptApiProvider, ScriptApiRegistry, SparkEngine, engine_host_schema,
+};
 use spark_script::{HostFunction, HostFunctionId, HostPhase, HostSchema};
 
 struct TestGameApi;
@@ -63,6 +65,16 @@ entry = "main.vk"
         msg.contains("host") || msg.contains("spawn") || msg.contains("compile") || msg.contains("Script"),
         "{msg}"
     );
+}
+
+#[test]
+fn game_combat_provider_registers_schema() {
+    let mut registry = ScriptApiRegistry::new();
+    registry.register_provider(Box::new(GameCombatScriptApiProvider));
+    let mut schema = engine_host_schema();
+    registry.apply_to(&mut schema);
+    assert!(schema.resolve_import("game.apply_damage").is_ok());
+    assert!(schema.resolve_import("game.is_alive").is_ok());
 }
 
 #[test]
