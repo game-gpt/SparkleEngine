@@ -74,11 +74,11 @@ pub struct DrawList {
     pub quads: Vec<QuadCmd>,
     /// 世界层纹理四边形批次（同层内排在纯色之后）。
     pub tex_quads: Vec<TexQuadCmd>,
-    /// HUD 层纯色四边形批次。
+    /// **兼容**：HUD 层纯色四边形。新代码请写 [`crate::UiRenderBatch`]。
     pub hud_quads: Vec<QuadCmd>,
-    /// HUD 层纹理四边形批次。
+    /// **兼容**：HUD 层纹理四边形。新代码请写 [`crate::UiRenderBatch`]。
     pub hud_tex_quads: Vec<TexQuadCmd>,
-    /// 文字批次（始终屏幕空间，最后提交）。
+    /// 文字批次（始终屏幕空间，最后提交）。屏幕 UI 文案优先进 [`crate::UiRenderBatch::texts`]。
     pub texts: Vec<TextCmd>,
     /// 本帧待上传纹理：`(句柄, 像素/压缩数据)`，由后端在 draw 前提交 GPU。
     pub texture_uploads: Vec<(TextureId, TextureUpload)>,
