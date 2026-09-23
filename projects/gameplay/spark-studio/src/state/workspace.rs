@@ -1,5 +1,7 @@
 //! Studio 会话 UI 状态。
 
+use crate::layout::DockLayoutState;
+
 use super::{BottomTab, CenterTab, PlayMode, Tool};
 
 /// Studio 会话 UI 状态（与 Widget 树命令互通）。
@@ -15,6 +17,8 @@ pub struct EditorState {
     pub tool: Tool,
     /// Hierarchy 选中实体 ID。
     pub selected: u64,
+    /// 停靠布局尺寸与折叠态。
+    pub dock: DockLayoutState,
     /// 状态栏短文案。
     pub status: String,
 }
@@ -27,6 +31,7 @@ impl Default for EditorState {
             bottom: BottomTab::Project,
             tool: Tool::Move,
             selected: 1,
+            dock: DockLayoutState::default(),
             status: String::new(),
         }
     }

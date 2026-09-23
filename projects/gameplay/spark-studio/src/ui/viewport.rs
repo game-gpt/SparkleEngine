@@ -6,7 +6,10 @@ use crate::{
     layout::DockLayoutState,
     project::{ProjectInfo, ProjectKind},
     state::{CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CenterTab, EditorState, PlayMode, entity_by_id},
-    ui::style::{bright_label, chrome_surface, dim_label, divider, tab_btn, v_body},
+    ui::{
+        scene_canvas::build_scene_canvas,
+        style::{bright_label, chrome_surface, dim_label, divider, tab_btn, v_body},
+    },
 };
 
 /// 构建中央视口（含页签条与正文）。
@@ -36,27 +39,17 @@ pub fn build_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuild
         .child(spacer_widget())
         .child(dim_label(mode));
 
-    let mut view_children = vec![
-        bright_label(match state.center {
-            CenterTab::Scene => "场景",
-            CenterTab::Game => "游戏",
-            CenterTab::Script => "脚本",
-        }),
+    let mut view_children: Vec<WidgetBuilder> = vec![
         dim_label(format!("场景资源：{scene}")),
         dim_label(format!("当前选择：{selected}")),
-        dim_label(""),
     ];
 
     match state.center {
         CenterTab::Scene => {
-            view_children.push(dim_label(match project.kind {
-                ProjectKind::Rust => "2D 场景 · 原生注册实体",
-                ProjectKind::Valkyrie => "2D 场景 · Valkyrie 脚本实体",
-                ProjectKind::Hybrid => "2D 场景 · Rust 与 Valkyrie 混合实体",
-            }));
-            view_children.push(dim_label("场景画布尚未接入网格与变换工具"));
+            view_children.push(build_scene_canvas(selected));
         }
         CenterTab::Game => {
+            view_children.push(bright_label("游戏"));
             if state.play == PlayMode::Edit {
                 view_children.push(dim_label("点击工具栏中的“运行”进入游戏模式"));
             }
@@ -65,23 +58,26 @@ pub fn build_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuild
                 view_children.push(dim_label("点击“停止”或按 Esc 返回编辑模式"));
             }
         }
-        CenterTab::Script => match project.kind {
-            ProjectKind::Rust => {
-                view_children.push(dim_label(project.cargo_manifest.as_deref().unwrap_or("Cargo.toml / src/")));
-                view_children.push(dim_label("在外部编辑器中打开源码"));
+        CenterTab::Script => {
+            view_children.push(bright_label("脚本"));
+            match project.kind {
+                ProjectKind::Rust => {
+                    view_children.push(dim_label(project.cargo_manifest.as_deref().unwrap_or("Cargo.toml / src/")));
+                    view_children.push(dim_label("在外部编辑器中打开源码"));
+                }
+                ProjectKind::Valkyrie => {
+                    view_children.push(dim_label(project.script_entry.as_deref().unwrap_or("assets/scripts/")));
+                    view_children.push(dim_label("在项目面板中双击 *.script 文件"));
+                }
+                ProjectKind::Hybrid => {
+                    view_children.push(dim_label("Rust src/ and assets/scripts/"));
+                }
             }
-            ProjectKind::Valkyrie => {
-                view_children.push(dim_label(project.script_entry.as_deref().unwrap_or("assets/scripts/")));
-                view_children.push(dim_label("在项目面板中双击 *.script 文件"));
-            }
-            ProjectKind::Hybrid => {
-                view_children.push(dim_label("Rust src/ and assets/scripts/"));
-            }
-        },
+        }
     }
 
     let viewport =
-        column().layout(v_body(12.0, 6.0)).style(Style { background: Some(chrome_surface()), ..Style::default() }).children(view_children);
+        column().layout(v_body(8.0, 6.0)).style(Style { background: Some(chrome_surface()), ..Style::default() }).children(view_children);
 
     panel()
         .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::vertical() })

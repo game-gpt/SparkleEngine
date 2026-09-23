@@ -3,12 +3,13 @@
 //! 不变式：编辑器壳与对局会话可并存；仅在 `--play` 浸入模式下从不挂载壳，
 //! Esc / Stop 才回到 Edit（浸入模式则退出进程级 Play）。
 
-use spark_input::Key;
+use spark_input::{Input, Key, MouseBtn};
 use spark_renderer::{DrawList, FrameCtx, WindowPump2d};
 use spark_types::Vec2;
 use spark_widget::{Insets, Theme, UiCommand, UiFrame, UiRuntime};
 
 use crate::{
+    layout::{SplitterAxis, SplitterDrag, apply_splitter_drag, double_click_splitter, hit_splitter},
     play::PlaySession,
     project::{ProjectInfo, list_asset_entries},
     state::{
@@ -28,6 +29,8 @@ pub struct StudioApp {
     assets: Vec<String>,
     state: EditorState,
     play: Option<PlaySession>,
+    splitter_drag: Option<SplitterDrag>,
+    splitter_last_click: Option<(SplitterAxis, f64)>,
     exit: bool,
     mounted: bool,
     dirty_ui: bool,
@@ -43,7 +46,18 @@ impl StudioApp {
         state.status = format!("已打开 {} · kind={}{}", project.name, project.kind.as_str(), inferred);
         let mut ui = UiRuntime::new();
         ui.theme = Theme::editor_dark();
-        Self { ui, project, assets, state, play: None, exit: false, mounted: false, dirty_ui: true }
+        Self {
+            ui,
+            project,
+            assets,
+            state,
+            play: None,
+            splitter_drag: None,
+            splitter_last_click: None,
+            exit: false,
+            mounted: false,
+            dirty_ui: true,
+        }
     }
 
     /// `--play`：跳过编辑器壳，直接进入对局全屏（仍可用 Esc 退出进程级 play）。
@@ -54,10 +68,10 @@ impl StudioApp {
                 self.play = Some(session);
                 self.state.play = PlayMode::Play;
                 self.state.center = CenterTab::Game;
-                self.state.status = format!("Play：{label}");
+                self.state.status = format!("运行中：{label}");
             }
             Err(e) => {
-                self.state.status = format!("无法 Play：{e}");
+                self.state.status = format!("无法运行：{e}");
                 self.state.bottom = BottomTab::Console;
             }
         }
@@ -77,11 +91,11 @@ impl StudioApp {
                 self.play = Some(session);
                 self.state.play = PlayMode::Play;
                 self.state.center = CenterTab::Game;
-                self.state.status = format!("Play：正在运行 {label}");
+                self.state.status = format!("运行中：{label}");
                 self.dirty_ui = true;
             }
             Err(e) => {
-                self.state.status = format!("Play 失败：{e}");
+                self.state.status = format!("运行失败：{e}");
                 self.state.bottom = BottomTab::Console;
                 self.dirty_ui = true;
             }
@@ -92,8 +106,48 @@ impl StudioApp {
         self.play = None;
         self.state.play = PlayMode::Edit;
         self.state.center = CenterTab::Scene;
-        self.state.status = "已停止 · 返回 Edit".into();
+        self.state.status = "已停止，返回编辑模式".into();
         self.dirty_ui = true;
+    }
+
+    fn handle_splitter_input(&mut self, input: &Input, screen_w: f32, screen_h: f32) {
+        let (mx, my) = input.mouse_pos();
+
+        if let Some(drag) = self.splitter_drag {
+            if input.mouse_down(MouseBtn::Left) {
+                apply_splitter_drag(drag, mx, my, screen_w, screen_h, &mut self.state.dock);
+                self.dirty_ui = true;
+            }
+            else {
+                self.splitter_drag = None;
+            }
+            return;
+        }
+
+        if input.mouse_pressed(MouseBtn::Left) {
+            if let Some(axis) = hit_splitter(input, screen_w, screen_h, self.state.dock) {
+                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
+                if let Some((last_axis, last_t)) = self.splitter_last_click {
+                    if last_axis == axis && now - last_t < 0.35 {
+                        double_click_splitter(axis, &mut self.state.dock);
+                        self.dirty_ui = true;
+                        self.splitter_last_click = None;
+                        return;
+                    }
+                }
+                self.splitter_last_click = Some((axis, now));
+                self.splitter_drag = Some(SplitterDrag {
+                    axis,
+                    anchor: match axis {
+                        SplitterAxis::Hierarchy | SplitterAxis::Inspector => mx,
+                        SplitterAxis::Bottom => my,
+                    },
+                    start_hierarchy: self.state.dock.hierarchy_width,
+                    start_inspector: self.state.dock.inspector_width,
+                    start_bottom: self.state.dock.bottom_height,
+                });
+            }
+        }
     }
 
     fn handle_commands(&mut self) {
@@ -106,10 +160,10 @@ impl StudioApp {
                     }
                     else if self.state.play == PlayMode::Paused {
                         self.state.play = PlayMode::Play;
-                        self.state.status = "Resumed".into();
+                        self.state.status = "已继续运行".into();
                         self.dirty_ui = true;
                     }
-                    else {
+                    else if self.state.play == PlayMode::Play {
                         self.state.center = CenterTab::Game;
                         self.dirty_ui = true;
                     }
@@ -117,13 +171,13 @@ impl StudioApp {
                 UiCommand::Custom(CMD_PAUSE) => {
                     if self.play.is_some() && self.state.play == PlayMode::Play {
                         self.state.play = PlayMode::Paused;
-                        self.state.status = "Paused".into();
+                        self.state.status = "已暂停".into();
                         self.dirty_ui = true;
                     }
                 }
                 UiCommand::Custom(CMD_STEP) => {
-                    if self.play.is_some() {
-                        self.state.status = "Step：单帧（占位）".into();
+                    if self.play.is_some() && self.state.play == PlayMode::Paused {
+                        self.state.status = "单步：占位（尚未推进一帧）".into();
                         self.dirty_ui = true;
                     }
                 }
@@ -173,7 +227,7 @@ impl StudioApp {
                     self.dirty_ui = true;
                 }
                 UiCommand::Custom(CMD_WINDOW_GALLERY) => {
-                    self.state.status = "Window → Widget Gallery（调试工具，不占主导航）".into();
+                    self.state.status = "窗口：控件图鉴（调试工具）".into();
                     self.state.bottom = BottomTab::Console;
                     self.dirty_ui = true;
                 }
@@ -183,7 +237,7 @@ impl StudioApp {
                         self.dirty_ui = true;
                     }
                     else {
-                        self.state.status = format!("命令 {id}");
+                        self.state.status = format!("未识别命令 {id}");
                         self.dirty_ui = true;
                     }
                 }
@@ -195,6 +249,8 @@ impl StudioApp {
     }
 
     fn tick_ui(&mut self, frame: &FrameCtx<'_>) {
+        self.handle_splitter_input(frame.input, frame.screen_w, frame.screen_h);
+
         if !self.mounted || self.dirty_ui {
             self.remount();
         }
@@ -220,7 +276,7 @@ impl StudioApp {
         self.ui.end_frame();
     }
 
-    /// Game 页签且正在 Play / Pause：整窗绘制对局（Unity Game 视图占位）。
+    /// Game 页签且正在 Play / Pause：整窗绘制对局。
     fn show_game_view(&self) -> bool {
         self.play.is_some() && self.state.center == CenterTab::Game
     }

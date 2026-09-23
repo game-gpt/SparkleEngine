@@ -4,13 +4,17 @@ use spark_widget::{Justify, LayoutSpec, Size, Style, WidgetBuilder, row};
 
 use crate::{
     layout::DockLayoutState,
-    state::{CMD_PAUSE, CMD_PLAY, CMD_STOP, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE, CMD_TOOL_SCALE, EditorState, PlayMode, Tool},
+    state::{CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE, CMD_TOOL_SCALE, EditorState, PlayMode, Tool},
     ui::style::{dim_label, fixed_bar, panel_surface, play_ctrl, tool_toggle},
 };
 
 /// 构建场景工具栏。
 pub fn build_scene_toolbar(state: &EditorState) -> WidgetBuilder {
     let playing = state.play != PlayMode::Edit;
+    let paused = state.play == PlayMode::Paused;
+
+    let play_enabled = state.play == PlayMode::Edit || state.play == PlayMode::Paused;
+    let play_lit = state.play == PlayMode::Play;
 
     let left = row()
         .layout(LayoutSpec { height: Size::Fill, flex_grow: 1.0, gap: 4.0, justify: Justify::Start, ..LayoutSpec::horizontal() })
@@ -29,9 +33,10 @@ pub fn build_scene_toolbar(state: &EditorState) -> WidgetBuilder {
             justify: Justify::Center,
             ..LayoutSpec::horizontal()
         })
-        .child(play_ctrl("运行", CMD_PLAY, state.play == PlayMode::Play, true))
-        .child(play_ctrl("暂停", CMD_PAUSE, state.play == PlayMode::Paused, playing))
-        .child(play_ctrl("停止", CMD_STOP, playing, playing));
+        .child(play_ctrl("运行", CMD_PLAY, play_lit, play_enabled))
+        .child(play_ctrl("暂停", CMD_PAUSE, paused, playing))
+        .child(play_ctrl("停止", CMD_STOP, playing, playing))
+        .child(play_ctrl("单步", CMD_STEP, false, paused));
 
     let right = row()
         .layout(LayoutSpec { height: Size::Fill, flex_grow: 1.0, gap: 8.0, justify: Justify::End, ..LayoutSpec::horizontal() })

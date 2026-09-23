@@ -2,6 +2,8 @@
 
 mod persistence;
 mod preset;
+mod splitter_interaction;
 
 pub use persistence::*;
 pub use preset::*;
+pub use splitter_interaction::*;

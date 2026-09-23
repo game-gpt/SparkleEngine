@@ -7,6 +7,7 @@ mod dock_panel;
 mod hierarchy;
 mod inspector;
 mod problems;
+mod scene_canvas;
 mod scene_toolbar;
 mod shell;
 mod splitter;

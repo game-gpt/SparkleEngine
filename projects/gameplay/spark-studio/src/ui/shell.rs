@@ -3,7 +3,6 @@
 use spark_widget::{LayoutSpec, Size, Style, WidgetBuilder, column, row};
 
 use crate::{
-    layout::LayoutPreset,
     project::ProjectInfo,
     state::EditorState,
     ui::{
@@ -21,7 +20,7 @@ use crate::{
 
 /// 按当前会话状态构建完整编辑器 Widget 树。
 pub fn build_shell(project: &ProjectInfo, state: &EditorState, asset_lines: &[String]) -> WidgetBuilder {
-    let dock = LayoutPreset::Default.dock_layout();
+    let dock = state.dock;
 
     let center_column = column()
         .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::vertical() })
