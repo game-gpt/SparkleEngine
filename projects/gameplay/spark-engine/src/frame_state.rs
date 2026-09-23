@@ -67,3 +67,10 @@ pub struct DrawBuffer3d {
     /// 整帧 `DrawList3d`；窗口泵 `take` 后置 `None`。
     pub list: Option<DrawList3d>,
 }
+
+/// 窗口泵指针抓取偏好（游戏系统每帧写入，3D 窗口泵在 `cursor_grab` 读取）。
+#[derive(Debug, Default, Clone, Copy)]
+pub struct CursorGrabPref(
+    /// `true` = 请求指针锁定。
+    pub bool,
+);

@@ -3,10 +3,11 @@
 //! - **Rust 域**：原生系统、权威模拟、渲染准备。
 //! - **Spark Script 域**：Mod、热更内容与受控命令 API。
 //!
-//! 窗口泵只通过 [`RuntimeHost2d`] 调用 [`SparkRuntime::tick_sim`] / [`SparkRuntime::render_world`]；
-//! 游戏不实现 [`spark_renderer::WindowPump2d`]。
+//! 窗口泵只通过 [`RuntimeHost2d`] / [`RuntimeHost3d`] 调用 [`SparkRuntime::tick_sim`] 与渲染相位；
+//! 游戏不实现 [`spark_renderer::WindowPump2d`] / [`spark_renderer::WindowPump3d`]。
 
 mod host;
+mod host3d;
 mod native;
 mod phase;
 mod scene;
@@ -15,6 +16,7 @@ mod script_domain;
 mod system_ctx;
 
 pub use host::RuntimeHost2d;
+pub use host3d::RuntimeHost3d;
 pub use native::NativeGamePlugin;
 pub use phase::RustPhase;
 pub use scene::{SceneCommand, SceneManager, SceneRequests};
@@ -23,12 +25,13 @@ pub use script_domain::SparkScriptDomain;
 pub use system_ctx::SystemContext;
 
 use spark_ecs::World;
-use spark_renderer::{Camera2d, DrawList, FrameCtx, UiRenderBatch};
+use spark_renderer::{Camera2d, DrawList, DrawList3d, FrameCtx, UiRenderBatch};
 use spark_vm::HostHooks;
 
 use crate::{
-    frame_state::{AppExit, DrawBuffer2d, FrameSnapshot, OsCursorVisible, UiBuffer2d},
+    frame_state::{AppExit, CursorGrabPref, DrawBuffer2d, DrawBuffer3d, FrameSnapshot, OsCursorVisible, UiBuffer2d},
     render2d::{RenderFrame2d, RenderSchedule2d},
+    render3d::{RenderFrame3d, RenderSchedule3d},
     EngineError, FrameLoopConfig,
 };
 
@@ -44,6 +47,7 @@ pub struct SparkRuntime {
     scheduler: RuntimeScheduler,
     scenes: SceneManager,
     renderer: RenderSchedule2d,
+    renderer_3d: RenderSchedule3d,
     script: SparkScriptDomain,
     loop_config: FrameLoopConfig,
     host_exit: bool,
@@ -65,11 +69,13 @@ impl SparkRuntime {
         world.resources.insert(SceneRequests::default());
         world.resources.insert(DrawBuffer2d::default());
         world.resources.insert(UiBuffer2d::default());
+        world.resources.insert(DrawBuffer3d::default());
         Self {
             world,
             scheduler: RuntimeScheduler::new(),
             scenes: SceneManager::new(),
             renderer: RenderSchedule2d::new(),
+            renderer_3d: RenderSchedule3d::new(),
             script: SparkScriptDomain::new(),
             loop_config: FrameLoopConfig::default(),
             host_exit: false,
@@ -183,6 +189,21 @@ impl SparkRuntime {
         self
     }
 
+    /// 可变访问 3D 渲染调度表（装配 [`RenderSystem3d`] 实现体）。
+    pub fn renderer_3d_mut(&mut self) -> &mut RenderSchedule3d {
+        &mut self.renderer_3d
+    }
+
+    /// 向 3D 渲染准备相位追加绘制系统。
+    pub fn add_render_fn_3d(
+        &mut self,
+        name: &'static str,
+        f: impl FnMut(&mut World, &RenderFrame3d, &mut DrawList3d) + Send + 'static,
+    ) -> &mut Self {
+        self.renderer_3d.add_fn(name, f);
+        self
+    }
+
     /// 提交场景切换命令（Rust 系统或 Spark Script 经宿主 API 写入）。
     pub fn enqueue_scene_command(&mut self, cmd: SceneCommand) {
         if let Some(q) = self.world.resources.get_mut::<SceneCommandQueue>() {
@@ -257,6 +278,23 @@ impl SparkRuntime {
         }
     }
 
+    /// 渲染 3D 世界层：取出 [`DrawBuffer3d`] 或执行 [`RenderSchedule3d`]。
+    pub fn render_world_3d(&mut self, draw: &mut DrawList3d, _host: &mut dyn HostHooks) -> Result<(), EngineError> {
+        if let Some(buf) = self.world.resources.get_mut::<DrawBuffer3d>() {
+            if let Some(list) = buf.list.take() {
+                *draw = list;
+                return Ok(());
+            }
+        }
+        if !self.renderer_3d.is_empty() {
+            let (screen_w, screen_h) =
+                self.world.resources.get::<FrameSnapshot>().map(|s| (s.screen_w, s.screen_h)).unwrap_or((0.0, 0.0));
+            let frame = RenderFrame3d { screen_w, screen_h, clear: draw.clear };
+            self.renderer_3d.draw(&mut self.world, &frame, draw);
+        }
+        Ok(())
+    }
+
     /// 是否应退出窗口泵。
     pub fn should_exit(&self) -> bool {
         self.host_exit || self.world.resources.get::<AppExit>().is_some_and(|e| e.requested)
@@ -277,6 +315,9 @@ impl SparkRuntime {
 
     /// 是否抓取指针。
     pub fn cursor_grab(&self) -> bool {
+        if let Some(pref) = self.world.resources.get::<CursorGrabPref>() {
+            return pref.0;
+        }
         self.cursor_grab
     }
 
@@ -290,6 +331,12 @@ impl SparkRuntime {
     pub fn into_host(self) -> RuntimeHost2d {
         let loop_config = self.loop_config.clone();
         RuntimeHost2d::new(self, loop_config)
+    }
+
+    /// 收成 [`RuntimeHost3d`]，供 `spark-renderer-wgpu` 3D 窗口泵驱动。
+    pub fn into_host_3d(self) -> RuntimeHost3d {
+        let loop_config = self.loop_config.clone();
+        RuntimeHost3d::new(self, loop_config)
     }
 }
 

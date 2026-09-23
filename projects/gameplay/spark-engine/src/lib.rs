@@ -40,7 +40,7 @@ pub use command_apply::{
 };
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
-pub use frame_state::{AppExit, DrawBuffer2d, DrawBuffer3d, FrameSnapshot, OsCursorVisible, UiBuffer2d};
+pub use frame_state::{AppExit, CursorGrabPref, DrawBuffer2d, DrawBuffer3d, FrameSnapshot, OsCursorVisible, UiBuffer2d};
 pub use event_inbox::{ScriptEvent, ScriptEventInbox};
 pub use frame::{FrameLoop, FrameLoopConfig, StepMode};
 pub use hooks::{HookBus, HookRef};
@@ -52,9 +52,10 @@ pub use registry::{DataRegistry, RegValue};
 pub use render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d};
 pub use render3d::{RenderFrame3d, RenderSchedule3d, RenderSystem3d};
 pub use runtime::{
-    NativeGamePlugin, RustPhase, RuntimeHost2d, SceneCommand, SceneManager, SceneRequests, SparkRuntime, SparkScriptDomain, SystemContext,
+    NativeGamePlugin, RustPhase, RuntimeHost2d, RuntimeHost3d, SceneCommand, SceneManager, SceneRequests, SparkRuntime, SparkScriptDomain,
+    SystemContext,
 };
-pub use run::{run_runtime, run_runtime_with, run_window_2d};
+pub use run::{run_runtime, run_runtime_3d, run_runtime_3d_with, run_runtime_with, run_window_2d, run_window_3d};
 pub use script_system::{ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError, ScriptSystemRegistry};
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
 pub use vfs::ModVfs;
