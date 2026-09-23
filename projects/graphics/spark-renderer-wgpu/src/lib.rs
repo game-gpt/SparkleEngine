@@ -1,6 +1,6 @@
 //! Spark 渲染 **wgpu** 后端：窗口事件泵与批绘制提交。
 //!
-//! 抽象类型（`DrawList` / `GameHost` / `FrameCtx` / `WindowConfig`）在 `spark-renderer`。
+//! 抽象类型（`DrawList` / `WindowPump2d` / `FrameCtx` / `WindowConfig`）在 `spark-renderer`。
 //! **帧主循环编排在 `spark-engine`**；本 crate 只泵 winit 事件并提交 GPU。
 //! 3D 路径支持 `MeshResidentKey` 网格驻留、`TexMeshCmd` 纹理网格与 `SkinnedMeshCmd` 蒙皮网格。
 //! **winit 止于此 crate**：游戏只看见 `spark-renderer` / `spark-input` 类型。
@@ -26,9 +26,9 @@ pub use game3d::run_window_3d;
 pub use mipmap::{downsample_rgba, mip_level_count};
 pub use spark_font::{GlyphCache, GlyphInfo};
 pub use spark_renderer::{
-    Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, GameHost, GameHost3d, HudCanvas, Input, Key,
+    Aabb3, ButtonState, Camera3d, CullParams, DrawList, DrawList3d, FrameCtx, Frustum, HudCanvas, Input, Key,
     MAX_SKIN_JOINTS, Mat4, MeshCmd, MeshId, MeshResidentKey, MeshVertex, MouseBtn, QuadCmd, SkinnedMeshCmd, SkinnedVertex, TexMeshCmd,
-    TexMeshVertex, TexQuadCmd, TextCmd, TextureId, TextureUpload, UiRenderBatch, Vec3, WindowConfig, alloc_texture_id,
+    TexMeshVertex, TexQuadCmd, TextCmd, TextureId, TextureUpload, UiRenderBatch, Vec3, WindowConfig, WindowPump2d, alloc_texture_id,
 };
 pub use texture_upload::{
     create_texture_from_upload, create_texture_from_upload_with_caps, device_caps_from_adapter, expected_mip_levels, map_texture_format,
@@ -622,9 +622,9 @@ fn push_text_glyphs(glyphs: &mut Vec<GlyphVertex>, cache: &mut GlyphCache, t: &s
     }
 }
 
-struct HostApp<H: GameHost> {
+struct HostApp<P: WindowPump2d> {
     config: WindowConfig,
-    host: H,
+    pump: P,
     input: Input,
     state: Option<GpuState>,
     last: Instant,
@@ -639,7 +639,7 @@ struct HostApp<H: GameHost> {
     gamepads: gamepad::GamepadPump,
 }
 
-impl<H: GameHost> HostApp<H> {
+impl<P: WindowPump2d> HostApp<P> {
     fn log_pointer_metrics(&mut self, force: bool) {
         let Some(gpu) = self.state.as_ref()
         else {
@@ -669,7 +669,7 @@ impl<H: GameHost> HostApp<H> {
     }
 }
 
-impl<H: GameHost> ApplicationHandler for HostApp<H> {
+impl<P: WindowPump2d> ApplicationHandler for HostApp<P> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
             return;
@@ -772,7 +772,7 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
 
         self.gamepads.poll(&mut self.input);
 
-        let want_grab = self.host.cursor_grab();
+        let want_grab = self.pump.cursor_grab();
         if want_grab != self.grab_applied {
             if want_grab {
                 let _ = gpu.window.set_cursor_grab(CursorGrabMode::Locked).or_else(|_| gpu.window.set_cursor_grab(CursorGrabMode::Confined));
@@ -793,18 +793,18 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
 
         {
             let frame = FrameCtx { input: &self.input, dt, screen_w: sw, screen_h: sh, dpi_scale, timing: Default::default() };
-            self.host.update(&frame);
+            self.pump.simulate(&frame);
         }
         self.input.begin_frame();
 
         // 菜单自绘光标时隐藏 OS 指针；grab 时由 cursor_grab 接管可见性。
-        let want_visible = if self.host.cursor_grab() { false } else { self.host.cursor_visible() };
+        let want_visible = if self.pump.cursor_grab() { false } else { self.pump.cursor_visible() };
         if want_visible != self.cursor_visible_applied {
             gpu.window.set_cursor_visible(want_visible);
             self.cursor_visible_applied = want_visible;
         }
 
-        if self.host.should_exit() {
+        if self.pump.should_exit() {
             event_loop.exit();
             return;
         }
@@ -816,9 +816,9 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
             self.config.clear_color[3] as f32,
         );
         let mut draw = DrawList::new(clear);
-        self.host.draw(&mut draw);
+        self.pump.present_world(&mut draw);
         let mut ui = UiRenderBatch::new();
-        self.host.draw_ui(&mut ui);
+        self.pump.present_ui(&mut ui);
         // UI 批次直读提交，不再并入 DrawList。
         if let Err(e) = gpu.render(&draw, &ui) {
             tracing::error!(event = "spark.renderer.render_failed", ?e);
@@ -841,13 +841,13 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
     }
 }
 
-/// 窗口事件泵 + GPU 提交（2D）。帧相位编排请走 `spark_engine::run_game`。
-pub fn run_window_2d<H: GameHost + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
+/// 窗口事件泵 + GPU 提交（2D）。帧相位编排在 `spark_engine::RuntimeHost2d` 内。
+pub fn run_window_2d<P: WindowPump2d + 'static>(config: WindowConfig, pump: P) -> Result<(), SparkError> {
     let event_loop = EventLoop::new().map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))?;
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = HostApp {
         config,
-        host,
+        pump,
         input: Input::default(),
         state: None,
         last: Instant::now(),
@@ -863,9 +863,9 @@ pub fn run_window_2d<H: GameHost + 'static>(config: WindowConfig, host: H) -> Re
 /// 仅清屏窗口（无宿主逻辑）。
 pub fn run_window(config: WindowConfig) -> Result<(), SparkError> {
     struct Empty;
-    impl GameHost for Empty {
-        fn update(&mut self, _: &FrameCtx<'_>) {}
-        fn draw(&mut self, _: &mut DrawList) {}
+    impl WindowPump2d for Empty {
+        fn simulate(&mut self, _: &FrameCtx<'_>) {}
+        fn present_world(&mut self, _: &mut DrawList) {}
     }
     run_window_2d(config, Empty)
 }

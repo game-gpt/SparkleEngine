@@ -16,7 +16,7 @@ fn fill_demo(draw: &mut DrawList) {
 
 3D 用 `DrawList3d`。纹理权威上传类型为 `TextureUpload`（来自 `spark-texture`）。
 
-`GameHost` / `GameHost3d` 为遗留窗口泵 trait（由 `RuntimeHost2d` 实现）；**禁止**游戏类型直接实现。开窗提交用 `spark_engine::run_runtime`。
+窗口泵契约为 `WindowPump2d` / `WindowPump3d`。游戏用 `spark_engine::run_runtime`；编辑器壳可实现 `WindowPump2d` 并走 `run_window_2d`。
 
 ```bash
 cargo test -p spark-renderer

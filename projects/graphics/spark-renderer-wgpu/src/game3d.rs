@@ -4,7 +4,7 @@ use std::{cell::Cell, collections::HashMap, sync::Arc, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
 use spark_font::GlyphCache;
-use spark_renderer::{DrawList, DrawList3d, FrameCtx, FrameLights3d, GameHost3d, Input, MeshCmd, MeshResidentKey, MeshVertex, WindowConfig};
+use spark_renderer::{DrawList, DrawList3d, FrameCtx, FrameLights3d, Input, MeshCmd, MeshResidentKey, MeshVertex, WindowConfig, WindowPump3d};
 use spark_shader::{BuiltinShader, create_builtin};
 use spark_types::{Color, SparkError, codes};
 use winit::{
@@ -1235,9 +1235,9 @@ fn make_depth(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Texture,
     (tex, view)
 }
 
-struct HostApp3d<H: GameHost3d> {
+struct HostApp3d<P: WindowPump3d> {
     config: WindowConfig,
-    host: H,
+    pump: P,
     input: Input,
     state: Option<GpuState3d>,
     last: Instant,
@@ -1249,7 +1249,7 @@ struct HostApp3d<H: GameHost3d> {
     modifiers: ModifiersState,
 }
 
-impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
+impl<P: WindowPump3d> ApplicationHandler for HostApp3d<P> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
             return;
@@ -1340,14 +1340,14 @@ impl<H: GameHost3d> ApplicationHandler for HostApp3d<H> {
     }
 }
 
-impl<H: GameHost3d> HostApp3d<H> {
+impl<P: WindowPump3d> HostApp3d<P> {
     fn frame(&mut self, event_loop: &ActiveEventLoop) {
         let Some(gpu) = self.state.as_mut()
         else {
             return;
         };
 
-        let want_grab = self.host.cursor_grab();
+        let want_grab = self.pump.cursor_grab();
         if want_grab != self.grab_applied {
             if want_grab {
                 let _ = gpu.window.set_cursor_grab(CursorGrabMode::Locked).or_else(|_| gpu.window.set_cursor_grab(CursorGrabMode::Confined));
@@ -1372,12 +1372,12 @@ impl<H: GameHost3d> HostApp3d<H> {
         let t_update = Instant::now();
         {
             let frame = FrameCtx { input: &self.input, dt, screen_w: sw, screen_h: sh, dpi_scale: self.scale.max(0.01), timing: prev_timing };
-            self.host.update(&frame);
+            self.pump.simulate(&frame);
         }
         let update_ms = t_update.elapsed().as_secs_f32() * 1000.0;
         self.input.begin_frame();
 
-        if self.host.should_exit() {
+        if self.pump.should_exit() {
             event_loop.exit();
             return;
         }
@@ -1390,7 +1390,7 @@ impl<H: GameHost3d> HostApp3d<H> {
         );
         let t_draw = Instant::now();
         let mut draw = DrawList3d::new(clear, spark_geometry::Mat4::IDENTITY);
-        self.host.draw(&mut draw);
+        self.pump.present(&mut draw);
         let draw_ms = t_draw.elapsed().as_secs_f32() * 1000.0;
 
         let t_render = Instant::now();
@@ -1422,13 +1422,13 @@ impl<H: GameHost3d> HostApp3d<H> {
     }
 }
 
-/// 窗口事件泵 + GPU 提交（3D）。帧相位编排请走 `spark_engine::run_game_3d`。
-pub fn run_window_3d<H: GameHost3d + 'static>(config: WindowConfig, host: H) -> Result<(), SparkError> {
+/// 窗口事件泵 + GPU 提交（3D）。仿真相位编排在 `WindowPump3d` 实现方。
+pub fn run_window_3d<P: WindowPump3d + 'static>(config: WindowConfig, pump: P) -> Result<(), SparkError> {
     let event_loop = EventLoop::new().map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))?;
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = HostApp3d {
         config,
-        host,
+        pump,
         input: Input::default(),
         state: None,
         last: Instant::now(),
