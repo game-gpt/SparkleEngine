@@ -183,6 +183,12 @@ impl SparkRuntime {
         self
     }
 
+    /// 禁用宿主导入（须在 `load_script_package` 前配置；编译期从 schema 剔除）。
+    pub fn disable_script_host_import(&mut self, qualified_name: impl Into<String>) -> &mut Self {
+        self.script.ensure_engine().api_registry_mut().disable(qualified_name);
+        self
+    }
+
     /// 请求加载并切换到场景（等价于写入 [`SceneCommand::Transition`]）。
     pub fn load_scene(&mut self, id: impl Into<String>) -> &mut Self {
         self.enqueue_scene_command(SceneCommand::Transition { to: id.into() });
