@@ -1,7 +1,7 @@
 //! 乒乓对局逻辑与绘制。
 
 use spark_input::Key;
-use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_renderer::{DrawList, FrameCtx, GameHost, UiRenderBatch};
 use spark_types::{Color, Rect};
 
 use crate::{ball::Ball, paddle::Paddle};
@@ -143,10 +143,11 @@ impl GameHost for PingPongGame {
 
         let d = self.ball.radius * 2.0;
         draw.fill_rect(Rect::new(self.ball.x - self.ball.radius, self.ball.y - self.ball.radius, d, d), Color::rgb(1.0, 0.85, 0.2));
+    }
 
-        draw.begin_hud();
-        draw.text(24.0, 16.0, 28.0, Color::rgb(1.0, 1.0, 1.0), format!("{}   :   {}", self.score_l, self.score_r));
-        draw.text(24.0, COURT_H - 36.0, 16.0, Color::rgba(1.0, 1.0, 1.0, 0.55), "W/S 左拍 · ↑/↓ 右拍 · Esc 退出");
+    fn draw_ui(&mut self, ui: &mut UiRenderBatch) {
+        ui.text(24.0, 16.0, 28.0, Color::rgb(1.0, 1.0, 1.0), format!("{}   :   {}", self.score_l, self.score_r));
+        ui.text(24.0, COURT_H - 36.0, 16.0, Color::rgba(1.0, 1.0, 1.0, 0.55), "W/S 左拍 · ↑/↓ 右拍 · Esc 退出");
     }
 
     fn should_exit(&self) -> bool {

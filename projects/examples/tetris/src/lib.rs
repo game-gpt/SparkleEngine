@@ -9,7 +9,7 @@ pub use board::Board;
 pub use pieces::PieceKind;
 
 use spark_input::Key;
-use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_renderer::{DrawList, FrameCtx, GameHost, UiRenderBatch};
 use spark_types::{Color, Rect};
 
 use crate::{
@@ -232,22 +232,26 @@ impl GameHost for TetrisApp {
             }
         }
 
-        // Next preview
+        // Next preview（世界层旁栏，非 HUD hitchhiking）
         let nx0 = ORIGIN_X + board_w + 28.0;
         let ny0 = ORIGIN_Y + 40.0;
         draw.text(nx0, ORIGIN_Y, 18.0, Color::rgb(0.8, 0.85, 1.0), "NEXT");
         for (cx, cy) in cells(self.next, 0) {
             draw.fill_rect(Rect::new(nx0 + cx as f32 * 22.0, ny0 + cy as f32 * 22.0, 20.0, 20.0), piece_color(self.next));
         }
+    }
 
-        draw.begin_hud();
-        draw.text(nx0, ny0 + 120.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", self.score));
-        draw.text(nx0, ny0 + 150.0, 18.0, Color::rgb(0.85, 0.9, 1.0), format!("Lines {}", self.lines));
-        draw.text(24.0, 680.0, 14.0, Color::rgba(1.0, 1.0, 1.0, 0.5), "←/→ 移动 · ↑/X 旋转 · ↓ 软降 · Space 硬降 · R 重开 · Esc 退出");
+    fn draw_ui(&mut self, ui: &mut UiRenderBatch) {
+        let board_w = COLS as f32 * CELL;
+        let nx0 = ORIGIN_X + board_w + 28.0;
+        let ny0 = ORIGIN_Y + 40.0;
+        ui.text(nx0, ny0 + 120.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", self.score));
+        ui.text(nx0, ny0 + 150.0, 18.0, Color::rgb(0.85, 0.9, 1.0), format!("Lines {}", self.lines));
+        ui.text(24.0, 680.0, 14.0, Color::rgba(1.0, 1.0, 1.0, 0.5), "←/→ 移动 · ↑/X 旋转 · ↓ 软降 · Space 硬降 · R 重开 · Esc 退出");
         if self.game_over {
-            draw.fill_rect(Rect::new(60.0, 300.0, 360.0, 80.0), Color::rgba(0.0, 0.0, 0.0, 0.7));
-            draw.text(120.0, 320.0, 28.0, Color::rgb(1.0, 0.4, 0.4), "GAME OVER");
-            draw.text(130.0, 355.0, 16.0, Color::rgb(1.0, 1.0, 1.0), "按 R 重新开始");
+            ui.fill_rect(Rect::new(60.0, 300.0, 360.0, 80.0), Color::rgba(0.0, 0.0, 0.0, 0.7));
+            ui.text(120.0, 320.0, 28.0, Color::rgb(1.0, 0.4, 0.4), "GAME OVER");
+            ui.text(130.0, 355.0, 16.0, Color::rgb(1.0, 1.0, 1.0), "按 R 重新开始");
         }
     }
 

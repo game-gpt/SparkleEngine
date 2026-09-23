@@ -2,7 +2,7 @@
 
 #![forbid(missing_docs)]
 use spark_input::Key;
-use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_renderer::{DrawList, FrameCtx, GameHost, UiRenderBatch};
 use spark_types::{Color, Rect};
 
 const COLS: i32 = 24;
@@ -188,14 +188,15 @@ impl GameHost for SnakeApp {
             let c = if i == 0 { Color::rgb(0.35, 0.95, 0.45) } else { Color::rgb(0.25, 0.7, 0.35) };
             draw.fill_rect(Rect::new(PAD + x as f32 * CELL + 1.0, PAD + y as f32 * CELL + 1.0, CELL - 2.0, CELL - 2.0), c);
         }
+    }
 
-        draw.begin_hud();
-        draw.text(PAD, PAD + ROWS as f32 * CELL + 10.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", self.score));
-        draw.text(PAD + 140.0, PAD + ROWS as f32 * CELL + 12.0, 14.0, Color::rgba(1.0, 1.0, 1.0, 0.55), "方向键/WASD · R 重开 · Esc 退出");
+    fn draw_ui(&mut self, ui: &mut UiRenderBatch) {
+        ui.text(PAD, PAD + ROWS as f32 * CELL + 10.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", self.score));
+        ui.text(PAD + 140.0, PAD + ROWS as f32 * CELL + 12.0, 14.0, Color::rgba(1.0, 1.0, 1.0, 0.55), "方向键/WASD · R 重开 · Esc 退出");
         if self.dead {
-            draw.fill_rect(Rect::new(PAD + 40.0, PAD + 160.0, 400.0, 80.0), Color::rgba(0.0, 0.0, 0.0, 0.7));
-            draw.text(PAD + 140.0, PAD + 180.0, 28.0, Color::rgb(1.0, 0.45, 0.4), "GAME OVER");
-            draw.text(PAD + 150.0, PAD + 215.0, 16.0, Color::rgb(1.0, 1.0, 1.0), "按 R 重新开始");
+            ui.fill_rect(Rect::new(PAD + 40.0, PAD + 160.0, 400.0, 80.0), Color::rgba(0.0, 0.0, 0.0, 0.7));
+            ui.text(PAD + 140.0, PAD + 180.0, 28.0, Color::rgb(1.0, 0.45, 0.4), "GAME OVER");
+            ui.text(PAD + 150.0, PAD + 215.0, 16.0, Color::rgb(1.0, 1.0, 1.0), "按 R 重新开始");
         }
     }
 

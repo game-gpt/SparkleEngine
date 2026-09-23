@@ -100,13 +100,13 @@ impl FrameCtx<'_> {
 pub trait GameHost {
     /// 每帧逻辑更新（输入、模拟）；勿在此提交 GPU。
     fn update(&mut self, frame: &FrameCtx<'_>);
-    /// 将本帧 2D 命令写入 [`DrawList`]（世界 / HUD / 纹理上传）。
+    /// 将本帧世界层命令写入 [`DrawList`]（含纹理上传）。屏幕叠绘请用 [`Self::draw_ui`]。
     fn draw(&mut self, draw: &mut DrawList);
-/// 可选：单独填充 UI 批次（不经世界层）。默认空实现。
-///
-/// 2D wgpu 宿主在 `draw` 之后调用本方法，并把批次与 [`DrawList`] **分开**提交；
-/// 不要再把 UI 命令写进 `DrawList::hud_*`。
-fn draw_ui(&mut self, _ui: &mut UiRenderBatch) {}
+    /// 可选：单独填充 UI 批次（不经世界层）。默认空实现。
+    ///
+    /// 2D wgpu 宿主在 `draw` 之后调用本方法，并把批次与 [`DrawList`] **分开**提交；
+    /// 不要再把 UI 命令写进 `DrawList::hud_*`。
+    fn draw_ui(&mut self, _ui: &mut UiRenderBatch) {}
     /// 返回 `true` 时宿主循环应退出。默认永不退出。
     fn should_exit(&self) -> bool {
         false
