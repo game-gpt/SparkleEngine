@@ -160,6 +160,12 @@ impl SparkRuntime {
         self
     }
 
+    /// 登记脚本可见组件名（绑定期 [`QueryPlan`] 解析用）。
+    pub fn register_script_component(&mut self, name: impl Into<std::sync::Arc<str>>) -> &mut Self {
+        self.script.ensure_engine().component_catalog_mut().register(name);
+        self
+    }
+
     /// 请求加载并切换到场景（等价于写入 [`SceneCommand::Transition`]）。
     pub fn load_scene(&mut self, id: impl Into<String>) -> &mut Self {
         self.enqueue_scene_command(SceneCommand::Transition { to: id.into() });

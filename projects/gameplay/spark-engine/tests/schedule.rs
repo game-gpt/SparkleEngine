@@ -113,6 +113,7 @@ fn mixed_phase_runs_native_around_script_slot() {
 #[test]
 fn mixed_phase_rejects_cross_domain_write_conflict() {
     let mut runtime = SparkRuntime::new();
+    runtime.register_script_component("Health");
     runtime
         .register_script_system(
             spark_engine::ScriptSystemDescriptor::new("test_mod", "hook", "tick", HostPhase::Update).write("Health"),
