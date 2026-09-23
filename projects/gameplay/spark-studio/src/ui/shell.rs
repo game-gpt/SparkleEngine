@@ -22,19 +22,21 @@ use crate::{
 pub fn build_shell(project: &ProjectInfo, state: &EditorState, asset_lines: &[String]) -> WidgetBuilder {
     let dock = state.dock;
 
-    let center_column = column()
+    let mut center_column = column()
         .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::vertical() })
-        .child(build_viewport(project, state))
-        .child(h_splitter())
-        .child(build_bottom_bar(asset_lines, state, &dock));
+        .child(build_viewport(project, state));
+    if !dock.bottom_collapsed {
+        center_column = center_column.child(h_splitter()).child(build_bottom_bar(asset_lines, state, &dock));
+    }
 
-    let main = row()
-        .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::horizontal() })
-        .child(build_hierarchy_panel(project, state, &dock))
-        .child(v_splitter())
-        .child(center_column)
-        .child(v_splitter())
-        .child(build_inspector_panel(project, state, &dock));
+    let mut main = row().layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::horizontal() });
+    if !dock.hierarchy_collapsed {
+        main = main.child(build_hierarchy_panel(project, state, &dock)).child(v_splitter());
+    }
+    main = main.child(center_column);
+    if !dock.inspector_collapsed {
+        main = main.child(v_splitter()).child(build_inspector_panel(project, state, &dock));
+    }
 
     column()
         .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, gap: 0.0, ..LayoutSpec::vertical() })

@@ -34,6 +34,12 @@ pub const CMD_BOTTOM_CONSOLE: u64 = 411;
 pub const CMD_BOTTOM_PROBLEMS: u64 = 412;
 /// 窗口：控件图鉴。
 pub const CMD_WINDOW_GALLERY: u64 = 500;
+/// 布局预设：默认。
+pub const CMD_LAYOUT_DEFAULT: u64 = 600;
+/// 布局预设：脚本。
+pub const CMD_LAYOUT_SCRIPT: u64 = 601;
+/// 布局预设：调试。
+pub const CMD_LAYOUT_DEBUG: u64 = 602;
 /// Hierarchy 选中命令基址：实际命令 = 基址 + 实体 ID。
 pub const CMD_SELECT_BASE: u64 = 1000;
 

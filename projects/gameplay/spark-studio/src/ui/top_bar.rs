@@ -17,7 +17,7 @@ pub fn build_top_bar(project: &ProjectInfo) -> WidgetBuilder {
         .style(Style { background: Some(chrome_surface()), ..Style::default() })
         .child(bright_label("Spark Studio"))
         .child(menu_item("文件", CMD_FILE_SAVE))
-        .child(menu_item("编辑", CMD_EDIT_UNDO))
+        .child(menu_item("编辑", CMD_EDIT_UNDO).disabled(true))
         .child(menu_item("窗口", CMD_WINDOW_GALLERY))
         .child(spacer_widget())
         .child(dim_label(format!("{} — {} ({})", project.name, project.kind.label(), short_root)))

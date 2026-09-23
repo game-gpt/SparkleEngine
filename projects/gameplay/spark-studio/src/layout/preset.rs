@@ -14,6 +14,15 @@ pub enum LayoutPreset {
 }
 
 impl LayoutPreset {
+    /// 工具栏显示名。
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Default => "默认",
+            Self::Script => "脚本",
+            Self::Debug => "调试",
+        }
+    }
+
     /// 预设对应的停靠尺寸。
     pub fn dock_layout(self) -> DockLayoutState {
         match self {
@@ -28,6 +37,19 @@ impl LayoutPreset {
                 bottom_height: 280.0,
                 ..DockLayoutState::default()
             },
+        }
+    }
+
+    /// 应用预设尺寸，保留当前折叠态。
+    pub fn apply_to(self, current: DockLayoutState) -> DockLayoutState {
+        let next = self.dock_layout();
+        DockLayoutState {
+            hierarchy_width: next.hierarchy_width,
+            inspector_width: next.inspector_width,
+            bottom_height: next.bottom_height,
+            hierarchy_collapsed: current.hierarchy_collapsed,
+            inspector_collapsed: current.inspector_collapsed,
+            bottom_collapsed: current.bottom_collapsed,
         }
     }
 }

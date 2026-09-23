@@ -9,15 +9,20 @@ use spark_types::Vec2;
 use spark_widget::{Insets, Theme, UiCommand, UiFrame, UiRuntime};
 
 use crate::{
-    layout::{SplitterAxis, SplitterDrag, apply_splitter_drag, double_click_splitter, hit_splitter},
+    layout::{
+        LayoutPreset, SplitterAxis, SplitterDrag, apply_splitter_drag, center_viewport_rect, double_click_splitter, hit_splitter,
+        load_dock_layout, save_dock_layout,
+    },
     play::PlaySession,
     project::{ProjectInfo, list_asset_entries},
     state::{
-        BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME,
-        CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE, CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab,
-        EditorState, PlayMode, Tool, default_selected, parse_select_cmd,
+        BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_LAYOUT_DEBUG, CMD_LAYOUT_DEFAULT, CMD_LAYOUT_SCRIPT,
+        CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE,
+        CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab,
+        EditorState, PlayMode, Tool, TransformState, default_selected, entity_by_id, parse_select_cmd,
     },
     ui,
+    viewport::paint_scene_viewport,
 };
 
 /// Studio 应用宿主：持有 Widget 运行时、项目元数据与可选 Play 会话。
@@ -31,6 +36,8 @@ pub struct StudioApp {
     play: Option<PlaySession>,
     splitter_drag: Option<SplitterDrag>,
     splitter_last_click: Option<(SplitterAxis, f64)>,
+    screen_w: f32,
+    screen_h: f32,
     exit: bool,
     mounted: bool,
     dirty_ui: bool,
@@ -42,6 +49,9 @@ impl StudioApp {
         let assets = list_asset_entries(&project.root);
         let mut state = EditorState::default();
         state.selected = default_selected(project.kind);
+        if let Some(dock) = load_dock_layout(&project.root) {
+            state.dock = dock;
+        }
         let inferred = if project.kind_inferred { "（推断）" } else { "" };
         state.status = format!("已打开 {} · kind={}{}", project.name, project.kind.as_str(), inferred);
         let mut ui = UiRuntime::new();
@@ -54,6 +64,8 @@ impl StudioApp {
             play: None,
             splitter_drag: None,
             splitter_last_click: None,
+            screen_w: 1280.0,
+            screen_h: 720.0,
             exit: false,
             mounted: false,
             dirty_ui: true,
@@ -84,6 +96,20 @@ impl StudioApp {
         self.dirty_ui = false;
     }
 
+    fn persist_dock(&self) {
+        if let Err(err) = save_dock_layout(&self.project.root, &self.state.dock) {
+            tracing::warn!(%err, "保存停靠布局失败");
+        }
+    }
+
+    fn apply_layout_preset(&mut self, preset: LayoutPreset) {
+        self.state.layout_preset = preset;
+        self.state.dock = preset.apply_to(self.state.dock);
+        self.state.status = format!("已应用{}布局", preset.label());
+        self.dirty_ui = true;
+        self.persist_dock();
+    }
+
     fn start_play(&mut self) {
         match PlaySession::start(&self.project) {
             Ok(session) => {
@@ -110,6 +136,32 @@ impl StudioApp {
         self.dirty_ui = true;
     }
 
+    fn apply_selection(&mut self, entity_id: u64) {
+        self.state.selected = entity_id;
+        self.state.transform = TransformState {
+            pos_x: (entity_id as f32 - 1.0) * 16.0,
+            pos_y: 0.0,
+            pos_z: 0.0,
+            rot_x: 0.0,
+            rot_y: 0.0,
+            rot_z: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            scale_z: 1.0,
+        };
+        self.dirty_ui = true;
+    }
+
+    fn handle_shortcuts(&mut self, input: &Input) {
+        let ctrl = input.key_down(Key::LCtrl) || input.key_down(Key::RCtrl);
+        if ctrl && input.key_pressed(Key::J) {
+            self.state.dock.bottom_collapsed = !self.state.dock.bottom_collapsed;
+            self.state.status = if self.state.dock.bottom_collapsed { "底栏已隐藏 (Ctrl+J)".into() } else { "底栏已显示 (Ctrl+J)".into() };
+            self.dirty_ui = true;
+            self.persist_dock();
+        }
+    }
+
     fn handle_splitter_input(&mut self, input: &Input, screen_w: f32, screen_h: f32) {
         let (mx, my) = input.mouse_pos();
 
@@ -120,6 +172,7 @@ impl StudioApp {
             }
             else {
                 self.splitter_drag = None;
+                self.persist_dock();
             }
             return;
         }
@@ -131,6 +184,7 @@ impl StudioApp {
                     if last_axis == axis && now - last_t < 0.35 {
                         double_click_splitter(axis, &mut self.state.dock);
                         self.dirty_ui = true;
+                        self.persist_dock();
                         self.splitter_last_click = None;
                         return;
                     }
@@ -231,10 +285,18 @@ impl StudioApp {
                     self.state.bottom = BottomTab::Console;
                     self.dirty_ui = true;
                 }
+                UiCommand::Custom(CMD_LAYOUT_DEFAULT) => {
+                    self.apply_layout_preset(LayoutPreset::Default);
+                }
+                UiCommand::Custom(CMD_LAYOUT_SCRIPT) => {
+                    self.apply_layout_preset(LayoutPreset::Script);
+                }
+                UiCommand::Custom(CMD_LAYOUT_DEBUG) => {
+                    self.apply_layout_preset(LayoutPreset::Debug);
+                }
                 UiCommand::Custom(id) => {
                     if let Some(eid) = parse_select_cmd(id) {
-                        self.state.selected = eid;
-                        self.dirty_ui = true;
+                        self.apply_selection(eid);
                     }
                     else {
                         self.state.status = format!("未识别命令 {id}");
@@ -249,6 +311,9 @@ impl StudioApp {
     }
 
     fn tick_ui(&mut self, frame: &FrameCtx<'_>) {
+        self.screen_w = frame.screen_w;
+        self.screen_h = frame.screen_h;
+        self.handle_shortcuts(frame.input);
         self.handle_splitter_input(frame.input, frame.screen_w, frame.screen_h);
 
         if !self.mounted || self.dirty_ui {
@@ -258,7 +323,7 @@ impl StudioApp {
         let ui_frame = UiFrame {
             dt: frame.dt,
             screen_size: Vec2::new(frame.screen_w, frame.screen_h),
-            dpi_scale: 1.0,
+            dpi_scale: frame.dpi_scale,
             ui_scale: 1.0,
             safe_area: Insets::default(),
             input: frame.input,
@@ -331,6 +396,13 @@ impl WindowPump2d for StudioApp {
                 return;
             }
         }
+
+        if self.state.center == CenterTab::Scene {
+            let rect = center_viewport_rect(self.screen_w, self.screen_h, self.state.dock);
+            let selected = entity_by_id(self.project.kind, self.state.selected).is_some();
+            paint_scene_viewport(draw, rect, selected);
+        }
+
         self.ui.paint(draw);
     }
 
