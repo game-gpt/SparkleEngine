@@ -28,6 +28,8 @@ pub const ENGINE_NATIVES: &[&str] = &[
     "engine.queue_remove_component",
     "engine.query_archetype_count",
     "engine.query_entity_at",
+    "engine.query_batch_count",
+    "engine.query_batch_entity_at",
 ];
 
 /// 文档用标记类型。
@@ -60,6 +62,8 @@ pub fn engine_host_schema() -> HostSchema {
     schema.insert(HostFunction::new(HostFunctionId::new("engine", "queue_remove_component", 1)).phases(sim).effect(HostEffect::WriteComponent));
     schema.insert(HostFunction::new(HostFunctionId::new("engine", "query_archetype_count", 1)).phases(any).effect(HostEffect::ReadWorld));
     schema.insert(HostFunction::new(HostFunctionId::new("engine", "query_entity_at", 1)).phases(any).effect(HostEffect::ReadWorld));
+    schema.insert(HostFunction::new(HostFunctionId::new("engine", "query_batch_count", 1)).phases(sim).effect(HostEffect::ReadWorld));
+    schema.insert(HostFunction::new(HostFunctionId::new("engine", "query_batch_entity_at", 2)).phases(sim).effect(HostEffect::ReadWorld));
     schema
 }
 
@@ -89,6 +93,15 @@ fn gate_read_world(shared: &EngineShared) -> Result<(), VmError> {
         return Ok(());
     }
     if shared.access.allows_read_world() { Ok(()) } else { Err(VmError::HostDenied { detail: "host_access_denied:read_world".into() }) }
+}
+
+fn gate_batch_read(shared: &EngineShared, import: &str) -> Result<(), VmError> {
+    gate(shared, import)?;
+    gate_read_world(shared)?;
+    if shared.active_column_batch.is_none() {
+        return Err(VmError::HostDenied { detail: "host_batch_denied:no_active_column_batch".into() });
+    }
+    Ok(())
 }
 
 /// 向脚本 VM 安装引擎原生函数。
@@ -244,6 +257,35 @@ pub fn install_builtins(
             Some(bits) => Ok(Value::Entity(bits)),
             None => Ok(Value::Null),
         }
+    });
+
+    let shared_batch_count = Rc::clone(shared);
+    vm.register_native("engine.query_batch_count", move |_ctx, args| {
+        gate_batch_read(&shared_batch_count.borrow(), "engine.query_batch_count")?;
+        if args.is_empty() {
+            return Err(VmError::ArityMismatch { expected: 1, got: 0 });
+        }
+        let archetype_index = args[0].as_number().ok_or(VmError::BadNativeArg { name: "query_batch_count" })? as usize;
+        let shared = shared_batch_count.borrow();
+        let batch = shared.active_column_batch.as_ref().expect("gate_batch_read ensures batch");
+        Ok(Value::Number(batch.entity_count(archetype_index) as f64))
+    });
+
+    let shared_batch_entity = Rc::clone(shared);
+    vm.register_native("engine.query_batch_entity_at", move |_ctx, args| {
+        gate_batch_read(&shared_batch_entity.borrow(), "engine.query_batch_entity_at")?;
+        if args.len() < 2 {
+            return Err(VmError::ArityMismatch { expected: 2, got: args.len() as u16 });
+        }
+        let archetype_index = args[0].as_number().ok_or(VmError::BadNativeArg { name: "query_batch_entity_at" })? as usize;
+        let row = args[1].as_number().ok_or(VmError::BadNativeArg { name: "query_batch_entity_at" })? as usize;
+        let shared = shared_batch_entity.borrow();
+        let batch = shared.active_column_batch.as_ref().expect("gate_batch_read ensures batch");
+        let bits = batch
+            .views()
+            .get(archetype_index)
+            .and_then(|view| view.entity_bits(row));
+        Ok(bits.map(Value::Entity).unwrap_or(Value::Null))
     });
 }
 

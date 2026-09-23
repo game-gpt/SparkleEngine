@@ -474,6 +474,11 @@ impl SparkEngine {
         &self.component_catalog
     }
 
+    /// 已绑定的查询计划（登记后可用）。
+    pub fn query_plan(&self, desc: &ScriptSystemDescriptor) -> Option<QueryPlan> {
+        self.query_plans.get(&desc.graph_key()).cloned()
+    }
+
     /// 登记脚本 System 描述符（同 `mod_id`+`name` 覆盖），绑定 [`QueryPlan`] 并校验调度契约。
     pub fn register_script_system(&mut self, desc: ScriptSystemDescriptor) -> Result<(), EngineError> {
         let plan = QueryPlan::bind(&desc, &self.component_catalog)?;
