@@ -43,6 +43,17 @@ impl SparkScriptDomain {
         self.engine.as_mut()
     }
 
+    /// 确保已挂载空引擎壳（仅 System 登记表；无模组字节码）。
+    ///
+    /// 供原生插件在 `load_script_package` 之前登记 [`ScriptSystemDescriptor`]。
+    pub fn ensure_engine(&mut self) -> &mut SparkEngine {
+        if self.engine.is_none() {
+            let root = self.mods_root.clone().unwrap_or_else(|| PathBuf::from("."));
+            self.engine = Some(SparkEngine::new(root));
+        }
+        self.engine.as_mut().expect("just inserted")
+    }
+
     /// 装载脚本包根目录并扫描全部 `mod.von`。
     pub fn load_package_root(&mut self, mods_root: impl AsRef<Path>) -> Result<(), EngineError> {
         let root = mods_root.as_ref().to_path_buf();

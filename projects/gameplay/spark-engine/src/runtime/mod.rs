@@ -38,7 +38,7 @@ use crate::{
     frame_state::{AppExit, CursorGrabPref, DrawBuffer2d, DrawBuffer3d, FrameSnapshot, OsCursorVisible, UiBuffer2d},
     render2d::{RenderFrame2d, RenderSchedule2d},
     render3d::{RenderFrame3d, RenderSchedule3d},
-    EngineError, FrameLoopConfig,
+    EngineError, FrameLoopConfig, ScriptSystemDescriptor,
 };
 
 /// 待执行的场景命令队列（单步最多消费一条）。
@@ -145,6 +145,12 @@ impl SparkRuntime {
     /// 装载 Spark Script 包根（mods 目录）。
     pub fn load_script_package(&mut self, mods_root: impl AsRef<std::path::Path>) -> Result<&mut Self, EngineError> {
         self.script.load_package_root(mods_root)?;
+        Ok(self)
+    }
+
+    /// 登记脚本 System 描述符（可与 `load_script_package` 并用；无模组时仅参与调度图）。
+    pub fn register_script_system(&mut self, desc: ScriptSystemDescriptor) -> Result<&mut Self, EngineError> {
+        self.script.ensure_engine().register_script_system(desc)?;
         Ok(self)
     }
 

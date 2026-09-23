@@ -3,6 +3,7 @@
 use spark_engine::{NativeGamePlugin, RustPhase, SparkRuntime, SystemOrder};
 use spark_input::Input;
 use spark_renderer::FrameCtx;
+use spark_script::HostPhase;
 use spark_vm::StdHost;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -73,6 +74,33 @@ fn system_before_after_ordering() {
         SystemOrder { after: vec!["first"], ..SystemOrder::default() },
         |ctx| {
             ctx.world.resources.get_mut::<String>().unwrap().push_str("b");
+        },
+    );
+    let input = Input::default();
+    let frame = frame_ctx(&input, 0.016);
+    let mut host = StdHost;
+    runtime.tick_sim(&frame, &mut host).unwrap();
+    assert_eq!(runtime.world().resources.get::<String>().unwrap().as_str(), "ab");
+}
+
+#[test]
+fn mixed_phase_runs_native_around_script_slot() {
+    let mut runtime = SparkRuntime::new();
+    runtime.insert_resource(String::new());
+    runtime
+        .register_script_system(
+            spark_engine::ScriptSystemDescriptor::new("test_mod", "hook", "tick", HostPhase::Update),
+        )
+        .unwrap();
+    runtime.add_system_ctx(RustPhase::Update, "first", |ctx| {
+        ctx.world.resources.get_mut::<String>().unwrap().push('a');
+    });
+    runtime.add_system_ctx_with_order(
+        RustPhase::Update,
+        "second",
+        SystemOrder { after: vec!["hook"], ..SystemOrder::default() },
+        |ctx| {
+            ctx.world.resources.get_mut::<String>().unwrap().push('b');
         },
     );
     let input = Input::default();
