@@ -26,7 +26,7 @@ pub fn build_shell(project: &ProjectInfo, state: &EditorState, asset_lines: &[St
         .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::vertical() })
         .child(build_viewport(project, state));
     if !dock.bottom_collapsed {
-        center_column = center_column.child(h_splitter()).child(build_bottom_bar(asset_lines, state, &dock));
+        center_column = center_column.child(h_splitter()).child(build_bottom_bar(project, asset_lines, state, &dock));
     }
 
     let mut main = row().layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::horizontal() });

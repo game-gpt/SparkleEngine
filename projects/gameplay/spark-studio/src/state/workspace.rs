@@ -2,7 +2,7 @@
 
 use crate::layout::{DockLayoutState, LayoutPreset};
 
-use super::{BottomTab, CenterTab, PlayMode, Tool, TransformState, ViewportState};
+use super::{BottomTab, CenterTab, ConsoleLog, PlayMode, Tool, TransformState, ViewportState};
 
 /// Studio 会话 UI 状态（与 Widget 树命令互通）。
 #[derive(Debug, Clone)]
@@ -29,6 +29,8 @@ pub struct EditorState {
     pub viewport: ViewportState,
     /// 状态栏短文案。
     pub status: String,
+    /// 控制台日志。
+    pub console: ConsoleLog,
 }
 
 impl Default for EditorState {
@@ -45,6 +47,16 @@ impl Default for EditorState {
             transform: TransformState::default(),
             viewport: ViewportState::default(),
             status: String::new(),
+            console: ConsoleLog::default(),
         }
+    }
+}
+
+impl EditorState {
+    /// 写入状态栏并追加控制台行。
+    pub fn log(&mut self, line: impl Into<String>) {
+        let line = line.into();
+        self.console.push(&line);
+        self.status = line;
     }
 }

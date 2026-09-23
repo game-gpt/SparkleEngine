@@ -4,6 +4,7 @@ use spark_widget::{Insets, LayoutSpec, Size, Style, WidgetBuilder, column, panel
 
 use crate::{
     layout::DockLayoutState,
+    project::ProjectInfo,
     state::{BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, EditorState},
     ui::{
         asset_browser::build_asset_browser_body,
@@ -14,7 +15,7 @@ use crate::{
 };
 
 /// 构建底栏停靠区。
-pub fn build_bottom_bar(asset_lines: &[String], state: &EditorState, dock: &DockLayoutState) -> WidgetBuilder {
+pub fn build_bottom_bar(project: &ProjectInfo, asset_lines: &[String], state: &EditorState, dock: &DockLayoutState) -> WidgetBuilder {
     let tabs = row()
         .layout(LayoutSpec {
             width: Size::Fill,
@@ -32,8 +33,8 @@ pub fn build_bottom_bar(asset_lines: &[String], state: &EditorState, dock: &Dock
 
     let body_kids = match state.bottom {
         BottomTab::Project => build_asset_browser_body(asset_lines, state),
-        BottomTab::Console => build_console_body(&state.status),
-        BottomTab::Problems => build_problems_body(),
+        BottomTab::Console => build_console_body(&state.console),
+        BottomTab::Problems => build_problems_body(project, asset_lines.len()),
     };
 
     let body = column().layout(v_body(8.0, 2.0)).style(Style { background: Some(panel_surface()), ..Style::default() }).children(body_kids);
