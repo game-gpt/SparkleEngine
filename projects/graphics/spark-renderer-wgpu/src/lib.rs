@@ -88,6 +88,7 @@ struct GpuState {
     solid_cap: u64,
     glyph_cap: u64,
     tex_quads: crate::tex_quad2d::TexQuad2dGpu,
+    bloom: crate::bloom::BloomGpu,
 }
 
 impl GpuState {
@@ -315,6 +316,7 @@ impl GpuState {
         });
 
         let tex_quads = crate::tex_quad2d::TexQuad2dGpu::new(&device, format, &uniform_buf);
+        let bloom = crate::bloom::BloomGpu::new(&device, format);
 
         Ok(Self {
             window,
@@ -335,6 +337,7 @@ impl GpuState {
             solid_cap,
             glyph_cap,
             tex_quads,
+            bloom,
         })
     }
 
@@ -345,6 +348,7 @@ impl GpuState {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
+        self.bloom.resize(&self.device, width, height);
     }
 
     fn ensure_solid_cap(&mut self, need: u64) -> Result<(), SparkError> {
@@ -462,22 +466,79 @@ impl GpuState {
             }
         };
         let view = frame.texture.create_view(&Default::default());
+        let use_bloom = list.bloom_strength > 0.001;
+        let clear_color = wgpu::Color {
+            r: list.clear.r as f64,
+            g: list.clear.g as f64,
+            b: list.clear.b as f64,
+            a: list.clear.a as f64,
+        };
+        let hud_solid_end = solids.len() as u32;
+        let tex_split = self.tex_quads.world_vert_end();
+
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame") });
-        {
+        if use_bloom {
+            self.bloom.resize(&self.device, self.config.width, self.config.height);
+            let scene_color = self.bloom.scene_view().expect("bloom scene rt");
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("world-bloom"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: scene_color,
+                        resolve_target: None,
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(clear_color), store: wgpu::StoreOp::Store },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                    multiview_mask: None,
+                });
+                if world_solid_end > 0 {
+                    pass.set_pipeline(&self.solid_pipeline);
+                    pass.set_bind_group(0, &self.solid_bind, &[]);
+                    pass.set_vertex_buffer(0, self.solid_vbo.slice(..));
+                    pass.draw(0..world_solid_end, 0..1);
+                }
+                self.tex_quads.encode_pass_range(&mut pass, 0, tex_split);
+            }
+            self.bloom.apply(&mut encoder, &self.queue, &view, list.bloom_strength);
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("hud-bloom"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                    multiview_mask: None,
+                });
+                if hud_solid_end > world_solid_end {
+                    pass.set_pipeline(&self.solid_pipeline);
+                    pass.set_bind_group(0, &self.solid_bind, &[]);
+                    pass.set_vertex_buffer(0, self.solid_vbo.slice(..));
+                    pass.draw(world_solid_end..hud_solid_end, 0..1);
+                }
+                self.tex_quads.encode_pass_range(&mut pass, tex_split, u32::MAX);
+                if !glyphs.is_empty() {
+                    pass.set_pipeline(&self.glyph_pipeline);
+                    pass.set_bind_group(0, &self.glyph_bind, &[]);
+                    pass.set_vertex_buffer(0, self.glyph_vbo.slice(..));
+                    pass.draw(0..glyphs.len() as u32, 0..1);
+                }
+            }
+        }
+        else {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("main"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: list.clear.r as f64,
-                            g: list.clear.g as f64,
-                            b: list.clear.b as f64,
-                            a: list.clear.a as f64,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(clear_color), store: wgpu::StoreOp::Store },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
@@ -491,16 +552,14 @@ impl GpuState {
                 pass.set_vertex_buffer(0, self.solid_vbo.slice(..));
                 pass.draw(0..world_solid_end, 0..1);
             }
-            let split = self.tex_quads.world_vert_end();
-            self.tex_quads.encode_pass_range(&mut pass, 0, split);
-            let hud_solid_end = solids.len() as u32;
+            self.tex_quads.encode_pass_range(&mut pass, 0, tex_split);
             if hud_solid_end > world_solid_end {
                 pass.set_pipeline(&self.solid_pipeline);
                 pass.set_bind_group(0, &self.solid_bind, &[]);
                 pass.set_vertex_buffer(0, self.solid_vbo.slice(..));
                 pass.draw(world_solid_end..hud_solid_end, 0..1);
             }
-            self.tex_quads.encode_pass_range(&mut pass, split, u32::MAX);
+            self.tex_quads.encode_pass_range(&mut pass, tex_split, u32::MAX);
             if !glyphs.is_empty() {
                 pass.set_pipeline(&self.glyph_pipeline);
                 pass.set_bind_group(0, &self.glyph_bind, &[]);

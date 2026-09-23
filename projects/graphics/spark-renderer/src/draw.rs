@@ -82,6 +82,8 @@ pub struct DrawList {
     pub texts: Vec<TextCmd>,
     /// 本帧待上传纹理：`(句柄, 像素/压缩数据)`，由后端在 draw 前提交 GPU。
     pub texture_uploads: Vec<(TextureId, TextureUpload)>,
+    /// 全屏 bloom 强度；`0` 关闭后处理（仅 `spark-renderer-wgpu` 2D 路径）。
+    pub bloom_strength: f32,
     layer: DrawLayer2d,
     /// 只变换世界层。默认原点与缩放为恒等，旧调用坐标不变。
     camera: Camera2d,
@@ -99,6 +101,7 @@ impl DrawList {
             hud_tex_quads: Vec::new(),
             texts: Vec::new(),
             texture_uploads: Vec::new(),
+            bloom_strength: 0.0,
             layer: DrawLayer2d::World,
             camera: Camera2d::default(),
             clip_stack: Vec::new(),
