@@ -2,6 +2,13 @@
 use spark_engine::*;
 use spark_script::{DeterminismClass, HostEffect, HostFunction, HostFunctionId, HostPhase, HostSchema};
 #[test]
+fn execution_profile_trusted_skips_runtime_gate() {
+    assert!(!ExecutionProfile::Trusted.enforces_runtime_gate());
+    assert!(ExecutionProfile::Mod.enforces_runtime_gate());
+    assert!(ExecutionProfile::Sandbox.enforces_runtime_gate());
+}
+
+#[test]
 fn declared_empty_write_set_blocks_component_mutation() {
     let desc = ScriptSystemDescriptor::new("m", "s", "update", HostPhase::Update).read("Transform");
     let policy = ScriptAccessPolicy::from_descriptor(&desc);

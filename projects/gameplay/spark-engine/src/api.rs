@@ -64,12 +64,18 @@ pub fn engine_host_schema() -> HostSchema {
 }
 
 fn gate(shared: &EngineShared, import: &str) -> Result<(), VmError> {
+    if !shared.execution_profile.enforces_runtime_gate() {
+        return Ok(());
+    }
     check_host_phase(&shared.host_schema, import, shared.active_phase).map_err(|detail| VmError::HostDenied { detail })?;
     check_host_determinism(&shared.host_schema, import, shared.active_determinism).map_err(|detail| VmError::HostDenied { detail })?;
     Ok(())
 }
 
 fn gate_component_write(shared: &EngineShared, component: &str) -> Result<(), VmError> {
+    if !shared.execution_profile.enforces_runtime_gate() {
+        return Ok(());
+    }
     if shared.access.allows_write(component) {
         Ok(())
     }
@@ -79,6 +85,9 @@ fn gate_component_write(shared: &EngineShared, component: &str) -> Result<(), Vm
 }
 
 fn gate_read_world(shared: &EngineShared) -> Result<(), VmError> {
+    if !shared.execution_profile.enforces_runtime_gate() {
+        return Ok(());
+    }
     if shared.access.allows_read_world() { Ok(()) } else { Err(VmError::HostDenied { detail: "host_access_denied:read_world".into() }) }
 }
 

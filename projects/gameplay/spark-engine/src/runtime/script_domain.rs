@@ -6,7 +6,7 @@ use spark_ecs::World;
 use spark_script::HostPhase;
 use spark_vm::{HostHooks, StdHost};
 
-use crate::{CommandApplyReport, EngineError, SparkEngine};
+use crate::{CommandApplyReport, EngineError, ExecutionProfile, SparkEngine};
 
 /// Spark Script 包（Mod / 热更脚本）的运行时域。
 ///
@@ -14,6 +14,7 @@ use crate::{CommandApplyReport, EngineError, SparkEngine};
 pub struct SparkScriptDomain {
     engine: Option<SparkEngine>,
     mods_root: Option<PathBuf>,
+    execution_profile: ExecutionProfile,
 }
 
 impl Default for SparkScriptDomain {
@@ -25,7 +26,15 @@ impl Default for SparkScriptDomain {
 impl SparkScriptDomain {
     /// 空域（无已装载脚本包）。
     pub fn new() -> Self {
-        Self { engine: None, mods_root: None }
+        Self { engine: None, mods_root: None, execution_profile: ExecutionProfile::default() }
+    }
+
+    /// 设置脚本包执行策略并同步到已挂载引擎壳。
+    pub fn set_execution_profile(&mut self, profile: ExecutionProfile) {
+        self.execution_profile = profile;
+        if let Some(engine) = &mut self.engine {
+            engine.set_execution_profile(profile);
+        }
     }
 
     /// 是否已装载至少一个脚本包根。
@@ -49,7 +58,9 @@ impl SparkScriptDomain {
     pub fn ensure_engine(&mut self) -> &mut SparkEngine {
         if self.engine.is_none() {
             let root = self.mods_root.clone().unwrap_or_else(|| PathBuf::from("."));
-            self.engine = Some(SparkEngine::new(root));
+            let mut engine = SparkEngine::new(root);
+            engine.set_execution_profile(self.execution_profile);
+            self.engine = Some(engine);
         }
         self.engine.as_mut().expect("just inserted")
     }

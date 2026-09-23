@@ -2,12 +2,32 @@
 //!
 //! 调度器在每次 `call_in_phase` 前写入 [`crate::EngineShared`]；内置原生据此强制
 //! 阶段、确定性、组件写集、世界只读与原型可见集，避免描述符沦为文档元数据。
+//! [`ExecutionProfile::Trusted`] 在绑定期已固定接口表时跳过上述每调用门禁（A5）。
 
 use std::{collections::HashSet, sync::Arc};
 
 use spark_script::{DeterminismClass, HostPhase, HostSchema};
 
 use crate::script_system::ScriptSystemDescriptor;
+
+/// 游戏为脚本包选配的执行策略（绑定期能力 + 热路径门禁）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExecutionProfile {
+    /// 默认：保留阶段 / 确定性 / 访问集每调用检查。
+    #[default]
+    Mod,
+    /// 自家热更等可信脚本：绑定期固定 dispatch，热路径不做每调用 gate。
+    Trusted,
+    /// 玩家编程等：保留门禁并叠加预算（预算 enforcement 后续接入）。
+    Sandbox,
+}
+
+impl ExecutionProfile {
+    /// 热路径是否仍执行每调用宿主 gate。
+    pub fn enforces_runtime_gate(self) -> bool {
+        !matches!(self, Self::Trusted)
+    }
+}
 
 /// 当前脚本调用的组件 / 查询访问策略。
 #[derive(Debug, Clone, Default)]

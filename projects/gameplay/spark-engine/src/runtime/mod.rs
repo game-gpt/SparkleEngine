@@ -38,7 +38,7 @@ use crate::{
     frame_state::{AppExit, CursorGrabPref, DrawBuffer2d, DrawBuffer3d, FrameSnapshot, OsCursorVisible, UiBuffer2d},
     render2d::{RenderFrame2d, RenderSchedule2d},
     render3d::{RenderFrame3d, RenderSchedule3d},
-    EngineError, FrameLoopConfig, ScriptSystemDescriptor,
+    EngineError, ExecutionProfile, FrameLoopConfig, ScriptSystemDescriptor,
 };
 
 /// 待执行的场景命令队列（单步最多消费一条）。
@@ -152,6 +152,12 @@ impl SparkRuntime {
     pub fn register_script_system(&mut self, desc: ScriptSystemDescriptor) -> Result<&mut Self, EngineError> {
         self.script.ensure_engine().register_script_system(desc)?;
         Ok(self)
+    }
+
+    /// 设置 Spark Script 域执行策略（`Trusted` 跳过每调用宿主 gate）。
+    pub fn set_execution_profile(&mut self, profile: ExecutionProfile) -> &mut Self {
+        self.script.set_execution_profile(profile);
+        self
     }
 
     /// 请求加载并切换到场景（等价于写入 [`SceneCommand::Transition`]）。

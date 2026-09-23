@@ -32,7 +32,7 @@ pub mod run;
 pub mod script_system;
 pub mod vfs;
 
-pub use access_policy::{ScriptAccessPolicy, check_host_determinism, check_host_phase};
+pub use access_policy::{ExecutionProfile, ScriptAccessPolicy, check_host_determinism, check_host_phase};
 pub use api::{BuiltinApi, ENGINE_NATIVES, engine_host_schema};
 pub use command_apply::{
     CommandApplyError, CommandApplyReport, ComponentDescriptorId, SCRIPT_MARKER_NAME, ScriptArchetypeTag, ScriptComponentCatalog, ScriptMarker,
@@ -336,6 +336,8 @@ pub struct EngineShared {
     pub access: ScriptAccessPolicy,
     /// 与编译期一致的宿主 ABI（阶段 / 效果门禁）。
     pub host_schema: HostSchema,
+    /// 当前脚本包执行策略（Trusted 跳过每调用 gate）。
+    pub execution_profile: ExecutionProfile,
 }
 
 impl EngineShared {
@@ -417,6 +419,16 @@ impl SparkEngine {
     /// 可变访问脚本 System 登记表。
     pub fn script_systems_mut(&mut self) -> &mut ScriptSystemRegistry {
         &mut self.script_systems
+    }
+
+    /// 设置脚本包执行策略（Trusted 跳过每调用宿主 gate）。
+    pub fn set_execution_profile(&mut self, profile: ExecutionProfile) {
+        self.shared.borrow_mut().execution_profile = profile;
+    }
+
+    /// 当前脚本包执行策略。
+    pub fn execution_profile(&self) -> ExecutionProfile {
+        self.shared.borrow().execution_profile
     }
 
     /// 登记脚本 System 描述符（同 `mod_id`+`name` 覆盖），并校验声明契约。
