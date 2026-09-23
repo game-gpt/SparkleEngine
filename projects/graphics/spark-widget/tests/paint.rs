@@ -24,13 +24,7 @@ fn paint_emits_commands_for_label_and_button() {
     let theme = Theme::default();
     let motion = spark_widget::motion::MotionManager::new();
     let mut batch = UiRenderBatch::new();
-    paint_tree_into(
-        &tree,
-        &theme,
-        &motion,
-        &mut spark_widget::asset::NullTextureResolver,
-        &mut batch,
-    );
+    paint_tree_into(&tree, &theme, &motion, &mut spark_widget::asset::NullTextureResolver, &mut batch);
     let total = batch.command_count();
     assert!(
         total >= 4,
@@ -109,22 +103,13 @@ fn paint_image_pending_draws_placeholder() {
 fn paint_tree_into_batch_then_flush() {
     let mut tree = WidgetTree::new();
     let root = tree.root();
-    label_widget()
-        .text("batch")
-        .mount(&mut tree, root)
-        .unwrap();
+    label_widget().text("batch").mount(&mut tree, root).unwrap();
     run_layout(&mut tree, Vec2::new(200.0, 80.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
 
     let theme = Theme::default();
     let motion = spark_widget::motion::MotionManager::new();
     let mut batch = UiRenderBatch::new();
-    paint_tree_into(
-        &tree,
-        &theme,
-        &motion,
-        &mut spark_widget::asset::NullTextureResolver,
-        &mut batch,
-    );
+    paint_tree_into(&tree, &theme, &motion, &mut spark_widget::asset::NullTextureResolver, &mut batch);
     assert!(batch.command_count() >= 1);
     assert!(!batch.texts.is_empty());
 
@@ -139,16 +124,56 @@ fn paint_tree_into_batch_then_flush() {
 #[test]
 fn text_outlined_emits_outline_then_fill() {
     let mut batch = UiRenderBatch::new();
-    batch.text_outlined(
-        10.0,
-        20.0,
-        16.0,
-        Color::rgb(1.0, 1.0, 1.0),
-        Color::rgba(0.0, 0.0, 0.0, 0.8),
-        &[(-1.0, 0.0), (1.0, 0.0)],
-        "A",
-    );
+    batch.text_outlined(10.0, 20.0, 16.0, Color::rgb(1.0, 1.0, 1.0), Color::rgba(0.0, 0.0, 0.0, 0.8), &[(-1.0, 0.0), (1.0, 0.0)], "A");
     assert_eq!(batch.texts.len(), 3);
     assert!((batch.texts[0].pos.x - 9.0).abs() < f32::EPSILON);
     assert!((batch.texts[2].pos.x - 10.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn editor_theme_is_compact_and_uses_quiet_buttons() {
+    let theme = Theme::editor_dark();
+    assert_eq!(theme.button_treatment, ButtonTreatment::Quiet);
+    assert_eq!(theme.metrics.control_height, 24.0);
+    assert!(theme.colors.control.r < theme.colors.control_hover.r);
+
+    let mut node = WidgetNode::new(WidgetId(1), WidgetKind::Button);
+    let idle = ComputedStyle::resolve_for(&theme, &node);
+    assert_eq!(idle.background, theme.colors.control);
+    assert_eq!(idle.foreground, theme.colors.foreground);
+
+    node.state.selected = true;
+    let selected = ComputedStyle::resolve_for(&theme, &node);
+    assert_eq!(selected.background, theme.colors.selection);
+
+    node.state.invalid = true;
+    node.state.focused = true;
+    let invalid = ComputedStyle::resolve_for(&theme, &node);
+    assert_eq!(invalid.border, theme.colors.danger);
+}
+
+#[test]
+fn declared_button_border_is_painted_without_focus() {
+    let mut tree = WidgetTree::new();
+    let root = tree.root();
+    let border = Color::rgb(0.8, 0.2, 0.1);
+    button_widget()
+        .text("border")
+        .style(Style { border_color: Some(border), border_width: Some(2.0), ..Style::default() })
+        .layout(LayoutSpec::default().with_width(Size::Px(100.0)).with_height(Size::Px(30.0)))
+        .mount(&mut tree, root)
+        .unwrap();
+    run_layout(&mut tree, Vec2::new(120.0, 50.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+
+    let mut batch = UiRenderBatch::new();
+    paint_tree_into(
+        &tree,
+        &Theme::editor_dark(),
+        &spark_widget::motion::MotionManager::new(),
+        &mut spark_widget::asset::NullTextureResolver,
+        &mut batch,
+    );
+
+    let border_quads = batch.quads.iter().filter(|quad| quad.color == border).count();
+    assert_eq!(border_quads, 4);
 }

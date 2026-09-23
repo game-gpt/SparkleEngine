@@ -370,11 +370,7 @@ pub fn menu_button(label: impl Into<String>, font_size: f32, foreground: Color) 
             corner_radius: Some(0.0),
             ..Style::default()
         })
-        .layout(LayoutSpec {
-            width: Size::Px(320.0),
-            height: Size::Px(font_size + 14.0),
-            ..LayoutSpec::default()
-        })
+        .layout(LayoutSpec { width: Size::Px(320.0), height: Size::Px(font_size + 14.0), ..LayoutSpec::default() })
 }
 
 /// 复选框；默认行高 24。

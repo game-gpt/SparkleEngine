@@ -10,7 +10,8 @@ struct LabelVm {
 
 impl UiViewModel for LabelVm {
     fn sync(&mut self, tree: &mut WidgetTree) {
-        let Some(id) = self.target else {
+        let Some(id) = self.target
+        else {
             return;
         };
         set_text(tree, id, self.text.clone());
@@ -22,10 +23,7 @@ fn view_model_updates_label_text() {
     let mut tree = WidgetTree::new();
     let root = tree.root();
     let id = label_widget().text("old").mount(&mut tree, root).unwrap();
-    let mut vm = LabelVm {
-        text: "new".into(),
-        target: Some(id),
-    };
+    let mut vm = LabelVm { text: "new".into(), target: Some(id) };
     vm.sync(&mut tree);
     assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("new"));
 }
@@ -34,11 +32,7 @@ fn view_model_updates_label_text() {
 fn bind_helpers_by_id_and_key() {
     let mut tree = WidgetTree::new();
     let root = tree.root();
-    let id = label_widget()
-        .key("hud.hp")
-        .text("0")
-        .mount(&mut tree, root)
-        .unwrap();
+    let id = label_widget().key("hud.hp").text("0").mount(&mut tree, root).unwrap();
 
     assert!(set_text_by_key(&mut tree, root, "hud.hp", "99"));
     assert_eq!(tree.node(id).unwrap().content.text.as_deref(), Some("99"));
@@ -91,11 +85,7 @@ fn absolute_and_style_bind_helpers() {
 
     let mut tree = WidgetTree::new();
     let root = tree.root();
-    let id = label_widget()
-        .key("slot")
-        .text("x")
-        .mount(&mut tree, root)
-        .unwrap();
+    let id = label_widget().key("slot").text("x").mount(&mut tree, root).unwrap();
 
     assert!(set_absolute_offset(&mut tree, id, 12.0, 34.0));
     let n = tree.node(id).unwrap();
@@ -113,12 +103,7 @@ fn absolute_and_style_bind_helpers() {
     let gold = Color::rgb(1.0, 0.8, 0.2);
     assert!(set_foreground(&mut tree, id, Some(gold)));
     assert_eq!(tree.node(id).unwrap().style.foreground, Some(gold));
-    assert!(set_background_by_key(
-        &mut tree,
-        root,
-        "slot",
-        Some(Color::rgba(0.0, 0.0, 0.0, 0.5))
-    ));
+    assert!(set_background_by_key(&mut tree, root, "slot", Some(Color::rgba(0.0, 0.0, 0.0, 0.5))));
     assert!(tree.node(id).unwrap().style.background.is_some());
 
     assert!(set_opacity(&mut tree, id, Some(0.5)));
@@ -128,8 +113,5 @@ fn absolute_and_style_bind_helpers() {
     assert!(set_corner_radius(&mut tree, id, Some(4.0)));
     assert_eq!(tree.node(id).unwrap().style.corner_radius, Some(4.0));
     assert!(set_size_px_by_key(&mut tree, root, "slot", 64.0, 32.0));
-    assert_eq!(
-        tree.node(id).unwrap().layout.width,
-        spark_widget::layout::Size::Px(64.0)
-    );
+    assert_eq!(tree.node(id).unwrap().layout.width, spark_widget::layout::Size::Px(64.0));
 }

@@ -33,10 +33,7 @@ impl UiCommand {
 
     /// 构造带数值载荷的 [`Self::Action`]。
     pub fn action_with(name: &'static str, payload: u64) -> Self {
-        Self::Action {
-            name,
-            payload: Some(payload),
-        }
+        Self::Action { name, payload: Some(payload) }
     }
 
     /// 若为 [`Self::Action`] 则返回动作名。

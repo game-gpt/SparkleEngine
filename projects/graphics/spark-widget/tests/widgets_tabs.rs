@@ -43,4 +43,3 @@ fn sync_tabs_reuses_tab_button_ids() {
     assert_eq!(tree.child_by_key(bar, "tab-1"), Some(tab1));
     assert!(tree.node(tab1).unwrap().state.selected);
 }
-

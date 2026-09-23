@@ -97,7 +97,8 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
             let captured = runtime.state.captured.take();
             let click_target = match (captured, hit) {
                 (Some(c), Some(h)) if c == h => Some(c),
-                (Some(c), _) => Some(c),
+                // 捕获保证按下控件能完成状态清理，但控件外释放不应触发点击。
+                (Some(_), _) => None,
                 (None, Some(h)) if consumes_pointer(&runtime.tree, h) => Some(h),
                 _ => None,
             };
@@ -127,6 +128,9 @@ pub fn dispatch(runtime: &mut UiRuntime, frame: &UiFrame<'_>) {
                     if let Some(node) = runtime.tree.node_mut(id) {
                         node.scroll.apply_wheel(wheel * 40.0);
                     }
+                    // 滚动偏移在 arrange 阶段应用到子树几何。偏移改变后必须重跑布局，
+                    // 否则绘制与命中测试仍会使用旧坐标。
+                    runtime.invalidate_layout();
                     runtime.inspector.push_trace("scroll", Some(id), format!("wheel={wheel:.2}"));
                     consumed = true;
                     break;

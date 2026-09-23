@@ -305,13 +305,7 @@ impl UiRuntime {
 
     /// 把整棵树写入 [`crate::UiRenderBatch`]（不碰世界 DrawList）。
     pub fn paint_into(&mut self, batch: &mut crate::UiRenderBatch) {
-        paint::paint_tree_into(
-            &self.tree,
-            &self.theme,
-            &self.motion,
-            self.textures.as_mut(),
-            batch,
-        );
+        paint::paint_tree_into(&self.tree, &self.theme, &self.motion, self.textures.as_mut(), batch);
         self.state.dirty.clear_paint();
     }
 

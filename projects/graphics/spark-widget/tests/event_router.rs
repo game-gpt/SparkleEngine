@@ -83,6 +83,69 @@ fn click_emits_command_and_blocks_input() {
 }
 
 #[test]
+fn release_outside_captured_widget_does_not_click() {
+    let mut runtime = UiRuntime::new();
+    let root = runtime.tree.root();
+    let button = button_widget()
+        .text("Go")
+        .on_click(UiCommand::Custom(7))
+        .layout(LayoutSpec { width: Size::Px(80.0), height: Size::Px(40.0), ..LayoutSpec::default() })
+        .mount(&mut runtime.tree, root)
+        .unwrap();
+    run_layout(&mut runtime.tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+    let center = runtime.tree.node(button).unwrap().computed.rect.center();
+
+    let mut input = Input::default();
+    input.on_cursor(center.x, center.y);
+    input.on_mouse_button(MouseBtn::Left, ButtonState::Pressed);
+    let f = frame(&input, 200.0, 200.0);
+    runtime.begin_frame(&f);
+    runtime.dispatch_input(&f);
+
+    input.begin_frame();
+    input.on_cursor(190.0, 190.0);
+    input.on_mouse_button(MouseBtn::Left, ButtonState::Released);
+    let f = frame(&input, 200.0, 200.0);
+    runtime.dispatch_input(&f);
+
+    assert!(runtime.drain_commands().next().is_none());
+    assert_eq!(runtime.state.captured, None);
+    assert!(!runtime.tree.node(button).unwrap().state.pressed);
+}
+
+#[test]
+fn wheel_invalidates_layout_and_moves_scroll_content() {
+    use spark_widget::widgets::{panel, scroll_view};
+
+    let mut runtime = UiRuntime::new();
+    let root = runtime.tree.root();
+    let scroll = scroll_view()
+        .layout(LayoutSpec { width: Size::Px(100.0), height: Size::Px(80.0), ..LayoutSpec::default() })
+        .child(panel().layout(LayoutSpec { width: Size::Px(100.0), height: Size::Px(240.0), ..LayoutSpec::default() }))
+        .mount(&mut runtime.tree, root)
+        .unwrap();
+
+    let input = Input::default();
+    let f = frame(&input, 200.0, 200.0);
+    runtime.layout(&f);
+    let content = runtime.tree.node(scroll).unwrap().children[0];
+    let initial_y = runtime.tree.node(content).unwrap().computed.rect.y;
+    let center = runtime.tree.node(scroll).unwrap().computed.rect.center();
+
+    let mut input = Input::default();
+    input.on_cursor(center.x, center.y);
+    input.on_wheel(-1.0);
+    let f = frame(&input, 200.0, 200.0);
+    runtime.begin_frame(&f);
+    runtime.dispatch_input(&f);
+    assert!(runtime.state.dirty.layout, "wheel input must invalidate layout");
+
+    runtime.layout(&f);
+    assert_eq!(runtime.tree.node(scroll).unwrap().scroll.offset.y, 40.0);
+    assert_eq!(runtime.tree.node(content).unwrap().computed.rect.y, initial_y - 40.0);
+}
+
+#[test]
 fn checkbox_click_toggles_checked() {
     let mut runtime = UiRuntime::new();
     let root = runtime.tree.root();

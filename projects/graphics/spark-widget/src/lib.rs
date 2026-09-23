@@ -2,7 +2,7 @@
 //!
 //! 公共 API 为长期持有的 [`WidgetTree`] 与 [`UiRuntime`]。
 //! 每帧经 layout / event / update 后，由 paint traversal 写入 [`UiRenderBatch`]
-//!（权威类型在 `spark-renderer`），再可选刷入 [`spark_renderer::DrawList`] HUD 层。
+//! （权威类型在 `spark-renderer`），再可选刷入 [`spark_renderer::DrawList`] HUD 层。
 //!
 //! 界面控件叫 **Widget**，避免与 ECS `Component` 混淆。
 //! UI 动效在 [`motion`]，不属于 `spark-animator`。
@@ -36,13 +36,11 @@ pub mod widgets;
 pub use accessibility::{AccessibilityNode, AccessibilityTree, Role};
 pub use asset::{MapTextureResolver, NullTextureResolver, ResolvedTexture, UiImage, UiTextureResolver};
 pub use binding::{
-    set_absolute_bounds, set_absolute_bounds_by_key, set_absolute_offset, set_absolute_offset_by_key,
-    set_absolute_rect, set_absolute_rect_by_key, set_background, set_background_by_key, set_checked,
-    set_checked_by_key, set_corner_radius, set_corner_radius_by_key, set_disabled, set_disabled_by_key,
-    set_font_size, set_font_size_by_key, set_foreground, set_foreground_by_key, set_image,
-    set_image_by_key, set_layout, set_opacity, set_opacity_by_key, set_selected, set_selected_by_key,
-    set_size_px, set_size_px_by_key, set_text, set_text_by_key, set_value, set_value_by_key, set_visible,
-    set_visible_by_key, NullViewModel, UiViewModel,
+    NullViewModel, UiViewModel, set_absolute_bounds, set_absolute_bounds_by_key, set_absolute_offset, set_absolute_offset_by_key,
+    set_absolute_rect, set_absolute_rect_by_key, set_background, set_background_by_key, set_checked, set_checked_by_key, set_corner_radius,
+    set_corner_radius_by_key, set_disabled, set_disabled_by_key, set_font_size, set_font_size_by_key, set_foreground, set_foreground_by_key,
+    set_image, set_image_by_key, set_layout, set_opacity, set_opacity_by_key, set_selected, set_selected_by_key, set_size_px,
+    set_size_px_by_key, set_text, set_text_by_key, set_value, set_value_by_key, set_visible, set_visible_by_key,
 };
 pub use command::{UiCommand, UiCommandQueue};
 pub use drag_drop::{DragPayload, DragState};
@@ -63,15 +61,15 @@ pub use response::EventResponse;
 pub use runtime::{UiFrame, UiLayer, UiRuntime};
 pub use scroll::{ScrollDirection, ScrollState, ensure_visible, find_scroll_ancestor};
 pub use state::{UiDirty, UiState};
-pub use style::{ComputedStyle, MenuItemColors, Style, Theme};
+pub use style::{ButtonTreatment, ComputedStyle, ControlMetrics, MenuItemColors, Spacing, Style, Theme, Typography, UiColors};
 pub use text::{
     Clipboard, EstimateMeasurer, FontMeasurer, MemoryClipboard, TextEditAction, TextLayout, TextMeasurer, TextStyle, apply_text_input,
     measure_plain,
 };
 pub use tree::WidgetTree;
 pub use widgets::{
-    WidgetBuilder, button_widget, checkbox_widget, column, content_height, grid, handle_tab_click, hud_root, image_widget,
-    label_widget, list_view, menu_button, modal_widget, overlay_root, panel, popup_widget, progress_widget, radio_widget, row,
-    scroll_view, separator_widget, slider_widget, spacer_widget, sync_tabs, sync_visible_rows, tab_view, text_field_widget,
-    toast_widget, toggle_widget, tooltip_widget, visible_row_range,
+    WidgetBuilder, button_widget, checkbox_widget, column, content_height, grid, handle_tab_click, hud_root, image_widget, label_widget,
+    list_view, menu_button, modal_widget, overlay_root, panel, popup_widget, progress_widget, radio_widget, row, scroll_view, separator_widget,
+    slider_widget, spacer_widget, sync_tabs, sync_visible_rows, tab_view, text_field_widget, toast_widget, toggle_widget, tooltip_widget,
+    visible_row_range,
 };

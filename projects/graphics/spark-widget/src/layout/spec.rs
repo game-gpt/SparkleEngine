@@ -140,24 +140,12 @@ impl LayoutSpec {
 
     /// 绝对定位到 `(x, y)`（宽高仍为 Auto）。
     pub fn absolute_at(x: f32, y: f32) -> Self {
-        Self {
-            kind: Layout::Absolute,
-            offset_x: x,
-            offset_y: y,
-            ..Self::default()
-        }
+        Self { kind: Layout::Absolute, offset_x: x, offset_y: y, ..Self::default() }
     }
 
     /// 绝对定位矩形：位置 + 固定像素宽高。
     pub fn absolute_bounds(x: f32, y: f32, width: f32, height: f32) -> Self {
-        Self {
-            kind: Layout::Absolute,
-            offset_x: x,
-            offset_y: y,
-            width: Size::Px(width),
-            height: Size::Px(height),
-            ..Self::default()
-        }
+        Self { kind: Layout::Absolute, offset_x: x, offset_y: y, width: Size::Px(width), height: Size::Px(height), ..Self::default() }
     }
 }
 

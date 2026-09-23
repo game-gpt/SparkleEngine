@@ -74,23 +74,11 @@ fn sync_visible_rows_works_on_scroll_view() {
     let mut tree = WidgetTree::new();
     let root = tree.root();
     let list = scroll_view()
-        .layout(LayoutSpec {
-            width: Size::Px(100.0),
-            height: Size::Px(80.0),
-            ..LayoutSpec::vertical()
-        })
+        .layout(LayoutSpec { width: Size::Px(100.0), height: Size::Px(80.0), ..LayoutSpec::vertical() })
         .mount(&mut tree, root)
         .unwrap();
-    run_layout(
-        &mut tree,
-        Vec2::new(200.0, 200.0),
-        UiMetrics::new(1.0),
-        &mut EstimateMeasurer,
-    );
-    let range = sync_visible_rows(&mut tree, list, 30, 20.0, 0, |i| {
-        label_widget().text(format!("row-{i}"))
-    })
-    .unwrap();
+    run_layout(&mut tree, Vec2::new(200.0, 200.0), UiMetrics::new(1.0), &mut EstimateMeasurer);
+    let range = sync_visible_rows(&mut tree, list, 30, 20.0, 0, |i| label_widget().text(format!("row-{i}"))).unwrap();
     assert_eq!(range.0, 0);
     assert!(range.1 > 0);
     assert!(tree.child_by_key(list, "list-content").is_some());

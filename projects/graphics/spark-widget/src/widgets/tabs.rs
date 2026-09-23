@@ -57,10 +57,8 @@ pub fn sync_tabs(tree: &mut WidgetTree, tab_view_id: WidgetId, selected: usize, 
     let pages_id = pages.reconcile(tree, tab_view_id)?;
 
     let keep: HashSet<WidgetId> = [bar_id, pages_id].into_iter().collect();
-    let orphans = tree
-        .node(tab_view_id)
-        .map(|n| n.children.iter().copied().filter(|id| !keep.contains(id)).collect::<Vec<_>>())
-        .unwrap_or_default();
+    let orphans =
+        tree.node(tab_view_id).map(|n| n.children.iter().copied().filter(|id| !keep.contains(id)).collect::<Vec<_>>()).unwrap_or_default();
     for id in orphans {
         tree.unmount(id);
     }
