@@ -1,13 +1,19 @@
 //! 游戏可替换的脚本宿主 API 装配（[`ScriptApiProvider`]）。
 
-use std::collections::HashSet;
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use spark_script::{HostEffect, HostFunction, HostFunctionId, HostPhase, HostSchema};
+use spark_vm::Vm;
+
+use crate::EngineShared;
 
 /// 向宿主 schema 注册可选导入的游戏侧 API 面。
 pub trait ScriptApiProvider: Send + Sync {
     /// 向 `schema` 追加本 Provider 提供的宿主导入声明。
     fn register(&self, schema: &mut HostSchema);
+
+    /// 模组装载后向 VM 安装本 Provider 对应的原生实现（默认无操作）。
+    fn install_vm(&self, _vm: &mut Vm, _shared: &Rc<RefCell<EngineShared>>) {}
 }
 
 /// 引擎内置 Provider（占位；核心 `engine.*` 由 [`crate::api::engine_host_schema`] 登记）。
@@ -31,6 +37,10 @@ impl ScriptApiProvider for GameCombatScriptApiProvider {
                 .effect(HostEffect::WriteComponent),
         );
         schema.insert(HostFunction::new(HostFunctionId::new("game", "is_alive", 1)).phases(sim).effect(HostEffect::ReadWorld));
+    }
+
+    fn install_vm(&self, vm: &mut Vm, shared: &Rc<RefCell<EngineShared>>) {
+        crate::game_api::install_game_combat_natives(vm, shared);
     }
 }
 
@@ -75,5 +85,12 @@ impl ScriptApiRegistry {
             let short = func.id.name.as_ref();
             !self.disabled.contains(&qualified) && !self.disabled.contains(short)
         });
+    }
+
+    /// 向模组 VM 安装已登记 Provider 的原生实现。
+    pub fn install_vm_natives(&self, vm: &mut Vm, shared: &Rc<RefCell<EngineShared>>) {
+        for provider in &self.providers {
+            provider.install_vm(vm, shared);
+        }
     }
 }

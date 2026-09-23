@@ -66,11 +66,13 @@ impl SparkScriptDomain {
     }
 
     /// 装载脚本包根目录并扫描全部 `mod.von`。
+    ///
+    /// 保留 `ensure_engine` 已登记的 Provider、组件目录与脚本 System（不重建引擎壳）。
     pub fn load_package_root(&mut self, mods_root: impl AsRef<Path>) -> Result<(), EngineError> {
         let root = mods_root.as_ref().to_path_buf();
-        let mut engine = SparkEngine::new(&root);
+        let engine = self.ensure_engine();
+        engine.set_mods_root(root.clone());
         engine.load_all()?;
-        self.engine = Some(engine);
         self.mods_root = Some(root);
         Ok(())
     }

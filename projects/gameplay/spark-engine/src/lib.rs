@@ -21,6 +21,7 @@ pub mod domain;
 pub mod event_inbox;
 pub mod frame;
 pub mod frame_state;
+pub mod game_api;
 pub mod hooks;
 pub mod loader;
 pub mod localization;
@@ -582,6 +583,11 @@ impl SparkEngine {
         &self.mods_root
     }
 
+    /// 更新模组扫描根（保留已登记的 Provider / 组件目录 / System 表）。
+    pub fn set_mods_root(&mut self, root: impl Into<PathBuf>) {
+        self.mods_root = root.into();
+    }
+
     /// 共享状态句柄（内置原生与宿主侧共用）。
     pub fn shared(&self) -> &Rc<RefCell<EngineShared>> {
         &self.shared
@@ -654,6 +660,7 @@ impl SparkEngine {
             let image = load_mod_image(&manifest, &root, &host_schema)?;
             let mut script_domain = ScriptDomain::from_image(manifest.id.as_str(), &image, &host_schema, ScriptBudget::default())?;
             install_builtins(&mut script_domain.runtime.vm, &self.shared, &manifest.id, &vfs, &script_domain.command_buffer);
+            self.api_registry.install_vm_natives(&mut script_domain.runtime.vm, &self.shared);
             self.plugins.install_all(&mut script_domain.runtime.vm);
             let mut hooks = StdHost;
             // 装载只跑 `on_load`（顶层块已在封目标时提升为 `on_load`）。
