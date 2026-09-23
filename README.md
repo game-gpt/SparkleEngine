@@ -66,7 +66,7 @@ run_runtime(
 
 游戏通过 `NativeGamePlugin` 向 `SparkRuntime` 注册系统；状态存放在 `World` 资源与组件中。`run_runtime` 驱动帧循环并调用 `spark-renderer-wgpu` 开窗提交。
 
-`run_game` + `impl GameHost` 为遗留路径，已废弃，禁止新游戏使用。
+自定义编辑器壳使用 `run_window_2d` + `WindowPump2d`（见 `spark-studio`）。
 
 ## 说明
 
