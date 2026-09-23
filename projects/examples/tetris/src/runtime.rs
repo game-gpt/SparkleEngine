@@ -1,6 +1,7 @@
-//! 俄罗斯方块：[`SparkRuntime`] 路径（权威状态在 ECS 资源）。
+//! 俄罗斯方块：[`SparkRuntime`] 路径（活动方块 Component + 棋盘 Resource）。
 
-use spark_engine::{NativeGamePlugin, RustPhase, SparkRuntime};
+use spark_ecs::{Entity, World};
+use spark_engine::{NativeGamePlugin, RustPhase, SparkRuntime, SystemOrder};
 use spark_input::Key;
 use spark_types::{Color, Rect};
 
@@ -16,19 +17,18 @@ const CELL: f32 = 28.0;
 const ORIGIN_X: f32 = 40.0;
 const ORIGIN_Y: f32 = 40.0;
 
-#[derive(Debug)]
-struct Active {
+/// 下落中的方块（单实体 Component）。
+#[derive(Debug, Clone, Copy)]
+struct ActivePiece {
     kind: PieceKind,
     rot: u8,
     x: i32,
     y: i32,
 }
 
-/// 俄罗斯方块局权威状态（内核 [`World`] 资源）。
+/// 局级会话（分数、下落计时、下一块预览；**不含**棋盘格与活动方块坐标）。
 #[derive(Debug)]
-pub struct TetrisState {
-    board: Board,
-    active: Option<Active>,
+struct TetrisSession {
     next: PieceKind,
     fall_acc: f32,
     fall_interval: f32,
@@ -38,94 +38,122 @@ pub struct TetrisState {
     rng: u64,
 }
 
-impl TetrisState {
-    fn new() -> Self {
-        let mut rng = 0xC0FFEE_u64;
-        let next = random_kind(&mut rng);
-        let mut state = Self {
-            board: Board::default(),
-            active: None,
-            next,
-            fall_acc: 0.0,
-            fall_interval: 0.55,
-            score: 0,
-            lines: 0,
-            game_over: false,
-            rng,
+fn active_entity(world: &World) -> Option<Entity> {
+    let mut found = None;
+    world.for_each::<ActivePiece>(|entity, _| found = Some(entity));
+    found
+}
+
+fn despawn_active(world: &mut World) {
+    if let Some(entity) = active_entity(world) {
+        world.despawn(entity);
+    }
+}
+
+fn init_match(world: &mut World) {
+    let mut rng = 0xC0FFEE_u64;
+    let next = random_kind(&mut rng);
+    world.resources.insert(TetrisSession {
+        next,
+        fall_acc: 0.0,
+        fall_interval: 0.55,
+        score: 0,
+        lines: 0,
+        game_over: false,
+        rng,
+    });
+    world.resources.insert(Board::default());
+    spawn_piece(world);
+}
+
+fn spawn_piece(world: &mut World) {
+    despawn_active(world);
+    let kind = {
+        let session = world.resources.get_mut::<TetrisSession>().unwrap();
+        let kind = session.next;
+        session.next = random_kind(&mut session.rng);
+        kind
+    };
+    let candidate = ActivePiece { kind, rot: 0, x: 3, y: 0 };
+    let board = world.resources.get::<Board>().unwrap();
+    if !fits(board, candidate.kind, candidate.rot, candidate.x, candidate.y) {
+        world.resources.get_mut::<TetrisSession>().unwrap().game_over = true;
+        return;
+    }
+    world.spawn(candidate);
+    world.resources.get_mut::<TetrisSession>().unwrap().fall_acc = 0.0;
+}
+
+fn try_move(world: &mut World, dx: i32, dy: i32) -> bool {
+    let Some(entity) = active_entity(world) else {
+        return false;
+    };
+    let piece = *world.get::<ActivePiece>(entity).unwrap();
+    let board = world.resources.get::<Board>().unwrap();
+    let nx = piece.x + dx;
+    let ny = piece.y + dy;
+    if !fits(board, piece.kind, piece.rot, nx, ny) {
+        return false;
+    }
+    let active = world.get_mut::<ActivePiece>(entity).unwrap();
+    active.x = nx;
+    active.y = ny;
+    true
+}
+
+fn try_rotate(world: &mut World) {
+    let Some(entity) = active_entity(world) else {
+        return;
+    };
+    let piece = *world.get::<ActivePiece>(entity).unwrap();
+    let nrot = rotate_cw(piece.rot);
+    let board = world.resources.get::<Board>().unwrap();
+    if fits(board, piece.kind, nrot, piece.x, piece.y) {
+        let active = world.get_mut::<ActivePiece>(entity).unwrap();
+        active.rot = nrot;
+        return;
+    }
+    for kick in [-1, 1, -2, 2] {
+        if fits(board, piece.kind, nrot, piece.x + kick, piece.y) {
+            let active = world.get_mut::<ActivePiece>(entity).unwrap();
+            active.rot = nrot;
+            active.x += kick;
+            return;
+        }
+    }
+}
+
+fn lock_active(world: &mut World) {
+    let Some(entity) = active_entity(world) else {
+        return;
+    };
+    let piece = *world.get::<ActivePiece>(entity).unwrap();
+    world.despawn(entity);
+    let board = world.resources.get_mut::<Board>().unwrap();
+    lock_piece(board, piece.kind, piece.rot, piece.x, piece.y);
+    let cleared = board.clear_lines();
+    if cleared > 0 {
+        let session = world.resources.get_mut::<TetrisSession>().unwrap();
+        session.lines += cleared;
+        session.score += match cleared {
+            1 => 100,
+            2 => 300,
+            3 => 500,
+            _ => 800,
         };
-        state.spawn();
-        state
+        session.fall_interval = (0.55 - session.lines as f32 * 0.015).max(0.12);
     }
+    spawn_piece(world);
+}
 
-    fn spawn(&mut self) {
-        let kind = self.next;
-        self.next = random_kind(&mut self.rng);
-        let active = Active { kind, rot: 0, x: 3, y: 0 };
-        if !fits(&self.board, kind, active.rot, active.x, active.y) {
-            self.game_over = true;
-            self.active = None;
-            return;
-        }
-        self.active = Some(active);
-        self.fall_acc = 0.0;
-    }
+fn hard_drop(world: &mut World) {
+    while try_move(world, 0, 1) {}
+    lock_active(world);
+}
 
-    fn try_move(&mut self, dx: i32, dy: i32) -> bool {
-        let Some(a) = self.active.as_ref() else { return false };
-        let nx = a.x + dx;
-        let ny = a.y + dy;
-        if fits(&self.board, a.kind, a.rot, nx, ny) {
-            let a = self.active.as_mut().unwrap();
-            a.x = nx;
-            a.y = ny;
-            true
-        } else {
-            false
-        }
-    }
-
-    fn try_rotate(&mut self) {
-        let Some(a) = self.active.as_ref() else { return };
-        let nrot = rotate_cw(a.rot);
-        if fits(&self.board, a.kind, nrot, a.x, a.y) {
-            self.active.as_mut().unwrap().rot = nrot;
-            return;
-        }
-        for kick in [-1, 1, -2, 2] {
-            if fits(&self.board, a.kind, nrot, a.x + kick, a.y) {
-                let a = self.active.as_mut().unwrap();
-                a.rot = nrot;
-                a.x += kick;
-                return;
-            }
-        }
-    }
-
-    fn hard_drop(&mut self) {
-        while self.try_move(0, 1) {}
-        self.lock_active();
-    }
-
-    fn lock_active(&mut self) {
-        let Some(a) = self.active.take() else { return };
-        lock_piece(&mut self.board, a.kind, a.rot, a.x, a.y);
-        let cleared = self.board.clear_lines();
-        if cleared > 0 {
-            self.lines += cleared;
-            self.score += match cleared {
-                1 => 100,
-                2 => 300,
-                3 => 500,
-                _ => 800,
-            };
-            self.fall_interval = (0.55 - self.lines as f32 * 0.015).max(0.12);
-        }
-        self.spawn();
-    }
-
-    fn restart(&mut self) {
-        *self = Self::new();
-    }
+fn restart_match(world: &mut World) {
+    despawn_active(world);
+    init_match(world);
 }
 
 fn piece_color(kind: PieceKind) -> Color {
@@ -146,55 +174,74 @@ pub struct TetrisNativePlugin;
 
 impl NativeGamePlugin for TetrisNativePlugin {
     fn build(&self, runtime: &mut SparkRuntime) {
-        runtime.insert_resource(TetrisState::new());
         runtime.scenes_mut().on_enter("play", |world| {
-            if world.resources.get::<TetrisState>().is_none() {
-                world.resources.insert(TetrisState::new());
+            if world.resources.get::<TetrisSession>().is_none() {
+                init_match(world);
             }
         });
         runtime.load_scene("play");
 
-        runtime.add_system_ctx(RustPhase::Update, "tetris_sim", |ctx| {
-            let state = ctx.world.resources.get_mut::<TetrisState>().unwrap();
+        runtime.add_system_ctx(RustPhase::Update, "tetris_input", |ctx| {
+            if ctx.world.resources.get::<TetrisSession>().is_none() {
+                return;
+            }
             if ctx.input.key_pressed(Key::Escape) {
                 ctx.world.resources.get_mut::<spark_engine::AppExit>().unwrap().request();
                 return;
             }
-            if state.game_over {
+            let game_over = ctx.world.resources.get::<TetrisSession>().unwrap().game_over;
+            if game_over {
                 if ctx.input.key_pressed(Key::R) {
-                    state.restart();
+                    restart_match(ctx.world);
                 }
                 return;
             }
 
             if ctx.input.key_pressed(Key::Left) {
-                state.try_move(-1, 0);
+                try_move(ctx.world, -1, 0);
             }
             if ctx.input.key_pressed(Key::Right) {
-                state.try_move(1, 0);
+                try_move(ctx.world, 1, 0);
             }
             if ctx.input.key_pressed(Key::Up) || ctx.input.key_pressed(Key::X) {
-                state.try_rotate();
+                try_rotate(ctx.world);
             }
             if ctx.input.key_pressed(Key::Space) {
-                state.hard_drop();
-                return;
-            }
-
-            let soft = ctx.input.key_down(Key::Down);
-            let interval = if soft { state.fall_interval * 0.12 } else { state.fall_interval };
-            state.fall_acc += ctx.dt;
-            while state.fall_acc >= interval {
-                state.fall_acc -= interval;
-                if !state.try_move(0, 1) {
-                    state.lock_active();
-                    break;
-                }
+                hard_drop(ctx.world);
             }
         });
 
+        runtime.add_system_ctx_with_order(
+            RustPhase::Update,
+            "tetris_gravity",
+            SystemOrder { after: vec!["tetris_input"], ..SystemOrder::default() },
+            |ctx| {
+                if ctx.world.resources.get::<TetrisSession>().is_none_or(|s| s.game_over) {
+                    return;
+                }
+                let soft = ctx.input.key_down(Key::Down);
+                let interval = {
+                    let session = ctx.world.resources.get::<TetrisSession>().unwrap();
+                    if soft { session.fall_interval * 0.12 } else { session.fall_interval }
+                };
+                let mut tick = false;
+                {
+                    let session = ctx.world.resources.get_mut::<TetrisSession>().unwrap();
+                    session.fall_acc += ctx.dt;
+                    if session.fall_acc >= interval {
+                        session.fall_acc -= interval;
+                        tick = true;
+                    }
+                }
+                if tick && !try_move(ctx.world, 0, 1) {
+                    lock_active(ctx.world);
+                }
+            },
+        );
+
         runtime.add_render_fn("tetris_world", |world, _, draw| {
-            let state = world.resources.get::<TetrisState>().unwrap();
+            let board = world.resources.get::<Board>().unwrap();
+            let session = world.resources.get::<TetrisSession>().unwrap();
             draw.begin_world();
             draw.fill_rect(Rect::new(0.0, 0.0, 480.0, 720.0), Color::rgb(0.04, 0.05, 0.08));
 
@@ -204,7 +251,7 @@ impl NativeGamePlugin for TetrisNativePlugin {
 
             for y in 0..ROWS {
                 for x in 0..COLS {
-                    let v = state.board.get(x, y);
+                    let v = board.get(x, y);
                     if v == 0 {
                         continue;
                     }
@@ -215,36 +262,36 @@ impl NativeGamePlugin for TetrisNativePlugin {
                 }
             }
 
-            if let Some(a) = &state.active {
-                for (cx, cy) in cells(a.kind, a.rot) {
-                    let x = a.x + cx;
-                    let y = a.y + cy;
+            world.for_each::<ActivePiece>(|_, active| {
+                for (cx, cy) in cells(active.kind, active.rot) {
+                    let x = active.x + cx;
+                    let y = active.y + cy;
                     if y < 0 {
                         continue;
                     }
                     draw.fill_rect(
                         Rect::new(ORIGIN_X + x as f32 * CELL + 1.0, ORIGIN_Y + y as f32 * CELL + 1.0, CELL - 2.0, CELL - 2.0),
-                        piece_color(a.kind),
+                        piece_color(active.kind),
                     );
                 }
-            }
+            });
 
             let nx0 = ORIGIN_X + board_w + 28.0;
             let ny0 = ORIGIN_Y + 40.0;
             draw.text(nx0, ORIGIN_Y, 18.0, Color::rgb(0.8, 0.85, 1.0), "NEXT");
-            for (cx, cy) in cells(state.next, 0) {
-                draw.fill_rect(Rect::new(nx0 + cx as f32 * 22.0, ny0 + cy as f32 * 22.0, 20.0, 20.0), piece_color(state.next));
+            for (cx, cy) in cells(session.next, 0) {
+                draw.fill_rect(Rect::new(nx0 + cx as f32 * 22.0, ny0 + cy as f32 * 22.0, 20.0, 20.0), piece_color(session.next));
             }
         });
 
         runtime.add_system(RustPhase::UiPrepare, "tetris_hud", |world| {
-            let state = world.resources.get::<TetrisState>().unwrap();
+            let session = world.resources.get::<TetrisSession>().unwrap();
             let board_w = COLS as f32 * CELL;
             let nx0 = ORIGIN_X + board_w + 28.0;
             let ny0 = ORIGIN_Y + 40.0;
             let mut batch = spark_renderer::UiRenderBatch::new();
-            batch.text(nx0, ny0 + 120.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", state.score));
-            batch.text(nx0, ny0 + 150.0, 18.0, Color::rgb(0.85, 0.9, 1.0), format!("Lines {}", state.lines));
+            batch.text(nx0, ny0 + 120.0, 20.0, Color::rgb(1.0, 1.0, 1.0), format!("Score {}", session.score));
+            batch.text(nx0, ny0 + 150.0, 18.0, Color::rgb(0.85, 0.9, 1.0), format!("Lines {}", session.lines));
             batch.text(
                 24.0,
                 680.0,
@@ -252,7 +299,7 @@ impl NativeGamePlugin for TetrisNativePlugin {
                 Color::rgba(1.0, 1.0, 1.0, 0.5),
                 "←/→ 移动 · ↑/X 旋转 · ↓ 软降 · Space 硬降 · R 重开 · Esc 退出",
             );
-            if state.game_over {
+            if session.game_over {
                 batch.fill_rect(Rect::new(60.0, 300.0, 360.0, 80.0), Color::rgba(0.0, 0.0, 0.0, 0.7));
                 batch.text(120.0, 320.0, 28.0, Color::rgb(1.0, 0.4, 0.4), "GAME OVER");
                 batch.text(130.0, 355.0, 16.0, Color::rgb(1.0, 1.0, 1.0), "按 R 重新开始");
