@@ -14,6 +14,7 @@
 pub mod access_policy;
 pub mod api;
 pub mod runtime;
+pub mod column_dispatch;
 pub mod command_apply;
 pub mod command_buffer;
 pub mod domain;
@@ -43,6 +44,7 @@ pub use command_apply::{
     CommandApplyError, CommandApplyReport, ComponentDescriptorId, SCRIPT_MARKER_NAME, ScriptArchetypeTag, ScriptComponentCatalog, ScriptMarker,
     apply_script_commands, apply_script_commands_with, apply_script_commands_with_store,
 };
+pub use column_dispatch::{BoundFieldDispatch, ColumnDispatchTable};
 pub use command_buffer::{ScriptCommand, ScriptCommandBuffer};
 pub use domain::{ScriptBudget, ScriptDomain};
 pub use frame_state::{AppExit, CursorGrabPref, DrawBuffer2d, DrawBuffer3d, FrameSnapshot, OsCursorVisible, UiBuffer2d};
@@ -63,11 +65,11 @@ pub use runtime::{
     SparkScriptDomain, SystemContext, SystemOrder,
 };
 pub use run::{run_runtime, run_runtime_3d, run_runtime_3d_with, run_runtime_with, run_window_2d, run_window_3d};
-pub use script_api::{CoreEngineScriptApiProvider, ScriptApiProvider, ScriptApiRegistry};
+pub use script_api::{CoreEngineScriptApiProvider, GameCombatScriptApiProvider, ScriptApiProvider, ScriptApiRegistry};
 pub use script_component_schema::{
     ScriptComponentLayout, ScriptComponentLayoutBuilder, ScriptComponentLayoutError, ScriptFieldKind, ScriptFieldLayout,
 };
-pub use script_component_store::ScriptComponentStore;
+pub use script_component_store::{ColumnFieldValue, ScriptComponentStore};
 pub use script_system::{ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError, ScriptSystemRegistry};
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
 pub use vfs::ModVfs;
@@ -366,6 +368,8 @@ pub struct EngineShared {
     pub active_component_catalog: ScriptComponentCatalog,
     /// 当前脚本调用的列存储句柄（与 [`World`] 资源共享）。
     pub active_component_store: Option<ScriptComponentStore>,
+    /// 当前脚本 System 的绑定期列字段分发表。
+    pub active_column_dispatch: Option<ColumnDispatchTable>,
 }
 
 impl EngineShared {
@@ -384,6 +388,7 @@ impl EngineShared {
         plan: Option<&QueryPlan>,
         catalog: &ScriptComponentCatalog,
         store: Option<ScriptComponentStore>,
+        dispatch: Option<ColumnDispatchTable>,
     ) {
         self.active_phase = phase;
         self.active_determinism = desc.map(|d| d.determinism).unwrap_or(DeterminismClass::Nondeterministic);
@@ -395,6 +400,7 @@ impl EngineShared {
         self.active_column_batch = plan.map(|p| ScriptColumnBatch::install(p.clone(), self.query.clone()));
         self.active_component_catalog = catalog.clone();
         self.active_component_store = store;
+        self.active_column_dispatch = dispatch;
     }
 
     /// 按当前 `access` 从 `query_base` 安装可见查询快照。
@@ -413,6 +419,7 @@ impl EngineShared {
         self.query = self.query_base.clone();
         self.active_column_batch = None;
         self.active_component_store = None;
+        self.active_column_dispatch = None;
     }
 }
 
@@ -427,6 +434,8 @@ pub struct SparkEngine {
     script_systems: ScriptSystemRegistry,
     /// 绑定期查询计划（键 = `mod_id/system_name`）。
     query_plans: HashMap<String, QueryPlan>,
+    /// 绑定期列字段分发表（键与 `query_plans` 相同）。
+    column_dispatches: HashMap<String, ColumnDispatchTable>,
     /// 脚本可见组件目录（绑定期解析 `QueryPlan`）。
     component_catalog: ScriptComponentCatalog,
     /// 游戏可替换的脚本 API Provider 登记表。
@@ -445,6 +454,7 @@ impl SparkEngine {
             plugins: PluginRegistry::new(),
             script_systems: ScriptSystemRegistry::new(),
             query_plans: HashMap::new(),
+            column_dispatches: HashMap::new(),
             component_catalog: ScriptComponentCatalog::with_builtins(),
             api_registry: ScriptApiRegistry::new(),
         }
@@ -467,17 +477,29 @@ impl SparkEngine {
     fn purge_query_plans_for_mod(&mut self, mod_id: &str) {
         let prefix = format!("{mod_id}/");
         self.query_plans.retain(|key, _| !key.starts_with(&prefix));
+        self.column_dispatches.retain(|key, _| !key.starts_with(&prefix));
+    }
+
+    fn insert_query_plan_bundle(&mut self, key: String, plan: QueryPlan) {
+        let dispatch = ColumnDispatchTable::bind(&plan, &self.component_catalog);
+        self.column_dispatches.insert(key.clone(), dispatch);
+        self.query_plans.insert(key, plan);
     }
 
     /// 为模组已登记、尚未绑定的 System 描述符生成 [`QueryPlan`]。
     fn bind_query_plans_for_mod(&mut self, mod_id: &str) -> Result<(), EngineError> {
-        for desc in self.script_systems.systems().iter().filter(|s| s.mod_id.as_ref() == mod_id) {
+        let pending = self
+            .script_systems
+            .systems()
+            .iter()
+            .filter(|s| s.mod_id.as_ref() == mod_id)
+            .filter(|desc| !self.query_plans.contains_key(&desc.graph_key()))
+            .cloned()
+            .collect::<Vec<_>>();
+        for desc in pending {
             let key = desc.graph_key();
-            if self.query_plans.contains_key(&key) {
-                continue;
-            }
-            let plan = QueryPlan::bind(desc, &self.component_catalog)?;
-            self.query_plans.insert(key, plan);
+            let plan = QueryPlan::bind(&desc, &self.component_catalog)?;
+            self.insert_query_plan_bundle(key, plan);
         }
         Ok(())
     }
@@ -536,10 +558,15 @@ impl SparkEngine {
         self.query_plans.get(&desc.graph_key()).cloned()
     }
 
+    /// 已绑定的列字段分发表（登记后可用）。
+    pub fn column_dispatch(&self, desc: &ScriptSystemDescriptor) -> Option<ColumnDispatchTable> {
+        self.column_dispatches.get(&desc.graph_key()).cloned()
+    }
+
     /// 登记脚本 System 描述符（同 `mod_id`+`name` 覆盖），绑定 [`QueryPlan`] 并校验调度契约。
     pub fn register_script_system(&mut self, desc: ScriptSystemDescriptor) -> Result<(), EngineError> {
         let plan = QueryPlan::bind(&desc, &self.component_catalog)?;
-        self.query_plans.insert(desc.graph_key(), plan);
+        self.insert_query_plan_bundle(desc.graph_key(), plan);
         self.script_systems.register_checked(desc)?;
         Ok(())
     }
@@ -631,7 +658,7 @@ impl SparkEngine {
             let mut hooks = StdHost;
             // 装载只跑 `on_load`（顶层块已在封目标时提升为 `on_load`）。
             let catalog = self.component_catalog.clone();
-            self.shared.borrow_mut().begin_script_call(HostPhase::OnLoad, None, None, &catalog, None);
+            self.shared.borrow_mut().begin_script_call(HostPhase::OnLoad, None, None, &catalog, None, None);
             let load_result = script_domain.call_lifecycle("on_load", &[], &mut hooks);
             self.shared.borrow_mut().end_script_call();
             let _ = load_result?;
@@ -799,6 +826,7 @@ impl SparkEngine {
         let catalog = self.component_catalog.clone();
         for (mod_id, entry, desc) in jobs {
             let plan = desc.as_ref().and_then(|d| self.query_plans.get(&d.graph_key()).cloned());
+            let dispatch = desc.as_ref().and_then(|d| self.column_dispatches.get(&d.graph_key()).cloned());
             let Some(m) = self.mods.get_mut(&mod_id)
             else {
                 continue;
@@ -815,9 +843,14 @@ impl SparkEngine {
             }
             let has_entry = domain.runtime.vm.module.functions.iter().any(|f| f.name == entry);
             if has_entry {
-                self.shared
-                    .borrow_mut()
-                    .begin_script_call(phase, desc.as_ref(), plan.as_ref(), &catalog, component_store.clone());
+                self.shared.borrow_mut().begin_script_call(
+                    phase,
+                    desc.as_ref(),
+                    plan.as_ref(),
+                    &catalog,
+                    component_store.clone(),
+                    dispatch,
+                );
                 let call_result = domain.call_in_phase(&entry, &[], phase, host);
                 self.shared.borrow_mut().end_script_call();
                 let _ = call_result?;
@@ -836,6 +869,7 @@ impl SparkEngine {
         let mod_id = desc.mod_id.to_string();
         let entry = desc.entry.to_string();
         let plan = self.query_plans.get(&desc.graph_key()).cloned();
+        let dispatch = self.column_dispatches.get(&desc.graph_key()).cloned();
         let catalog = self.component_catalog.clone();
         let Some(m) = self.mods.get_mut(&mod_id)
         else {
@@ -853,9 +887,14 @@ impl SparkEngine {
         }
         let has_entry = domain.runtime.vm.module.functions.iter().any(|f| f.name == entry);
         if has_entry {
-            self.shared
-                .borrow_mut()
-                .begin_script_call(desc.phase, Some(desc), plan.as_ref(), &catalog, component_store);
+            self.shared.borrow_mut().begin_script_call(
+                desc.phase,
+                Some(desc),
+                plan.as_ref(),
+                &catalog,
+                component_store,
+                dispatch,
+            );
             let call_result = domain.call_in_phase(&entry, &[], desc.phase, host);
             self.shared.borrow_mut().end_script_call();
             call_result?;

@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::column_dispatch::BoundFieldDispatch;
 use crate::command_apply::ComponentDescriptorId;
 use crate::script_component_schema::{ScriptComponentLayout, ScriptFieldKind};
 
@@ -163,6 +164,42 @@ impl ScriptComponentStore {
         };
         write_pod(row, field.offset, if value { 1u32 } else { 0u32 })
     }
+
+    /// 按绑定期分发表读取字段（热路径无布局查找）。
+    pub fn read_dispatch(&self, field: &BoundFieldDispatch, entity_bits: u64) -> Option<ColumnFieldValue> {
+        let inner = self.inner.lock().expect("script component store poisoned");
+        let row = inner.rows.get(&field.slot)?.get(&entity_bits)?;
+        match field.kind {
+            ScriptFieldKind::F32 => read_pod::<f32>(row, field.offset).map(ColumnFieldValue::F32),
+            ScriptFieldKind::I32 => read_pod::<i32>(row, field.offset).map(ColumnFieldValue::I32),
+            ScriptFieldKind::Bool => read_pod::<u32>(row, field.offset).map(|v| ColumnFieldValue::Bool(v != 0)),
+        }
+    }
+
+    /// 按绑定期分发表写入字段（热路径无布局查找）。
+    pub fn write_dispatch(&mut self, field: &BoundFieldDispatch, entity_bits: u64, value: ColumnFieldValue) -> bool {
+        let mut inner = self.inner.lock().expect("script component store poisoned");
+        let Some(row) = inner.rows.get_mut(&field.slot).and_then(|b| b.get_mut(&entity_bits)) else {
+            return false;
+        };
+        match (field.kind, value) {
+            (ScriptFieldKind::F32, ColumnFieldValue::F32(v)) => write_pod(row, field.offset, v),
+            (ScriptFieldKind::I32, ColumnFieldValue::I32(v)) => write_pod(row, field.offset, v),
+            (ScriptFieldKind::Bool, ColumnFieldValue::Bool(v)) => write_pod(row, field.offset, if v { 1u32 } else { 0u32 }),
+            _ => false,
+        }
+    }
+}
+
+/// 列直写分发表支持的运行时值。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ColumnFieldValue {
+    /// 32 位浮点。
+    F32(f32),
+    /// 32 位有符号整数。
+    I32(i32),
+    /// 布尔。
+    Bool(bool),
 }
 
 impl Default for ScriptComponentStore {

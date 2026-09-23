@@ -448,7 +448,7 @@ entry = "main.vk"
     assert_eq!(eng.shared().borrow().query_base.count("tree"), 1);
 
     let catalog = eng.component_catalog().clone();
-    eng.shared().borrow_mut().begin_script_call(HostPhase::Update, Some(&desc), None, &catalog, None);
+    eng.shared().borrow_mut().begin_script_call(HostPhase::Update, Some(&desc), None, &catalog, None, None);
     assert_eq!(eng.shared().borrow().query.count("rock"), 1);
     assert_eq!(eng.shared().borrow().query.count("tree"), 0);
     let mut hooks = StdHost;
