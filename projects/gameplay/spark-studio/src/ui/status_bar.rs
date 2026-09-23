@@ -29,7 +29,7 @@ pub fn build_status_bar(project: &ProjectInfo, state: &EditorState) -> WidgetBui
         .child(dim_label(if state.status.is_empty() { "就绪".into() } else { state.status.clone() }))
         .child(spacer_widget())
         .child(dim_label(scene_hint(project, state)))
-        .child(dim_label("F 聚焦 · Ctrl+J 底栏"))
+        .child(dim_label("F 聚焦 · Ctrl+↑↓ UI · Ctrl+J 底栏"))
 }
 
 fn scene_hint(project: &ProjectInfo, state: &EditorState) -> String {
@@ -38,5 +38,6 @@ fn scene_hint(project: &ProjectInfo, state: &EditorState) -> String {
     }
     let zoom = (state.viewport.zoom * 100.0).round();
     let name = entity_by_id(project.kind, state.selected).map(|e| e.name).unwrap_or("—");
-    format!("场景 {zoom}% · {name}")
+    let ui_pct = (state.ui_scale * 100.0).round();
+    format!("场景 {zoom}% · {name} · UI {ui_pct}%")
 }

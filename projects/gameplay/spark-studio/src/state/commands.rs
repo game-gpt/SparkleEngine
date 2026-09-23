@@ -32,6 +32,8 @@ pub const CMD_BOTTOM_PROJECT: u64 = 410;
 pub const CMD_BOTTOM_CONSOLE: u64 = 411;
 /// 底部标签：Problems。
 pub const CMD_BOTTOM_PROBLEMS: u64 = 412;
+/// 控制台：清空。
+pub const CMD_CONSOLE_CLEAR: u64 = 413;
 /// 窗口：控件图鉴。
 pub const CMD_WINDOW_GALLERY: u64 = 500;
 /// 布局预设：默认。

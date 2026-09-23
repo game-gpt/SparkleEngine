@@ -34,7 +34,7 @@ pub fn build_bottom_bar(project: &ProjectInfo, asset_lines: &[String], state: &E
     let body_kids = match state.bottom {
         BottomTab::Project => build_asset_browser_body(asset_lines, state),
         BottomTab::Console => build_console_body(&state.console),
-        BottomTab::Problems => build_problems_body(project, asset_lines.len()),
+        BottomTab::Problems => build_problems_body(project, asset_lines.len(), &state.runtime_problems),
     };
 
     let body = column().layout(v_body(8.0, 2.0)).style(Style { background: Some(panel_surface()), ..Style::default() }).children(body_kids);

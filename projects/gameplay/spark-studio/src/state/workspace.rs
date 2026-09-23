@@ -2,7 +2,7 @@
 
 use crate::layout::{DockLayoutState, LayoutPreset};
 
-use super::{BottomTab, CenterTab, ConsoleLog, PlayMode, Tool, TransformState, ViewportState};
+use super::{BottomTab, CenterTab, ConsoleLog, PlayMode, Problem, ProblemSeverity, Tool, TransformState, ViewportState};
 
 /// Studio 会话 UI 状态（与 Widget 树命令互通）。
 #[derive(Debug, Clone)]
@@ -31,6 +31,10 @@ pub struct EditorState {
     pub status: String,
     /// 控制台日志。
     pub console: ConsoleLog,
+    /// 用户 UI 缩放（叠在 DPI 之上）。
+    pub ui_scale: f32,
+    /// Play / 脚本等运行时诊断。
+    pub runtime_problems: Vec<Problem>,
 }
 
 impl Default for EditorState {
@@ -48,6 +52,8 @@ impl Default for EditorState {
             viewport: ViewportState::default(),
             status: String::new(),
             console: ConsoleLog::default(),
+            ui_scale: 1.0,
+            runtime_problems: Vec::new(),
         }
     }
 }
@@ -58,5 +64,17 @@ impl EditorState {
         let line = line.into();
         self.console.push(&line);
         self.status = line;
+    }
+
+    /// 记录运行时问题并写入控制台。
+    pub fn note_runtime_problem(&mut self, severity: ProblemSeverity, message: impl Into<String>) {
+        let message = message.into();
+        self.runtime_problems.push(Problem { severity, message: message.clone() });
+        self.console.push(format!("{} {}", severity.glyph(), message));
+    }
+
+    /// 清除运行时问题（成功启动 Play 等）。
+    pub fn clear_runtime_problems(&mut self) {
+        self.runtime_problems.clear();
     }
 }

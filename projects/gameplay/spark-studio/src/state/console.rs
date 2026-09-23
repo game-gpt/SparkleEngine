@@ -28,4 +28,14 @@ impl ConsoleLog {
     pub fn lines(&self) -> impl ExactSizeIterator<Item = &String> {
         self.lines.iter()
     }
+
+    /// 清空全部行。
+    pub fn clear(&mut self) {
+        self.lines.clear();
+    }
+
+    /// 当前行数。
+    pub fn len(&self) -> usize {
+        self.lines.len()
+    }
 }

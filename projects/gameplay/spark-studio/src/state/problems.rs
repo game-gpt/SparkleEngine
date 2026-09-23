@@ -59,6 +59,23 @@ pub fn diagnose_project(project: &ProjectInfo, asset_count: usize) -> Vec<Proble
     out
 }
 
+/// 合并项目静态诊断与运行时问题。
+pub fn collect_problems(project: &ProjectInfo, asset_count: usize, runtime: &[Problem]) -> Vec<Problem> {
+    let mut out = diagnose_project(project, asset_count);
+    if !runtime.is_empty() {
+        out.extend(runtime.iter().cloned());
+    }
+    out
+}
+
+/// 统计摘要 `(errors, warnings, infos)`。
+pub fn count_by_severity(problems: &[Problem]) -> (usize, usize, usize) {
+    let errors = problems.iter().filter(|p| p.severity == ProblemSeverity::Error).count();
+    let warnings = problems.iter().filter(|p| p.severity == ProblemSeverity::Warning).count();
+    let infos = problems.len() - errors - warnings;
+    (errors, warnings, infos)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,5 +96,23 @@ mod tests {
         };
         let problems = diagnose_project(&project, 3);
         assert!(problems.iter().any(|p| p.message.contains("startupScene")));
+    }
+
+    #[test]
+    fn collect_merges_runtime_rows() {
+        let project = ProjectInfo {
+            root: std::path::PathBuf::from("."),
+            name: "demo".into(),
+            kind: ProjectKind::Rust,
+            kind_inferred: false,
+            startup_scene: Some("main.scene".into()),
+            script_entry: None,
+            cargo_manifest: None,
+            run_target: None,
+            has_sparkle_engine_dep: true,
+        };
+        let runtime = vec![Problem { severity: ProblemSeverity::Error, message: "运行失败：demo".into() }];
+        let merged = collect_problems(&project, 1, &runtime);
+        assert!(merged.iter().any(|p| p.message.contains("运行失败")));
     }
 }
