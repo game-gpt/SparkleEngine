@@ -434,6 +434,19 @@ impl SparkEngine {
         self.query_plans.retain(|key, _| !key.starts_with(&prefix));
     }
 
+    /// 为模组已登记、尚未绑定的 System 描述符生成 [`QueryPlan`]。
+    fn bind_query_plans_for_mod(&mut self, mod_id: &str) -> Result<(), EngineError> {
+        for desc in self.script_systems.systems().iter().filter(|s| s.mod_id.as_ref() == mod_id) {
+            let key = desc.graph_key();
+            if self.query_plans.contains_key(&key) {
+                continue;
+            }
+            let plan = QueryPlan::bind(desc, &self.component_catalog)?;
+            self.query_plans.insert(key, plan);
+        }
+        Ok(())
+    }
+
     /// 只读访问脚本插件登记表。
     pub fn plugins(&self) -> &PluginRegistry {
         &self.plugins
@@ -578,6 +591,7 @@ impl SparkEngine {
             self.shared.borrow_mut().end_script_call();
             let _ = load_result?;
             self.script_systems.register_lifecycle_exports(manifest.id.as_str(), &script_domain.lifecycle_exports);
+            self.bind_query_plans_for_mod(manifest.id.as_str())?;
             domain = Some(script_domain);
         }
 
