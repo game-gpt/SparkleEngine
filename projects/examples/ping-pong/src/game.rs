@@ -9,7 +9,9 @@ use crate::{ball::Ball, paddle::Paddle};
 const COURT_W: f32 = 960.0;
 const COURT_H: f32 = 540.0;
 
-/// 双人乒乓对局宿主：球场 960×540 逻辑像素，实现 [`GameHost`]。
+/// 双人乒乓对局宿主：球场 960×540 逻辑像素。
+///
+/// **遗留**：实现 [`GameHost`]，仅供对照；正式入口见 [`crate::runtime::build_runtime`]。
 ///
 /// 左拍 `W`/`S`、右拍方向键；球出左右边得分并交替发球。
 /// `Esc` 置退出标志。公开字段便于嵌入方读拍/球状态。
