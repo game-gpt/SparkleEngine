@@ -10,6 +10,7 @@ use spark_ecs::{Entity, World};
 
 use crate::command_buffer::ScriptCommand;
 use crate::script_component_schema::ScriptComponentLayout;
+use crate::script_component_store::ScriptComponentStore;
 
 /// 脚本侧组件描述符槽位（与宿主登记表顺序一致）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -188,6 +189,16 @@ pub fn apply_script_commands_with(
     commands: &[ScriptCommand],
     catalog: &ScriptComponentCatalog,
 ) -> Result<CommandApplyReport, CommandApplyError> {
+    apply_script_commands_with_store(world, commands, catalog, &mut None)
+}
+
+/// 将一批脚本命令应用到世界（显式组件目录与列存储）。
+pub fn apply_script_commands_with_store(
+    world: &mut World,
+    commands: &[ScriptCommand],
+    catalog: &ScriptComponentCatalog,
+    store: &mut Option<ScriptComponentStore>,
+) -> Result<CommandApplyReport, CommandApplyError> {
     let mut report = CommandApplyReport::default();
     for cmd in commands {
         match cmd {
@@ -198,6 +209,9 @@ pub fn apply_script_commands_with(
             ScriptCommand::Despawn { entity } => {
                 let e = Entity::from_bits(*entity);
                 if world.despawn(e) {
+                    if let Some(store) = store.as_mut() {
+                        store.remove_entity(*entity);
+                    }
                     report.despawned.push(e);
                 }
                 else {
@@ -206,40 +220,55 @@ pub fn apply_script_commands_with(
             }
             ScriptCommand::AddComponent { entity, component } => {
                 let e = Entity::from_bits(*entity);
-                match catalog.id_of(component) {
-                    Some(id) if catalog.name_of(id) == Some(SCRIPT_MARKER_NAME) => {
-                        if world.insert(e, ScriptMarker) {
-                            report.added_components += 1;
-                        }
-                        else {
-                            return Err(CommandApplyError::EntityNotAlive { entity: *entity, component: Arc::clone(component) });
-                        }
+                let Some(id) = catalog.id_of(component) else {
+                    return Err(CommandApplyError::UnknownComponent { component: Arc::clone(component) });
+                };
+                if !world.is_alive(e) {
+                    return Err(CommandApplyError::EntityNotAlive { entity: *entity, component: Arc::clone(component) });
+                }
+                if catalog.name_of(id) == Some(SCRIPT_MARKER_NAME) {
+                    if world.insert(e, ScriptMarker) {
+                        report.added_components += 1;
                     }
-                    Some(_) => {
+                    else {
+                        return Err(CommandApplyError::EntityNotAlive { entity: *entity, component: Arc::clone(component) });
+                    }
+                }
+                else if let Some(layout) = catalog.layout_of(id) {
+                    let Some(store) = store.as_mut() else {
                         return Err(CommandApplyError::UnsupportedComponent { component: Arc::clone(component) });
-                    }
-                    None => {
-                        return Err(CommandApplyError::UnknownComponent { component: Arc::clone(component) });
-                    }
+                    };
+                    store.ensure_row(id, *entity, layout);
+                    report.added_components += 1;
+                }
+                else {
+                    return Err(CommandApplyError::UnsupportedComponent { component: Arc::clone(component) });
                 }
             }
             ScriptCommand::RemoveComponent { entity, component } => {
                 let e = Entity::from_bits(*entity);
-                match catalog.id_of(component) {
-                    Some(id) if catalog.name_of(id) == Some(SCRIPT_MARKER_NAME) => {
-                        if world.remove::<ScriptMarker>(e).is_some() {
-                            report.removed_components += 1;
-                        }
-                        else {
-                            return Err(CommandApplyError::EntityNotAlive { entity: *entity, component: Arc::clone(component) });
-                        }
+                let Some(id) = catalog.id_of(component) else {
+                    return Err(CommandApplyError::UnknownComponent { component: Arc::clone(component) });
+                };
+                if !world.is_alive(e) {
+                    return Err(CommandApplyError::EntityNotAlive { entity: *entity, component: Arc::clone(component) });
+                }
+                if catalog.name_of(id) == Some(SCRIPT_MARKER_NAME) {
+                    if world.remove::<ScriptMarker>(e).is_some() {
+                        report.removed_components += 1;
                     }
-                    Some(_) => {
-                        return Err(CommandApplyError::UnsupportedComponent { component: Arc::clone(component) });
+                    else {
+                        return Err(CommandApplyError::EntityNotAlive { entity: *entity, component: Arc::clone(component) });
                     }
-                    None => {
-                        return Err(CommandApplyError::UnknownComponent { component: Arc::clone(component) });
+                }
+                else if catalog.layout_of(id).is_some() {
+                    if let Some(store) = store.as_mut() {
+                        store.remove_row(id, *entity);
                     }
+                    report.removed_components += 1;
+                }
+                else {
+                    return Err(CommandApplyError::UnsupportedComponent { component: Arc::clone(component) });
                 }
             }
         }

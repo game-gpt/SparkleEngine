@@ -30,6 +30,8 @@ pub const ENGINE_NATIVES: &[&str] = &[
     "engine.query_entity_at",
     "engine.query_batch_count",
     "engine.query_batch_entity_at",
+    "engine.query_column_f32",
+    "engine.set_column_f32",
 ];
 
 /// 文档用标记类型。
@@ -64,6 +66,8 @@ pub fn engine_host_schema() -> HostSchema {
     schema.insert(HostFunction::new(HostFunctionId::new("engine", "query_entity_at", 1)).phases(any).effect(HostEffect::ReadWorld));
     schema.insert(HostFunction::new(HostFunctionId::new("engine", "query_batch_count", 1)).phases(sim).effect(HostEffect::ReadWorld));
     schema.insert(HostFunction::new(HostFunctionId::new("engine", "query_batch_entity_at", 2)).phases(sim).effect(HostEffect::ReadWorld));
+    schema.insert(HostFunction::new(HostFunctionId::new("engine", "query_column_f32", 4)).phases(sim).effect(HostEffect::ReadWorld));
+    schema.insert(HostFunction::new(HostFunctionId::new("engine", "set_column_f32", 5)).phases(sim).effect(HostEffect::WriteComponent));
     schema
 }
 
@@ -102,6 +106,41 @@ fn gate_batch_read(shared: &EngineShared, import: &str) -> Result<(), VmError> {
         return Err(VmError::HostDenied { detail: "host_batch_denied:no_active_column_batch".into() });
     }
     Ok(())
+}
+
+fn gate_column_dispatch(shared: &EngineShared, import: &str) -> Result<(), VmError> {
+    gate(shared, import)?;
+    gate_read_world(shared)?;
+    if shared.active_column_batch.is_none() {
+        return Err(VmError::HostDenied { detail: "host_column_denied:no_active_column_batch".into() });
+    }
+    if shared.active_component_store.is_none() {
+        return Err(VmError::HostDenied { detail: "host_column_denied:no_component_store".into() });
+    }
+    Ok(())
+}
+
+fn column_entity_bits(shared: &EngineShared, archetype_index: usize, row: usize) -> Result<u64, VmError> {
+    let batch = shared.active_column_batch.as_ref().expect("gate_column_dispatch ensures batch");
+    batch
+        .views()
+        .get(archetype_index)
+        .and_then(|view| view.entity_bits(row))
+        .ok_or(VmError::BadNativeArg { name: "column_row" })
+}
+
+fn column_layout(shared: &EngineShared, column_index: usize) -> Result<(&crate::query_plan::BoundColumn, &crate::ScriptComponentLayout), VmError> {
+    let batch = shared.active_column_batch.as_ref().expect("gate_column_dispatch ensures batch");
+    let col = batch
+        .plan()
+        .columns()
+        .get(column_index)
+        .ok_or(VmError::BadNativeArg { name: "column_index" })?;
+    let layout = shared
+        .active_component_catalog
+        .layout_of(col.slot)
+        .ok_or(VmError::HostDenied { detail: format!("host_column_denied:no_layout:{}", col.slot.0) })?;
+    Ok((col, layout))
 }
 
 /// 向脚本 VM 安装引擎原生函数。
@@ -286,6 +325,71 @@ pub fn install_builtins(
             .get(archetype_index)
             .and_then(|view| view.entity_bits(row));
         Ok(bits.map(Value::Entity).unwrap_or(Value::Null))
+    });
+
+    let shared_col_read = Rc::clone(shared);
+    vm.register_native("engine.query_column_f32", move |_ctx, args| {
+        gate_column_dispatch(&shared_col_read.borrow(), "engine.query_column_f32")?;
+        if args.len() < 4 {
+            return Err(VmError::ArityMismatch { expected: 4, got: args.len() as u16 });
+        }
+        let column_index = args[0].as_number().ok_or(VmError::BadNativeArg { name: "query_column_f32" })? as usize;
+        let archetype_index = args[1].as_number().ok_or(VmError::BadNativeArg { name: "query_column_f32" })? as usize;
+        let row = args[2].as_number().ok_or(VmError::BadNativeArg { name: "query_column_f32" })? as usize;
+        let field_index = args[3].as_number().ok_or(VmError::BadNativeArg { name: "query_column_f32" })? as usize;
+        let shared = shared_col_read.borrow();
+        let (col, layout) = column_layout(&shared, column_index)?;
+        if shared.execution_profile.enforces_runtime_gate() {
+            let name = shared.active_component_catalog.name_of(col.slot).unwrap_or("?");
+            if !shared.access.allows_read_component(name) {
+                return Err(VmError::HostDenied { detail: format!("host_access_denied:read_column:{name}") });
+            }
+        }
+        let entity_bits = column_entity_bits(&shared, archetype_index, row)?;
+        let store = shared.active_component_store.as_ref().expect("gate_column_dispatch ensures store");
+        let value = store.read_f32(col.slot, layout, entity_bits, field_index).ok_or(VmError::BadNativeArg { name: "query_column_f32" })?;
+        Ok(Value::Number(value as f64))
+    });
+
+    let shared_col_write = Rc::clone(shared);
+    vm.register_native("engine.set_column_f32", move |_ctx, args| {
+        if args.len() < 5 {
+            return Err(VmError::ArityMismatch { expected: 5, got: args.len() as u16 });
+        }
+        let column_index = args[0].as_number().ok_or(VmError::BadNativeArg { name: "set_column_f32" })? as usize;
+        let archetype_index = args[1].as_number().ok_or(VmError::BadNativeArg { name: "set_column_f32" })? as usize;
+        let row = args[2].as_number().ok_or(VmError::BadNativeArg { name: "set_column_f32" })? as usize;
+        let field_index = args[3].as_number().ok_or(VmError::BadNativeArg { name: "set_column_f32" })? as usize;
+        let value = args[4].as_number().ok_or(VmError::BadNativeArg { name: "set_column_f32" })? as f32;
+        let mut shared = shared_col_write.borrow_mut();
+        gate_column_dispatch(&shared, "engine.set_column_f32")?;
+        let (slot, layout, col_write) = {
+            let batch = shared.active_column_batch.as_ref().expect("gate_column_dispatch ensures batch");
+            let col = batch
+                .plan()
+                .columns()
+                .get(column_index)
+                .ok_or(VmError::BadNativeArg { name: "column_index" })?;
+            let layout = shared
+                .active_component_catalog
+                .layout_of(col.slot)
+                .cloned()
+                .ok_or(VmError::HostDenied { detail: format!("host_column_denied:no_layout:{}", col.slot.0) })?;
+            (col.slot, layout, col.write)
+        };
+        if !col_write {
+            return Err(VmError::HostDenied { detail: "host_column_denied:read_only_column".into() });
+        }
+        if shared.execution_profile.enforces_runtime_gate() {
+            let name = shared.active_component_catalog.name_of(slot).unwrap_or("?");
+            gate_component_write(&shared, name)?;
+        }
+        let entity_bits = column_entity_bits(&shared, archetype_index, row)?;
+        let store = shared.active_component_store.as_mut().expect("gate_column_dispatch ensures store");
+        if !store.write_f32(slot, &layout, entity_bits, field_index, value) {
+            return Err(VmError::BadNativeArg { name: "set_column_f32" });
+        }
+        Ok(Value::Null)
     });
 }
 

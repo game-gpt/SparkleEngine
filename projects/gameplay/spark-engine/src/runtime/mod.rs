@@ -38,7 +38,7 @@ use crate::{
     frame_state::{AppExit, CursorGrabPref, DrawBuffer2d, DrawBuffer3d, FrameSnapshot, OsCursorVisible, UiBuffer2d},
     render2d::{RenderFrame2d, RenderSchedule2d},
     render3d::{RenderFrame3d, RenderSchedule3d},
-    EngineError, ExecutionProfile, FrameLoopConfig, ScriptSystemDescriptor,
+    EngineError, ExecutionProfile, FrameLoopConfig, ScriptApiProvider, ScriptComponentStore, ScriptSystemDescriptor,
 };
 
 /// 待执行的场景命令队列（单步最多消费一条）。
@@ -76,6 +76,7 @@ impl SparkRuntime {
         world.resources.insert(DrawBuffer2d::default());
         world.resources.insert(UiBuffer2d::default());
         world.resources.insert(DrawBuffer3d::default());
+        world.resources.insert(ScriptComponentStore::new());
         Self {
             world,
             scheduler: RuntimeScheduler::new(),
@@ -173,6 +174,12 @@ impl SparkRuntime {
         layout: crate::ScriptComponentLayout,
     ) -> &mut Self {
         self.script.ensure_engine().register_script_component_layout(name, layout);
+        self
+    }
+
+    /// 登记脚本 API Provider（须在 `load_script_package` 前配置）。
+    pub fn register_script_api_provider(&mut self, provider: Box<dyn ScriptApiProvider>) -> &mut Self {
+        self.script.ensure_engine().api_registry_mut().register_provider(provider);
         self
     }
 

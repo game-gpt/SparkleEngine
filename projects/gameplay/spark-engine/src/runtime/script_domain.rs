@@ -6,7 +6,7 @@ use spark_ecs::World;
 use spark_script::HostPhase;
 use spark_vm::{HostHooks, StdHost};
 
-use crate::{CommandApplyReport, EngineError, ExecutionProfile, SparkEngine};
+use crate::{CommandApplyReport, EngineError, ExecutionProfile, ScriptComponentStore, SparkEngine};
 
 /// Spark Script 包（Mod / 热更脚本）的运行时域。
 ///
@@ -87,11 +87,12 @@ impl SparkScriptDomain {
     pub fn run_script_descriptor(
         &mut self,
         desc: &crate::ScriptSystemDescriptor,
-        _world: &mut World,
+        world: &mut World,
         host: &mut dyn HostHooks,
     ) -> Result<(), EngineError> {
         if let Some(engine) = &mut self.engine {
-            engine.run_script_descriptor(desc, host)?;
+            let store = world.resources.get::<ScriptComponentStore>().cloned();
+            engine.run_script_descriptor(desc, store, host)?;
         }
         Ok(())
     }

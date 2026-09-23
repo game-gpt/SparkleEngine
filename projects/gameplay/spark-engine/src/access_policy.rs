@@ -72,6 +72,16 @@ impl ScriptAccessPolicy {
         }
     }
 
+    /// 是否允许只读访问 `component` 列（声明 read 或 write 均可读）。
+    pub fn allows_read_component(&self, component: &str) -> bool {
+        match self {
+            Self::Unrestricted => true,
+            Self::Declared { reads, writes, .. } => {
+                reads.iter().any(|c| c.as_ref() == component) || writes.iter().any(|c| c.as_ref() == component)
+            }
+        }
+    }
+
     /// 是否允许只读查询世界（`query_*`）。
     ///
     /// `Declared` 且读写集皆空 → 拒绝（未声明任何世界访问）。

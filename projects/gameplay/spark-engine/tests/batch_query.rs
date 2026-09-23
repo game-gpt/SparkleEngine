@@ -42,7 +42,8 @@ fn run_update(
 ) -> spark_gc::Value {
     let plan = eng.query_plan(desc);
     eng.refresh_script_query(world);
-    eng.shared().borrow_mut().begin_script_call(HostPhase::Update, Some(desc), plan.as_ref());
+    let catalog = eng.component_catalog().clone();
+    eng.shared().borrow_mut().begin_script_call(HostPhase::Update, Some(desc), plan.as_ref(), &catalog, None);
     let v = eng
         .get_mod_mut(mod_id)
         .unwrap()
@@ -92,7 +93,8 @@ fn column_batch_entity_bits_match_snapshot() {
     );
     let plan = eng.query_plan(&desc).unwrap();
     eng.refresh_script_query(&world);
-    eng.shared().borrow_mut().begin_script_call(HostPhase::Update, Some(&desc), Some(&plan));
+    let catalog = eng.component_catalog().clone();
+    eng.shared().borrow_mut().begin_script_call(HostPhase::Update, Some(&desc), Some(&plan), &catalog, None);
     let expected = eng.shared().borrow().query.entity_at("rock", 0).unwrap();
     let batch = eng.shared().borrow().active_column_batch.clone().unwrap();
     eng.shared().borrow_mut().end_script_call();
