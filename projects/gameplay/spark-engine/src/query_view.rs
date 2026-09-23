@@ -116,4 +116,16 @@ impl ScriptQuerySnapshot {
     pub fn contains_archetype(&self, archetype: &str) -> bool {
         self.by_archetype.contains_key(archetype)
     }
+
+    /// 某原型下全部实体位模式（连续切片；未知原型为空切片）。
+    pub fn entities(&self, archetype: &str) -> &[u64] {
+        self.by_archetype.get(archetype).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// 快照中出现的原型名（字典序，供未过滤 [`QueryPlan`] 稳定枚举）。
+    pub fn archetype_names(&self) -> Vec<&str> {
+        let mut names: Vec<&str> = self.by_archetype.keys().map(|k| k.as_ref()).collect();
+        names.sort();
+        names
+    }
 }
