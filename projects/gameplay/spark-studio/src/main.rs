@@ -1,6 +1,6 @@
 //! Spark Studio 入口：打开当前 npm 游戏项目的 Unity-like 编辑器。
 
-use spark_engine::run_game;
+use spark_engine::run_window_2d;
 use spark_renderer::WindowConfig;
 
 use spark_studio::{
@@ -47,7 +47,7 @@ fn main() {
     if play_only {
         host = host.with_immediate_play();
     }
-    if let Err(err) = run_game(
+    if let Err(err) = run_window_2d(
         WindowConfig {
             title,
             width: if play_only { 960 } else { 1440 },

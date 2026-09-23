@@ -7,7 +7,7 @@ use crate::project::ProjectKind;
 pub enum PlayMode {
     /// 编辑：不跑游戏主循环。
     Edit,
-    /// 播放：进程内嵌入示例 `GameHost`。
+    /// 播放：进程内嵌入示例 `SparkRuntime`（`RuntimeHost2d`）。
     Play,
     /// 暂停：保留会话，不再 `update`。
     Paused,

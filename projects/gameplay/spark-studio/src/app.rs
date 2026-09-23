@@ -1,10 +1,10 @@
-//! Studio 宿主：`GameHost` + `UiRuntime`；Play 时保留编辑器壳，Game 页签显示对局。
+//! Studio 窗口泵：`WindowPump2d` + `UiRuntime`；Play 时保留编辑器壳，Game 页签显示对局。
 //!
 //! 不变式：编辑器壳与对局会话可并存；仅在 `--play` 浸入模式下从不挂载壳，
 //! Esc / Stop 才回到 Edit（浸入模式则退出进程级 Play）。
 
 use spark_input::Key;
-use spark_renderer::{DrawList, FrameCtx, GameHost};
+use spark_renderer::{DrawList, FrameCtx, WindowPump2d};
 use spark_types::Vec2;
 use spark_widget::{Insets, UiCommand, UiFrame, UiRuntime};
 
@@ -21,7 +21,7 @@ use crate::{
 
 /// Studio 应用宿主：持有 Widget 运行时、项目元数据与可选 Play 会话。
 ///
-/// 实现 [`GameHost`]：每帧先处理 UI 命令，再按 `PlayMode` 推进对局。
+/// 实现 [`WindowPump2d`]：每帧先处理 UI 命令，再按 `PlayMode` 推进对局。
 pub struct StudioApp {
     ui: UiRuntime,
     project: ProjectInfo,
@@ -224,8 +224,8 @@ impl StudioApp {
     }
 }
 
-impl GameHost for StudioApp {
-    fn update(&mut self, frame: &FrameCtx<'_>) {
+impl WindowPump2d for StudioApp {
+    fn simulate(&mut self, frame: &FrameCtx<'_>) {
         // `--play`：从未挂载编辑器壳 → 全屏对局。
         let immersive = self.play.is_some() && !self.mounted;
 
@@ -233,7 +233,10 @@ impl GameHost for StudioApp {
             if self.state.play == PlayMode::Paused {
                 return;
             }
-            let stop = self.play.as_mut().map(|p| p.update(frame)).unwrap_or(false);
+            if let Some(play) = self.play.as_mut() {
+                play.simulate(frame);
+            }
+            let stop = self.play.as_ref().map(|p| p.should_exit()).unwrap_or(false);
             if stop || frame.input.key_pressed(Key::Escape) {
                 self.exit = true;
             }
@@ -257,18 +260,18 @@ impl GameHost for StudioApp {
             return;
         }
         if let Some(play) = self.play.as_mut() {
-            let stop = play.update(frame);
-            if stop {
+            play.simulate(frame);
+            if play.should_exit() {
                 self.stop_play();
             }
         }
     }
 
-    fn draw(&mut self, draw: &mut DrawList) {
+    fn present_world(&mut self, draw: &mut DrawList) {
         let immersive = self.play.is_some() && !self.mounted;
         if immersive || self.show_game_view() {
             if let Some(play) = self.play.as_mut() {
-                play.draw(draw);
+                play.present_world(draw);
                 return;
             }
         }

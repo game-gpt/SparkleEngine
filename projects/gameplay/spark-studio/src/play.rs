@@ -1,65 +1,63 @@
-//! Studio Play：进程内嵌入示例 `GameHost`（Esc / Stop 回编辑器）。
+//! Studio Play：进程内嵌入示例 [`SparkRuntime`]（Esc / Stop 回编辑器）。
 
-use ping_pong::PingPongGame;
-use snake::SnakeApp;
-use spark_renderer::{DrawList, FrameCtx, GameHost};
-use tetris::TetrisApp;
+use ping_pong::build_runtime as ping_pong_runtime;
+use snake::build_runtime as snake_runtime;
+use spark_engine::RuntimeHost2d;
+use spark_renderer::{DrawList, FrameCtx, WindowPump2d};
+use tetris::build_runtime as tetris_runtime;
 
 use crate::project::{ProjectInfo, ProjectKind};
 
-/// 进程内 Play 会话：持有某一个示例宿主。
+/// 进程内 Play 会话：持有示例运行时的窗口泵适配器。
 pub enum PlaySession {
     /// 乒乓示例。
-    PingPong(PingPongGame),
+    PingPong(RuntimeHost2d),
     /// 俄罗斯方块示例。
-    Tetris(TetrisApp),
+    Tetris(RuntimeHost2d),
     /// 贪吃蛇示例。
-    Snake(SnakeApp),
+    Snake(RuntimeHost2d),
 }
 
 impl PlaySession {
     /// 按项目 `runTarget` / 名称 / kind 解析并启动会话。
-    ///
-    /// 解析失败时仍按 `ProjectKind` 兜底，避免 Play 按钮无响应；仅当构造失败才返回 `Err`。
     pub fn start(project: &ProjectInfo) -> Result<Self, String> {
         if let Some(session) = resolve_by_target(project) {
             return Ok(session);
         }
-        // 未声明 runTarget 时按项目名 / kind 兜底，避免 Play 按钮「点了没反应」。
         if let Some(session) = resolve_by_name(&project.name) {
             return Ok(session);
         }
         match project.kind {
-            ProjectKind::Valkyrie => Ok(Self::Snake(SnakeApp::new())),
-            ProjectKind::Hybrid => Ok(Self::Tetris(TetrisApp::new())),
-            ProjectKind::Rust => Ok(Self::PingPong(PingPongGame::new())),
+            ProjectKind::Valkyrie => Ok(Self::Snake(snake_runtime().into_host())),
+            ProjectKind::Hybrid => Ok(Self::Tetris(tetris_runtime().into_host())),
+            ProjectKind::Rust => Ok(Self::PingPong(ping_pong_runtime().into_host())),
         }
     }
 
-    /// 推进一帧。返回 `true` 表示会话应结束（回编辑器）。
-    pub fn update(&mut self, frame: &FrameCtx<'_>) -> bool {
+    /// 推进仿真相位。
+    pub fn simulate(&mut self, frame: &FrameCtx<'_>) {
         match self {
-            Self::PingPong(g) => {
-                g.update(frame);
-                g.should_exit()
-            }
-            Self::Tetris(g) => {
-                g.update(frame);
-                g.should_exit()
-            }
-            Self::Snake(g) => {
-                g.update(frame);
-                g.should_exit()
-            }
+            Self::PingPong(h) => h.simulate(frame),
+            Self::Tetris(h) => h.simulate(frame),
+            Self::Snake(h) => h.simulate(frame),
         }
     }
 
-    /// 绘制当前示例到 `DrawList`。
-    pub fn draw(&mut self, draw: &mut DrawList) {
+    /// 绘制对局世界层。
+    pub fn present_world(&mut self, draw: &mut DrawList) {
         match self {
-            Self::PingPong(g) => g.draw(draw),
-            Self::Tetris(g) => g.draw(draw),
-            Self::Snake(g) => g.draw(draw),
+            Self::PingPong(h) => h.present_world(draw),
+            Self::Tetris(h) => h.present_world(draw),
+            Self::Snake(h) => h.present_world(draw),
+        }
+    }
+
+    /// 会话是否请求结束（回编辑器或退出浸入模式）。
+    pub fn should_exit(&self) -> bool {
+        match self {
+            Self::PingPong(h) => h.should_exit(),
+            Self::Tetris(h) => h.should_exit(),
+            Self::Snake(h) => h.should_exit(),
         }
     }
 
@@ -85,13 +83,13 @@ fn resolve_by_name(name: &str) -> Option<PlaySession> {
 fn resolve_token(raw: &str) -> Option<PlaySession> {
     let key = raw.trim().to_ascii_lowercase().replace('_', "-");
     if key.contains("ping") || key == "ping-pong" || key == "pingpong" {
-        return Some(PlaySession::PingPong(PingPongGame::new()));
+        return Some(PlaySession::PingPong(ping_pong_runtime().into_host()));
     }
     if key.contains("tetris") {
-        return Some(PlaySession::Tetris(TetrisApp::new()));
+        return Some(PlaySession::Tetris(tetris_runtime().into_host()));
     }
     if key.contains("snake") {
-        return Some(PlaySession::Snake(SnakeApp::new()));
+        return Some(PlaySession::Snake(snake_runtime().into_host()));
     }
     None
 }
