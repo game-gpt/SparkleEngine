@@ -166,6 +166,16 @@ impl SparkRuntime {
         self
     }
 
+    /// 登记脚本可见组件名与列布局。
+    pub fn register_script_component_layout(
+        &mut self,
+        name: impl Into<std::sync::Arc<str>>,
+        layout: crate::ScriptComponentLayout,
+    ) -> &mut Self {
+        self.script.ensure_engine().register_script_component_layout(name, layout);
+        self
+    }
+
     /// 请求加载并切换到场景（等价于写入 [`SceneCommand::Transition`]）。
     pub fn load_scene(&mut self, id: impl Into<String>) -> &mut Self {
         self.enqueue_scene_command(SceneCommand::Transition { to: id.into() });

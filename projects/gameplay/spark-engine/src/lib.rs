@@ -31,6 +31,7 @@ pub mod registry;
 pub mod render2d;
 pub mod render3d;
 pub mod run;
+pub mod script_component_schema;
 pub mod script_system;
 pub mod vfs;
 
@@ -60,6 +61,9 @@ pub use runtime::{
     SparkScriptDomain, SystemContext, SystemOrder,
 };
 pub use run::{run_runtime, run_runtime_3d, run_runtime_3d_with, run_runtime_with, run_window_2d, run_window_3d};
+pub use script_component_schema::{
+    ScriptComponentLayout, ScriptComponentLayoutBuilder, ScriptComponentLayoutError, ScriptFieldKind, ScriptFieldLayout,
+};
 pub use script_system::{ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError, ScriptSystemRegistry};
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
 pub use vfs::ModVfs;
@@ -485,6 +489,15 @@ impl SparkEngine {
     /// 只读访问脚本组件目录。
     pub fn component_catalog(&self) -> &ScriptComponentCatalog {
         &self.component_catalog
+    }
+
+    /// 登记脚本可见组件名与列布局（绑定期 [`QueryPlan`] / 列直写解析用）。
+    pub fn register_script_component_layout(
+        &mut self,
+        name: impl Into<std::sync::Arc<str>>,
+        layout: ScriptComponentLayout,
+    ) -> ComponentDescriptorId {
+        self.component_catalog.register_with_layout(name, layout)
     }
 
     /// 已绑定的查询计划（登记后可用）。

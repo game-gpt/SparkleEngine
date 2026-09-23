@@ -9,6 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 use spark_ecs::{Entity, World};
 
 use crate::command_buffer::ScriptCommand;
+use crate::script_component_schema::ScriptComponentLayout;
 
 /// 脚本侧组件描述符槽位（与宿主登记表顺序一致）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,6 +37,7 @@ pub const SCRIPT_MARKER_NAME: &str = "ScriptMarker";
 pub struct ScriptComponentCatalog {
     by_name: HashMap<Arc<str>, ComponentDescriptorId>,
     names: Vec<Arc<str>>,
+    layouts: Vec<Option<ScriptComponentLayout>>,
 }
 
 impl ScriptComponentCatalog {
@@ -60,6 +62,20 @@ impl ScriptComponentCatalog {
         let id = ComponentDescriptorId(self.names.len() as u32);
         self.by_name.insert(Arc::clone(&name), id);
         self.names.push(name);
+        self.layouts.push(None);
+        id
+    }
+
+    /// 登记组件名并附带列布局（已存在则仅更新布局）。
+    pub fn register_with_layout(
+        &mut self,
+        name: impl Into<Arc<str>>,
+        layout: ScriptComponentLayout,
+    ) -> ComponentDescriptorId {
+        let id = self.register(name);
+        if let Some(slot) = self.layouts.get_mut(id.0 as usize) {
+            *slot = Some(layout);
+        }
         id
     }
 
@@ -71,6 +87,16 @@ impl ScriptComponentCatalog {
     /// 按槽位反查逻辑名。
     pub fn name_of(&self, id: ComponentDescriptorId) -> Option<&str> {
         self.names.get(id.0 as usize).map(|s| s.as_ref())
+    }
+
+    /// 按槽位取列布局（未登记布局则 `None`）。
+    pub fn layout_of(&self, id: ComponentDescriptorId) -> Option<&ScriptComponentLayout> {
+        self.layouts.get(id.0 as usize).and_then(|l| l.as_ref())
+    }
+
+    /// 按组件名取列布局。
+    pub fn layout_of_name(&self, name: &str) -> Option<&ScriptComponentLayout> {
+        self.id_of(name).and_then(|id| self.layout_of(id))
     }
 
     /// 已登记组件数。
