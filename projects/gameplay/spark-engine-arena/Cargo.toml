@@ -1,0 +1,17 @@
+[package]
+name = "spark-engine-arena"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme = "readme.md"
+description = "Spark 竞技场特异化引擎：动能体对象池、波次时间轴与圆空间查询（无具体敌种表）"
+keywords = ["spark", "engine", "arena", "twin-stick"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+spark-types = { workspace = true }
+spark-geometry = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

@@ -71,6 +71,7 @@ spark-engine-rts = { path = "projects/gameplay/spark-engine-rts" }
 spark-engine-stg = { path = "projects/gameplay/spark-engine-stg" }
 spark-engine-rpg = { path = "projects/gameplay/spark-engine-rpg" }
 spark-engine-platformer = { path = "projects/gameplay/spark-engine-platformer" }
+spark-engine-arena = { path = "projects/gameplay/spark-engine-arena" }
 spark-engine-galgame = { path = "projects/gameplay/spark-engine-galgame" }
 spark-napi = { path = "projects/bindings/spark-napi" }
 spark-wasm = { path = "projects/bindings/spark-wasm" }

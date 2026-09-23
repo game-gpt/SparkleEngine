@@ -2710,6 +2710,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "spark-engine-arena"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "spark-geometry",
+ "spark-types",
+]
+
+[[package]]
 name = "spark-engine-galgame"
 version = "0.0.0"
 dependencies = [
