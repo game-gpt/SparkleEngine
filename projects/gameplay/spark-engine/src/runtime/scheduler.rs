@@ -2,17 +2,62 @@
 
 use std::collections::HashMap;
 
-use spark_ecs::{Schedule, World};
+use spark_ecs::World;
 use spark_script::HostPhase;
 use spark_vm::HostHooks;
 
+use super::commands::RustCommands;
 use super::phase::RustPhase;
 use super::script_domain::SparkScriptDomain;
+use super::system_ctx::SystemContext;
+use crate::frame_state::FrameSnapshot;
 use crate::EngineError;
+
+trait RustRunner: Send {
+    fn run(&mut self, world: &mut World, commands: &mut RustCommands);
+}
+
+struct WorldFnRunner<F> {
+    f: F,
+}
+
+impl<F> RustRunner for WorldFnRunner<F>
+where
+    F: FnMut(&mut World) + Send,
+{
+    fn run(&mut self, world: &mut World, _commands: &mut RustCommands) {
+        (self.f)(world);
+    }
+}
+
+struct CtxFnRunner<F> {
+    f: F,
+}
+
+impl<F> RustRunner for CtxFnRunner<F>
+where
+    F: FnMut(&mut SystemContext<'_>) + Send,
+{
+    fn run(&mut self, world: &mut World, commands: &mut RustCommands) {
+        let Some(snap) = world.resources.get::<FrameSnapshot>().cloned() else {
+            return;
+        };
+        let mut ctx = SystemContext {
+            dt: snap.dt,
+            input: snap.input,
+            screen_w: snap.screen_w,
+            screen_h: snap.screen_h,
+            dpi_scale: snap.dpi_scale,
+            world,
+            commands,
+        };
+        (self.f)(&mut ctx);
+    }
+}
 
 /// 按相位分桶的 Rust 系统表与 Spark Script 桥。
 pub struct RuntimeScheduler {
-    rust: HashMap<RustPhase, Schedule>,
+    rust: HashMap<RustPhase, Vec<Box<dyn RustRunner>>>,
 }
 
 impl Default for RuntimeScheduler {
@@ -28,15 +73,24 @@ impl RuntimeScheduler {
     }
 
     /// 向指定 Rust 相位追加闭包系统（早期 API：`&mut World`）。
-    pub fn add_rust_fn(&mut self, phase: RustPhase, name: &'static str, f: impl FnMut(&mut World) + Send + 'static) {
-        self.rust.entry(phase).or_insert_with(Schedule::new).add_fn(name, f);
+    pub fn add_rust_fn(&mut self, phase: RustPhase, _name: &'static str, f: impl FnMut(&mut World) + Send + 'static) {
+        self.rust.entry(phase).or_default().push(Box::new(WorldFnRunner { f }));
     }
 
-    /// 运行单个 Rust 相位。
+    /// 向指定 Rust 相位追加 [`SystemContext`] 系统。
+    pub fn add_rust_ctx_fn(&mut self, phase: RustPhase, _name: &'static str, f: impl FnMut(&mut SystemContext<'_>) + Send + 'static) {
+        self.rust.entry(phase).or_default().push(Box::new(CtxFnRunner { f }));
+    }
+
+    /// 运行单个 Rust 相位（相位末提交 [`RustCommands`]）。
     pub fn run_rust(&mut self, phase: RustPhase, world: &mut World) {
-        if let Some(schedule) = self.rust.get_mut(&phase) {
-            schedule.run(world);
+        let mut commands = RustCommands::new();
+        if let Some(runners) = self.rust.get_mut(&phase) {
+            for runner in runners.iter_mut() {
+                runner.run(world, &mut commands);
+            }
         }
+        commands.apply(world);
     }
 
     /// 仿真步内按契约顺序驱动 Rust 域与 Spark Script 域。
@@ -77,16 +131,5 @@ impl RuntimeScheduler {
 
         self.run_rust(RustPhase::UiPrepare, world);
         Ok(())
-    }
-
-    /// 按 [`RustPhase::SIM_ORDER`] 合并各相位调度表。
-    pub fn into_flat_sim(mut self) -> Schedule {
-        let mut flat = Schedule::new();
-        for phase in RustPhase::SIM_ORDER {
-            if let Some(sched) = self.rust.remove(&phase) {
-                flat.merge(sched);
-            }
-        }
-        flat
     }
 }

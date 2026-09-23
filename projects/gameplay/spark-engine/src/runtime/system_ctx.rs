@@ -5,6 +5,8 @@ use spark_input::Input;
 
 use crate::frame_state::FrameSnapshot;
 
+use super::commands::RustCommands;
+
 /// Rust 原生系统的单步执行上下文。
 ///
 /// 游戏逻辑应优先通过本类型访问世界，而不是普遍持有 `&mut World`。
@@ -22,11 +24,13 @@ pub struct SystemContext<'a> {
     pub dpi_scale: f32,
     /// 权威 ECS 世界（内核拥有；系统按调度相位写入）。
     pub world: &'a mut World,
+    /// 本相位共享的结构变更队列（相位末由调度器 [`RustCommands::apply`]）。
+    pub commands: &'a mut RustCommands,
 }
 
 impl<'a> SystemContext<'a> {
-    /// 从已写入世界的 [`FrameSnapshot`] 构造上下文。
-    pub fn from_snapshot(world: &'a mut World) -> Option<Self> {
+    /// 从已写入世界的 [`FrameSnapshot`] 与外部命令队列构造上下文。
+    pub fn from_snapshot(world: &'a mut World, commands: &'a mut RustCommands) -> Option<Self> {
         let snap = world.resources.get::<FrameSnapshot>()?.clone();
         Some(Self {
             dt: snap.dt,
@@ -35,6 +39,7 @@ impl<'a> SystemContext<'a> {
             screen_h: snap.screen_h,
             dpi_scale: snap.dpi_scale,
             world,
+            commands,
         })
     }
 }

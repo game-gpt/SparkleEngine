@@ -14,6 +14,9 @@ mod scene;
 mod scheduler;
 mod script_domain;
 mod system_ctx;
+mod commands;
+mod loop_system;
+mod query;
 
 pub use host::RuntimeHost2d;
 pub use host3d::RuntimeHost3d;
@@ -23,6 +26,8 @@ pub use scene::{SceneCommand, SceneManager, SceneRequests};
 pub use scheduler::RuntimeScheduler;
 pub use script_domain::SparkScriptDomain;
 pub use system_ctx::SystemContext;
+pub use commands::RustCommands;
+pub use loop_system::{LoopSystem, LoopSystemFn};
 
 use spark_ecs::World;
 use spark_renderer::{Camera2d, DrawList, DrawList3d, FrameCtx, UiRenderBatch};
@@ -164,13 +169,27 @@ impl SparkRuntime {
         &mut self,
         phase: RustPhase,
         name: &'static str,
-        mut f: impl FnMut(&mut SystemContext<'_>) + Send + 'static,
+        f: impl FnMut(&mut SystemContext<'_>) + Send + 'static,
     ) -> &mut Self {
-        self.scheduler.add_rust_fn(phase, name, move |world| {
-            if let Some(mut ctx) = SystemContext::from_snapshot(world) {
-                f(&mut ctx);
-            }
-        });
+        self.scheduler.add_rust_ctx_fn(phase, name, f);
+        self
+    }
+
+    /// 向 Rust 相位追加 [`LoopSystem`]（语义别名，推荐新代码使用）。
+    pub fn add_loop_system<S: LoopSystem + 'static>(&mut self, phase: RustPhase, mut system: S) -> &mut Self {
+        let name = system.name();
+        self.add_rust_system_ctx(phase, name, move |ctx| system.run(ctx));
+        self
+    }
+
+    /// 以闭包形式追加 [`LoopSystem`]。
+    pub fn add_loop_system_fn(
+        &mut self,
+        phase: RustPhase,
+        name: &'static str,
+        f: impl FnMut(&mut SystemContext<'_>) + Send + 'static,
+    ) -> &mut Self {
+        self.add_loop_system(phase, LoopSystemFn::new(name, f));
         self
     }
 
