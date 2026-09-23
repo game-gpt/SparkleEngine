@@ -1,0 +1,90 @@
+//! Spark Script 执行域：热更 Mod、内容与受控世界访问。
+
+use std::path::{Path, PathBuf};
+
+use spark_ecs::World;
+use spark_script::HostPhase;
+use spark_vm::{HostHooks, StdHost};
+
+use crate::{CommandApplyReport, EngineError, SparkEngine};
+
+/// Spark Script 包（Mod / 热更脚本）的运行时域。
+///
+/// 与 Rust 域共享同一个 [`World`]，但只能通过引擎提供的命令缓冲与查询视图写入。
+pub struct SparkScriptDomain {
+    engine: Option<SparkEngine>,
+    mods_root: Option<PathBuf>,
+}
+
+impl Default for SparkScriptDomain {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SparkScriptDomain {
+    /// 空域（无已装载脚本包）。
+    pub fn new() -> Self {
+        Self { engine: None, mods_root: None }
+    }
+
+    /// 是否已装载至少一个脚本包根。
+    pub fn is_loaded(&self) -> bool {
+        self.engine.is_some()
+    }
+
+    /// 只读访问底层引擎壳（模组、钩子、脚本 System 表）。
+    pub fn engine(&self) -> Option<&SparkEngine> {
+        self.engine.as_ref()
+    }
+
+    /// 可变访问底层引擎壳。
+    pub fn engine_mut(&mut self) -> Option<&mut SparkEngine> {
+        self.engine.as_mut()
+    }
+
+    /// 装载脚本包根目录并扫描全部 `mod.von`。
+    pub fn load_package_root(&mut self, mods_root: impl AsRef<Path>) -> Result<(), EngineError> {
+        let root = mods_root.as_ref().to_path_buf();
+        let mut engine = SparkEngine::new(&root);
+        engine.load_all()?;
+        self.engine = Some(engine);
+        self.mods_root = Some(root);
+        Ok(())
+    }
+
+    /// 运行某一 Spark Script 相位并把命令提交到共享世界。
+    pub fn run_phase(&mut self, phase: HostPhase, world: &mut World, host: &mut dyn HostHooks) -> Result<(), EngineError> {
+        if let Some(engine) = &mut self.engine {
+            engine.run_script_systems(phase, world, host)?;
+        }
+        Ok(())
+    }
+
+    /// 派发各模组事件 inbox（在 LateUpdate 之后由调度器调用）。
+    pub fn dispatch_events(&mut self, host: &mut dyn HostHooks) -> Result<(), EngineError> {
+        if let Some(engine) = &mut self.engine {
+            engine.dispatch_script_events(host)?;
+        }
+        Ok(())
+    }
+
+    /// 帧同步点：取出并应用脚本命令缓冲。
+    pub fn apply_commands(&mut self, world: &mut World) -> Result<CommandApplyReport, EngineError> {
+        if let Some(engine) = &mut self.engine {
+            return engine.apply_script_commands_to_world(world);
+        }
+        Ok(CommandApplyReport::default())
+    }
+
+    /// 帧边界：本地化提交与事件双缓冲（无脚本包时为空操作）。
+    pub fn begin_frame(&mut self) -> Option<spark_localization::LocaleChanged> {
+        self.engine.as_mut().and_then(|e| e.begin_frame())
+    }
+
+    /// 使用默认 [`StdHost`] 运行相位（测试 / 无自定义宿主钩子）。
+    pub fn run_phase_std(&mut self, phase: HostPhase, world: &mut World) -> Result<(), EngineError> {
+        let mut host = StdHost;
+        self.run_phase(phase, world, &mut host)
+    }
+}

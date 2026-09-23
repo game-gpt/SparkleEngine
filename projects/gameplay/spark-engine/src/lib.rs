@@ -1,5 +1,6 @@
-//! Spark 引擎壳：帧主循环编排 + ECS 宿主桥 + 在 `spark-vm` / `spark-script` 之上的 **modder** 能力。
+//! Spark 引擎壳：帧主循环编排 + [`SparkRuntime`] 双域运行时 + 在 `spark-vm` / `spark-script` 之上的 **modder** 能力。
 //!
+//! 推荐游戏入口：[`SparkRuntime`] + [`run_runtime`]；[`EcsHost2d`] / [`GameHost`] 仅作兼容桥。
 //! 提供：固定步 / update·draw 相位编排、[`EcsHost2d`] / [`EcsHost3d`]（`Schedule` ↔ `GameHost`）、
 //! 模组清单与发现、依赖排序加载、脚本入口、命名钩子、
 //! 通用数据表、模组资源路径、脚本插件挂载（[`PluginRegistry`]）。模组逻辑一律跑在
@@ -13,6 +14,7 @@
 pub mod access_policy;
 pub mod api;
 pub mod app;
+pub mod runtime;
 pub mod app3d;
 pub mod command_apply;
 pub mod command_buffer;
@@ -55,7 +57,12 @@ pub use query_view::{ScriptQuerySnapshot, ScriptQueryView};
 pub use registry::{DataRegistry, RegValue};
 pub use render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d};
 pub use render3d::{RenderFrame3d, RenderSchedule3d, RenderSystem3d};
-pub use run::{run_app_2d, run_app_3d, run_ecs_game, run_ecs_game_2d, run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with};
+pub use runtime::{
+    NativeGamePlugin, RustPhase, RuntimeHost2d, SceneCommand, SceneManager, SceneRequests, SparkRuntime, SparkScriptDomain, SystemContext,
+};
+pub use run::{
+    run_app_2d, run_app_3d, run_ecs_game, run_ecs_game_2d, run_ecs_game_3d, run_game, run_game_3d, run_game_3d_with, run_game_with, run_runtime,
+};
 pub use script_system::{ComponentAccess, ScriptParallelism, ScriptSystemDescriptor, ScriptSystemError, ScriptSystemRegistry};
 pub use spark_plugin::{Plugin, PluginError, PluginInfo, PluginRegistry};
 pub use vfs::ModVfs;

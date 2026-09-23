@@ -27,9 +27,9 @@ pub fn run_game_3d_with<H: GameHost3d + 'static>(config: WindowConfig, host: H, 
     spark_renderer_wgpu::run_window_3d(config, wrapped)
 }
 
-/// 以 [`crate::SparkApp`] 运行 2D 游戏。
+/// 以 [`crate::SparkApp`] 运行 2D 游戏（内部委托 [`run_runtime`]）。
 pub fn run_app_2d(config: WindowConfig, app: crate::SparkApp) -> Result<(), SparkError> {
-    run_ecs_game(config, app.into_host())
+    run_runtime(config, app.into_runtime())
 }
 
 /// 以 [`crate::SparkApp3d`] 运行 3D 游戏。
@@ -45,6 +45,22 @@ pub fn run_ecs_game_2d(config: WindowConfig, host: crate::EcsHost2d, loop_config
 /// 以默认帧循环配置运行 [`crate::EcsHost2d`]。
 pub fn run_ecs_game(config: WindowConfig, host: crate::EcsHost2d) -> Result<(), SparkError> {
     run_ecs_game_2d(config, host, FrameLoopConfig::default())
+}
+
+/// 以 [`crate::SparkRuntime`] 运行 2D 游戏（推荐入口；[`GameHost`] 仅作窗口泵适配）。
+pub fn run_runtime(config: WindowConfig, runtime: crate::SparkRuntime) -> Result<(), SparkError> {
+    run_runtime_with(config, runtime, FrameLoopConfig::default())
+}
+
+/// 带帧循环配置的 [`crate::SparkRuntime`] 入口。
+pub fn run_runtime_with(
+    config: WindowConfig,
+    runtime: crate::SparkRuntime,
+    loop_config: FrameLoopConfig,
+) -> Result<(), SparkError> {
+    let loop_cfg = loop_config.clone();
+    let host = crate::RuntimeHost2d::new(runtime.with_loop_config(loop_cfg.clone()), loop_cfg);
+    run_game_with(config, host, loop_config)
 }
 
 /// 以 [`crate::EcsHost3d`] 运行 3D 游戏（固定/可变帧循环可配）。

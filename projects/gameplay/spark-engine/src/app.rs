@@ -1,20 +1,20 @@
 //! 游戏装配：资源、仿真系统、2D 绘制系统。
 //!
 //! 与 `spark-plugin` 的脚本插件不是同一件事。这里的 [`SparkPlugin`] 只向 [`SparkApp`] 登记 Rust 系统。
+//! 内部委托 [`SparkRuntime`]；新游戏优先 [`NativeGamePlugin`] + [`run_runtime`]。
 
-use spark_ecs::{Schedule, World};
-
-use crate::{
-    ecs_host::{AppExit, EcsHost2d},
-    render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d},
-};
+use spark_ecs::World;
 use spark_renderer::DrawList;
 
-/// 2D 游戏装配根。建成后交给 [`EcsHost2d`]，不再由游戏持有主循环。
+use crate::{
+    ecs_host::EcsHost2d,
+    render2d::{RenderFrame2d, RenderSystem2d},
+    runtime::{RustPhase, SparkRuntime},
+};
+
+/// 2D 游戏装配根（[`SparkRuntime`] 的兼容薄封装）。
 pub struct SparkApp {
-    world: World,
-    sim: Schedule,
-    render: RenderSchedule2d,
+    runtime: SparkRuntime,
 }
 
 impl Default for SparkApp {
@@ -24,33 +24,31 @@ impl Default for SparkApp {
 }
 
 impl SparkApp {
-    /// 空世界 + 空仿真/绘制调度；预插入 [`AppExit`] 资源。
+    /// 空世界 + 空仿真/绘制调度；预插入 [`AppExit`] 等资源。
     pub fn new() -> Self {
-        let mut world = World::new();
-        world.resources.insert(AppExit::default());
-        Self { world, sim: Schedule::new(), render: RenderSchedule2d::new() }
+        Self { runtime: SparkRuntime::new() }
     }
 
     /// 可变访问 ECS 世界（装配期插入资源 / 实体）。
     pub fn world_mut(&mut self) -> &mut World {
-        &mut self.world
+        self.runtime.world_mut()
     }
 
     /// 插入资源并返回 `self`，便于链式装配。
     pub fn insert_resource<T: Send + Sync + 'static>(&mut self, value: T) -> &mut Self {
-        self.world.resources.insert(value);
+        self.runtime.insert_resource(value);
         self
     }
 
-    /// 向仿真 [`Schedule`] 追加命名闭包系统。
+    /// 向仿真 [`Schedule`] 追加命名闭包系统（映射到 [`RustPhase::Update`]）。
     pub fn add_system(&mut self, name: &'static str, f: impl FnMut(&mut World) + Send + 'static) -> &mut Self {
-        self.sim.add_fn(name, f);
+        self.runtime.add_rust_system(RustPhase::Update, name, f);
         self
     }
 
     /// 向 2D 绘制调度追加实现 [`RenderSystem2d`] 的系统。
     pub fn add_render_system(&mut self, system: impl RenderSystem2d + 'static) -> &mut Self {
-        self.render.add_system(system);
+        self.runtime.renderer_mut().add_system(system);
         self
     }
 
@@ -60,7 +58,7 @@ impl SparkApp {
         name: &'static str,
         f: impl FnMut(&mut World, &RenderFrame2d, &mut DrawList) + Send + 'static,
     ) -> &mut Self {
-        self.render.add_fn(name, f);
+        self.runtime.add_render_fn(name, f);
         self
     }
 
@@ -70,9 +68,14 @@ impl SparkApp {
         self
     }
 
-    /// 收成 2D ECS 宿主。固定步长仍由 `run_app_2d` / `LoopedHost2d` 包在外面。
+    /// 收成 [`SparkRuntime`]（推荐：`run_runtime`）。
+    pub fn into_runtime(self) -> SparkRuntime {
+        self.runtime
+    }
+
+    /// 收成 2D ECS 宿主（兼容：`run_app_2d` 旧路径）。
     pub fn into_host(self) -> EcsHost2d {
-        EcsHost2d::new(self.world, self.sim).with_renderer(self.render)
+        self.runtime.into_ecs_host()
     }
 }
 

@@ -587,4 +587,9 @@ impl Schedule {
     pub fn is_empty(&self) -> bool {
         self.systems.is_empty()
     }
+
+    /// 将 `other` 中已注册系统按顺序追加到本表末尾（用于相位表压平）。
+    pub fn merge(&mut self, other: Schedule) {
+        self.systems.extend(other.systems);
+    }
 }
