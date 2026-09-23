@@ -6,7 +6,7 @@ use spark_types::{Color, Rect};
 use crate::state::{Tool, TransformState, ViewportState};
 
 use super::camera::{viewport_center, world_to_screen};
-use super::gizmo::paint_move_gizmo;
+use super::gizmo::{paint_move_gizmo, paint_rotate_gizmo, paint_scale_gizmo};
 
 /// 场景画布底色。
 const CANVAS: Color = Color::rgb(0.055, 0.060, 0.068);
@@ -86,6 +86,12 @@ pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, vp: &ViewportState,
         stroke_rect(draw, Rect::new(sx - w * 0.5, sy - h * 0.5, w, h), SELECTION);
         if tool == Tool::Move {
             paint_move_gizmo(draw, t.pos_x, t.pos_y, rect, vp);
+        }
+        else if tool == Tool::Rotate {
+            paint_rotate_gizmo(draw, t.pos_x, t.pos_y, rect, vp);
+        }
+        else if tool == Tool::Scale {
+            paint_scale_gizmo(draw, t.pos_x, t.pos_y, t.scale_x, t.scale_y, rect, vp);
         }
     }
 
