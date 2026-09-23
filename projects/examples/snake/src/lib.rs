@@ -1,6 +1,11 @@
 //! 贪吃蛇：Valkyrie 项目的 native 试玩宿主（脚本仍为 Inspector 元数据，VM Play 接通前由此运行）。
+//!
+//! 推荐入口：[`runtime::build_runtime`] + `spark_engine::run_runtime`。
+//! 旧 [`SnakeApp`]（[`GameHost`]）保留作兼容对照。
 
 #![forbid(missing_docs)]
+
+pub mod runtime;
 use spark_input::Key;
 use spark_renderer::{DrawList, FrameCtx, GameHost, UiRenderBatch};
 use spark_types::{Color, Rect};
