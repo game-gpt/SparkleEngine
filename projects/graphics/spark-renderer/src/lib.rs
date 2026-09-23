@@ -115,6 +115,10 @@ pub trait GameHost {
     fn cursor_visible(&self) -> bool {
         true
     }
+    /// 是否请求指针锁定（双摇杆鼠标瞄准）。默认不锁定。
+    fn cursor_grab(&self) -> bool {
+        false
+    }
 }
 
 /// 兼容桥：把 `ui` 刷入 `draw` 的 HUD 层。

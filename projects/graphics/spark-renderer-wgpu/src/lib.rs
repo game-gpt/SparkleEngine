@@ -9,6 +9,7 @@
 mod bloom;
 mod dyn_ubo;
 mod game3d;
+mod gamepad;
 mod mipmap;
 mod shadow;
 mod skinned_mesh;
@@ -43,7 +44,7 @@ use winit::{
     dpi::LogicalSize,
     event::{DeviceEvent, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    window::{Window, WindowAttributes, WindowId},
+    window::{CursorGrabMode, Window, WindowAttributes, WindowId},
 };
 
 #[repr(C)]
@@ -574,6 +575,9 @@ struct HostApp<H: GameHost> {
     last_metrics_log: Instant,
     /// 已应用到窗口的 OS 光标可见性。
     cursor_visible_applied: bool,
+    /// 已应用的指针锁定状态。
+    grab_applied: bool,
+    gamepads: gamepad::GamepadPump,
 }
 
 impl<H: GameHost> HostApp<H> {
@@ -702,6 +706,24 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
             return;
         }
 
+        let Some(gpu) = self.state.as_mut()
+        else {
+            return;
+        };
+
+        self.gamepads.poll(&mut self.input);
+
+        let want_grab = self.host.cursor_grab();
+        if want_grab != self.grab_applied {
+            if want_grab {
+                let _ = gpu.window.set_cursor_grab(CursorGrabMode::Locked).or_else(|_| gpu.window.set_cursor_grab(CursorGrabMode::Confined));
+            }
+            else {
+                let _ = gpu.window.set_cursor_grab(CursorGrabMode::None);
+            }
+            self.grab_applied = want_grab;
+        }
+
         let now = Instant::now();
         let dt = (now - self.last).as_secs_f32().clamp(1.0 / 240.0, 0.05);
         self.last = now;
@@ -716,8 +738,8 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         }
         self.input.begin_frame();
 
-        // 菜单自绘光标时隐藏 OS 指针；不 grab（标题菜单保持自由移动）。
-        let want_visible = self.host.cursor_visible();
+        // 菜单自绘光标时隐藏 OS 指针；grab 时由 cursor_grab 接管可见性。
+        let want_visible = if self.host.cursor_grab() { false } else { self.host.cursor_visible() };
         if want_visible != self.cursor_visible_applied {
             gpu.window.set_cursor_visible(want_visible);
             self.cursor_visible_applied = want_visible;
@@ -747,7 +769,11 @@ impl<H: GameHost> ApplicationHandler for HostApp<H> {
         gpu.window.request_redraw();
     }
 
-    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: winit::event::DeviceId, _event: DeviceEvent) {}
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: winit::event::DeviceId, event: DeviceEvent) {
+        if let DeviceEvent::MouseMotion { delta } = event {
+            self.input.on_mouse_delta(delta.0 as f32, delta.1 as f32);
+        }
+    }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(s) = self.state.as_ref() {
@@ -769,6 +795,8 @@ pub fn run_window_2d<H: GameHost + 'static>(config: WindowConfig, host: H) -> Re
         scale: 1.0,
         last_metrics_log: Instant::now(),
         cursor_visible_applied: true,
+        grab_applied: false,
+        gamepads: gamepad::GamepadPump::new(),
     };
     event_loop.run_app(&mut app).map_err(|e| SparkError::new(codes::gpu_event_loop()).caused_by(e))
 }

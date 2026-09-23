@@ -159,6 +159,10 @@ impl<H: GameHost> GameHost for LoopedHost2d<H> {
     fn cursor_visible(&self) -> bool {
         self.inner.cursor_visible()
     }
+
+    fn cursor_grab(&self) -> bool {
+        self.inner.cursor_grab()
+    }
 }
 
 /// 3D 宿主包装：窗口泵一次 `update`，内部按固定/可变步拆成多次。
