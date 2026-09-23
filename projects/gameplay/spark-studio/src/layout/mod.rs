@@ -3,7 +3,11 @@
 mod persistence;
 mod preset;
 mod splitter_interaction;
+mod storage;
+mod viewport_rect;
 
 pub use persistence::*;
 pub use preset::*;
 pub use splitter_interaction::*;
+pub use storage::*;
+pub use viewport_rect::*;

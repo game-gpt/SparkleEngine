@@ -1,7 +1,9 @@
-//! 停靠布局状态（后续按项目持久化）。
+//! 停靠布局状态（持久化至 `.spark/studio-layout.json`）。
+
+use serde::{Deserialize, Serialize};
 
 /// 可调整的停靠尺寸与折叠态。
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DockLayoutState {
     /// 层级面板宽度。
     pub hierarchy_width: f32,
