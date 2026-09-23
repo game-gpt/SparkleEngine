@@ -4,7 +4,7 @@
 //! Esc / Stop 才回到 Edit（浸入模式则退出进程级 Play）。
 
 use spark_input::{Input, Key, MouseBtn};
-use spark_renderer::{DrawList, FrameCtx, WindowPump2d};
+use spark_renderer::{DrawList, FrameCtx, UiRenderBatch, WindowPump2d};
 use spark_types::Vec2;
 use spark_widget::{Insets, Theme, UiCommand, UiFrame, UiRuntime};
 
@@ -23,7 +23,7 @@ use crate::{
         parse_select_cmd, pick_entity_at_world,
     },
     ui,
-    viewport::{paint_scene_viewport, screen_to_world},
+    viewport::{paint_scene_viewport, screen_to_world, world_to_screen},
 };
 
 /// Studio 应用宿主：持有 Widget 运行时、项目元数据与可选 Play 会话。
@@ -39,6 +39,8 @@ pub struct StudioApp {
     splitter_last_click: Option<(SplitterAxis, f64)>,
     viewport_pan: Option<(f32, f32)>,
     entity_drag: Option<(f32, f32)>,
+    rotate_drag: Option<f32>,
+    scale_drag: Option<(f32, f32, f32)>,
     last_focus_key: Option<String>,
     screen_w: f32,
     screen_h: f32,
@@ -57,7 +59,7 @@ impl StudioApp {
             state.dock = dock;
         }
         let inferred = if project.kind_inferred { "（推断）" } else { "" };
-        state.status = format!("已打开 {} · kind={}{}", project.name, project.kind.as_str(), inferred);
+        state.log(format!("已打开 {} · kind={}{}", project.name, project.kind.as_str(), inferred));
         let mut ui = UiRuntime::new();
         ui.theme = Theme::editor_dark();
         Self {
@@ -70,6 +72,8 @@ impl StudioApp {
             splitter_last_click: None,
             viewport_pan: None,
             entity_drag: None,
+            rotate_drag: None,
+            scale_drag: None,
             last_focus_key: None,
             screen_w: 1280.0,
             screen_h: 720.0,
@@ -87,10 +91,10 @@ impl StudioApp {
                 self.play = Some(session);
                 self.state.play = PlayMode::Play;
                 self.state.center = CenterTab::Game;
-                self.state.status = format!("运行中：{label}");
+                self.state.log(format!("运行中：{label}"));
             }
             Err(e) => {
-                self.state.status = format!("无法运行：{e}");
+                self.state.log(format!("无法运行：{e}"));
                 self.state.bottom = BottomTab::Console;
             }
         }
@@ -118,7 +122,7 @@ impl StudioApp {
     fn apply_layout_preset(&mut self, preset: LayoutPreset) {
         self.state.layout_preset = preset;
         self.state.dock = preset.apply_to(self.state.dock);
-        self.state.status = format!("已应用{}布局", preset.label());
+        self.state.log(format!("已应用{}布局", preset.label()));
         self.dirty_ui = true;
         self.persist_dock();
     }
@@ -130,11 +134,11 @@ impl StudioApp {
                 self.play = Some(session);
                 self.state.play = PlayMode::Play;
                 self.state.center = CenterTab::Game;
-                self.state.status = format!("运行中：{label}");
+                self.state.log(format!("运行中：{label}"));
                 self.dirty_ui = true;
             }
             Err(e) => {
-                self.state.status = format!("运行失败：{e}");
+                self.state.log(format!("运行失败：{e}"));
                 self.state.bottom = BottomTab::Console;
                 self.dirty_ui = true;
             }
@@ -145,7 +149,7 @@ impl StudioApp {
         self.play = None;
         self.state.play = PlayMode::Edit;
         self.state.center = CenterTab::Scene;
-        self.state.status = "已停止，返回编辑模式".into();
+        self.state.log("已停止，返回编辑模式");
         self.dirty_ui = true;
     }
 
@@ -158,7 +162,7 @@ impl StudioApp {
     fn sync_inspector_transform(&mut self) {
         if let Some(root) = self.ui.scene_root() {
             if TransformState::read_from_tree(&self.ui.tree, root, &mut self.state.transform) {
-                self.state.status = "已应用 Transform 修改".into();
+                self.state.log("已应用 Transform 修改");
             }
         }
     }
@@ -194,6 +198,8 @@ impl StudioApp {
         if mx < rect.x || my < rect.y || mx > rect.x + rect.w || my > rect.y + rect.h {
             self.viewport_pan = None;
             self.entity_drag = None;
+            self.rotate_drag = None;
+            self.scale_drag = None;
             return;
         }
 
@@ -214,12 +220,16 @@ impl StudioApp {
             }
             self.viewport_pan = Some((mx, my));
             self.entity_drag = None;
+            self.rotate_drag = None;
+            self.scale_drag = None;
         }
         else {
             self.viewport_pan = None;
         }
 
         let has_selection = entity_by_id(self.project.kind, self.state.selected).is_some();
+        let t = self.state.transform;
+
         let moving_entity = self.state.tool == Tool::Move && has_selection && input.mouse_down(MouseBtn::Left) && in_scene_body && !panning;
         if moving_entity {
             if let Some((last_mx, last_my)) = self.entity_drag {
@@ -230,15 +240,52 @@ impl StudioApp {
                 self.push_transform_to_inspector();
             }
             self.entity_drag = Some((mx, my));
+            self.rotate_drag = None;
+            self.scale_drag = None;
         }
         else if self.entity_drag.is_some() {
             self.entity_drag = None;
-            self.state.status =
-                format!("位置 ({:.1}, {:.1})", self.state.transform.pos_x, self.state.transform.pos_y);
+            self.state.log(format!("位置 ({:.1}, {:.1})", self.state.transform.pos_x, self.state.transform.pos_y));
+        }
+
+        let rotating = self.state.tool == Tool::Rotate && has_selection && input.mouse_down(MouseBtn::Left) && in_scene_body && !panning;
+        if rotating {
+            if let Some(last_mx) = self.rotate_drag {
+                self.state.transform.rot_z += (mx - last_mx) * 0.5;
+                self.push_transform_to_inspector();
+            }
+            self.rotate_drag = Some(mx);
+            self.entity_drag = None;
+            self.scale_drag = None;
+        }
+        else if self.rotate_drag.is_some() {
+            self.rotate_drag = None;
+            self.state.log(format!("旋转 Z = {:.1}°", self.state.transform.rot_z));
+        }
+
+        let scaling = self.state.tool == Tool::Scale && has_selection && input.mouse_down(MouseBtn::Left) && in_scene_body && !panning;
+        if scaling {
+            let (cx, cy) = world_to_screen(t.pos_x, t.pos_y, rect, &self.state.viewport);
+            let dist = ((mx - cx).powi(2) + (my - cy).powi(2)).sqrt().max(1.0);
+            if let Some((start_dist, sx, sy)) = self.scale_drag {
+                let factor = dist / start_dist;
+                self.state.transform.scale_x = (sx * factor).clamp(0.1, 8.0);
+                self.state.transform.scale_y = (sy * factor).clamp(0.1, 8.0);
+                self.push_transform_to_inspector();
+            }
+            else {
+                self.scale_drag = Some((dist, t.scale_x, t.scale_y));
+            }
+            self.entity_drag = None;
+            self.rotate_drag = None;
+        }
+        else if self.scale_drag.is_some() {
+            self.scale_drag = None;
+            self.state.log(format!("缩放 ({:.2}, {:.2})", self.state.transform.scale_x, self.state.transform.scale_y));
         }
 
         if input.mouse_pressed(MouseBtn::Left) && in_scene_body && !panning {
-            if self.state.tool == Tool::Hand || self.state.tool == Tool::Move {
+            if matches!(self.state.tool, Tool::Hand | Tool::Move | Tool::Rotate | Tool::Scale) {
                 let (wx, wy) = screen_to_world(mx, my, rect, &self.state.viewport);
                 let pick_radius = 48.0 / self.state.viewport.zoom;
                 if let Some(eid) = pick_entity_at_world(self.project.kind, wx, wy, pick_radius) {
@@ -256,14 +303,15 @@ impl StudioApp {
         let zoom = self.state.viewport.zoom;
         self.state.viewport.pan_x = -t.pos_x * zoom;
         self.state.viewport.pan_y = t.pos_y * zoom;
-        self.state.status = "已聚焦选中对象 (F)".into();
+        self.state.log("已聚焦选中对象 (F)");
     }
 
     fn handle_shortcuts(&mut self, input: &Input) {
         let ctrl = input.key_down(Key::LCtrl) || input.key_down(Key::RCtrl);
         if ctrl && input.key_pressed(Key::J) {
             self.state.dock.bottom_collapsed = !self.state.dock.bottom_collapsed;
-            self.state.status = if self.state.dock.bottom_collapsed { "底栏已隐藏 (Ctrl+J)".into() } else { "底栏已显示 (Ctrl+J)".into() };
+            let msg = if self.state.dock.bottom_collapsed { "底栏已隐藏 (Ctrl+J)" } else { "底栏已显示 (Ctrl+J)" };
+            self.state.log(msg);
             self.dirty_ui = true;
             self.persist_dock();
         }
@@ -411,7 +459,7 @@ impl StudioApp {
                     else if let Some(idx) = parse_asset_cmd(id) {
                         self.state.selected_asset = Some(idx as u32);
                         if let Some(line) = self.assets.get(idx as usize) {
-                            self.state.status = format!("已选资源：{line}");
+                            self.state.log(format!("已选资源：{line}"));
                         }
                         self.state.bottom = BottomTab::Project;
                         self.dirty_ui = true;
@@ -525,8 +573,13 @@ impl WindowPump2d for StudioApp {
             let selection = entity_by_id(self.project.kind, self.state.selected).map(|_| &self.state.transform);
             paint_scene_viewport(draw, rect, &self.state.viewport, self.state.tool, selection);
         }
+    }
 
-        self.ui.paint(draw);
+    fn present_ui(&mut self, ui: &mut UiRenderBatch) {
+        if (self.play.is_some() && !self.mounted) || !self.mounted {
+            return;
+        }
+        self.ui.paint_into(ui);
     }
 
     fn should_exit(&self) -> bool {
