@@ -115,6 +115,7 @@ pub fn ordered_mixed_phase(
     }
 
     check_native_access_conflicts(native_systems)?;
+    check_cross_domain_access_conflicts(native_systems, script_systems)?;
 
     let mut queue: VecDeque<usize> = indeg.iter().enumerate().filter_map(|(i, d)| (*d == 0).then_some(i)).collect();
     let mut ordered_indices = Vec::with_capacity(node_count);
@@ -213,9 +214,85 @@ fn check_native_access_conflicts(systems: &[SystemSchedule]) -> Result<(), Scrip
                     });
                 }
             }
+            for component in component_names_in_conflict(
+                &a.read_components,
+                &a.write_components,
+                &b.read_components,
+                &b.write_components,
+            ) {
+                return Err(ScriptSystemError::AccessConflict {
+                    detail: format!("{} vs {} on {}", a.graph_key(), b.graph_key(), component),
+                });
+            }
         }
     }
     Ok(())
+}
+
+fn check_cross_domain_access_conflicts(
+    native_systems: &[SystemSchedule],
+    script_systems: &[ScriptSystemDescriptor],
+) -> Result<(), ScriptSystemError> {
+    for native in native_systems {
+        for script in script_systems {
+            let (script_reads, script_writes) = script_component_access(script);
+            for component in component_names_in_conflict(
+                &native.read_components,
+                &native.write_components,
+                &script_reads,
+                &script_writes,
+            ) {
+                return Err(ScriptSystemError::AccessConflict {
+                    detail: format!("{} vs {} on {}", native.graph_key(), script.graph_key(), component),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn script_component_access(script: &ScriptSystemDescriptor) -> (Vec<&str>, Vec<&str>) {
+    let mut reads = Vec::new();
+    let mut writes = Vec::new();
+    for access in &script.access {
+        if access.write {
+            writes.push(access.component.as_ref());
+        }
+        else {
+            reads.push(access.component.as_ref());
+        }
+    }
+    (reads, writes)
+}
+
+/// 返回首个冲突组件名；无冲突则空 Vec。
+fn component_names_in_conflict(
+    a_reads: &[&str],
+    a_writes: &[&str],
+    b_reads: &[&str],
+    b_writes: &[&str],
+) -> Vec<String> {
+    let mut names: HashSet<&str> = HashSet::new();
+    names.extend(a_reads.iter().copied());
+    names.extend(a_writes.iter().copied());
+    names.extend(b_reads.iter().copied());
+    names.extend(b_writes.iter().copied());
+    names
+        .into_iter()
+        .filter(|component| accesses_conflict_on(component, a_reads, a_writes, b_reads, b_writes))
+        .map(str::to_string)
+        .collect()
+}
+
+fn accesses_conflict_on(component: &str, a_reads: &[&str], a_writes: &[&str], b_reads: &[&str], b_writes: &[&str]) -> bool {
+    let a_w = a_writes.iter().any(|c| *c == component);
+    let a_r = a_reads.iter().any(|c| *c == component);
+    let b_w = b_writes.iter().any(|c| *c == component);
+    let b_r = b_reads.iter().any(|c| *c == component);
+    if !a_w && !a_r && !b_w && !b_r {
+        return false;
+    }
+    (a_w && (b_w || b_r)) || (b_w && a_r)
 }
 
 #[cfg(test)]
@@ -237,6 +314,8 @@ mod tests {
             after: vec!["script_tick"],
             reads: Vec::new(),
             writes: Vec::new(),
+            read_components: Vec::new(),
+            write_components: Vec::new(),
         }];
         let script = vec![ScriptSystemDescriptor::new("test_mod", "script_tick", "tick", HostPhase::Update)];
         let order = ordered_mixed_phase(&native, &script).unwrap();
@@ -260,6 +339,8 @@ mod tests {
             after: vec!["test_mod/script_tick"],
             reads: Vec::new(),
             writes: Vec::new(),
+            read_components: Vec::new(),
+            write_components: Vec::new(),
         }];
         let script = vec![ScriptSystemDescriptor::new("test_mod", "script_tick", "tick", HostPhase::Update)];
         let order = ordered_mixed_phase(&native, &script).unwrap();
@@ -275,6 +356,8 @@ mod tests {
             after: vec!["b"],
             reads: Vec::new(),
             writes: Vec::new(),
+            read_components: Vec::new(),
+            write_components: Vec::new(),
         }];
         let script = vec![ScriptSystemDescriptor::new("m", "b", "tick", HostPhase::Update).after("a")];
         let err = ordered_mixed_phase(&native, &script).unwrap_err();
@@ -292,6 +375,8 @@ mod tests {
                 after: Vec::new(),
                 reads: vec![ty],
                 writes: Vec::new(),
+                read_components: Vec::new(),
+                write_components: Vec::new(),
             },
             SystemSchedule {
                 name: "write",
@@ -300,9 +385,62 @@ mod tests {
                 after: Vec::new(),
                 reads: Vec::new(),
                 writes: vec![ty],
+                read_components: Vec::new(),
+                write_components: Vec::new(),
             },
         ];
         let err = ordered_mixed_phase(&native, &[]).unwrap_err();
         assert!(matches!(err, ScriptSystemError::AccessConflict { .. }));
+    }
+
+    #[test]
+    fn mixed_phase_cross_domain_write_write_conflict() {
+        let native = vec![SystemSchedule {
+            name: "native_sim",
+            phase: RustPhase::Update,
+            before: Vec::new(),
+            after: Vec::new(),
+            reads: Vec::new(),
+            writes: Vec::new(),
+            read_components: Vec::new(),
+            write_components: vec!["Health"],
+        }];
+        let script = vec![ScriptSystemDescriptor::new("m", "hook", "tick", HostPhase::Update).write("Health")];
+        let err = ordered_mixed_phase(&native, &script).unwrap_err();
+        assert!(matches!(err, ScriptSystemError::AccessConflict { .. }));
+    }
+
+    #[test]
+    fn mixed_phase_cross_domain_read_write_conflict() {
+        let native = vec![SystemSchedule {
+            name: "native_read",
+            phase: RustPhase::Update,
+            before: Vec::new(),
+            after: Vec::new(),
+            reads: Vec::new(),
+            writes: Vec::new(),
+            read_components: vec!["Transform"],
+            write_components: Vec::new(),
+        }];
+        let script = vec![ScriptSystemDescriptor::new("m", "hook", "tick", HostPhase::Update).write("Transform")];
+        let err = ordered_mixed_phase(&native, &script).unwrap_err();
+        assert!(matches!(err, ScriptSystemError::AccessConflict { .. }));
+    }
+
+    #[test]
+    fn mixed_phase_cross_domain_read_read_ok() {
+        let native = vec![SystemSchedule {
+            name: "native_read",
+            phase: RustPhase::Update,
+            before: Vec::new(),
+            after: Vec::new(),
+            reads: Vec::new(),
+            writes: Vec::new(),
+            read_components: vec!["Transform"],
+            write_components: Vec::new(),
+        }];
+        let script = vec![ScriptSystemDescriptor::new("m", "hook", "tick", HostPhase::Update).read("Transform")];
+        let order = ordered_mixed_phase(&native, &script).unwrap();
+        assert_eq!(order.len(), 2);
     }
 }

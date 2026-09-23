@@ -4,13 +4,17 @@ use std::any::TypeId;
 
 use super::phase::RustPhase;
 
-/// 作者可写的顺序约束（`before` / `after`）；读写集由引擎在登记时收集（并行预留）。
+/// 作者可写的顺序与组件访问约束（与脚本 [`ComponentAccess`] 同名对齐，供混排冲突检测）。
 #[derive(Debug, Clone, Default)]
 pub struct SystemOrder {
     /// 须排在目标 **之前**（可写 `native/foo` 或脚本 `{mod}/{name}`）。
     pub before: Vec<&'static str>,
     /// 须排在目标 **之后**。
     pub after: Vec<&'static str>,
+    /// 只读触及的组件逻辑名（与脚本 System 声明同一命名空间）。
+    pub reads: Vec<&'static str>,
+    /// 可写触及的组件逻辑名。
+    pub writes: Vec<&'static str>,
 }
 
 /// 调度图登记用的原生 System 元数据（crate 内部）。
@@ -24,16 +28,29 @@ pub(crate) struct SystemSchedule {
     pub before: Vec<&'static str>,
     /// 须排在目标 **之后**。
     pub after: Vec<&'static str>,
-    /// 只读触及的组件 / 资源 [`TypeId`]（并行预留）。
+    /// 只读触及的组件 / 资源 [`TypeId`]（并行预留；Rust 域内冲突检测）。
     pub reads: Vec<TypeId>,
-    /// 可写触及的组件 / 资源 [`TypeId`]（并行预留）。
+    /// 可写触及的组件 / 资源 [`TypeId`]（并行预留；Rust 域内冲突检测）。
     pub writes: Vec<TypeId>,
+    /// 只读组件逻辑名（跨域与脚本 [`ComponentAccess`] 冲突检测）。
+    pub read_components: Vec<&'static str>,
+    /// 可写组件逻辑名。
+    pub write_components: Vec<&'static str>,
 }
 
 impl SystemSchedule {
     /// 最小声明：无顺序与访问约束。
     pub fn new(name: &'static str, phase: RustPhase) -> Self {
-        Self { name, phase, before: Vec::new(), after: Vec::new(), reads: Vec::new(), writes: Vec::new() }
+        Self {
+            name,
+            phase,
+            before: Vec::new(),
+            after: Vec::new(),
+            reads: Vec::new(),
+            writes: Vec::new(),
+            read_components: Vec::new(),
+            write_components: Vec::new(),
+        }
     }
 
     /// 从 [`SystemOrder`] 构造。
@@ -45,6 +62,8 @@ impl SystemSchedule {
             after: order.after.clone(),
             reads: Vec::new(),
             writes: Vec::new(),
+            read_components: order.reads.clone(),
+            write_components: order.writes.clone(),
         }
     }
 

@@ -109,3 +109,27 @@ fn mixed_phase_runs_native_around_script_slot() {
     runtime.tick_sim(&frame, &mut host).unwrap();
     assert_eq!(runtime.world().resources.get::<String>().unwrap().as_str(), "ab");
 }
+
+#[test]
+fn mixed_phase_rejects_cross_domain_write_conflict() {
+    let mut runtime = SparkRuntime::new();
+    runtime
+        .register_script_system(
+            spark_engine::ScriptSystemDescriptor::new("test_mod", "hook", "tick", HostPhase::Update).write("Health"),
+        )
+        .unwrap();
+    runtime.add_system_ctx_with_order(
+        RustPhase::Update,
+        "native_write",
+        SystemOrder {
+            writes: vec!["Health"],
+            ..SystemOrder::default()
+        },
+        |_ctx| {},
+    );
+    let input = Input::default();
+    let frame = frame_ctx(&input, 0.016);
+    let mut host = StdHost;
+    let err = runtime.tick_sim(&frame, &mut host).unwrap_err();
+    assert!(matches!(err, spark_engine::EngineError::ScriptSystem(_)));
+}
