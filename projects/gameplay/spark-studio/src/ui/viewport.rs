@@ -1,15 +1,13 @@
 //! 中央 Scene / Game / Script 视口。
 
+use spark_types::Color;
 use spark_widget::{Insets, LayoutSpec, Size, Style, WidgetBuilder, column, panel, row, spacer_widget};
 
 use crate::{
     layout::DockLayoutState,
     project::{ProjectInfo, ProjectKind},
     state::{CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CenterTab, EditorState, PlayMode, entity_by_id},
-    ui::{
-        scene_canvas::build_scene_canvas,
-        style::{bright_label, chrome_surface, dim_label, divider, tab_btn, v_body},
-    },
+    ui::style::{bright_label, chrome_surface, dim_label, divider, tab_btn, v_body},
 };
 
 /// 构建中央视口（含页签条与正文）。
@@ -39,17 +37,20 @@ pub fn build_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuild
         .child(spacer_widget())
         .child(dim_label(mode));
 
-    let mut view_children: Vec<WidgetBuilder> = vec![
-        dim_label(format!("场景资源：{scene}")),
-        dim_label(format!("当前选择：{selected}")),
-    ];
+    let scene_overlay = state.center == CenterTab::Scene;
+    let body_bg = if scene_overlay { Color::rgba(0.0, 0.0, 0.0, 0.0) } else { chrome_surface() };
+
+    let mut view_children: Vec<WidgetBuilder> = Vec::new();
 
     match state.center {
         CenterTab::Scene => {
-            view_children.push(build_scene_canvas(selected));
+            view_children.push(dim_label(format!("场景资源：{scene}")));
+            view_children.push(dim_label(format!("当前选择：{selected}")));
+            view_children.push(spacer_widget());
         }
         CenterTab::Game => {
             view_children.push(bright_label("游戏"));
+            view_children.push(dim_label(format!("场景资源：{scene}")));
             if state.play == PlayMode::Edit {
                 view_children.push(dim_label("点击工具栏中的“运行”进入游戏模式"));
             }
@@ -76,8 +77,10 @@ pub fn build_viewport(project: &ProjectInfo, state: &EditorState) -> WidgetBuild
         }
     }
 
-    let viewport =
-        column().layout(v_body(8.0, 6.0)).style(Style { background: Some(chrome_surface()), ..Style::default() }).children(view_children);
+    let viewport = column()
+        .layout(v_body(8.0, 4.0))
+        .style(Style { background: Some(body_bg), ..Style::default() })
+        .children(view_children);
 
     panel()
         .layout(LayoutSpec { width: Size::Fill, height: Size::Fill, flex_grow: 1.0, flex_shrink: 1.0, gap: 0.0, ..LayoutSpec::vertical() })
