@@ -18,7 +18,7 @@ pub enum RustPhase {
 }
 
 impl RustPhase {
-    /// 单帧内 Rust 域执行顺序（不含 Spark Script 穿插）。
+    /// 单帧内 Rust 域执行顺序（Spark Script 在混排相位内插入，见 [`RuntimeScheduler`]）。
     pub const SIM_ORDER: &'static [RustPhase] =
         &[Self::PreUpdate, Self::FixedUpdate, Self::Update, Self::LateUpdate];
 

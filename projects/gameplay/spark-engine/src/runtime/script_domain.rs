@@ -61,6 +61,19 @@ impl SparkScriptDomain {
         Ok(())
     }
 
+    /// 执行单个已登记脚本 System（不提交命令；由相位边界统一 apply）。
+    pub fn run_script_descriptor(
+        &mut self,
+        desc: &crate::ScriptSystemDescriptor,
+        _world: &mut World,
+        host: &mut dyn HostHooks,
+    ) -> Result<(), EngineError> {
+        if let Some(engine) = &mut self.engine {
+            engine.run_script_descriptor(desc, host)?;
+        }
+        Ok(())
+    }
+
     /// 派发各模组事件 inbox（在 LateUpdate 之后由调度器调用）。
     pub fn dispatch_events(&mut self, host: &mut dyn HostHooks) -> Result<(), EngineError> {
         if let Some(engine) = &mut self.engine {

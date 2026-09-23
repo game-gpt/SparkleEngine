@@ -52,7 +52,7 @@ pub use registry::{DataRegistry, RegValue};
 pub use render2d::{RenderFrame2d, RenderSchedule2d, RenderSystem2d};
 pub use render3d::{RenderFrame3d, RenderSchedule3d, RenderSystem3d};
 pub use runtime::{
-    LoopSystem, LoopSystemFn, NativeGamePlugin, RustCommands, RustPhase, RuntimeHost2d, RuntimeHost3d, SceneCommand, SceneManager, SceneRequests,
+    NativeGamePlugin, RustCommands, RustPhase, RustSystemMeta, RuntimeHost2d, RuntimeHost3d, SceneCommand, SceneManager, SceneRequests,
     SparkRuntime, SparkScriptDomain, SystemContext,
 };
 pub use run::{run_runtime, run_runtime_3d, run_runtime_3d_with, run_runtime_with, run_window_2d, run_window_3d};
@@ -690,6 +690,34 @@ impl SparkEngine {
                 self.shared.borrow_mut().end_script_call();
                 let _ = call_result?;
             }
+        }
+        Ok(())
+    }
+
+    /// 执行单个已登记脚本 System（不提交命令、不派发事件）。
+    pub fn run_script_descriptor(&mut self, desc: &ScriptSystemDescriptor, host: &mut dyn HostHooks) -> Result<(), EngineError> {
+        let mod_id = desc.mod_id.to_string();
+        let entry = desc.entry.to_string();
+        let Some(m) = self.mods.get_mut(&mod_id)
+        else {
+            return Ok(());
+        };
+        if !m.enabled {
+            return Ok(());
+        }
+        let Some(domain) = m.domain.as_mut()
+        else {
+            return Ok(());
+        };
+        if !domain.enabled {
+            return Ok(());
+        }
+        let has_entry = domain.runtime.vm.module.functions.iter().any(|f| f.name == entry);
+        if has_entry {
+            self.shared.borrow_mut().begin_script_call(desc.phase, Some(desc));
+            let call_result = domain.call_in_phase(&entry, &[], desc.phase, host);
+            self.shared.borrow_mut().end_script_call();
+            call_result?;
         }
         Ok(())
     }

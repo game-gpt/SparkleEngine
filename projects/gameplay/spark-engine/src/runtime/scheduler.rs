@@ -1,4 +1,4 @@
-//! 双域调度器：Rust 相位表 + Spark Script 相位钩子。
+//! 双域调度器：Rust / Spark Script 统一调度图 + 相位驱动。
 
 use std::collections::HashMap;
 
@@ -6,8 +6,12 @@ use spark_ecs::World;
 use spark_script::HostPhase;
 use spark_vm::HostHooks;
 
+use crate::ScriptSystemDescriptor;
+
 use super::commands::RustCommands;
 use super::phase::RustPhase;
+use super::rust_system::RustSystemMeta;
+use super::schedule_graph::{MixedNode, host_phase_for_rust, is_mixed_rust_phase, ordered_mixed_phase};
 use super::script_domain::SparkScriptDomain;
 use super::system_ctx::SystemContext;
 use crate::frame_state::FrameSnapshot;
@@ -55,9 +59,14 @@ where
     }
 }
 
-/// 按相位分桶的 Rust 系统表与 Spark Script 桥。
+struct RegisteredRustSystem {
+    meta: RustSystemMeta,
+    runner: Box<dyn RustRunner>,
+}
+
+/// 帧循环调度表：Rust System 与 Spark Script System 统一混排。
 pub struct RuntimeScheduler {
-    rust: HashMap<RustPhase, Vec<Box<dyn RustRunner>>>,
+    rust: HashMap<RustPhase, Vec<RegisteredRustSystem>>,
 }
 
 impl Default for RuntimeScheduler {
@@ -73,63 +82,117 @@ impl RuntimeScheduler {
     }
 
     /// 向指定 Rust 相位追加闭包系统（早期 API：`&mut World`）。
-    pub fn add_rust_fn(&mut self, phase: RustPhase, _name: &'static str, f: impl FnMut(&mut World) + Send + 'static) {
-        self.rust.entry(phase).or_default().push(Box::new(WorldFnRunner { f }));
+    pub fn add_rust_fn(&mut self, phase: RustPhase, name: &'static str, f: impl FnMut(&mut World) + Send + 'static) {
+        self.rust.entry(phase).or_default().push(RegisteredRustSystem {
+            meta: RustSystemMeta::new(name, phase),
+            runner: Box::new(WorldFnRunner { f }),
+        });
     }
 
     /// 向指定 Rust 相位追加 [`SystemContext`] 系统。
-    pub fn add_rust_ctx_fn(&mut self, phase: RustPhase, _name: &'static str, f: impl FnMut(&mut SystemContext<'_>) + Send + 'static) {
-        self.rust.entry(phase).or_default().push(Box::new(CtxFnRunner { f }));
+    pub fn add_rust_ctx_fn(&mut self, phase: RustPhase, name: &'static str, f: impl FnMut(&mut SystemContext<'_>) + Send + 'static) {
+        self.rust.entry(phase).or_default().push(RegisteredRustSystem {
+            meta: RustSystemMeta::new(name, phase),
+            runner: Box::new(CtxFnRunner { f }),
+        });
     }
 
-    /// 运行单个 Rust 相位（相位末提交 [`RustCommands`]）。
-    pub fn run_rust(&mut self, phase: RustPhase, world: &mut World) {
+    /// 向指定 Rust 相位追加带调度声明的系统。
+    pub fn add_rust_ctx_fn_with_meta(
+        &mut self,
+        meta: RustSystemMeta,
+        f: impl FnMut(&mut SystemContext<'_>) + Send + 'static,
+    ) {
+        let phase = meta.phase;
+        self.rust.entry(phase).or_default().push(RegisteredRustSystem { meta, runner: Box::new(CtxFnRunner { f }) });
+    }
+
+    /// 运行仅 Rust 的相位（相位末提交 [`RustCommands`]）。
+    pub fn run_rust_only(&mut self, phase: RustPhase, world: &mut World) {
         let mut commands = RustCommands::new();
-        if let Some(runners) = self.rust.get_mut(&phase) {
-            for runner in runners.iter_mut() {
-                runner.run(world, &mut commands);
+        if let Some(entries) = self.rust.get_mut(&phase) {
+            for entry in entries.iter_mut() {
+                entry.runner.run(world, &mut commands);
             }
         }
         commands.apply(world);
     }
 
-    /// 仿真步内按契约顺序驱动 Rust 域与 Spark Script 域。
-    ///
-    /// 顺序：PreUpdate → Fixed（双域）→ Update（双域）→ LateUpdate（双域）→ 命令提交 → 事件派发。
+    /// 运行 Rust 与 Spark Script 混排相位。
+    pub fn run_mixed_phase(
+        &mut self,
+        phase: RustPhase,
+        world: &mut World,
+        script: &mut SparkScriptDomain,
+        host: &mut dyn HostHooks,
+    ) -> Result<(), EngineError> {
+        let host_phase = host_phase_for_rust(phase).expect("caller ensures mixed phase");
+        let rust_entries = self.rust.get(&phase).map(|v| v.as_slice()).unwrap_or(&[]);
+        let rust_metas: Vec<RustSystemMeta> = rust_entries.iter().map(|e| e.meta.clone()).collect();
+
+        let script_descs: Vec<ScriptSystemDescriptor> = if let Some(engine) = script.engine() {
+            engine.script_systems().for_phase(host_phase).cloned().collect()
+        }
+        else {
+            Vec::new()
+        };
+
+        let order = ordered_mixed_phase(&rust_metas, &script_descs).map_err(EngineError::ScriptSystem)?;
+
+        if script.is_loaded() {
+            script.engine_mut().unwrap().refresh_script_query(world);
+        }
+
+        let mut commands = RustCommands::new();
+        for node in order {
+            match node {
+                MixedNode::Rust(i) => {
+                    if let Some(entries) = self.rust.get_mut(&phase) {
+                        if let Some(entry) = entries.get_mut(i) {
+                            entry.runner.run(world, &mut commands);
+                        }
+                    }
+                }
+                MixedNode::Script(i) => {
+                    let desc = script_descs.get(i).expect("index from same slice");
+                    script.run_script_descriptor(desc, world, host)?;
+                }
+            }
+        }
+
+        commands.apply(world);
+        script.apply_commands(world)?;
+        Ok(())
+    }
+
+    /// 仿真步内按契约顺序驱动统一调度图。
     pub fn run_sim_step(
         &mut self,
         world: &mut World,
         script: &mut SparkScriptDomain,
         host: &mut dyn HostHooks,
     ) -> Result<(), EngineError> {
-        self.run_rust(RustPhase::PreUpdate, world);
+        self.run_rust_only(RustPhase::PreUpdate, world);
 
-        self.run_rust(RustPhase::FixedUpdate, world);
-        script.run_phase(HostPhase::FixedUpdate, world, host)?;
+        for &phase in &[RustPhase::FixedUpdate, RustPhase::Update, RustPhase::LateUpdate] {
+            self.run_mixed_phase(phase, world, script, host)?;
+        }
 
-        self.run_rust(RustPhase::Update, world);
-        script.run_phase(HostPhase::Update, world, host)?;
-
-        self.run_rust(RustPhase::LateUpdate, world);
-        script.run_phase(HostPhase::LateUpdate, world, host)?;
-
-        script.apply_commands(world)?;
         script.dispatch_events(host)?;
         Ok(())
     }
 
-    /// 视觉帧渲染相位：Rust 准备 → Spark Script 准备。
+    /// 视觉帧渲染相位：混排 Rust 准备与 Spark Script 准备。
     pub fn run_render_frame(
         &mut self,
         world: &mut World,
         script: &mut SparkScriptDomain,
         host: &mut dyn HostHooks,
     ) -> Result<(), EngineError> {
-        self.run_rust(RustPhase::RenderPrepare, world);
-        script.run_phase(HostPhase::RenderPrepare, world, host)?;
-        script.apply_commands(world)?;
-
-        self.run_rust(RustPhase::UiPrepare, world);
+        if is_mixed_rust_phase(RustPhase::RenderPrepare) {
+            self.run_mixed_phase(RustPhase::RenderPrepare, world, script, host)?;
+        }
+        self.run_rust_only(RustPhase::UiPrepare, world);
         Ok(())
     }
 }
