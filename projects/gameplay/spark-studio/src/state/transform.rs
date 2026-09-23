@@ -1,6 +1,6 @@
 //! 检查器演示用 Transform 字段（非 ECS 权威）。
 
-use spark_widget::tree::WidgetTree;
+use spark_widget::{set_text_by_key, tree::WidgetTree};
 
 /// 演示实体默认世界位置（与 Hierarchy 选中同步）。
 pub fn demo_entity_position(entity_id: u64) -> (f32, f32, f32) {
@@ -106,6 +106,24 @@ impl TransformState {
         }
         changed
     }
+
+    /// 将当前值写回 Inspector 文本框（拖拽 Gizmo 后同步 UI，不触发整树 remount）。
+    pub fn write_to_tree(&self, tree: &mut WidgetTree, scene_root: spark_widget::WidgetId) {
+        set_text_by_key(tree, scene_root, field_keys::POS_X, format!("{:.2}", self.pos_x));
+        set_text_by_key(tree, scene_root, field_keys::POS_Y, format!("{:.2}", self.pos_y));
+        set_text_by_key(tree, scene_root, field_keys::POS_Z, format!("{:.2}", self.pos_z));
+        set_text_by_key(tree, scene_root, field_keys::ROT_X, format!("{:.1}°", self.rot_x));
+        set_text_by_key(tree, scene_root, field_keys::ROT_Y, format!("{:.1}°", self.rot_y));
+        set_text_by_key(tree, scene_root, field_keys::ROT_Z, format!("{:.1}°", self.rot_z));
+        set_text_by_key(tree, scene_root, field_keys::SCALE_X, format!("{:.2}", self.scale_x));
+        set_text_by_key(tree, scene_root, field_keys::SCALE_Y, format!("{:.2}", self.scale_y));
+        set_text_by_key(tree, scene_root, field_keys::SCALE_Z, format!("{:.2}", self.scale_z));
+    }
+}
+
+/// 是否为 Inspector Transform 字段的稳定键。
+pub fn is_transform_field_key(key: &str) -> bool {
+    key.starts_with("inspector.transform.")
 }
 
 fn read_field(tree: &WidgetTree, root: spark_widget::WidgetId, key: &str) -> Option<f32> {

@@ -19,7 +19,8 @@ use crate::{
         BottomTab, CMD_BOTTOM_CONSOLE, CMD_BOTTOM_PROBLEMS, CMD_BOTTOM_PROJECT, CMD_LAYOUT_DEBUG, CMD_LAYOUT_DEFAULT, CMD_LAYOUT_SCRIPT,
         CMD_PAUSE, CMD_PLAY, CMD_STEP, CMD_STOP, CMD_TAB_GAME, CMD_TAB_SCENE, CMD_TAB_SCRIPT, CMD_TOOL_HAND, CMD_TOOL_MOVE, CMD_TOOL_ROTATE,
         CMD_TOOL_SCALE, CMD_WINDOW_GALLERY, CenterTab,
-        EditorState, PlayMode, Tool, TransformState, default_selected, entity_by_id, parse_select_cmd, pick_entity_at_world,
+        EditorState, PlayMode, Tool, TransformState, default_selected, entity_by_id, is_transform_field_key, parse_asset_cmd,
+        parse_select_cmd, pick_entity_at_world,
     },
     ui,
     viewport::{paint_scene_viewport, screen_to_world},
@@ -37,6 +38,8 @@ pub struct StudioApp {
     splitter_drag: Option<SplitterDrag>,
     splitter_last_click: Option<(SplitterAxis, f64)>,
     viewport_pan: Option<(f32, f32)>,
+    entity_drag: Option<(f32, f32)>,
+    last_focus_key: Option<String>,
     screen_w: f32,
     screen_h: f32,
     exit: bool,
@@ -66,6 +69,8 @@ impl StudioApp {
             splitter_drag: None,
             splitter_last_click: None,
             viewport_pan: None,
+            entity_drag: None,
+            last_focus_key: None,
             screen_w: 1280.0,
             screen_h: 720.0,
             exit: false,
@@ -158,6 +163,27 @@ impl StudioApp {
         }
     }
 
+    fn push_transform_to_inspector(&mut self) {
+        if let Some(root) = self.ui.scene_root() {
+            self.state.transform.write_to_tree(&mut self.ui.tree, root);
+            self.ui.invalidate_paint();
+        }
+    }
+
+    fn focused_widget_key(&self) -> Option<String> {
+        self.ui.focus.focused.and_then(|id| self.ui.tree.node(id).and_then(|n| n.key.clone()))
+    }
+
+    fn track_inspector_focus(&mut self) {
+        let key = self.focused_widget_key();
+        let was_editing = self.last_focus_key.as_deref().is_some_and(is_transform_field_key);
+        let now_editing = key.as_deref().is_some_and(is_transform_field_key);
+        if was_editing && !now_editing {
+            self.sync_inspector_transform();
+        }
+        self.last_focus_key = key;
+    }
+
     fn handle_viewport_input(&mut self, input: &Input) {
         if self.state.center != CenterTab::Scene || self.splitter_drag.is_some() {
             return;
@@ -167,8 +193,11 @@ impl StudioApp {
         let (mx, my) = input.mouse_pos();
         if mx < rect.x || my < rect.y || mx > rect.x + rect.w || my > rect.y + rect.h {
             self.viewport_pan = None;
+            self.entity_drag = None;
             return;
         }
+
+        let in_scene_body = my > rect.y + 48.0;
 
         let wheel = input.wheel();
         if wheel != 0.0 {
@@ -177,23 +206,44 @@ impl StudioApp {
         }
 
         let panning = input.mouse_down(MouseBtn::Middle)
-            || (self.state.tool == Tool::Hand && input.mouse_down(MouseBtn::Left) && my > rect.y + 48.0);
+            || (self.state.tool == Tool::Hand && input.mouse_down(MouseBtn::Left) && in_scene_body);
         if panning {
             if let Some((last_x, last_y)) = self.viewport_pan {
                 self.state.viewport.pan_x += mx - last_x;
                 self.state.viewport.pan_y += my - last_y;
             }
             self.viewport_pan = Some((mx, my));
+            self.entity_drag = None;
         }
         else {
             self.viewport_pan = None;
         }
 
-        if input.mouse_pressed(MouseBtn::Left) && self.state.tool == Tool::Hand && my > rect.y + 48.0 {
-            let (wx, wy) = screen_to_world(mx, my, rect, &self.state.viewport);
-            let pick_radius = 48.0 / self.state.viewport.zoom;
-            if let Some(eid) = pick_entity_at_world(self.project.kind, wx, wy, pick_radius) {
-                self.apply_selection(eid);
+        let has_selection = entity_by_id(self.project.kind, self.state.selected).is_some();
+        let moving_entity = self.state.tool == Tool::Move && has_selection && input.mouse_down(MouseBtn::Left) && in_scene_body && !panning;
+        if moving_entity {
+            if let Some((last_mx, last_my)) = self.entity_drag {
+                let (wx0, wy0) = screen_to_world(last_mx, last_my, rect, &self.state.viewport);
+                let (wx1, wy1) = screen_to_world(mx, my, rect, &self.state.viewport);
+                self.state.transform.pos_x += wx1 - wx0;
+                self.state.transform.pos_y += wy1 - wy0;
+                self.push_transform_to_inspector();
+            }
+            self.entity_drag = Some((mx, my));
+        }
+        else if self.entity_drag.is_some() {
+            self.entity_drag = None;
+            self.state.status =
+                format!("位置 ({:.1}, {:.1})", self.state.transform.pos_x, self.state.transform.pos_y);
+        }
+
+        if input.mouse_pressed(MouseBtn::Left) && in_scene_body && !panning {
+            if self.state.tool == Tool::Hand || self.state.tool == Tool::Move {
+                let (wx, wy) = screen_to_world(mx, my, rect, &self.state.viewport);
+                let pick_radius = 48.0 / self.state.viewport.zoom;
+                if let Some(eid) = pick_entity_at_world(self.project.kind, wx, wy, pick_radius) {
+                    self.apply_selection(eid);
+                }
             }
         }
     }
@@ -344,6 +394,14 @@ impl StudioApp {
                     if let Some(eid) = parse_select_cmd(id) {
                         self.apply_selection(eid);
                     }
+                    else if let Some(idx) = parse_asset_cmd(id) {
+                        self.state.selected_asset = Some(idx as u32);
+                        if let Some(line) = self.assets.get(idx as usize) {
+                            self.state.status = format!("已选资源：{line}");
+                        }
+                        self.state.bottom = BottomTab::Project;
+                        self.dirty_ui = true;
+                    }
                     else {
                         self.state.status = format!("未识别命令 {id}");
                         self.dirty_ui = true;
@@ -378,6 +436,7 @@ impl StudioApp {
 
         self.ui.begin_frame(&ui_frame);
         self.ui.dispatch_input(&ui_frame);
+        self.track_inspector_focus();
         if frame.input.key_pressed(Key::Enter) {
             self.sync_inspector_transform();
         }
@@ -450,7 +509,7 @@ impl WindowPump2d for StudioApp {
         if self.state.center == CenterTab::Scene {
             let rect = center_viewport_rect(self.screen_w, self.screen_h, self.state.dock);
             let selection = entity_by_id(self.project.kind, self.state.selected).map(|_| &self.state.transform);
-            paint_scene_viewport(draw, rect, &self.state.viewport, selection);
+            paint_scene_viewport(draw, rect, &self.state.viewport, self.state.tool, selection);
         }
 
         self.ui.paint(draw);

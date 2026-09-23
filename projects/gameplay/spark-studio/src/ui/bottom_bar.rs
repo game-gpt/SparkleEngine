@@ -31,7 +31,7 @@ pub fn build_bottom_bar(asset_lines: &[String], state: &EditorState, dock: &Dock
         .child(tab_btn("问题", CMD_BOTTOM_PROBLEMS, state.bottom == BottomTab::Problems));
 
     let body_kids = match state.bottom {
-        BottomTab::Project => build_asset_browser_body(asset_lines),
+        BottomTab::Project => build_asset_browser_body(asset_lines, state),
         BottomTab::Console => build_console_body(&state.status),
         BottomTab::Problems => build_problems_body(),
     };

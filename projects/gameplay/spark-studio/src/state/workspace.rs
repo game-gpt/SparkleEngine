@@ -17,6 +17,8 @@ pub struct EditorState {
     pub tool: Tool,
     /// Hierarchy 选中实体 ID。
     pub selected: u64,
+    /// 项目面板选中的资源行索引。
+    pub selected_asset: Option<u32>,
     /// 停靠布局尺寸与折叠态。
     pub dock: DockLayoutState,
     /// 当前布局预设。
@@ -37,6 +39,7 @@ impl Default for EditorState {
             bottom: BottomTab::Project,
             tool: Tool::Move,
             selected: 1,
+            selected_asset: None,
             dock: DockLayoutState::default(),
             layout_preset: LayoutPreset::Default,
             transform: TransformState::default(),

@@ -3,9 +3,10 @@
 use spark_renderer::DrawList;
 use spark_types::{Color, Rect};
 
-use crate::state::{TransformState, ViewportState};
+use crate::state::{Tool, TransformState, ViewportState};
 
 use super::camera::{viewport_center, world_to_screen};
+use super::gizmo::paint_move_gizmo;
 
 /// 场景画布底色。
 const CANVAS: Color = Color::rgb(0.055, 0.060, 0.068);
@@ -25,7 +26,7 @@ const SELECTION: Color = Color::rgb(0.286, 0.475, 0.655);
 const GRID_STEP: f32 = 24.0;
 
 /// 在视口矩形内绘制场景网格、原点十字、相机框与选中占位。
-pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, vp: &ViewportState, selection: Option<&TransformState>) {
+pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, vp: &ViewportState, tool: Tool, selection: Option<&TransformState>) {
     if rect.w < 1.0 || rect.h < 1.0 {
         return;
     }
@@ -83,6 +84,9 @@ pub fn paint_scene_viewport(draw: &mut DrawList, rect: Rect, vp: &ViewportState,
         let w = 80.0 * t.scale_x.abs().max(0.1) * vp.zoom;
         let h = 56.0 * t.scale_y.abs().max(0.1) * vp.zoom;
         stroke_rect(draw, Rect::new(sx - w * 0.5, sy - h * 0.5, w, h), SELECTION);
+        if tool == Tool::Move {
+            paint_move_gizmo(draw, t.pos_x, t.pos_y, rect, vp);
+        }
     }
 
     let zoom_pct = (vp.zoom * 100.0).round();

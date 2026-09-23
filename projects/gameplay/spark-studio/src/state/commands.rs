@@ -40,6 +40,8 @@ pub const CMD_LAYOUT_DEFAULT: u64 = 600;
 pub const CMD_LAYOUT_SCRIPT: u64 = 601;
 /// 布局预设：调试。
 pub const CMD_LAYOUT_DEBUG: u64 = 602;
+/// 项目资源选中命令基址：实际命令 = 基址 + 列表索引。
+pub const CMD_ASSET_BASE: u64 = 700;
 /// Hierarchy 选中命令基址：实际命令 = 基址 + 实体 ID。
 pub const CMD_SELECT_BASE: u64 = 1000;
 
@@ -48,7 +50,29 @@ pub fn select_cmd(entity_id: u64) -> u64 {
     CMD_SELECT_BASE + entity_id
 }
 
+/// 编码「选中资源行」命令 ID。
+pub fn asset_cmd(index: u64) -> u64 {
+    CMD_ASSET_BASE + index
+}
+
+/// 解析资源选中命令；非资源区间返回 `None`。
+pub fn parse_asset_cmd(cmd: u64) -> Option<u64> {
+    if cmd >= CMD_ASSET_BASE && cmd < CMD_SELECT_BASE { Some(cmd - CMD_ASSET_BASE) } else { None }
+}
+
 /// 解析选中命令；非选中区间返回 `None`。
 pub fn parse_select_cmd(cmd: u64) -> Option<u64> {
     if cmd >= CMD_SELECT_BASE { Some(cmd - CMD_SELECT_BASE) } else { None }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn asset_cmd_roundtrip() {
+        assert_eq!(parse_asset_cmd(asset_cmd(3)), Some(3));
+        assert_eq!(parse_asset_cmd(CMD_SELECT_BASE), None);
+        assert_eq!(parse_asset_cmd(CMD_LAYOUT_DEBUG), None);
+    }
 }
