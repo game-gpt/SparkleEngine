@@ -7,8 +7,12 @@
 
 #![forbid(missing_docs)]
 mod actions;
+mod gamepad;
+mod twin_stick;
 
 pub use actions::ActionMap;
+pub use gamepad::{GamepadAxis, GamepadButton, GamepadFrame};
+pub use twin_stick::{AimMode, MoveBindings, apply_deadzone, normalize_stick, read_aim, read_move};
 
 use std::collections::HashSet;
 
@@ -191,6 +195,8 @@ pub struct Input {
     composition: String,
     /// 预编辑内光标字节范围（与 winit 一致）；`None` 表示未知。
     composition_cursor: Option<(usize, usize)>,
+    /// 第一只手柄（多手柄以后扩展）。
+    gamepad: GamepadFrame,
 }
 
 impl Input {
@@ -203,7 +209,18 @@ impl Input {
         self.mouse_delta = (0.0, 0.0);
         self.wheel = 0.0;
         self.text.clear();
+        self.gamepad.begin_frame();
         // composition 跨帧保留，由 on_ime_preedit / on_ime_commit 更新。
+    }
+
+    /// 只读手柄帧。
+    pub fn gamepad(&self) -> &GamepadFrame {
+        &self.gamepad
+    }
+
+    /// 可变手柄帧（宿主写入轴/键）。
+    pub fn gamepad_mut(&mut self) -> &mut GamepadFrame {
+        &mut self.gamepad
     }
 
     /// 累加本帧滚轮增量；`dy` 单位与后端一致，正值朝上。
