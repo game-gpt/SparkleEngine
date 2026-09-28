@@ -1,6 +1,6 @@
-//! 场景视口 Move 工具 Gizmo（`DrawList` HUD）。
+//! 场景视口 Gizmo（`UiRenderBatch` HUD）。
 
-use spark_renderer::DrawList;
+use spark_renderer::UiRenderBatch;
 use spark_types::Color;
 
 use crate::state::ViewportState;
@@ -24,24 +24,24 @@ const HEAD: f32 = 8.0;
 const PIVOT_SIZE: f32 = 7.0;
 
 /// 在选中枢轴处绘制 XY 平移 Gizmo。
-pub fn paint_move_gizmo(draw: &mut DrawList, wx: f32, wy: f32, rect: spark_types::Rect, vp: &ViewportState) {
+pub fn paint_move_gizmo(batch: &mut UiRenderBatch, wx: f32, wy: f32, rect: spark_types::Rect, vp: &ViewportState) {
     let (cx, cy) = world_to_screen(wx, wy, rect, vp);
     let len = AXIS_LEN * vp.zoom;
     let thick = AXIS_THICK.max(1.0);
     let head = HEAD * vp.zoom;
 
-    draw.fill_rect(spark_types::Rect::new(cx - len, cy - thick * 0.5, len, thick), AXIS_X);
-    draw.fill_rect(spark_types::Rect::new(cx - head, cy - head * 0.5, head, head), AXIS_X);
+    batch.fill_rect(spark_types::Rect::new(cx - len, cy - thick * 0.5, len, thick), AXIS_X);
+    batch.fill_rect(spark_types::Rect::new(cx - head, cy - head * 0.5, head, head), AXIS_X);
 
-    draw.fill_rect(spark_types::Rect::new(cx - thick * 0.5, cy - len, thick, len), AXIS_Y);
-    draw.fill_rect(spark_types::Rect::new(cx - head * 0.5, cy - len, head, head), AXIS_Y);
+    batch.fill_rect(spark_types::Rect::new(cx - thick * 0.5, cy - len, thick, len), AXIS_Y);
+    batch.fill_rect(spark_types::Rect::new(cx - head * 0.5, cy - len, head, head), AXIS_Y);
 
     let half = PIVOT_SIZE * 0.5;
-    draw.fill_rect(spark_types::Rect::new(cx - half, cy - half, PIVOT_SIZE, PIVOT_SIZE), PIVOT);
+    batch.fill_rect(spark_types::Rect::new(cx - half, cy - half, PIVOT_SIZE, PIVOT_SIZE), PIVOT);
 }
 
 /// 在选中枢轴处绘制 Z 旋转环（2D 编辑器演示）。
-pub fn paint_rotate_gizmo(draw: &mut DrawList, wx: f32, wy: f32, rect: spark_types::Rect, vp: &ViewportState) {
+pub fn paint_rotate_gizmo(batch: &mut UiRenderBatch, wx: f32, wy: f32, rect: spark_types::Rect, vp: &ViewportState) {
     let (cx, cy) = world_to_screen(wx, wy, rect, vp);
     let radius = 44.0 * vp.zoom;
     let thick = (2.5 * vp.zoom).max(1.0);
@@ -50,14 +50,22 @@ pub fn paint_rotate_gizmo(draw: &mut DrawList, wx: f32, wy: f32, rect: spark_typ
         let a = i as f32 / segments as f32 * std::f32::consts::TAU;
         let px = cx + radius * a.cos();
         let py = cy + radius * a.sin();
-        draw.fill_rect(spark_types::Rect::new(px - thick * 0.5, py - thick * 0.5, thick, thick), ROTATE_RING);
+        batch.fill_rect(spark_types::Rect::new(px - thick * 0.5, py - thick * 0.5, thick, thick), ROTATE_RING);
     }
     let tick = 10.0 * vp.zoom;
-    draw.fill_rect(spark_types::Rect::new(cx - thick * 0.5, cy - radius - tick, thick, tick + thick), ROTATE_RING);
+    batch.fill_rect(spark_types::Rect::new(cx - thick * 0.5, cy - radius - tick, thick, tick + thick), ROTATE_RING);
 }
 
 /// 在选中框四角绘制 uniform 缩放把手。
-pub fn paint_scale_gizmo(draw: &mut DrawList, wx: f32, wy: f32, scale_x: f32, scale_y: f32, rect: spark_types::Rect, vp: &ViewportState) {
+pub fn paint_scale_gizmo(
+    batch: &mut UiRenderBatch,
+    wx: f32,
+    wy: f32,
+    scale_x: f32,
+    scale_y: f32,
+    rect: spark_types::Rect,
+    vp: &ViewportState,
+) {
     let (cx, cy) = world_to_screen(wx, wy, rect, vp);
     let w = 80.0 * scale_x.abs().max(0.1) * vp.zoom;
     let h = 56.0 * scale_y.abs().max(0.1) * vp.zoom;
@@ -65,6 +73,6 @@ pub fn paint_scale_gizmo(draw: &mut DrawList, wx: f32, wy: f32, scale_x: f32, sc
     let half = handle * 0.5;
     let corners = [(-w * 0.5, -h * 0.5), (w * 0.5, -h * 0.5), (-w * 0.5, h * 0.5), (w * 0.5, h * 0.5)];
     for (dx, dy) in corners {
-        draw.fill_rect(spark_types::Rect::new(cx + dx - half, cy + dy - half, handle, handle), SCALE_HANDLE);
+        batch.fill_rect(spark_types::Rect::new(cx + dx - half, cy + dy - half, handle, handle), SCALE_HANDLE);
     }
 }

@@ -611,20 +611,18 @@ impl WindowPump2d for StudioApp {
         if immersive || self.show_game_view() {
             if let Some(play) = self.play.as_mut() {
                 play.present_world(draw);
-                return;
             }
-        }
-
-        if self.state.center == CenterTab::Scene {
-            let rect = center_viewport_rect(self.screen_w, self.screen_h, self.state.dock);
-            let selection = entity_by_id(self.project.kind, self.state.selected).map(|_| &self.state.transform);
-            paint_scene_viewport(draw, rect, &self.state.viewport, self.state.tool, selection);
         }
     }
 
     fn present_ui(&mut self, ui: &mut UiRenderBatch) {
         if (self.play.is_some() && !self.mounted) || !self.mounted {
             return;
+        }
+        if self.state.center == CenterTab::Scene && !self.show_game_view() {
+            let rect = center_viewport_rect(self.screen_w, self.screen_h, self.state.dock);
+            let selection = entity_by_id(self.project.kind, self.state.selected).map(|_| &self.state.transform);
+            paint_scene_viewport(ui, rect, &self.state.viewport, self.state.tool, selection);
         }
         self.ui.paint_into(ui);
     }
