@@ -1,6 +1,6 @@
 # spark-physics
 
-2D 刚体物理：`PhysicsWorld`、重力、宽窄相接触。
+2D rigid-body physics: `PhysicsWorld`, gravity, broad/narrow-phase contacts.
 
 ```rust
 use spark_physics::{BodyKind, PhysicsConfig, PhysicsWorld, RigidBody2, Vec2};
@@ -14,8 +14,7 @@ world.step(1.0 / 60.0);
 assert!(world.get(ball).unwrap().position.y > 0.0);
 ```
 
-还有 `RigidBody2::aabb`、`BodyKind::{Static, Kinematic, Dynamic}`、`UniformGrid` 等。错误类型 `PhysicsError`。并再导出部分
-3D 扫掠原语。
+Also `RigidBody2::aabb`, `BodyKind::{Static, Kinematic, Dynamic}`, `UniformGrid`, etc. Error type `PhysicsError`. Re-exports some 3D sweep primitives.
 
 ```bash
 cargo test -p spark-physics

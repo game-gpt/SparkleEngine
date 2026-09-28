@@ -1,6 +1,6 @@
 # spark-plugin
 
-向 `spark-vm` 注册脚本侧原生函数的插件表。
+Plugin table for registering script-side native functions on `spark-vm`.
 
 ```rust
 use spark_plugin::{Plugin, PluginInfo, PluginRegistry};
@@ -26,7 +26,7 @@ reg.register(Box::new(EchoPlugin)).unwrap();
 // reg.install_all(&mut vm);
 ```
 
-错误：`PluginError`。具体平台插件见 `spark-plugin-live2d` / `spark-plugin-steam`。
+Errors: `PluginError`. Platform-specific plugins: `spark-plugin-live2d` / `spark-plugin-steam`.
 
 ```bash
 cargo test -p spark-plugin

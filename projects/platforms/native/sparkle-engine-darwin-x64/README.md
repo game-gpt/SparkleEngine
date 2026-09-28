@@ -1,31 +1,31 @@
 # `@game-gpt/sparkle-engine-darwin-x64`
 
-`@game-gpt/sparkle-engine` 的 darwin/x64 原生平台袋：预编译 N-API 插件（`.node`），无 TypeScript 入口。
+Native platform bundle for `@game-gpt/sparkle-engine` on darwin/x64: a prebuilt N-API plugin (`.node`), no TypeScript entry.
 
-## 包内容
+## Package contents
 
-| 字段         | 值                                    |
-|--------------|---------------------------------------|
-| 包名         | `@game-gpt/sparkle-engine-darwin-x64` |
-| `main`       | `sparkle-engine.darwin-x64.node`      |
-| `os` / `cpu` | `darwin` / `x64`                      |
+| Field | Value |
+|-------|-------|
+| Package | `@game-gpt/sparkle-engine-darwin-x64` |
+| `main` | `sparkle-engine.darwin-x64.node` |
+| `os` / `cpu` | `darwin` / `x64` |
 
-宿主包通过 optionalDependencies 安装本包，再由 `loadSpark()` 加载上述 `main`。
+The host package installs this via optionalDependencies; `loadSpark()` loads the `main` binary above.
 
-## 在本仓库构建
+## Build in this repo
 
-在匹配的 OS/CPU 上，于 SparkEngine 仓库根执行：
+On a matching OS/CPU, from the SparkEngine repo root:
 
 ```bash
 node scripts/build/napi.mjs --release
 ```
 
-产物写入 `projects/platforms/native/sparkle-engine-darwin-x64/`。跨平台发布需在对应机器或 CI 上分别构建。
+Output lands in `projects/platforms/native/sparkle-engine-darwin-x64/`. Cross-platform releases must be built on each target machine or in CI.
 
-覆盖路径：环境变量 `SPARK_NATIVE_NODE`（由宿主包解析）。
+Override path: environment variable `SPARK_NATIVE_NODE` (resolved by the host package).
 
-浏览器 / Wasm 使用 `@game-gpt/sparkle-engine-unknown-wasm32`，不是本包。
+For browser / Wasm use `@game-gpt/sparkle-engine-unknown-wasm32`, not this package.
 
-## 许可证
+## License
 
 Apache-2.0

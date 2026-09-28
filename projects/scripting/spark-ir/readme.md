@@ -1,17 +1,16 @@
 # spark-ir
 
-语言无关中间表示：HIR → MIR，再 `emit_module` 生成 `spark-vm` 字节码。
+Language-neutral intermediate representation: HIR → MIR, then `emit_module` generates `spark-vm` bytecode.
 
 ```rust
 use spark_ir::{emit_module, lower_module};
-// 从前端得到 HirModule 后：
+// After obtaining HirModule from a frontend:
 // let mir = lower_module(&hir)?;
 // let module = emit_module(&mir)?;
 // Vm::new(module).run(...)
 ```
 
-宿主绑定：`HostBindTable`、`HostId`、`emit_module_with_host`。测例 `tests/codegen.rs` 覆盖算术管线。语言前端在
-`spark-script-*`；本 crate 不含源语言枚举。
+Host bindings: `HostBindTable`, `HostId`, `emit_module_with_host`. Test `tests/codegen.rs` covers the arithmetic pipeline. Language frontends live in `spark-script-*`; this crate has no source-language enum.
 
 ```bash
 cargo test -p spark-ir

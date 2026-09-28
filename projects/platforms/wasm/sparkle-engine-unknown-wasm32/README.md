@@ -1,16 +1,16 @@
 # `@game-gpt/sparkle-engine-unknown-wasm32`
 
-Spark Engine 的 Wasm 平台袋：TypeScript 加载器 + `spark_engine_bg.wasm`（由 Rust crate `spark-wasm` 构建拷贝而来）。
+Wasm platform bundle for Spark Engine: TypeScript loader + `spark_engine_bg.wasm` (built from Rust crate `spark-wasm` and copied in).
 
-## 安装
+## Install
 
 ```bash
 npm install @game-gpt/sparkle-engine-unknown-wasm32
 ```
 
-ESM 包（`"type": "module"`）。Node ≥ 18；浏览器需能 `fetch` / 实例化 Wasm。
+ESM package (`"type": "module"`). Node ≥ 18; browsers must be able to `fetch` / instantiate Wasm.
 
-## 用法
+## Usage
 
 ```js
 import {loadSpark, rustTarget, platformPackage} from "@game-gpt/sparkle-engine-unknown-wasm32";
@@ -20,31 +20,30 @@ console.log(spark.info());
 console.log(spark.vec2Length(3, 4));
 ```
 
-可选：
+Optional:
 
 ```js
 await loadSpark({wasmUrl: new URL("./spark_engine_bg.wasm", import.meta.url)});
-// 或传入已编译的 WebAssembly.Module
+// or pass a compiled WebAssembly.Module
 await loadSpark({module});
 ```
 
-若 `.wasm` 尚未拷贝到位，加载器会回退到纯 JS 的 `Math.hypot` 实现，方便 TS 联调；正式环境请先构建 Wasm。
+If `.wasm` is not copied yet, the loader falls back to a pure JS `Math.hypot` implementation for TS integration; build Wasm for production.
 
-## 在本仓库构建
+## Build in this repo
 
 ```bash
 rustup target add wasm32-unknown-unknown
 pnpm --filter @game-gpt/sparkle-engine-unknown-wasm32 run build:wasm
-# 或仓库根：pnpm run build:wasm
+# or from repo root: pnpm run build:wasm
 ```
 
-`build:wasm` 会 `cargo build -p spark-wasm --target wasm32-unknown-unknown --release`，再把产物拷成包根的
-`spark_engine_bg.wasm`。
+`build:wasm` runs `cargo build -p spark-wasm --target wasm32-unknown-unknown --release`, then copies the artifact to package-root `spark_engine_bg.wasm`.
 
-常量：`rustTarget === "wasm32-unknown-unknown"`，`platformPackage === "spark-unknown-wasm32"`。
+Constants: `rustTarget === "wasm32-unknown-unknown"`, `platformPackage === "spark-unknown-wasm32"`.
 
-原生 Node `.node` 请用 `@game-gpt/sparkle-engine` 的 `loadSpark`，不要混用本包入口。
+For native Node `.node`, use `loadSpark` from `@game-gpt/sparkle-engine`; do not mix entry points with this package.
 
-## 许可证
+## License
 
 Apache-2.0

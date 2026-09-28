@@ -1,6 +1,6 @@
 # spark-vm
 
-栈式字节码解释器。
+Stack bytecode interpreter.
 
 ```rust
 use spark_vm::{FuncProto, HostHooks, Module, Op, Vm};
@@ -32,8 +32,7 @@ let v = vm.run(&mut BufHost(String::new())).unwrap();
 assert_eq!(v.as_number(), Some(42.0));
 ```
 
-也可用 `StdHost`、`register_native`、`call_function`、`verify_bytecode`。VM 不持有 ECS `World`。错误：`VmError`、
-`BytecodeVerifyError`。字节码通常由 `spark-script` / `spark-ir` 生成。
+Also `StdHost`, `register_native`, `call_function`, `verify_bytecode`. VM does not hold an ECS `World`. Errors: `VmError`, `BytecodeVerifyError`. Bytecode is usually produced by `spark-script` / `spark-ir`.
 
 ```bash
 cargo test -p spark-vm

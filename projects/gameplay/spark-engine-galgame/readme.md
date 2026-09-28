@@ -1,6 +1,6 @@
 # spark-engine-galgame
 
-视觉小说 / AVG 骨架：对白、选项、旗标；默认注册 Live2D 脚本插件。
+Visual novel / AVG skeleton: dialogue, choices, flags; registers the Live2D script plugin by default.
 
 ```rust
 use spark_engine_galgame::{Choice, DialogueLine, GalgameEngine, ScriptState};
@@ -8,19 +8,19 @@ use spark_engine_galgame::{Choice, DialogueLine, GalgameEngine, ScriptState};
 let mut gal = GalgameEngine::new(".");
 gal.script.push_line(DialogueLine {
     speaker: Some("A".into()),
-    text: "你好".into(),
+    text: "Hello".into(),
     voice: None,
 });
 gal.script.push_choices(vec![
-    Choice { label: "去东".into(), set_flag: Some(("route".into(), 1.0)) },
-    Choice { label: "去西".into(), set_flag: Some(("route".into(), 2.0)) },
+    Choice { label: "Go east".into(), set_flag: Some(("route".into(), 1.0)) },
+    Choice { label: "Go west".into(), set_flag: Some(("route".into(), 2.0)) },
 ]);
 assert!(matches!(gal.advance(), ScriptState::Line(_)));
 assert!(matches!(gal.advance(), ScriptState::Choices(_)));
 gal.script.choose(0, &mut gal.flags).unwrap();
 ```
 
-剧本与立绘资源由游戏提供。也可用 `with_live2d_backend`。
+Scripts and portrait assets are provided by the game. Also available: `with_live2d_backend`.
 
 ```bash
 cargo test -p spark-engine-galgame

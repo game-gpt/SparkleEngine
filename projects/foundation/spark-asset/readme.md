@@ -1,12 +1,11 @@
 # spark-asset
 
-资源键、内存缓存与加载器接口。`BytesLoader` 从根目录读字节；具体解码由其它 loader / 上层完成。
+Asset keys, in-memory cache, and loader interfaces. `BytesLoader` reads bytes from a root directory; decoding is done by other loaders / upper layers.
 
-旁车 `.meta`（[`AssetMetaStore`]）为 **VON** 文本（`oak-von` serde），保存资源 GUID（UUID v7）与可选导入设置。路径引用由 Agent /
-脚本使用；GUID 仅由工具生成。`load` 在缺失旁车时返回 `spark.asset.meta_missing`，不会静默换发新身份。
+Sidecar `.meta` ([`AssetMetaStore`]) is **VON** text (`oak-von` serde), storing asset GUID (UUID v7) and optional import settings. Path references are used by agents / scripts; GUIDs are tool-generated only. `load` returns `spark.asset.meta_missing` when the sidecar is absent; it will not silently mint a new identity.
 
-[`AssetRef`] 以路径为源格式；工具 `resolve` 后可附着 `guid`。
-[`AssetIndex`] 扫描旁车建立 GUID ↔ 路径映射，`rename` 移动文件与 `.meta` 且保持 GUID。
+[`AssetRef`] uses paths as the source format; tools `resolve` can attach a `guid`.
+[`AssetIndex`] scans sidecars for GUID ↔ path mapping; `rename` moves files and `.meta` while preserving GUID.
 
 ```rust
 use spark_asset::{AssetCache, BytesLoader};
@@ -24,15 +23,14 @@ let _ = cache.drain_reloads();
 ```rust
 use spark_asset::AssetMetaStore;
 
-// 新资源登记（旁车已存在则失败）
+// Register a new asset (fails if sidecar already exists)
 let meta = AssetMetaStore::create("assets/image.png")?;
-// 读取；缺失则报错，不自动 create
+// Load; missing sidecar is an error, no auto-create
 let same = AssetMetaStore::load("assets/image.png")?;
 assert_eq!(meta.guid, same.guid);
 ```
 
-错误：`AssetError`（含 `LoadError`、`AssetMetaError`）。热重载轮询钩子见 `HotReloadWatch` / `ReloadEvent`。自定义格式实现
-`AssetLoader` trait。
+Errors: `AssetError` (includes `LoadError`, `AssetMetaError`). Hot-reload polling hooks: `HotReloadWatch` / `ReloadEvent`. Custom formats implement the `AssetLoader` trait.
 
 ```bash
 cargo test -p spark-asset

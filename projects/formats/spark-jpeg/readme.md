@@ -1,7 +1,6 @@
 # spark-jpeg
 
-JPEG → `TextureUpload`。pure Rust [`jpeg-decoder`](https://crates.io/crates/jpeg-decoder)，不依赖 umbrella `image`，不依赖
-libjpeg/`*-sys`。
+JPEG → `TextureUpload`. Pure Rust [`jpeg-decoder`](https://crates.io/crates/jpeg-decoder); no umbrella `image`, no libjpeg/`*-sys`.
 
 ```rust
 use spark_jpeg::{DecodeOptions, decode_memory};

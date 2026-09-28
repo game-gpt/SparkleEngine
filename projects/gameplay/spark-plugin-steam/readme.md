@@ -1,6 +1,6 @@
 # spark-plugin-steam
 
-Steam 脚本插件：成就、统计、云文件、用户信息；可挂空后端。
+Steam script plugin: achievements, stats, cloud files, user info; optional null backend.
 
 ```rust
 use spark_plugin_steam::SteamPlugin;
@@ -13,7 +13,7 @@ rt.borrow_mut().backend.set_stat("kills", 3.0).unwrap();
 rt.borrow_mut().backend.cloud_write("save.txt", "hello").unwrap();
 ```
 
-注册进 `PluginRegistry` 后供 VM 调用。空后端 `is_available()` 为 false，仍可测逻辑。
+After registration in `PluginRegistry`, available to the VM. Null backend `is_available()` is false; logic can still be tested.
 
 ```bash
 cargo test -p spark-plugin-steam

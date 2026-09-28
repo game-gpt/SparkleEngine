@@ -1,6 +1,6 @@
 # spark-engine-rts
 
-即时战略骨架：单位名册、框选、指令队列、迷雾。
+Real-time strategy skeleton: unit roster, box select, command queue, fog of war.
 
 ```rust
 use spark_types::Vec2;
@@ -14,7 +14,7 @@ rts.commands.issue(a, Command::MoveTo { target: Vec2::new(8.0, 2.0), speed: 4.0 
 rts.tick(1.0, p);
 ```
 
-科技树与兵种表由游戏提供。
+Tech trees and unit tables are provided by the game.
 
 ```bash
 cargo test -p spark-engine-rts

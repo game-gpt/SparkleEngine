@@ -1,6 +1,6 @@
 # spark-event
 
-类型化双缓冲事件总线 `EventBus`。
+Typed double-buffered event bus `EventBus`.
 
 ```rust
 use spark_event::EventBus;
@@ -16,7 +16,7 @@ let got: Vec<_> = bus.events::<Boom>().unwrap().iter().map(|b| b.0).collect();
 assert_eq!(got, vec![1, 2]);
 ```
 
-`send` 写入 writing 缓冲；`update_all` 交换缓冲后，`events::<E>()` 迭代上一拍。可并存多种事件类型。事件枚举由调用方定义。
+`send` writes the writing buffer; after `update_all` swaps buffers, `events::<E>()` iterates the previous frame. Multiple event types can coexist. Event enums are defined by callers.
 
 ```bash
 cargo test -p spark-event

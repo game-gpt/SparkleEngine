@@ -1,6 +1,6 @@
 # spark-debugger
 
-调试叠加绘制与帧统计。
+Debug overlay drawing and frame statistics.
 
 ```rust
 use spark_types::{Color, Rect, Vec2};
@@ -15,8 +15,7 @@ d.line(Vec2::ZERO, Vec2::new(1.0, 1.0), Color::rgb(1.0, 1.0, 1.0), 1.0);
 assert!(d.prims().is_empty());
 ```
 
-还有 `FrameStats::from_dt`、`DebugSession`、`Inspector` / `NopInspector`。依赖 `spark-renderer` 的颜色矩形等类型，本身不做
-GPU 提交。
+Also `FrameStats::from_dt`, `DebugSession`, `Inspector` / `NopInspector`. Depends on `spark-renderer` colored-rect types; does not submit to GPU itself.
 
 ```bash
 cargo test -p spark-debugger

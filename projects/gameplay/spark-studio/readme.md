@@ -1,13 +1,13 @@
 # spark-studio
 
-Spark 编辑器：库面 + 二进制，用 `spark-widget` 搭壳，可打开示例工程并 Play。
+Spark editor: library surface + binary, shell built with `spark-widget`; can open sample projects and Play.
 
 ```bash
 cargo run -p spark-studio
-# 或 pnpm exec spark studio
+# or pnpm exec spark studio
 ```
 
-工程发现：
+Project discovery:
 
 ```rust
 use spark_studio::project::{load_project, ProjectKind};
@@ -19,7 +19,7 @@ assert_eq!(load_project(&root.join("snake")).unwrap().kind, ProjectKind::Valkyri
 assert_eq!(load_project(&root.join("tetris")).unwrap().kind, ProjectKind::Hybrid);
 ```
 
-库面类型：`StudioApp`、`EditorState`、`PlaySession` 等。错误：`ProjectError`。
+Library types: `StudioApp`, `EditorState`, `PlaySession`, etc. Errors: `ProjectError`.
 
 ```bash
 cargo test -p spark-studio

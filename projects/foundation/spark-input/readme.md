@@ -1,8 +1,8 @@
 # spark-input
 
-每帧输入快照 `Input`，以及引擎自有键码 `Key` / `MouseBtn` / `ButtonState`。另有动作映射 `ActionMap`。
+Per-frame input snapshot `Input`, plus engine-owned key codes `Key` / `MouseBtn` / `ButtonState`. Also action mapping `ActionMap`.
 
-窗口后端写入：
+Window backend writes:
 
 ```rust
 input.on_key(key, pressed);
@@ -12,10 +12,9 @@ input.on_wheel(dx, dy);
 input.on_text(ch);
 ```
 
-游戏在 `GameHost::update` 里读取 `frame.input` 的 `key_down` / `key_pressed` / `key_released`、`mouse_pos` 等。帧末调用
-`begin_frame` 清除边沿状态。
+Games read `key_down` / `key_pressed` / `key_released`, `mouse_pos`, etc. from `frame.input` in `GameHost::update`. Call `begin_frame` at frame end to clear edge state.
 
-winit 等类型不会漏到游戏代码；映射在 `spark-renderer-wgpu`（或 napi 宿主）完成。
+winit and similar types do not leak into game code; mapping happens in `spark-renderer-wgpu` (or the napi host).
 
 ```bash
 cargo test -p spark-input

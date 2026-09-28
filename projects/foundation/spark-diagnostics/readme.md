@@ -1,7 +1,6 @@
 # spark-diagnostics
 
-结构化错误与诊断模型：`Error`、`ErrorCode`、类型化参数 `ErrorArg` / `ErrorArgs`，以及 `Diagnostic`、`SourceSpan`、
-`MessageKey`。
+Structured errors and diagnostics: `Error`, `ErrorCode`, typed parameters `ErrorArg` / `ErrorArgs`, plus `Diagnostic`, `SourceSpan`, `MessageKey`.
 
 ```rust
 use spark_diagnostics::{Error, ErrorArg, ErrorArgs, ErrorCode};
@@ -13,8 +12,7 @@ assert_eq!(err.to_string(), "spark.example.demo");
 let _ = ErrorArgs::new().with("n", ErrorArg::Unsigned(3));
 ```
 
-预置码在 `codes` 模块。上层 crate（含 `spark-types::SparkError`）都建立在这套模型上；给人看的文案由 localization / UI
-根据码与参数生成。
+Preset codes live in the `codes` module. Upper crates (including `spark-types::SparkError`) build on this model; human-readable text is produced by localization / UI from codes and arguments.
 
 ```bash
 cargo test -p spark-diagnostics

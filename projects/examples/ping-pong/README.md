@@ -1,6 +1,6 @@
 # ping-pong
 
-纯 Rust 乒乓：`SparkRuntime` + `NativeGamePlugin`，经 `spark_engine::run_runtime` 开窗。
+Pure Rust ping-pong: `SparkRuntime` + `NativeGamePlugin`, windowed via `spark_engine::run_runtime`.
 
 ```bash
 cargo run -p ping-pong
@@ -13,12 +13,12 @@ use spark_engine::run_runtime;
 run_runtime(window_config, build_runtime())?;
 ```
 
-| 内容        | 文件                |
-|-------------|---------------------|
-| 运行时装配  | `src/runtime.rs`    |
-| 球速 / 发球 | `src/ball.rs`       |
-| 挡板        | `src/paddle.rs`     |
-| 遗留 GameHost | `src/game.rs`（对照） |
-| 窗口        | `src/main.rs`       |
+| Topic | File |
+|-------|------|
+| Runtime wiring | `src/runtime.rs` |
+| Ball speed / serve | `src/ball.rs` |
+| Paddles | `src/paddle.rs` |
+| Legacy GameHost | `src/game.rs` (reference) |
+| Window | `src/main.rs` |
 
-无音频、无脚本模组。Studio 可按 Rust 工程打开。
+No audio, no script mods. Studio can open it as a Rust project.

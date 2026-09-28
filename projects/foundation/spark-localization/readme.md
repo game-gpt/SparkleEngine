@@ -1,6 +1,6 @@
 # spark-localization
 
-Locale、消息文档、编译与不可变快照。
+Locale, message documents, compilation, and immutable snapshots.
 
 ```rust
 use spark_localization::{
@@ -16,14 +16,13 @@ loader.insert(
 );
 
 let mut manifest = LocalizationManifest::new(LocaleId::parse("en").unwrap());
-// 填 locales / shards 后：
+// Fill locales / shards, then:
 let request = LocaleRequest::new(vec![LocaleId::parse("en").unwrap()], vec![]);
 let snap = prepare_snapshot(&loader, &manifest, &request, 1).unwrap();
 let _ = snap.format(&MessageRef::named("game", "menu.quit"), &MessageArgs::new());
 ```
 
-另有 `compile_document`、`negotiate`、`Localizer`、伪本地化与覆盖率检查。错误类型按阶段拆分（`CompileError`、`LocaleLoadError`
-等）。
+Also `compile_document`, `negotiate`, `Localizer`, pseudo-localization, and coverage checks. Error types are split by stage (`CompileError`, `LocaleLoadError`, etc.).
 
 ```bash
 cargo test -p spark-localization

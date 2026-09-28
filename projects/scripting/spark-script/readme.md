@@ -1,9 +1,9 @@
 # spark-script
 
-多语言脚本编译与运行门面。
+Multi-language script compile and run facade.
 
 ```text
-源码 + HostSchema
+source + HostSchema
   → spark-script-valkyrie / lua / ruby
   → spark-ir
   → SparkObject / ExecutableImage
@@ -27,7 +27,7 @@ let mut rt = ScriptRuntime::from_image(&package.image, &host).unwrap();
 assert_eq!(rt.call_on_load_std().unwrap().as_number(), Some(3.0));
 ```
 
-错误：`ScriptError` 及链接 / 校验 / 制品 IO 等。正式路径不绕过 IR 手写 `Op`。
+Errors: `ScriptError` plus link / verify / artifact IO, etc. Production paths do not hand-write `Op` bypassing IR.
 
 ```bash
 cargo test -p spark-script

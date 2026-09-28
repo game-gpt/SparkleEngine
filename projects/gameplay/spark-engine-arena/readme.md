@@ -1,16 +1,16 @@
 # spark-engine-arena
 
-Spark **竞技场**（双摇杆生存 / 几何射击）特异化壳：**不含**具体敌种、Boss 剧本或 Roguelike 数值。
+Spark **arena** (twin-stick survival / geometric shooter) specialization shell: **no** concrete enemy types, boss scripts, or roguelike tuning.
 
-## 能力
+## Capabilities
 
-- [`KineticPool`](src/pool.rs)：位置 + 速度 + 半径 + 标签的对象池（玩家弹、敌人、拾取物等由游戏定义 `tag` / `layer`）
-- [`WaveTimeline`](src/wave.rs)：按秒触发的生成事件队列（只输出 `tag`，不解释语义）
-- [`CircleGrid`](src/spatial.rs)：均匀网格圆邻近查询
-- [`RunClock`](src/clock.rs)：单调关卡秒表
+- [`KineticPool`](src/pool.rs): object pool with position, velocity, radius, and tag (games define `tag` / `layer` for player shots, enemies, pickups, etc.)
+- [`WaveTimeline`](src/wave.rs): spawn event queue triggered by seconds (outputs `tag` only, no semantics)
+- [`CircleGrid`](src/spatial.rs): uniform-grid circle neighbor queries
+- [`RunClock`](src/clock.rs): monotonic stage timer
 
-## 边界
+## Boundary
 
-与 [`spark-engine-stg`](../spark-engine-stg/) 相对：STG 面向弹幕→玩家；Arena 面向玩家↔敌人↔环境的双向动能体。
+Compared to [`spark-engine-stg`](../spark-engine-stg/): STG is bullet → player; Arena is player ↔ enemy ↔ environment kinetic bodies.
 
-游戏层（如 GeometryLab `prism-raid`）负责形状—AI 映射、Boss 改规则与 Roguelike 成长。
+The game layer (e.g. GeometryLab `prism-raid`) owns shape–AI mapping, boss rule changes, and roguelike progression.
