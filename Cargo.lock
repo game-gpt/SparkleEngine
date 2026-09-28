@@ -2040,6 +2040,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 name = "ping-pong"
 version = "0.0.0"
 dependencies = [
+ "spark-ecs",
  "spark-engine",
  "spark-input",
  "spark-renderer",
@@ -2593,6 +2594,7 @@ dependencies = [
 name = "snake"
 version = "0.0.0"
 dependencies = [
+ "spark-ecs",
  "spark-engine",
  "spark-input",
  "spark-renderer",
@@ -3527,6 +3529,7 @@ dependencies = [
 name = "tetris"
 version = "0.0.0"
 dependencies = [
+ "spark-ecs",
  "spark-engine",
  "spark-input",
  "spark-renderer",
