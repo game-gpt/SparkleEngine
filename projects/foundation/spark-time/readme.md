@@ -1,6 +1,6 @@
 # spark-time
 
-Frame clock `Clock`: feed wall-clock seconds, returns how many simulation steps to run this frame.
+帧时钟 `Clock`：喂入墙钟秒数，返回本帧应执行的仿真步数。
 
 ```rust
 use spark_time::Clock;
@@ -12,12 +12,12 @@ for _ in 0..steps {
 }
 ```
 
-- `Clock::fixed(fixed_dt, max_substeps)`: accumulator yields `0..=max_substeps` steps, each with `delta_seconds == fixed_dt`
-- `Clock::variable()`: when not paused, returns `1` per frame; `delta_seconds` is scaled real dt
-- `set_paused(true)` / `set_scale(s)`: pause or time scale (`scale == 0` does not advance)
-- Public fields: `elapsed_seconds`, `delta_seconds`, `scale`, `paused`
+- `Clock::fixed(fixed_dt, max_substeps)`：累积器吐出 `0..=max_substeps` 步，每步 `delta_seconds == fixed_dt`
+- `Clock::variable()`：未暂停时每帧返回 `1`，`delta_seconds` 为缩放后的真实 dt
+- `set_paused(true)` / `set_scale(s)`：暂停或缩放（`scale == 0` 不推进）
+- 公开字段：`elapsed_seconds`、`delta_seconds`、`scale`、`paused`
 
-`Default` equals `fixed(1/60, 5)`. Main loop is driven by `spark-engine` or the host calling `begin_frame`.
+`Default` 等于 `fixed(1/60, 5)`。主循环由 `spark-engine` 或宿主调用 `begin_frame`。
 
 ```bash
 cargo test -p spark-time

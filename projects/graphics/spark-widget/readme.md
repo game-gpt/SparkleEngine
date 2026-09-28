@@ -1,6 +1,6 @@
 # spark-widget
 
-Retained widget tree: layout, events, and theming; `paint_tree_into` writes into `UiRenderBatch`, consumed by the host `draw_ui` / GPU backend.
+Retained Widget 树：布局、事件、主题，经 `paint_tree_into` 写入 `UiRenderBatch`，由宿主 `draw_ui` / GPU 后端直读。
 
 ```rust
 use spark_types::Vec2;
@@ -32,12 +32,13 @@ paint_tree_into(
     &mut NullTextureResolver,
     &mut batch,
 );
-// Host loop: GameHost::draw_ui fills the batch, submitted separately from the world DrawList.
+// 宿主循环：GameHost::draw_ui 写入批次，与世界 DrawList 分开提交。
 ```
 
-You can also `tree.mount(parent, WidgetKind::…)` directly. Events, focus, and scrolling are covered in `tests/*.rs`. Entry points include `UiRuntime` and `WidgetId`. UI motion lives in `motion`; Studio: `cargo run -p spark-studio`.
+也可用 `tree.mount(parent, WidgetKind::…)` 直接挂节点。事件、焦点、滚动见各 `tests/*.rs`。入口还有 `UiRuntime`、`WidgetId`。UI
+动效在 `motion`；Studio：`cargo run -p spark-studio`。
 
-The compatibility bridge `paint_tree` (flushing into `DrawList` HUD) is deprecated; do not use it in new code.
+兼容桥 `paint_tree`（刷入 `DrawList` HUD）已废弃，请勿在新代码使用。
 
 ```bash
 cargo test -p spark-widget

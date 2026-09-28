@@ -1,31 +1,31 @@
 # `@game-gpt/sparkle-engine-win32-arm64`
 
-Native platform bundle for `@game-gpt/sparkle-engine` on win32/arm64: a prebuilt N-API plugin (`.node`), no TypeScript entry.
+`@game-gpt/sparkle-engine` 的 win32/arm64 原生平台袋：预编译 N-API 插件（`.node`），无 TypeScript 入口。
 
-## Package contents
+## 包内容
 
-| Field | Value |
-|-------|-------|
-| Package | `@game-gpt/sparkle-engine-win32-arm64` |
-| `main` | `sparkle-engine.win32-arm64-msvc.node` |
-| `os` / `cpu` | `win32` / `arm64` |
+| 字段         | 值                                     |
+|--------------|----------------------------------------|
+| 包名         | `@game-gpt/sparkle-engine-win32-arm64` |
+| `main`       | `sparkle-engine.win32-arm64-msvc.node` |
+| `os` / `cpu` | `win32` / `arm64`                      |
 
-The host package installs this via optionalDependencies; `loadSpark()` loads the `main` binary above.
+宿主包通过 optionalDependencies 安装本包，再由 `loadSpark()` 加载上述 `main`。
 
-## Build in this repo
+## 在本仓库构建
 
-On a matching OS/CPU, from the SparkEngine repo root:
+在匹配的 OS/CPU 上，于 SparkEngine 仓库根执行：
 
 ```bash
 node scripts/build/napi.mjs --release
 ```
 
-Output lands in `projects/platforms/native/sparkle-engine-win32-arm64/`. Cross-platform releases must be built on each target machine or in CI.
+产物写入 `projects/platforms/native/sparkle-engine-win32-arm64/`。跨平台发布需在对应机器或 CI 上分别构建。
 
-Override path: environment variable `SPARK_NATIVE_NODE` (resolved by the host package).
+覆盖路径：环境变量 `SPARK_NATIVE_NODE`（由宿主包解析）。
 
-For browser / Wasm use `@game-gpt/sparkle-engine-unknown-wasm32`, not this package.
+浏览器 / Wasm 使用 `@game-gpt/sparkle-engine-unknown-wasm32`，不是本包。
 
-## License
+## 许可证
 
 Apache-2.0

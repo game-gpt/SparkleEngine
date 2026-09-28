@@ -1,16 +1,16 @@
 # `@game-gpt/sparkle-engine-unknown-wasm32`
 
-Wasm platform bundle for Spark Engine: TypeScript loader + `spark_engine_bg.wasm` (built from Rust crate `spark-wasm` and copied in).
+Spark Engine 的 Wasm 平台袋：TypeScript 加载器 + `spark_engine_bg.wasm`（由 Rust crate `spark-wasm` 构建拷贝而来）。
 
-## Install
+## 安装
 
 ```bash
 npm install @game-gpt/sparkle-engine-unknown-wasm32
 ```
 
-ESM package (`"type": "module"`). Node ≥ 18; browsers must be able to `fetch` / instantiate Wasm.
+ESM 包（`"type": "module"`）。Node ≥ 18；浏览器需能 `fetch` / 实例化 Wasm。
 
-## Usage
+## 用法
 
 ```js
 import {loadSpark, rustTarget, platformPackage} from "@game-gpt/sparkle-engine-unknown-wasm32";
@@ -20,30 +20,31 @@ console.log(spark.info());
 console.log(spark.vec2Length(3, 4));
 ```
 
-Optional:
+可选：
 
 ```js
 await loadSpark({wasmUrl: new URL("./spark_engine_bg.wasm", import.meta.url)});
-// or pass a compiled WebAssembly.Module
+// 或传入已编译的 WebAssembly.Module
 await loadSpark({module});
 ```
 
-If `.wasm` is not copied yet, the loader falls back to a pure JS `Math.hypot` implementation for TS integration; build Wasm for production.
+若 `.wasm` 尚未拷贝到位，加载器会回退到纯 JS 的 `Math.hypot` 实现，方便 TS 联调；正式环境请先构建 Wasm。
 
-## Build in this repo
+## 在本仓库构建
 
 ```bash
 rustup target add wasm32-unknown-unknown
 pnpm --filter @game-gpt/sparkle-engine-unknown-wasm32 run build:wasm
-# or from repo root: pnpm run build:wasm
+# 或仓库根：pnpm run build:wasm
 ```
 
-`build:wasm` runs `cargo build -p spark-wasm --target wasm32-unknown-unknown --release`, then copies the artifact to package-root `spark_engine_bg.wasm`.
+`build:wasm` 会 `cargo build -p spark-wasm --target wasm32-unknown-unknown --release`，再把产物拷成包根的
+`spark_engine_bg.wasm`。
 
-Constants: `rustTarget === "wasm32-unknown-unknown"`, `platformPackage === "spark-unknown-wasm32"`.
+常量：`rustTarget === "wasm32-unknown-unknown"`，`platformPackage === "spark-unknown-wasm32"`。
 
-For native Node `.node`, use `loadSpark` from `@game-gpt/sparkle-engine`; do not mix entry points with this package.
+原生 Node `.node` 请用 `@game-gpt/sparkle-engine` 的 `loadSpark`，不要混用本包入口。
 
-## License
+## 许可证
 
 Apache-2.0

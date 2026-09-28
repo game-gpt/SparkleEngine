@@ -1,6 +1,6 @@
 # spark-net
 
-Network transport abstraction, packet sequencing, and simple client prediction.
+网络传输抽象、包序号与简易客户端预测。
 
 ```rust
 use spark_net::{
@@ -32,7 +32,7 @@ let mut clock = PredictionClock::new(8);
 let _ = clock.push_input().unwrap();
 ```
 
-Concrete UDP/WebRTC implementations provide `Transport` in the host. Errors: `NetError`, `PredictionError`.
+具体 UDP/WebRTC 由宿主实现 `Transport`。错误：`NetError`、`PredictionError`。
 
 ```bash
 cargo test -p spark-net

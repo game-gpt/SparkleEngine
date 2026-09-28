@@ -1,27 +1,27 @@
 # `spark-napi`
 
-Build-helper npm metadata next to the Rust crate `spark-napi` (`private: true`), not a package end users install directly.
+本目录是 Rust crate `spark-napi` 旁的 **构建辅助** npm 元数据（`private: true`），不是给业务直接安装的发布面。
 
-Published surfaces:
+真正发布给用户的是：
 
-- `@game-gpt/sparkle-engine` (JS API + CLI `spark`)
-- `@game-gpt/sparkle-engine-<os-cpu>` (`.node` platform bundles)
+- `@game-gpt/sparkle-engine`（JS API + CLI `spark`）
+- `@game-gpt/sparkle-engine-<os-cpu>`（`.node` 平台袋）
 
-## Build
+## 构建
 
-From the SparkEngine repo root:
+在 SparkEngine 仓库根：
 
 ```bash
 node scripts/build/napi.mjs --release
-# or
+# 或
 pnpm run build:napi
 ```
 
-Equivalent to `cargo build -p spark-napi --features node`, then installing artifacts into `projects/platforms/native/sparkle-engine-<short>/`.
+等价于 `cargo build -p spark-napi --features node`，再把产物装进 `projects/platforms/native/sparkle-engine-<short>/`。
 
-This package's `package.json` `scripts.build` forwards to the script above; the `napi` field lists triples for toolchain reference.
+本包 `package.json` 的 `scripts.build` 会转到上述脚本；`napi` 字段描述 triple 列表，供工具链参考。
 
-## Related
+## 相关
 
-- Rust API / features: `projects/bindings/spark-napi/readme.md`
-- Host load logic: `projects/hosts/sparkle-engine/README.md`
+- Rust API / feature：`projects/bindings/spark-napi/readme.md`
+- 宿主加载逻辑：`projects/hosts/sparkle-engine/README.md`

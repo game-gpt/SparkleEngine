@@ -1,6 +1,6 @@
 # spark-jit
 
-Bytecode specialization for `FuncProto` (e.g. constant folding). Does not emit machine code today.
+对 `FuncProto` 做字节码特化（如常量折叠）。当前不发射机器码。
 
 ```rust
 use spark_jit::specialize_func;
@@ -27,7 +27,7 @@ let v = Vm::new(Module {
 assert_eq!(v.as_number(), Some(42.0));
 ```
 
-Also `JitEngine`, `specialize_module`, `optimize_hot`. Errors: `JitError`.
+还有 `JitEngine`、`specialize_module`、`optimize_hot`。错误：`JitError`。
 
 ```bash
 cargo test -p spark-jit

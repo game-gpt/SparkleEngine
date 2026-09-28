@@ -1,6 +1,7 @@
 # spark-prefab
 
-Declarative prefabs: **serde domain model**, on-disk carrier is **VON** (`oak-von`). Local node IDs, field-path overrides, nested references. Agents write paths and node names; GUIDs are maintained by `spark-asset` sidecars (also VON).
+声明式 Prefab： **serde 领域模型**，磁盘载体为 **VON**（`oak-von`）。本地节点 ID、字段路径覆盖、嵌套引用。Agent 写路径与节点名；GUID
+由 `spark-asset` 旁车（同为 VON）维护。
 
 ```rust
 use spark_prefab::{PrefabDocument, PrefabInstance};
@@ -28,8 +29,8 @@ inst.set_override(
 );
 ```
 
-`save_registered` writes to disk and ensures sidecar `.meta` (VON, `kind = prefab`; GUID does not change on re-save).
-`with_overrides` applies instance patches on a copy without writing back to the source prefab.
+`save_registered` 写盘并确保旁车 `.meta`（VON，`kind = prefab`，GUID 不因重存而更换）。
+`with_overrides` 在副本上应用实例补丁，不回写源 Prefab。
 
 ```bash
 cargo test -p spark-prefab

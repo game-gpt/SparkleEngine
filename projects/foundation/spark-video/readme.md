@@ -1,6 +1,6 @@
 # spark-video
 
-Video track demux and compressed packet pumping (via `spark-media`). No pixel decode.
+视频轨解复用与压缩包泵送（经 `spark-media`）。不做像素解码。
 
 ```rust
 use spark_video::VideoClip;
@@ -9,7 +9,7 @@ let mut clip = VideoClip::open("clip.mp4")?;
 // seek_seconds / next_video_packet / next_encoded_frame
 ```
 
-`EncodedFrame` carries compressed data and timestamps. Errors are `SparkError`. Display path connects frames on the render / hardware-decode side.
+`EncodedFrame` 携带压缩数据与时间戳。错误为 `SparkError`。显示路径由渲染 / 硬件解码侧接好帧。
 
 ```bash
 cargo test -p spark-video

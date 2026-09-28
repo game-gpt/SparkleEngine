@@ -1,6 +1,6 @@
 # spark-engine-stg
 
-Bullet-hell skeleton: bullet pool, emitters, stage clock.
+弹幕骨架：子弹池、发射器、关卡时钟。
 
 ```rust
 use spark_types::Vec2;
@@ -24,7 +24,7 @@ let mut clock = StageClock::default();
 clock.advance(0.5);
 ```
 
-Bullet tables and spell cards are provided by the game.
+弹种表与符卡由游戏提供。
 
 ```bash
 cargo test -p spark-engine-stg

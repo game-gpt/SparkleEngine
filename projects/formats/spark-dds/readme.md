@@ -1,8 +1,8 @@
 # spark-dds
 
-DDS container parse → `TextureUpload`. In-house DXGI / BCn subset; no umbrella `image`, no `*-sys`.
+DDS 容器解析 → `TextureUpload`。自研 DXGI / BCn 子集，不依赖 umbrella `image`，不依赖 `*-sys`。
 
-First slice: `DXT1` / `DXT5`, plus DX10 `BC1` / `BC3` / `BC5` / `BC7` and `R8G8B8A8` (UNORM / SRGB).
+首切：`DXT1` / `DXT5`，以及 DX10 的 `BC1` / `BC3` / `BC5` / `BC7` 与 `R8G8B8A8`（UNORM / SRGB）。
 
 ```rust
 use spark_dds::decode_memory;

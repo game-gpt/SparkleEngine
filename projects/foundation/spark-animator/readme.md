@@ -1,6 +1,6 @@
 # spark-animator
 
-Animation clip sampling, playback, and state machines. Supports sprite frames and skinned poses; no drawing, no GPU upload.
+动画剪辑采样、播放器与状态机。支持精灵帧与蒙皮姿态；不绘制、不上传 GPU。
 
 ```rust
 use spark_animator::{AnimationClip, AnimationFrame, SpriteFrame, sample_clip};
@@ -21,7 +21,8 @@ let clip = AnimationClip::single(
 assert_eq!(sample_clip(&clip, 0.2).unwrap().index, 0);
 ```
 
-State machine: `AnimatorController` + `AnimatorState` + `AnimatorTransition` + parameter conditions. Skinning: `Skeleton`, `SkinnedAnimationClip`, `sample_clip` / `evaluate_pose`. ECS side: `AnimatorComponent` / `tick_animators`. UI motion lives in `spark-widget` `motion`.
+状态机：`AnimatorController` + `AnimatorState` + `AnimatorTransition` + 参数条件。蒙皮：`Skeleton`、`SkinnedAnimationClip`、
+`sample_clip` / `evaluate_pose`。ECS 侧有 `AnimatorComponent` / `tick_animators`。UI 动效在 `spark-widget` 的 motion。
 
 ```bash
 cargo test -p spark-animator

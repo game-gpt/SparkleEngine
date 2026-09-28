@@ -1,6 +1,6 @@
 # spark-ecs
 
-Archetype ECS: `World` manages entities and components, `Resources` holds singletons, `Schedule` runs systems by name.
+Archetype ECS：`World` 管实体与组件，`Resources` 管单例，`Schedule` 按名称跑系统。
 
 ```rust
 use spark_ecs::{Schedule, World};
@@ -22,7 +22,8 @@ schedule.add_fn("tick", |_w| {});
 schedule.run(&mut world);
 ```
 
-Any `Send + Sync + 'static` type is a `Component`. Also: `spawn`, `spawn_empty`, `insert`, `remove`, `despawn`. UI trees live in `spark-widget`.
+任意 `Send + Sync + 'static` 类型都是 `Component`。还有 `spawn`、`spawn_empty`、`insert`、`remove`、`despawn`。界面树在
+`spark-widget`。
 
 ```bash
 cargo test -p spark-ecs

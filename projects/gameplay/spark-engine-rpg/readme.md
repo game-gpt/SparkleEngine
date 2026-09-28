@@ -1,6 +1,6 @@
 # spark-engine-rpg
 
-RPG skeleton: party, inventory, stats, quests, turn order.
+RPG 骨架：队伍、背包、属性、任务、回合序。
 
 ```rust
 use spark_engine_rpg::{ActorId, QuestId, QuestStatus, RpgEngine};
@@ -14,7 +14,7 @@ rpg.turns.enqueue(hero);
 rpg.turns.advance();
 ```
 
-Classes and skill data are provided by the game.
+职业与技能数据由游戏提供。
 
 ```bash
 cargo test -p spark-engine-rpg
