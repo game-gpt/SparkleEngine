@@ -49,6 +49,7 @@ spark-ktx2 = { path = "projects/formats/spark-ktx2" }
 spark-dds = { path = "projects/formats/spark-dds" }
 spark-renderer = { path = "projects/graphics/spark-renderer" }
 spark-renderer-wgpu = { path = "projects/graphics/spark-renderer-wgpu" }
+spark-ucf-adapter = { path = "projects/graphics/spark-ucf-adapter" }
 spark-widget = { path = "projects/graphics/spark-widget" }
 spark-animator = { path = "projects/foundation/spark-animator" }
 spark-gltf = { path = "projects/formats/spark-gltf" }

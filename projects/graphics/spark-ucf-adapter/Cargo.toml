@@ -1,0 +1,21 @@
+[package]
+name = "spark-ucf-adapter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "可选 UCF 计算/后处理适配：不进入 ECS 或窗口泵"
+keywords = ["spark", "ucf", "compute"]
+categories = ["game-development"]
+publish = false
+
+[features]
+default = ["cpu"]
+cpu = ["dep:ucf"]
+
+[dependencies]
+ucf = { git = "https://github.com/muse-gpt/ucf.rs.git", branch = "dev", default-features = false, features = ["cpu"], optional = true }
+
+[dev-dependencies]
+ucf = { git = "https://github.com/muse-gpt/ucf.rs.git", branch = "dev", default-features = false, features = ["cpu"] }
