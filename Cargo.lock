@@ -3089,7 +3089,11 @@ dependencies = [
 name = "spark-ucf-adapter"
 version = "0.0.0"
 dependencies = [
+ "pollster",
+ "spark-renderer",
+ "spark-types",
  "ucf",
+ "wgpu",
 ]
 
 [[package]]
