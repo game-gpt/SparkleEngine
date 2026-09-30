@@ -32,6 +32,7 @@ pnpm run build:wasm             # Wasm 平台袋（按需）
 | 固定步时钟                          | `spark-time`                                                           |
 | 键鼠帧状态                          | `spark-input`                                                          |
 | 绘制列表与帧上下文                  | `spark-renderer`                                                       |
+| 可选 UCF 计算 / 后处理适配          | `spark-ucf-adapter`（不进 ECS / 窗口泵）                               |
 | GPU 纹理描述与上传包                | `spark-texture`                                                        |
 | PNG / JPEG / WebP / KTX2 / DDS 解码 | `spark-png` / `spark-jpeg` / `spark-webp` / `spark-ktx2` / `spark-dds` |
 | wgpu 窗口与提交                     | `spark-renderer-wgpu`                                                  |
