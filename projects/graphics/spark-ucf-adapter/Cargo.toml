@@ -13,9 +13,17 @@ publish = false
 [features]
 default = ["cpu"]
 cpu = ["dep:ucf"]
+wgpu = ["cpu", "dep:wgpu"]
+renderer = ["cpu", "dep:spark-renderer"]
 
 [dependencies]
 ucf = { git = "https://github.com/muse-gpt/ucf.rs.git", branch = "dev", default-features = false, features = ["cpu"], optional = true }
+wgpu = { workspace = true, optional = true }
+spark-renderer = { workspace = true, optional = true }
 
 [dev-dependencies]
 ucf = { git = "https://github.com/muse-gpt/ucf.rs.git", branch = "dev", default-features = false, features = ["cpu"] }
+wgpu = { workspace = true }
+pollster = { workspace = true }
+spark-renderer = { workspace = true }
+spark-types = { workspace = true }

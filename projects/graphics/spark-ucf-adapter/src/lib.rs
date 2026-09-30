@@ -11,8 +11,20 @@
 #[cfg(feature = "cpu")]
 mod executor;
 
+#[cfg(feature = "wgpu")]
+mod wgpu_target;
+
+#[cfg(feature = "renderer")]
+mod drawlist;
+
 #[cfg(feature = "cpu")]
 pub use executor::{SparkComputePass, SparkUcfExecutor};
+
+#[cfg(feature = "wgpu")]
+pub use wgpu_target::WgpuRgba8Target;
+
+#[cfg(feature = "renderer")]
+pub use drawlist::enqueue_color_fill_texture;
 
 /// 无 UCF 时的纯色 RGBA8 填充（软件 fallback）。
 pub fn fill_rgba8_cpu_fallback(width: u32, height: u32, rgba: [u8; 4]) -> Vec<u8> {
