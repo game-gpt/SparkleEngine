@@ -3,6 +3,7 @@
 //! **边界（强制）：**
 //! - 不依赖 `spark-ecs` / `SparkRuntime` 权威世界。
 //! - 不实现 `WindowPump2d`，不改窗口泵。
+//! - **不**依赖 `wgpu` / WebGPU：UCF 无 wgpu 后端；GPU 交接在 `spark-renderer-wgpu` 或 DX12/CUDA 互操作层。
 //! - `spark-renderer` / `spark-renderer-wgpu` 不硬依赖本 crate；由调用方 opt-in。
 //! - 无 UCF 时可用 [`fill_rgba8_cpu_fallback`] 保持原路径。
 
@@ -11,17 +12,11 @@
 #[cfg(feature = "cpu")]
 mod executor;
 
-#[cfg(feature = "wgpu")]
-mod wgpu_target;
-
 #[cfg(feature = "renderer")]
 mod drawlist;
 
 #[cfg(feature = "cpu")]
 pub use executor::{SparkComputePass, SparkUcfExecutor};
-
-#[cfg(feature = "wgpu")]
-pub use wgpu_target::WgpuRgba8Target;
 
 #[cfg(feature = "renderer")]
 pub use drawlist::enqueue_color_fill_texture;

@@ -54,7 +54,7 @@ impl SparkUcfExecutor {
         self.compute_color_fill_rgba8(pass)
     }
 
-    /// 同 [`run_color_fill`]，供 wgpu / DrawList 桥接复用。
+    /// 同 [`run_color_fill`]，供 [`enqueue_color_fill_texture`] 等后端无关桥接复用。
     pub fn compute_color_fill_rgba8(
         &mut self,
         pass: &SparkComputePass,
@@ -91,32 +91,6 @@ impl SparkUcfExecutor {
             out.extend_from_slice(&pass.rgba);
         }
         Ok(out)
-    }
-
-    /// UCF CPU Fill → staging 上传到 [`WgpuRgba8Target`]（非 device-resident UCF）。
-    #[cfg(feature = "wgpu")]
-    pub fn run_color_fill_into_wgpu(
-        &mut self,
-        pass: &SparkComputePass,
-        queue: &wgpu::Queue,
-        target: &crate::wgpu_target::WgpuRgba8Target,
-    ) -> Result<(), SchedulerError> {
-        if target.width() != pass.width || target.height() != pass.height {
-            return Err(SchedulerError::Backend(
-                "wgpu".into(),
-                format!(
-                    "target {}x{} does not match pass {}x{}",
-                    target.width(),
-                    target.height(),
-                    pass.width,
-                    pass.height
-                ),
-            ));
-        }
-        let rgba = self.compute_color_fill_rgba8(pass)?;
-        crate::wgpu_target::WgpuRgba8Target::upload_rgba8(queue, target, &rgba).map_err(|e| {
-            SchedulerError::Backend("wgpu".into(), e)
-        })
     }
 
     /// 能力探测（应含 `cpu`）。
