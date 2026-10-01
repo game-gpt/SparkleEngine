@@ -600,7 +600,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1424,7 +1424,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1536,6 +1536,7 @@ dependencies = [
 [[package]]
 name = "oak-core"
 version = "0.0.12"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "serde",
  "smallvec",
@@ -1547,7 +1548,7 @@ dependencies = [
 [[package]]
 name = "oak-dejavu"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#ac97f16c894b9e3c7ffc3d4cfdb35fb5e27701bb"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "arcstr",
  "bigdecimal",
@@ -1564,7 +1565,7 @@ dependencies = [
 [[package]]
 name = "oak-lua"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#ac97f16c894b9e3c7ffc3d4cfdb35fb5e27701bb"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "oak-core",
  "serde",
@@ -1574,7 +1575,7 @@ dependencies = [
 [[package]]
 name = "oak-macros"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#ac97f16c894b9e3c7ffc3d4cfdb35fb5e27701bb"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1584,6 +1585,7 @@ dependencies = [
 [[package]]
 name = "oak-ruby"
 version = "0.0.12"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "oak-core",
  "serde",
@@ -1593,7 +1595,7 @@ dependencies = [
 [[package]]
 name = "oak-valkyrie"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#ac97f16c894b9e3c7ffc3d4cfdb35fb5e27701bb"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "oak-core",
  "oak-dejavu",
@@ -1604,7 +1606,7 @@ dependencies = [
 [[package]]
 name = "oak-von"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#ac97f16c894b9e3c7ffc3d4cfdb35fb5e27701bb"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "oak-core",
  "serde",
@@ -2371,7 +2373,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2384,7 +2386,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3089,11 +3091,9 @@ dependencies = [
 name = "spark-ucf-adapter"
 version = "0.0.0"
 dependencies = [
- "pollster",
  "spark-renderer",
  "spark-types",
  "ucf",
- "wgpu",
 ]
 
 [[package]]
@@ -3786,7 +3786,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "ucf"
 version = "0.0.0"
-source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#c3e67f75282fb405f5f7c71bb6095604150e34f6"
+source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#0b5cdc7e6b3fec3e100685d85d9bb2c4a94c9683"
 dependencies = [
  "ucf-backend-cpu",
  "ucf-capability",
@@ -3800,7 +3800,7 @@ dependencies = [
 [[package]]
 name = "ucf-backend-cpu"
 version = "0.0.0"
-source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#c3e67f75282fb405f5f7c71bb6095604150e34f6"
+source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#0b5cdc7e6b3fec3e100685d85d9bb2c4a94c9683"
 dependencies = [
  "ucf-capability",
  "ucf-ir",
@@ -3811,7 +3811,7 @@ dependencies = [
 [[package]]
 name = "ucf-capability"
 version = "0.0.0"
-source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#c3e67f75282fb405f5f7c71bb6095604150e34f6"
+source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#0b5cdc7e6b3fec3e100685d85d9bb2c4a94c9683"
 dependencies = [
  "serde",
 ]
@@ -3819,7 +3819,7 @@ dependencies = [
 [[package]]
 name = "ucf-ir"
 version = "0.0.0"
-source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#c3e67f75282fb405f5f7c71bb6095604150e34f6"
+source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#0b5cdc7e6b3fec3e100685d85d9bb2c4a94c9683"
 dependencies = [
  "serde",
  "serde_json",
@@ -3830,7 +3830,7 @@ dependencies = [
 [[package]]
 name = "ucf-optimize"
 version = "0.0.0"
-source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#c3e67f75282fb405f5f7c71bb6095604150e34f6"
+source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#0b5cdc7e6b3fec3e100685d85d9bb2c4a94c9683"
 dependencies = [
  "serde",
  "ucf-ir",
@@ -3840,7 +3840,7 @@ dependencies = [
 [[package]]
 name = "ucf-runtime"
 version = "0.0.0"
-source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#c3e67f75282fb405f5f7c71bb6095604150e34f6"
+source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#0b5cdc7e6b3fec3e100685d85d9bb2c4a94c9683"
 dependencies = [
  "ucf-capability",
  "ucf-ir",
@@ -3851,7 +3851,7 @@ dependencies = [
 [[package]]
 name = "ucf-scheduler"
 version = "0.0.0"
-source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#c3e67f75282fb405f5f7c71bb6095604150e34f6"
+source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#0b5cdc7e6b3fec3e100685d85d9bb2c4a94c9683"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -3863,7 +3863,7 @@ dependencies = [
 [[package]]
 name = "ucf-types"
 version = "0.0.0"
-source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#c3e67f75282fb405f5f7c71bb6095604150e34f6"
+source = "git+https://github.com/muse-gpt/ucf.rs.git?branch=dev#0b5cdc7e6b3fec3e100685d85d9bb2c4a94c9683"
 dependencies = [
  "serde",
 ]
@@ -4298,7 +4298,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4416,15 +4416,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]
