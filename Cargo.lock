@@ -600,7 +600,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1536,11 +1536,9 @@ dependencies = [
 [[package]]
 name = "oak-core"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "serde",
  "smallvec",
- "tracing",
  "triomphe",
  "twox-hash",
 ]
@@ -1548,7 +1546,7 @@ dependencies = [
 [[package]]
 name = "oak-dejavu"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#04c8dd933494591b2aeab193ec643a12a36dfc9b"
 dependencies = [
  "arcstr",
  "bigdecimal",
@@ -1558,14 +1556,13 @@ dependencies = [
  "oak-core",
  "oak-macros",
  "serde",
- "tracing",
  "unicode-ident",
 ]
 
 [[package]]
 name = "oak-lua"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#04c8dd933494591b2aeab193ec643a12a36dfc9b"
 dependencies = [
  "oak-core",
  "serde",
@@ -1575,7 +1572,7 @@ dependencies = [
 [[package]]
 name = "oak-macros"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#04c8dd933494591b2aeab193ec643a12a36dfc9b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1585,17 +1582,15 @@ dependencies = [
 [[package]]
 name = "oak-ruby"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
 dependencies = [
  "oak-core",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "oak-valkyrie"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#04c8dd933494591b2aeab193ec643a12a36dfc9b"
 dependencies = [
  "oak-core",
  "oak-dejavu",
@@ -1606,7 +1601,7 @@ dependencies = [
 [[package]]
 name = "oak-von"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#e454cc8e09841f5f3ca4f51a28b9cb3dcbc70386"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#04c8dd933494591b2aeab193ec643a12a36dfc9b"
 dependencies = [
  "oak-core",
  "serde",
@@ -2386,7 +2381,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4298,7 +4293,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
